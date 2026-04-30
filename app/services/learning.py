@@ -91,6 +91,7 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         topic=payload.title,
         source_text=source_text,
         count=payload.question_count,
+        db=db,
     )
     total_score = 0.0
     for index, question_dict in enumerate(question_dicts):
@@ -197,6 +198,7 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
                 reference_keywords=expected_keywords,
                 user_answer=str(user_answer or ""),
                 full_score=question.score,
+                db=db,
             )
             is_correct = score >= question.score * 0.6
         total_score += score
@@ -318,6 +320,7 @@ def create_study_plan(db: Session, *, user: User, payload: StudyPlanCreateReques
         available_days=payload.available_days,
         daily_minutes=payload.daily_minutes,
         course_name=course.name,
+        db=db,
     )
     tasks: list[StudyPlanTask] = []
     for item in task_payloads:

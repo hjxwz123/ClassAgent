@@ -258,10 +258,29 @@ def test_model_config(db: Session, *, config_id: int) -> dict:
         return {"success": True, "message": "mock 模型配置可用"}
     if not config.endpoint:
         return {"success": False, "message": "缺少 endpoint"}
+    headers = {"Content-Type": "application/json"}
+    api_key = decrypt_secret(config.api_key_encrypted) if config.api_key_encrypted else None
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    endpoint = config.endpoint.rstrip("/")
+    if not endpoint.endswith("/chat/completions"):
+        endpoint = f"{endpoint}/chat/completions"
+    payload = {
+        "model": config.model_name,
+        "messages": [{"role": "user", "content": "请回复 ok"}],
+        "temperature": 0,
+        "max_tokens": 8,
+    }
     try:
         with httpx.Client(timeout=5.0) as client:
-            response = client.get(config.endpoint)
-        return {"success": response.status_code < 500, "message": f"HTTP {response.status_code}"}
+            response = client.post(endpoint, headers=headers, json=payload)
+        if response.status_code >= 400:
+            return {"success": False, "message": f"HTTP {response.status_code}: {response.text[:200]}"}
+        body = response.json()
+        choices = body.get("choices") or []
+        if not choices:
+            return {"success": False, "message": "响应中没有 choices"}
+        return {"success": True, "message": "模型配置可用"}
     except Exception as exc:
         return {"success": False, "message": str(exc)}
 
@@ -343,6 +362,8 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
     config = json.loads(decrypt_secret(record.config_encrypted))
     if record.provider == "mock":
         return {"success": True, "message": "mock 服务配置可用"}
+    if record.service_type == "storage" and record.provider == "local":
+        return {"success": True, "message": "本地存储可用"}
     required_keys = {
         "oss": ["access_key_id", "access_key_secret", "endpoint", "bucket"],
         "ocr": ["access_key_id", "access_key_secret", "endpoint", "region"],
@@ -351,6 +372,21 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
     missing = [key for key in required_keys if not config.get(key)]
     if missing:
         return {"success": False, "message": f"缺少字段: {', '.join(missing)}"}
+    if record.service_type == "oss":
+        try:
+            import oss2
+
+            region = config.get("region")
+            if region and config.get("signature_version", "v4") != "v1":
+                auth = oss2.AuthV4(config["access_key_id"], config["access_key_secret"])
+                bucket = oss2.Bucket(auth, config["endpoint"], config["bucket"], region=region)
+            else:
+                auth = oss2.Auth(config["access_key_id"], config["access_key_secret"])
+                bucket = oss2.Bucket(auth, config["endpoint"], config["bucket"])
+            bucket.get_bucket_info()
+        except Exception as exc:
+            return {"success": False, "message": f"OSS 连接失败: {exc}"}
+        return {"success": True, "message": "OSS 配置可用"}
     return {"success": True, "message": "配置字段完整"}
 
 

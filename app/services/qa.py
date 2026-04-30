@@ -49,6 +49,7 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
         question=payload.question,
         contexts=[chunk.content for chunk in chunks],
         history=[item.question for item in history[-3:]],
+        db=db,
     )
     sources = [chunk.source_meta or {} for chunk in chunks]
     record = QARecord(

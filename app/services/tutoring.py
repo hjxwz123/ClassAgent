@@ -22,11 +22,11 @@ def _assert_student_course_access(db: Session, *, course_id: int, user: User) ->
         raise forbidden("仅可在已加入课程内使用题目辅导")
 
 
-def _populate_problem_analysis(problem: ProblemRecord, text: str) -> None:
-    knowledge_points = ai_service.extract_knowledge_points(text)
+def _populate_problem_analysis(problem: ProblemRecord, text: str, db: Session) -> None:
+    knowledge_points = ai_service.extract_knowledge_points(text, db=db)
     problem.corrected_text = text
     problem.knowledge_points = knowledge_points
-    problem.common_mistakes = ai_service.generate_common_mistakes(knowledge_points)
+    problem.common_mistakes = ai_service.generate_common_mistakes(knowledge_points, db=db)
 
 
 def create_text_problem(db: Session, *, user: User, payload: ProblemTextRequest) -> ProblemRecord:
@@ -37,7 +37,7 @@ def create_text_problem(db: Session, *, user: User, payload: ProblemTextRequest)
         source_type=ProblemSourceType.TEXT.value,
         raw_text=payload.text,
     )
-    _populate_problem_analysis(problem, payload.text)
+    _populate_problem_analysis(problem, payload.text, db)
     db.add(problem)
     log_ai_usage(
         db,
@@ -54,13 +54,13 @@ def create_text_problem(db: Session, *, user: User, payload: ProblemTextRequest)
 
 def create_image_problem(db: Session, *, user: User, course_id: int, upload: UploadFile) -> ProblemRecord:
     _assert_student_course_access(db, course_id=course_id, user=user)
-    relative_path, _ = storage_service.save_upload(upload, folder=f"problem_images/course_{course_id}")
-    ocr_text = ocr_service.recognize(upload)
+    relative_path, _ = storage_service.save_upload(upload, folder=f"problem_images/course_{course_id}", db=db)
+    ocr_text = ocr_service.recognize(upload, db=db)
     problem = ProblemRecord(
         course_id=course_id,
         user_id=user.id,
         source_type=ProblemSourceType.IMAGE.value,
-        image_path=storage_service.public_url(relative_path),
+        image_path=storage_service.public_url(relative_path, db=db),
         ocr_text=ocr_text,
     )
     db.add(problem)
@@ -73,7 +73,7 @@ def confirm_problem_text(db: Session, *, problem_id: int, user: User, corrected_
     problem = db.scalar(select(ProblemRecord).where(ProblemRecord.id == problem_id, ProblemRecord.user_id == user.id))
     if problem is None:
         raise not_found("题目记录不存在")
-    _populate_problem_analysis(problem, corrected_text)
+    _populate_problem_analysis(problem, corrected_text, db)
     db.add(problem)
     db.commit()
     db.refresh(problem)
@@ -93,8 +93,8 @@ def get_problem_guidance(db: Session, *, problem_id: int, user: User, level: int
     guidance = ProblemGuidance(
         problem_id=problem_id,
         level=level,
-        content=ai_service.generate_problem_guidance(problem_text=source_text, level=level),
-        similar_questions=ai_service.generate_similar_questions(problem.knowledge_points or []),
+        content=ai_service.generate_problem_guidance(problem_text=source_text, level=level, db=db),
+        similar_questions=ai_service.generate_similar_questions(problem.knowledge_points or [], db=db),
     )
     db.add(guidance)
     log_ai_usage(

@@ -49,20 +49,20 @@ def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | No
     counter: Counter[str] = Counter()
     source_text: dict[str, str] = {}
     for chunk in chunks:
-        for keyword in ai_service.extract_knowledge_points(chunk.content):
+        for keyword in ai_service.extract_knowledge_points(chunk.content, db=db):
             counter[keyword] += 1
             source_text.setdefault(keyword, chunk.content)
     created: list[KnowledgePoint] = []
     for keyword, _ in counter.most_common(8):
         content = {
             "beginner": ai_service.generate_knowledge_explanation(
-                name=keyword, difficulty="beginner", source_text=source_text[keyword]
+                name=keyword, difficulty="beginner", source_text=source_text[keyword], db=db
             ),
             "standard": ai_service.generate_knowledge_explanation(
-                name=keyword, difficulty="standard", source_text=source_text[keyword]
+                name=keyword, difficulty="standard", source_text=source_text[keyword], db=db
             ),
             "advanced": ai_service.generate_knowledge_explanation(
-                name=keyword, difficulty="advanced", source_text=source_text[keyword]
+                name=keyword, difficulty="advanced", source_text=source_text[keyword], db=db
             ),
         }
         point = KnowledgePoint(

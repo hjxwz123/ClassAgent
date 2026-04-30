@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
     celery_task_always_eager: bool = True
+    external_ai_mode: Literal["auto", "mock", "strict"] = "auto"
+    external_storage_mode: Literal["auto", "local", "oss"] = "auto"
+    external_service_timeout_seconds: float = 30.0
     public_base_url: str = "http://127.0.0.1:8000"
     default_upload_limit_mb: int = 50
     max_course_materials: int = 200
@@ -58,3 +61,20 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+
+def validate_production_settings(settings: Settings | None = None) -> None:
+    current = settings or get_settings()
+    if current.app_env != "production":
+        return
+    errors: list[str] = []
+    if current.secret_key == "change-this-secret-key-in-production":
+        errors.append("SECRET_KEY 不能使用默认值")
+    if current.database_url.startswith("sqlite"):
+        errors.append("DATABASE_URL 生产环境不能使用 SQLite")
+    if current.celery_task_always_eager:
+        errors.append("CELERY_TASK_ALWAYS_EAGER 生产环境必须为 false")
+    if not current.celery_broker_url.startswith("redis://") and not current.celery_broker_url.startswith("rediss://"):
+        errors.append("CELERY_BROKER_URL 应配置为 Redis 地址")
+    if errors:
+        raise RuntimeError("生产配置不完整：" + "；".join(errors))

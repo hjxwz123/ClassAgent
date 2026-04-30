@@ -138,6 +138,7 @@ def get_course_analytics(db: Session, *, course_id: int, user: User, days: int =
         high_frequency_questions=len(high_frequency_questions),
         weak_points=[item["knowledge_point"] for item in weak_points],
         inactive_students=len(inactive_students),
+        db=db,
     )
     return {
         "high_frequency_questions": high_frequency_questions,

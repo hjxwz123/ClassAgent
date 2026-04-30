@@ -94,7 +94,7 @@ def create_material(
     settings = get_settings()
     _validate_material_payload(course_id, category, chapter_id, user, db)
     material_type = _detect_material_type(upload.filename or "")
-    storage_path, size_bytes = storage_service.save_upload(upload, folder=f"course_{course_id}")
+    storage_path, size_bytes = storage_service.save_upload(upload, folder=f"course_{course_id}", db=db)
     if size_bytes > settings.default_upload_limit_mb * 1024 * 1024:
         absolute_path = storage_service.absolute_path(storage_path)
         absolute_path.unlink(missing_ok=True)
@@ -109,7 +109,7 @@ def create_material(
         size_bytes=size_bytes,
         original_filename=upload.filename or "unknown",
         storage_path=storage_path,
-        preview_url=storage_service.public_url(storage_path),
+        preview_url=storage_service.public_url(storage_path, db=db),
         parse_status=ProcessStatus.PENDING.value,
         vector_status=ProcessStatus.PENDING.value,
     )
@@ -241,7 +241,7 @@ def update_page_script(db: Session, *, page_id: int, user: User, script_text: st
     if material is None:
         raise not_found("资料不存在")
     _assert_material_owner(db, material, user)
-    audio_url, duration = tts_service.synthesize(script_text)
+    audio_url, duration = tts_service.synthesize(script_text, db=db)
     page.script_text = script_text
     page.subtitle_text = script_text
     page.script_status = ProcessStatus.READY.value
@@ -271,8 +271,8 @@ def regenerate_page_script(db: Session, *, page_id: int, user: User) -> LessonPa
     if material is None:
         raise not_found("资料不存在")
     _assert_material_owner(db, material, user)
-    script_text = ai_service.generate_page_script(title=page.page_title, content=page.page_text)
-    audio_url, duration = tts_service.synthesize(script_text)
+    script_text = ai_service.generate_page_script(title=page.page_title, content=page.page_text, db=db)
+    audio_url, duration = tts_service.synthesize(script_text, db=db)
     page.script_text = script_text
     page.subtitle_text = script_text
     page.script_status = ProcessStatus.READY.value
@@ -323,15 +323,15 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         lesson.title = material.title
         lesson.chapter_id = material.chapter_id
         lesson.page_count = len(pages)
-        lesson.summary = ai_service.summarize_lesson(material.title, [page["page_text"] for page in pages])
+        lesson.summary = ai_service.summarize_lesson(material.title, [page["page_text"] for page in pages], db=db)
         lesson.status = LessonStatus.READY.value
         db.add(lesson)
         db.commit()
 
         created_pages: list[LessonPage] = []
         for page_data in pages:
-            script_text = ai_service.generate_page_script(title=page_data.get("page_title"), content=page_data["page_text"])
-            audio_url, duration = tts_service.synthesize(script_text)
+            script_text = ai_service.generate_page_script(title=page_data.get("page_title"), content=page_data["page_text"], db=db)
+            audio_url, duration = tts_service.synthesize(script_text, db=db)
             page = LessonPage(
                 lesson_id=lesson.id,
                 page_number=page_data["page_number"],

@@ -23,6 +23,9 @@ cp .env.example .env
 | `CELERY_BROKER_URL` | Celery Broker 地址 |
 | `CELERY_RESULT_BACKEND` | Celery 结果存储地址 |
 | `CELERY_TASK_ALWAYS_EAGER` | 是否同步执行任务，开发环境默认 `true` |
+| `EXTERNAL_AI_MODE` | AI 调用模式，生产建议 `strict` |
+| `EXTERNAL_STORAGE_MODE` | 存储模式，默认 `auto` |
+| `EXTERNAL_SERVICE_TIMEOUT_SECONDS` | 外部服务请求超时时间 |
 | `PUBLIC_BASE_URL` | 对外访问地址 |
 | `ADMIN_DEFAULT_EMAIL` | 默认管理员邮箱 |
 | `ADMIN_DEFAULT_PASSWORD` | 默认管理员密码 |
@@ -38,6 +41,9 @@ REDIS_URL=redis://localhost:6379/0
 CELERY_BROKER_URL=redis://localhost:6379/1
 CELERY_RESULT_BACKEND=redis://localhost:6379/2
 CELERY_TASK_ALWAYS_EAGER=true
+EXTERNAL_AI_MODE=auto
+EXTERNAL_STORAGE_MODE=auto
+EXTERNAL_SERVICE_TIMEOUT_SECONDS=30
 PUBLIC_BASE_URL=http://127.0.0.1:8000
 ADMIN_DEFAULT_EMAIL=admin@classagent.com
 ADMIN_DEFAULT_PASSWORD=Admin123456
@@ -58,6 +64,12 @@ ADMIN_DEFAULT_NAME=系统管理员
 - 方便在后台动态修改
 - 支持多套配置切换
 - 便于后续做启停、测试、默认值选择
+
+其中存储是例外规则：
+
+- 未配置 OSS 时，系统自动使用本地存储
+- 配置并启用 `service_type=oss` 后，系统上传到 OSS，并返回 OSS 地址
+- 管理员禁用 OSS 配置后，系统恢复本地存储
 
 ## 3. 配置入口
 
@@ -98,14 +110,14 @@ http://127.0.0.1:8000/docs
 
 ```json
 {
-  "provider": "mock",
-  "model_name": "mock-v1",
+  "provider": "openai",
+  "model_name": "gpt-4o-mini",
   "purpose": "qa",
-  "endpoint": null,
-  "api_key": "mock-key",
+  "endpoint": "https://api.openai.com/v1",
+  "api_key": "sk-xxx",
   "is_default": true,
   "extra_config": {
-    "note": "test"
+    "temperature": 0.2
   }
 }
 ```
@@ -121,6 +133,28 @@ http://127.0.0.1:8000/docs
 | `api_key` | 模型 API Key |
 | `is_default` | 是否作为该用途默认模型 |
 | `extra_config` | 额外配置 |
+
+`endpoint` 支持 OpenAI 兼容格式。可以填写：
+
+- `https://api.openai.com/v1`
+- `https://api.deepseek.com`
+- `https://dashscope.aliyuncs.com/compatible-mode/v1`
+
+后端会自动拼接 `/chat/completions`。如果你已经填写完整的 `/chat/completions` 地址，也可以直接使用。
+
+建议按用途分别配置：
+
+| purpose | 用途 |
+| --- | --- |
+| `general` | 通用兜底模型 |
+| `qa` | 课程问答 |
+| `script` | 讲解脚本生成 |
+| `summary` | 课堂摘要 |
+| `knowledge` | 知识点抽取与讲解 |
+| `quiz` | 测验生成与主观题评分 |
+| `tutoring` | 题目辅导 |
+| `study_plan` | 学习计划 |
+| `analysis` | 教学分析建议 |
 
 ## 5. OSS / OCR / TTS 配置
 
@@ -155,6 +189,12 @@ http://127.0.0.1:8000/docs
 }
 ```
 
+说明：
+
+- OSS 不是强制配置项
+- 不配置 OSS 时自动使用本地存储
+- 如果配置了 `public_base_url` 或 `cdn_domain`，返回文件地址时会优先使用该地址
+
 ### 5.2 OCR 配置示例
 
 ```json
@@ -183,7 +223,10 @@ http://127.0.0.1:8000/docs
     "appkey": "xxx",
     "token": "xxx",
     "url": "https://nls-gateway-ap-southeast-1.aliyuncs.com/stream/v1/tts",
+    "method": "GET",
     "voice": "xiaoyun",
+    "format": "wav",
+    "sample_rate": 16000,
     "speech_rate": 0,
     "volume": 50
   },
@@ -215,3 +258,8 @@ http://127.0.0.1:8000/docs
 - `POST /api/v1/admin/service-configs/{config_id}/test`
 - `POST /api/v1/admin/model-configs`
 
+## 8. 官方参考
+
+- 阿里云 OSS Python SDK 上传对象：<https://help.aliyun.com/zh/oss/developer-reference/upload-an-object>
+- 阿里云 OCR 通用文字识别 RecognizeGeneral：<https://help.aliyun.com/zh/ocr/developer-reference/api-ocr-api-2021-07-07-recognizegeneral>
+- 阿里云智能语音交互 RESTful TTS：<https://help.aliyun.com/zh/isi/developer-reference/restful-api-3>
