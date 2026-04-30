@@ -44,3 +44,4 @@ pytest
 - [M2 资料管理](docs/api/03-m2-materials.md)
 - [M3-M6 学习核心](docs/api/04-m3-m6-learning-core.md)
 - [M7-M8 分析与管理](docs/api/05-m7-m8-analytics-admin.md)
+- [服务 API 配置说明](docs/api/06-service-configuration.md)
