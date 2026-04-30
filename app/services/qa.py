@@ -7,6 +7,7 @@ from app.db.models import CourseMembership, QAConversation, QARecord, User
 from app.schemas.qa import QAAskRequest
 from app.services.ai import ai_service
 from app.services.knowledge import search_course_knowledge
+from app.services.usage import log_ai_usage
 
 
 def _assert_student_course_access(db: Session, *, course_id: int, user: User) -> None:
@@ -62,6 +63,16 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
         keywords=ai_service.extract_keywords(payload.question),
     )
     db.add(record)
+    log_ai_usage(
+        db,
+        module="qa",
+        user_id=user.id,
+        course_id=payload.course_id,
+        prompt_chars=len(payload.question),
+        completion_chars=len(answer),
+        success=not out_of_scope,
+        error_message="out_of_scope" if out_of_scope else None,
+    )
     db.commit()
     db.refresh(record)
     return record

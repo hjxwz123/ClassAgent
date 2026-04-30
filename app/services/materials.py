@@ -24,6 +24,7 @@ from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.parser import parse_material
 from app.services.storage import storage_service
 from app.services.tts import tts_service
+from app.services.usage import log_ai_usage
 
 
 ALLOWED_EXTENSIONS = {
@@ -367,6 +368,14 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         material.parse_status = ProcessStatus.READY.value
         material.vector_status = ProcessStatus.READY.value
         db.add(material)
+        log_ai_usage(
+            db,
+            module="material_pipeline",
+            user_id=material.uploader_id,
+            course_id=material.course_id,
+            prompt_chars=len(material.extracted_text or ""),
+            completion_chars=sum(len(page.script_text or "") for page in created_pages),
+        )
         task.status = ProcessStatus.READY.value
         task.detail = {"page_count": len(created_pages)}
         db.add(task)
@@ -377,6 +386,14 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         task.status = ProcessStatus.FAILED.value
         task.detail = {"error": str(exc)}
         db.add_all([material, task])
+        log_ai_usage(
+            db,
+            module="material_pipeline",
+            user_id=material.uploader_id,
+            course_id=material.course_id,
+            success=False,
+            error_message=str(exc),
+        )
         db.commit()
         raise
 

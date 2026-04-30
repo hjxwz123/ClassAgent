@@ -1,0 +1,392 @@
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy.orm import Session
+
+from app.core.deps import get_current_user
+from app.core.responses import success_response
+from app.db.models import User
+from app.db.session import get_db
+from app.schemas.admin import (
+    AdminUserCreateRequest,
+    AdminUserUpdateRequest,
+    CourseTakeoverRequest,
+    ModelConfigRequest,
+    PasswordResetByAdminRequest,
+    ServiceConfigRequest,
+    SystemSettingUpdateRequest,
+)
+from app.schemas.common import UserSummary
+from app.services.admin import (
+    assert_admin,
+    create_admin_user,
+    create_backup,
+    deactivate_course_admin,
+    get_course_detail_admin,
+    get_material_stats,
+    get_model_usage_stats,
+    get_monitoring_overview,
+    list_backups,
+    list_courses_admin,
+    list_error_logs,
+    list_login_logs,
+    list_materials_admin,
+    list_model_configs,
+    list_operation_logs,
+    list_service_configs,
+    list_system_settings,
+    list_users,
+    remove_material_admin,
+    reset_user_password,
+    save_model_config,
+    save_service_config,
+    soft_delete_user,
+    takeover_course,
+    test_model_config,
+    test_service_config,
+    update_system_setting,
+    update_user,
+)
+
+
+router = APIRouter()
+
+
+def sa_dict(item):
+    data = dict(item.__dict__)
+    data.pop("_sa_instance_state", None)
+    return data
+
+
+@router.get("/users")
+def list_users_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    role: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+):
+    assert_admin(user)
+    items = [UserSummary.model_validate(item).model_dump(mode="json") for item in list_users(db, role=role, status=status, keyword=keyword)]
+    return success_response(data=items, request_id=request.state.request_id)
+
+
+@router.post("/users/admin")
+def create_admin_user_endpoint(
+    payload: AdminUserCreateRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    admin = create_admin_user(db, email=payload.email, password=payload.password, nickname=payload.nickname)
+    return success_response(data=UserSummary.model_validate(admin).model_dump(mode="json"), request_id=request.state.request_id)
+
+
+@router.patch("/users/{user_id}")
+def update_user_endpoint(
+    user_id: int,
+    payload: AdminUserUpdateRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    updated = update_user(db, user_id=user_id, status=payload.status, role=payload.role)
+    return success_response(data=UserSummary.model_validate(updated).model_dump(mode="json"), request_id=request.state.request_id)
+
+
+@router.post("/users/{user_id}/reset-password")
+def reset_user_password_endpoint(
+    user_id: int,
+    payload: PasswordResetByAdminRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    updated = reset_user_password(db, user_id=user_id, new_password=payload.new_password)
+    return success_response(data=UserSummary.model_validate(updated).model_dump(mode="json"), request_id=request.state.request_id)
+
+
+@router.delete("/users/{user_id}")
+def delete_user_endpoint(
+    user_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    soft_delete_user(db, user_id=user_id)
+    return success_response(message="用户已删除", request_id=request.state.request_id)
+
+
+@router.get("/courses")
+def list_courses_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    keyword: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+):
+    assert_admin(user)
+    items = [sa_dict(item) for item in list_courses_admin(db, keyword=keyword, status=status)]
+    return success_response(data=items, request_id=request.state.request_id)
+
+
+@router.get("/courses/{course_id}")
+def get_course_detail_admin_endpoint(
+    course_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_course_detail_admin(db, course_id=course_id), request_id=request.state.request_id)
+
+
+@router.post("/courses/{course_id}/deactivate")
+def deactivate_course_admin_endpoint(
+    course_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    course = deactivate_course_admin(db, course_id=course_id)
+    payload = sa_dict(course)
+    return success_response(data=payload, request_id=request.state.request_id)
+
+
+@router.post("/courses/{course_id}/takeover")
+def takeover_course_endpoint(
+    course_id: int,
+    payload: CourseTakeoverRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    course = takeover_course(db, course_id=course_id, teacher_id=payload.teacher_id)
+    output = sa_dict(course)
+    return success_response(data=output, request_id=request.state.request_id)
+
+
+@router.get("/materials")
+def list_materials_admin_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    category: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
+):
+    assert_admin(user)
+    items = [sa_dict(item) for item in list_materials_admin(db, category=category, keyword=keyword)]
+    return success_response(data=items, request_id=request.state.request_id)
+
+
+@router.get("/materials/stats")
+def get_material_stats_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_material_stats(db), request_id=request.state.request_id)
+
+
+@router.delete("/materials/{material_id}")
+def delete_material_admin_endpoint(
+    material_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    remove_material_admin(db, material_id=material_id)
+    return success_response(message="资料已删除", request_id=request.state.request_id)
+
+
+@router.get("/model-configs")
+def list_model_configs_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=list_model_configs(db), request_id=request.state.request_id)
+
+
+@router.post("/model-configs")
+def save_model_config_endpoint(
+    payload: ModelConfigRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    config = save_model_config(
+        db,
+        config_id=payload.config_id,
+        provider=payload.provider,
+        model_name=payload.model_name,
+        purpose=payload.purpose,
+        endpoint=payload.endpoint,
+        api_key=payload.api_key,
+        is_default=payload.is_default,
+        extra_config=payload.extra_config,
+    )
+    return success_response(data={"id": config.id}, request_id=request.state.request_id)
+
+
+@router.post("/model-configs/{config_id}/test")
+def test_model_config_endpoint(
+    config_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=test_model_config(db, config_id=config_id), request_id=request.state.request_id)
+
+
+@router.get("/model-usage")
+def get_model_usage_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_model_usage_stats(db), request_id=request.state.request_id)
+
+
+@router.get("/service-configs")
+def list_service_configs_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=list_service_configs(db), request_id=request.state.request_id)
+
+
+@router.post("/service-configs")
+def save_service_config_endpoint(
+    payload: ServiceConfigRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    config = save_service_config(
+        db,
+        config_id=payload.config_id,
+        service_type=payload.service_type,
+        provider=payload.provider,
+        name=payload.name,
+        config=payload.config,
+        is_enabled=payload.is_enabled,
+    )
+    return success_response(data={"id": config.id}, request_id=request.state.request_id)
+
+
+@router.post("/service-configs/{config_id}/test")
+def test_service_config_endpoint(
+    config_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=test_service_config(db, config_id=config_id), request_id=request.state.request_id)
+
+
+@router.get("/system-settings")
+def list_system_settings_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=list_system_settings(db), request_id=request.state.request_id)
+
+
+@router.put("/system-settings/{key}")
+def update_system_setting_endpoint(
+    key: str,
+    payload: SystemSettingUpdateRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    setting = update_system_setting(db, key=key, value=payload.value)
+    return success_response(
+        data={"id": setting.id, "setting_key": setting.setting_key, "setting_value": setting.setting_value},
+        request_id=request.state.request_id,
+    )
+
+
+@router.get("/monitoring/overview")
+def get_monitoring_overview_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_monitoring_overview(db), request_id=request.state.request_id)
+
+
+@router.get("/logs/login")
+def list_login_logs_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    assert_admin(user)
+    return success_response(data=[sa_dict(item) for item in list_login_logs(db, limit=limit)], request_id=request.state.request_id)
+
+
+@router.get("/logs/operations")
+def list_operation_logs_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    assert_admin(user)
+    return success_response(data=[sa_dict(item) for item in list_operation_logs(db, limit=limit)], request_id=request.state.request_id)
+
+
+@router.get("/logs/errors")
+def list_error_logs_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(default=100, ge=1, le=500),
+):
+    assert_admin(user)
+    return success_response(data=[sa_dict(item) for item in list_error_logs(db, limit=limit)], request_id=request.state.request_id)
+
+
+@router.get("/backups")
+def list_backups_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=[sa_dict(item) for item in list_backups(db)], request_id=request.state.request_id)
+
+
+@router.post("/backups")
+def create_backup_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    backup = create_backup(db, trigger_user_id=user.id)
+    return success_response(data=sa_dict(backup), request_id=request.state.request_id)

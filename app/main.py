@@ -10,8 +10,10 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import GENERATED_DIR, STORAGE_DIR, UPLOAD_DIR, get_settings
+from app.core.security import decode_access_token
+from app.db.models import ApiRequestLog, SystemErrorLog
 from app.db import session as db_session
-from app.services.bootstrap import ensure_default_admin
+from app.services.bootstrap import ensure_default_admin, ensure_system_settings
 
 
 @asynccontextmanager
@@ -21,6 +23,7 @@ async def lifespan(_: FastAPI):
         directory.mkdir(parents=True, exist_ok=True)
     with db_session.SessionLocal() as db:
         ensure_default_admin(db)
+        ensure_system_settings(db)
     yield
 
 
@@ -41,8 +44,33 @@ def create_app() -> FastAPI:
         request.state.request_id = request_id
         start = perf_counter()
         response = await call_next(request)
+        duration = perf_counter() - start
         response.headers["X-Request-Id"] = request_id
-        response.headers["X-Process-Time"] = f"{(perf_counter() - start):.4f}"
+        response.headers["X-Process-Time"] = f"{duration:.4f}"
+        if request.url.path.startswith(settings.api_v1_prefix):
+            user_id = None
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                try:
+                    payload = decode_access_token(auth_header.removeprefix("Bearer ").strip())
+                    user_id = int(payload["sub"])
+                except Exception:
+                    user_id = None
+            try:
+                with db_session.SessionLocal() as db:
+                    db.add(
+                        ApiRequestLog(
+                            request_id=request_id,
+                            method=request.method,
+                            path=request.url.path,
+                            status_code=response.status_code,
+                            duration_ms=round(duration * 1000, 2),
+                            user_id=user_id,
+                        )
+                    )
+                    db.commit()
+            except Exception:
+                pass
         return response
 
     @app.exception_handler(RequestValidationError)
@@ -68,7 +96,28 @@ def create_app() -> FastAPI:
                     "request_id": getattr(request.state, "request_id", None),
                 },
             )
-        raise exc
+        try:
+            with db_session.SessionLocal() as db:
+                db.add(
+                    SystemErrorLog(
+                        level="error",
+                        source=request.url.path,
+                        message=str(exc),
+                        detail={"request_id": getattr(request.state, "request_id", None)},
+                    )
+                )
+                db.commit()
+        except Exception:
+            pass
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": 500,
+                "message": "服务器内部错误",
+                "data": None,
+                "request_id": getattr(request.state, "request_id", None),
+            },
+        )
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
     app.mount("/static", StaticFiles(directory=STORAGE_DIR), name="static")

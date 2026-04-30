@@ -186,5 +186,18 @@ class MockAIService:
             )
         return tasks
 
+    def generate_teaching_suggestion(
+        self,
+        *,
+        high_frequency_questions: int,
+        weak_points: Sequence[str],
+        inactive_students: int,
+    ) -> str:
+        weak = "、".join(weak_points[:3]) if weak_points else "当前暂无明显薄弱点"
+        return (
+            f"本课程近期高频问题数为 {high_frequency_questions}。"
+            f"建议优先回讲 {weak}，并针对 {inactive_students} 名低活跃学生安排提醒或补学任务。"
+        )
+
 
 ai_service = MockAIService()

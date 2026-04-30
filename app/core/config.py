@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     default_tts_voice: str = "xiaoyun"
     default_tts_rate: int = 0
     default_tts_volume: int = 50
-    admin_default_email: str = "admin@classagent.local"
+    admin_default_email: str = "admin@classagent.com"
     admin_default_password: str = "Admin123456"
     admin_default_name: str = "系统管理员"
 

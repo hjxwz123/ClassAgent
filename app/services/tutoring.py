@@ -9,6 +9,7 @@ from app.schemas.tutoring import ProblemTextRequest
 from app.services.ai import ai_service
 from app.services.ocr import ocr_service
 from app.services.storage import storage_service
+from app.services.usage import log_ai_usage
 
 
 def _assert_student_course_access(db: Session, *, course_id: int, user: User) -> None:
@@ -38,6 +39,14 @@ def create_text_problem(db: Session, *, user: User, payload: ProblemTextRequest)
     )
     _populate_problem_analysis(problem, payload.text)
     db.add(problem)
+    log_ai_usage(
+        db,
+        module="tutoring_analysis",
+        user_id=user.id,
+        course_id=payload.course_id,
+        prompt_chars=len(payload.text),
+        completion_chars=len("".join(problem.knowledge_points or [])),
+    )
     db.commit()
     db.refresh(problem)
     return problem
@@ -88,6 +97,14 @@ def get_problem_guidance(db: Session, *, problem_id: int, user: User, level: int
         similar_questions=ai_service.generate_similar_questions(problem.knowledge_points or []),
     )
     db.add(guidance)
+    log_ai_usage(
+        db,
+        module="tutoring_guidance",
+        user_id=user.id,
+        course_id=problem.course_id,
+        prompt_chars=len(source_text),
+        completion_chars=len(guidance.content),
+    )
     db.commit()
     db.refresh(guidance)
     return guidance

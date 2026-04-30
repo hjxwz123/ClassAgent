@@ -29,6 +29,7 @@ from app.schemas.learning import QuizGenerateRequest, StudyPlanCreateRequest
 from app.services.ai import ai_service
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.knowledge import ensure_knowledge_points
+from app.services.usage import log_ai_usage
 
 
 def _assert_student_course_access(db: Session, *, course_id: int, user: User) -> None:
@@ -111,6 +112,14 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         db.add(question)
     quiz.total_score = total_score
     db.add(quiz)
+    log_ai_usage(
+        db,
+        module="quiz_generation",
+        user_id=user.id,
+        course_id=payload.course_id,
+        prompt_chars=len(source_text),
+        completion_chars=sum(len(item["stem"]) for item in question_dicts),
+    )
     db.commit()
     return quiz
 
@@ -322,6 +331,14 @@ def create_study_plan(db: Session, *, user: User, payload: StudyPlanCreateReques
         )
         db.add(task)
         tasks.append(task)
+    log_ai_usage(
+        db,
+        module="study_plan",
+        user_id=user.id,
+        course_id=payload.course_id,
+        prompt_chars=len(payload.goal),
+        completion_chars=sum(len(item["title"]) + len(item["summary"]) for item in task_payloads),
+    )
     db.commit()
     return plan, tasks
 
