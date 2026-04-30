@@ -179,6 +179,8 @@ http://127.0.0.1:8000/docs
 
 外部基础服务走下面这组接口：
 
+- `GET /api/v1/admin/service-health`
+- `POST /api/v1/admin/service-health/test-all`
 - `GET /api/v1/admin/service-configs`
 - `POST /api/v1/admin/service-configs`
 - `POST /api/v1/admin/service-configs/{config_id}/test`

@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 import { useSessionStore } from "../stores/session";
 import type { Role } from "../types";
+import AdminView from "../views/AdminView.vue";
 import AuthView from "../views/AuthView.vue";
 import WorkspaceView from "../views/WorkspaceView.vue";
 
@@ -15,6 +16,7 @@ export const routeByPage: Record<string, string> = {
   plans: "/plans",
   analytics: "/analytics",
   profile: "/profile",
+  adminDashboard: "/admin",
   adminUsers: "/admin/users",
   adminCourses: "/admin/courses",
   adminMaterials: "/admin/materials",
@@ -27,7 +29,7 @@ export const routeByPage: Record<string, string> = {
 };
 
 export function defaultRouteForRole(role?: Role | null) {
-  if (role === "admin") return routeByPage.adminUsers;
+  if (role === "admin") return routeByPage.adminDashboard;
   return routeByPage.courses;
 }
 
@@ -36,6 +38,13 @@ const workspaceRoute = (path: string, pageKey: string, roles: Role[]): RouteReco
   component: WorkspaceView,
   props: { pageKey },
   meta: { requiresAuth: true, roles, pageKey }
+});
+
+const adminRoute = (path: string, pageKey: string): RouteRecordRaw => ({
+  path,
+  component: AdminView,
+  props: { pageKey },
+  meta: { requiresAuth: true, roles: ["admin"], pageKey }
 });
 
 const routes: RouteRecordRaw[] = [
@@ -51,15 +60,16 @@ const routes: RouteRecordRaw[] = [
   workspaceRoute("/plans", "plans", ["student"]),
   workspaceRoute("/analytics", "analytics", ["teacher"]),
   workspaceRoute("/profile", "profile", ["student", "teacher", "admin"]),
-  workspaceRoute("/admin/users", "adminUsers", ["admin"]),
-  workspaceRoute("/admin/courses", "adminCourses", ["admin"]),
-  workspaceRoute("/admin/materials", "adminMaterials", ["admin"]),
-  workspaceRoute("/admin/models", "adminModels", ["admin"]),
-  workspaceRoute("/admin/services", "adminServices", ["admin"]),
-  workspaceRoute("/admin/system", "adminSystem", ["admin"]),
-  workspaceRoute("/admin/monitor", "adminMonitor", ["admin"]),
-  workspaceRoute("/admin/logs", "adminLogs", ["admin"]),
-  workspaceRoute("/admin/backups", "adminBackups", ["admin"]),
+  adminRoute("/admin", "adminDashboard"),
+  adminRoute("/admin/users", "adminUsers"),
+  adminRoute("/admin/courses", "adminCourses"),
+  adminRoute("/admin/materials", "adminMaterials"),
+  adminRoute("/admin/models", "adminModels"),
+  adminRoute("/admin/services", "adminServices"),
+  adminRoute("/admin/system", "adminSystem"),
+  adminRoute("/admin/monitor", "adminMonitor"),
+  adminRoute("/admin/logs", "adminLogs"),
+  adminRoute("/admin/backups", "adminBackups"),
   { path: "/:pathMatch(.*)*", redirect: "/courses" }
 ];
 

@@ -1,10 +1,13 @@
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.errors import not_found
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -22,14 +25,22 @@ from app.services.admin import (
     assert_admin,
     create_admin_user,
     create_backup,
+    course_summary_admin,
     deactivate_course_admin,
     delete_backup,
     delete_model_config,
     delete_service_config,
+    get_admin_dashboard,
+    get_backup_summary,
     get_course_detail_admin,
+    get_course_stats,
     get_material_stats,
     get_model_usage_stats,
     get_monitoring_overview,
+    get_monitoring_timeseries,
+    get_service_health,
+    get_user_detail_admin,
+    get_user_stats,
     list_backups,
     list_courses_admin,
     list_error_logs,
@@ -40,17 +51,22 @@ from app.services.admin import (
     list_service_configs,
     list_system_settings,
     list_users,
+    material_summary_admin,
+    mark_error_log_resolved,
     remove_material_admin,
     reset_user_password,
+    restore_default_system_settings,
     restore_backup,
     save_model_config,
     save_service_config,
     soft_delete_user,
     takeover_course,
     test_model_config,
+    test_all_services,
     test_service_config,
     update_system_setting,
     update_user,
+    verify_backup,
 )
 
 
@@ -61,6 +77,46 @@ def sa_dict(item):
     data = dict(item.__dict__)
     data.pop("_sa_instance_state", None)
     return data
+
+
+@router.get("/dashboard")
+def get_dashboard_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_admin_dashboard(db), request_id=request.state.request_id)
+
+
+@router.get("/service-health")
+def get_service_health_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_service_health(db), request_id=request.state.request_id)
+
+
+@router.post("/service-health/test-all")
+def test_all_services_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=test_all_services(db), request_id=request.state.request_id)
+
+
+@router.get("/users/stats")
+def get_user_stats_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_user_stats(db), request_id=request.state.request_id)
 
 
 @router.get("/users")
@@ -87,6 +143,17 @@ def create_admin_user_endpoint(
     assert_admin(user)
     admin = create_admin_user(db, email=payload.email, password=payload.password, nickname=payload.nickname)
     return success_response(data=UserSummary.model_validate(admin).model_dump(mode="json"), request_id=request.state.request_id)
+
+
+@router.get("/users/{user_id}")
+def get_user_detail_admin_endpoint(
+    user_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_user_detail_admin(db, user_id=user_id), request_id=request.state.request_id)
 
 
 @router.patch("/users/{user_id}")
@@ -136,8 +203,18 @@ def list_courses_endpoint(
     status: str | None = Query(default=None),
 ):
     assert_admin(user)
-    items = [sa_dict(item) for item in list_courses_admin(db, keyword=keyword, status=status)]
+    items = [course_summary_admin(db, item) for item in list_courses_admin(db, keyword=keyword, status=status)]
     return success_response(data=items, request_id=request.state.request_id)
+
+
+@router.get("/courses/stats")
+def get_course_stats_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_course_stats(db), request_id=request.state.request_id)
 
 
 @router.get("/courses/{course_id}")
@@ -192,7 +269,7 @@ def list_materials_admin_endpoint(
 ):
     assert_admin(user)
     items = [
-        sa_dict(item)
+        material_summary_admin(db, item)
         for item in list_materials_admin(
             db,
             category=category,
@@ -372,6 +449,16 @@ def update_system_setting_endpoint(
     )
 
 
+@router.post("/system-settings/restore-defaults")
+def restore_default_system_settings_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=restore_default_system_settings(db), request_id=request.state.request_id)
+
+
 @router.get("/monitoring/overview")
 def get_monitoring_overview_endpoint(
     request: Request,
@@ -380,6 +467,16 @@ def get_monitoring_overview_endpoint(
 ):
     assert_admin(user)
     return success_response(data=get_monitoring_overview(db), request_id=request.state.request_id)
+
+
+@router.get("/monitoring/timeseries")
+def get_monitoring_timeseries_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_monitoring_timeseries(db), request_id=request.state.request_id)
 
 
 @router.get("/logs/login")
@@ -461,6 +558,27 @@ def list_error_logs_endpoint(
     )
 
 
+@router.post("/logs/errors/{error_id}/resolve")
+def resolve_error_log_endpoint(
+    error_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=mark_error_log_resolved(db, error_id=error_id), request_id=request.state.request_id)
+
+
+@router.get("/backups/summary")
+def get_backup_summary_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=get_backup_summary(db), request_id=request.state.request_id)
+
+
 @router.get("/backups")
 def list_backups_endpoint(
     request: Request,
@@ -468,7 +586,16 @@ def list_backups_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    return success_response(data=[sa_dict(item) for item in list_backups(db)], request_id=request.state.request_id)
+    items = []
+    for item in list_backups(db):
+        data = sa_dict(item)
+        if item.file_path and Path(item.file_path).exists():
+            data["file_size_bytes"] = Path(item.file_path).stat().st_size
+        else:
+            data["file_size_bytes"] = 0
+        data["backup_name"] = Path(item.file_path).stem if item.file_path else f"backup_{item.id}"
+        items.append(data)
+    return success_response(data=items, request_id=request.state.request_id)
 
 
 @router.post("/backups")
@@ -491,6 +618,30 @@ def restore_backup_endpoint(
 ):
     assert_admin(user)
     return success_response(data=restore_backup(db, backup_id=backup_id), request_id=request.state.request_id)
+
+
+@router.post("/backups/{backup_id}/verify")
+def verify_backup_endpoint(
+    backup_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=verify_backup(db, backup_id=backup_id), request_id=request.state.request_id)
+
+
+@router.get("/backups/{backup_id}/download")
+def download_backup_endpoint(
+    backup_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    backup = next((item for item in list_backups(db) if item.id == backup_id), None)
+    if backup is None or not backup.file_path or not Path(backup.file_path).exists():
+        raise not_found("备份文件不存在")
+    return FileResponse(backup.file_path, filename=Path(backup.file_path).name)
 
 
 @router.delete("/backups/{backup_id}")

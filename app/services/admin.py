@@ -10,7 +10,7 @@ from pathlib import Path
 
 import httpx
 import redis
-from sqlalchemy import func, select, text
+from sqlalchemy import distinct, func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import BACKUP_DIR, VECTOR_DIR, get_settings
@@ -22,8 +22,13 @@ from app.db.models import (
     ApiRequestLog,
     AsyncTaskLog,
     BackupRecord,
+    Chapter,
     Course,
+    CourseMembership,
     CourseMaterial,
+    KnowledgeChunk,
+    LearningProgress,
+    Lesson,
     LoginLog,
     ModelConfig,
     OperationLog,
@@ -32,6 +37,7 @@ from app.db.models import (
     SystemSetting,
     User,
 )
+from app.services.bootstrap import default_system_settings
 from app.services.email import email_service
 from app.services.vector_store import vector_store
 
@@ -39,6 +45,47 @@ from app.services.vector_store import vector_store
 def assert_admin(user: User) -> None:
     if user.role != UserRole.ADMIN.value:
         raise forbidden("仅管理员可执行该操作")
+
+
+def _model_dict(item) -> dict:
+    data = dict(item.__dict__)
+    data.pop("_sa_instance_state", None)
+    return data
+
+
+def _month_start() -> datetime:
+    now = datetime.now(UTC)
+    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _week_start() -> datetime:
+    now = datetime.now(UTC)
+    start = now - timedelta(days=now.weekday())
+    return start.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _day_start() -> datetime:
+    return datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _storage_usage_bytes() -> int:
+    total = 0
+    storage_dir = get_settings().storage_dir
+    if not storage_dir.exists():
+        return 0
+    for path in storage_dir.rglob("*"):
+        if path.is_file():
+            total += path.stat().st_size
+    return total
+
+
+def _human_size(size: int) -> str:
+    value = float(size)
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if value < 1024 or unit == "TB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024
+    return f"{value:.1f} TB"
 
 
 def list_users(db: Session, *, role: str | None, status: str | None, keyword: str | None) -> list[User]:
@@ -51,6 +98,58 @@ def list_users(db: Session, *, role: str | None, status: str | None, keyword: st
         like = f"%{keyword}%"
         statement = statement.where((User.email.like(like)) | (User.nickname.like(like)))
     return list(db.scalars(statement.order_by(User.created_at.desc())))
+
+
+def get_user_stats(db: Session) -> dict:
+    week_start = _week_start()
+    counts = {
+        role: count
+        for role, count in db.execute(
+            select(User.role, func.count(User.id)).where(User.deleted_at.is_(None)).group_by(User.role)
+        )
+    }
+    total = sum(int(count or 0) for count in counts.values())
+    weekly_new = db.scalar(select(func.count(User.id)).where(User.deleted_at.is_(None), User.created_at >= week_start)) or 0
+    return {
+        "total": int(total),
+        "teachers": int(counts.get(UserRole.TEACHER.value, 0) or 0),
+        "students": int(counts.get(UserRole.STUDENT.value, 0) or 0),
+        "admins": int(counts.get(UserRole.ADMIN.value, 0) or 0),
+        "weekly_new": int(weekly_new),
+    }
+
+
+def get_user_detail_admin(db: Session, *, user_id: int) -> dict:
+    user = db.get(User, user_id)
+    if user is None or user.deleted_at is not None:
+        raise not_found("用户不存在")
+    memberships = list(db.scalars(select(CourseMembership).where(CourseMembership.user_id == user_id).order_by(CourseMembership.created_at.desc())))
+    course_ids = [item.course_id for item in memberships]
+    courses = {item.id: item for item in db.scalars(select(Course).where(Course.id.in_(course_ids)))} if course_ids else {}
+    progress_rows = {
+        lesson_id: progress
+        for lesson_id, progress in db.execute(
+            select(Lesson.id, LearningProgress).join(LearningProgress, LearningProgress.lesson_id == Lesson.id).where(
+                LearningProgress.user_id == user_id,
+                Lesson.course_id.in_(course_ids) if course_ids else False,
+            )
+        )
+    } if course_ids else {}
+    recent_logs = list(db.scalars(select(OperationLog).where(OperationLog.user_id == user_id).order_by(OperationLog.created_at.desc()).limit(5)))
+    return {
+        "user": _model_dict(user),
+        "courses": [
+            {
+                "id": membership.course_id,
+                "name": courses.get(membership.course_id).name if membership.course_id in courses else "-",
+                "role": membership.role,
+                "joined_at": membership.joined_at,
+                "progress_percent": max([item.progress_percent for item in progress_rows.values()], default=0),
+            }
+            for membership in memberships[:10]
+        ],
+        "logs": [_model_dict(item) for item in recent_logs],
+    }
 
 
 def create_admin_user(db: Session, *, email: str, password: str, nickname: str) -> User:
@@ -118,6 +217,48 @@ def list_courses_admin(db: Session, *, keyword: str | None, status: str | None) 
     return list(db.scalars(statement.order_by(Course.created_at.desc())))
 
 
+def get_course_stats(db: Session) -> dict:
+    month_start = _month_start()
+    total = db.scalar(select(func.count(Course.id)).where(Course.deleted_at.is_(None))) or 0
+    active = db.scalar(select(func.count(Course.id)).where(Course.deleted_at.is_(None), Course.status == CourseStatus.ACTIVE.value)) or 0
+    monthly_new = db.scalar(select(func.count(Course.id)).where(Course.deleted_at.is_(None), Course.created_at >= month_start)) or 0
+    pending_materials = db.scalar(
+        select(func.count(CourseMaterial.id)).where(
+            CourseMaterial.deleted_at.is_(None),
+            CourseMaterial.parse_status.in_(["pending", "processing", "failed"]),
+        )
+    ) or 0
+    return {
+        "total": int(total),
+        "active": int(active),
+        "pending_materials": int(pending_materials),
+        "monthly_new": int(monthly_new),
+    }
+
+
+def course_summary_admin(db: Session, course: Course) -> dict:
+    teacher = db.get(User, course.teacher_id)
+    student_count = db.scalar(
+        select(func.count(CourseMembership.id)).where(CourseMembership.course_id == course.id, CourseMembership.role == UserRole.STUDENT.value)
+    ) or 0
+    material_count = db.scalar(
+        select(func.count(CourseMaterial.id)).where(CourseMaterial.course_id == course.id, CourseMaterial.deleted_at.is_(None))
+    ) or 0
+    chapter_count = db.scalar(select(func.count(Chapter.id)).where(Chapter.course_id == course.id)) or 0
+    lesson_count = db.scalar(select(func.count(Lesson.id)).where(Lesson.course_id == course.id)) or 0
+    data = _model_dict(course)
+    data.update(
+        {
+            "teacher_name": teacher.nickname if teacher else "-",
+            "student_count": int(student_count),
+            "material_count": int(material_count),
+            "chapter_count": int(chapter_count),
+            "lesson_count": int(lesson_count),
+        }
+    )
+    return data
+
+
 def get_course_detail_admin(db: Session, *, course_id: int) -> dict:
     course = db.get(Course, course_id)
     if course is None or course.deleted_at is not None:
@@ -128,6 +269,31 @@ def get_course_detail_admin(db: Session, *, course_id: int) -> dict:
     student_count = db.scalar(
         select(func.count(CourseMembership.id)).where(CourseMembership.course_id == course_id, CourseMembership.role == UserRole.STUDENT.value)
     ) or 0
+    students = [
+        {
+            "membership_id": membership.id,
+            "user": _model_dict(student),
+            "joined_at": membership.joined_at,
+        }
+        for membership, student in db.execute(
+            select(CourseMembership, User)
+            .join(User, User.id == CourseMembership.user_id)
+            .where(CourseMembership.course_id == course_id, CourseMembership.role == UserRole.STUDENT.value)
+            .order_by(CourseMembership.joined_at.desc())
+            .limit(20)
+        )
+    ]
+    materials = [_model_dict(item) for item in db.scalars(select(CourseMaterial).where(CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None)).order_by(CourseMaterial.created_at.desc()).limit(20))]
+    lessons = [_model_dict(item) for item in db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc()).limit(20))]
+    operations = [
+        _model_dict(item)
+        for item in db.scalars(
+            select(OperationLog)
+            .where(OperationLog.target_type == "course", OperationLog.target_id == course_id)
+            .order_by(OperationLog.created_at.desc())
+            .limit(10)
+        )
+    ]
     return {
         "course": {
             "id": course.id,
@@ -140,6 +306,10 @@ def get_course_detail_admin(db: Session, *, course_id: int) -> dict:
         },
         "material_count": int(material_count),
         "student_count": int(student_count),
+        "students": students,
+        "materials": materials,
+        "lessons": lessons,
+        "operations": operations,
     }
 
 
@@ -195,6 +365,20 @@ def list_materials_admin(
     return list(db.scalars(statement.order_by(CourseMaterial.created_at.desc())))
 
 
+def material_summary_admin(db: Session, material: CourseMaterial) -> dict:
+    course = db.get(Course, material.course_id)
+    teacher = db.get(User, material.uploader_id)
+    data = _model_dict(material)
+    data.update(
+        {
+            "course_name": course.name if course else "-",
+            "teacher_name": teacher.nickname if teacher else "-",
+            "size_label": _human_size(material.size_bytes or 0),
+        }
+    )
+    return data
+
+
 def get_material_stats(db: Session) -> dict:
     total = db.scalar(select(func.count(CourseMaterial.id)).where(CourseMaterial.deleted_at.is_(None))) or 0
     ready = db.scalar(
@@ -237,10 +421,21 @@ def get_material_stats(db: Session) -> dict:
             .limit(30)
         )
     }
+    month_start = _month_start()
+    monthly_new = db.scalar(
+        select(func.count(CourseMaterial.id)).where(CourseMaterial.deleted_at.is_(None), CourseMaterial.created_at >= month_start)
+    ) or 0
+    storage_used = db.scalar(select(func.sum(CourseMaterial.size_bytes)).where(CourseMaterial.deleted_at.is_(None))) or 0
+    local_used = _storage_usage_bytes()
     return {
         "total": int(total),
         "ready": int(ready),
         "failed": int(failed),
+        "monthly_new": int(monthly_new),
+        "storage_used_bytes": int(storage_used),
+        "local_storage_used_bytes": int(local_used),
+        "storage_used_label": _human_size(int(storage_used)),
+        "storage_quota_bytes": 100 * 1024 * 1024 * 1024,
         "by_category": by_category,
         "by_type": by_type,
         "by_teacher": by_teacher,
@@ -522,6 +717,90 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
     return {"success": True, "message": "配置字段完整"}
 
 
+def get_service_health(db: Session) -> dict:
+    settings = get_settings()
+    items: list[dict] = []
+    try:
+        db.execute(text("SELECT 1"))
+        database_status = "ok"
+        database_detail = "连接正常"
+    except Exception as exc:
+        database_status = "down"
+        database_detail = str(exc)
+    items.append({"key": "mysql", "name": "MySQL 数据库", "status": database_status, "metric": "SQL", "detail": database_detail})
+
+    try:
+        cache_client = redis.Redis.from_url(settings.redis_url, socket_connect_timeout=2, socket_timeout=2)
+        cache_client.ping()
+        redis_status = "ok"
+        redis_detail = "连接正常"
+    except Exception as exc:
+        redis_status = "down"
+        redis_detail = str(exc)
+    items.append({"key": "redis", "name": "Redis 缓存", "status": redis_status, "metric": "缓存", "detail": redis_detail})
+
+    chunk_count = db.scalar(select(func.count(KnowledgeChunk.id))) or 0
+    vector_ready = db.scalar(select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.embedding.is_not(None))) or 0
+    vector_status = "ok" if VECTOR_DIR.exists() else "down"
+    items.append({"key": "vector", "name": "向量数据库", "status": vector_status, "metric": f"{int(vector_ready)}/{int(chunk_count)}", "detail": "Chroma"})
+
+    try:
+        broker_client = redis.Redis.from_url(settings.celery_broker_url, socket_connect_timeout=2, socket_timeout=2)
+        broker_client.ping()
+        queue_length = int(broker_client.llen("celery"))
+        celery_status = "processing" if queue_length > 50 else "ok"
+        celery_detail = f"队列 {queue_length}"
+    except Exception as exc:
+        queue_length = None
+        celery_status = "not_configured"
+        celery_detail = str(exc)
+    items.append({"key": "celery", "name": "Celery 队列", "status": celery_status, "metric": queue_length, "detail": celery_detail})
+
+    service_by_type = {
+        item.service_type: item
+        for item in db.scalars(select(ServiceConfig).where(ServiceConfig.deleted_at.is_(None), ServiceConfig.is_enabled.is_(True)))
+    }
+    for service_type, name in [("oss", "阿里云 OSS"), ("tts", "阿里云 TTS"), ("ocr", "阿里云 OCR"), ("email", "邮件服务")]:
+        config = service_by_type.get(service_type)
+        if config is None:
+            status = "not_configured"
+            detail = "未配置"
+            metric = "-"
+        else:
+            status = "ok" if config.provider in {"mock", "local"} else "configured"
+            detail = config.name
+            metric = config.provider
+        items.append({"key": service_type, "name": name, "status": status, "metric": metric, "detail": detail})
+
+    llm = db.scalar(
+        select(ModelConfig)
+        .where(ModelConfig.deleted_at.is_(None), ModelConfig.purpose != "embedding")
+        .order_by(ModelConfig.is_default.desc(), ModelConfig.updated_at.desc())
+    )
+    items.append(
+        {
+            "key": "llm",
+            "name": "当前 LLM",
+            "status": "ok" if llm else "not_configured",
+            "metric": llm.provider if llm else "-",
+            "detail": llm.model_name if llm else "未配置",
+        }
+    )
+    unhealthy = [item for item in items if item["status"] in {"down", "not_configured"} and item["key"] not in {"email"}]
+    return {"status": "ok" if not unhealthy else "warning", "items": items, "checked_at": datetime.now(UTC).isoformat()}
+
+
+def test_all_services(db: Session) -> dict:
+    results = []
+    for config in db.scalars(select(ServiceConfig).where(ServiceConfig.deleted_at.is_(None), ServiceConfig.is_enabled.is_(True))):
+        result = test_service_config(db, config_id=config.id)
+        results.append({"type": config.service_type, "name": config.name, **result})
+    for config in db.scalars(select(ModelConfig).where(ModelConfig.deleted_at.is_(None), ModelConfig.is_default.is_(True))):
+        result = test_model_config(db, config_id=config.id)
+        results.append({"type": f"model:{config.purpose}", "name": config.model_name, **result})
+    return {"success": all(item["success"] for item in results) if results else False, "items": results, "checked_at": datetime.now(UTC).isoformat()}
+
+
 def list_system_settings(db: Session) -> list[dict]:
     return [
         {
@@ -544,6 +823,20 @@ def update_system_setting(db: Session, *, key: str, value) -> SystemSetting:
     db.commit()
     db.refresh(setting)
     return setting
+
+
+def restore_default_system_settings(db: Session) -> list[dict]:
+    defaults = default_system_settings()
+    for key, (value, description, category) in defaults.items():
+        setting = db.scalar(select(SystemSetting).where(SystemSetting.setting_key == key))
+        if setting is None:
+            setting = SystemSetting(setting_key=key)
+        setting.setting_value = value
+        setting.description = description
+        setting.category = category
+        db.add(setting)
+    db.commit()
+    return list_system_settings(db)
 
 
 def get_monitoring_overview(db: Session) -> dict:
@@ -584,6 +877,88 @@ def get_monitoring_overview(db: Session) -> dict:
         "celery_queue_length": celery_queue_length,
         "database_status": database_status,
         "cache_status": cache_status,
+    }
+
+
+def get_monitoring_timeseries(db: Session) -> dict:
+    now = datetime.now(UTC)
+    points = []
+    for index in range(29, -1, -1):
+        start = now - timedelta(minutes=index + 1)
+        end = now - timedelta(minutes=index)
+        online = db.scalar(select(func.count(distinct(LoginLog.user_id))).where(LoginLog.created_at >= start, LoginLog.created_at < end)) or 0
+        api_calls = db.scalar(select(func.count(ApiRequestLog.id)).where(ApiRequestLog.created_at >= start, ApiRequestLog.created_at < end)) or 0
+        ai_calls = db.scalar(select(func.count(AIUsageLog.id)).where(AIUsageLog.created_at >= start, AIUsageLog.created_at < end)) or 0
+        ai_failures = db.scalar(
+            select(func.count(AIUsageLog.id)).where(AIUsageLog.created_at >= start, AIUsageLog.created_at < end, AIUsageLog.success.is_(False))
+        ) or 0
+        points.append(
+            {
+                "time": end.strftime("%H:%M"),
+                "online_users": int(online),
+                "api_calls": int(api_calls),
+                "ai_calls": int(ai_calls),
+                "ai_failure_rate": round((int(ai_failures) / int(ai_calls) * 100) if ai_calls else 0, 2),
+            }
+        )
+    return {"points": points}
+
+
+def get_admin_dashboard(db: Session) -> dict:
+    day_start = _day_start()
+    users_total = db.scalar(select(func.count(User.id)).where(User.deleted_at.is_(None))) or 0
+    active_courses = db.scalar(select(func.count(Course.id)).where(Course.deleted_at.is_(None), Course.status == CourseStatus.ACTIVE.value)) or 0
+    today_ai_calls = db.scalar(select(func.count(AIUsageLog.id)).where(AIUsageLog.created_at >= day_start)) or 0
+    queue_pending = db.scalar(select(func.count(AsyncTaskLog.id)).where(AsyncTaskLog.status.in_(["pending", "processing"]))) or 0
+
+    activity = []
+    now = datetime.now(UTC)
+    for offset in range(29, -1, -1):
+        start = (now - timedelta(days=offset)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        active_users = db.scalar(select(func.count(distinct(LoginLog.user_id))).where(LoginLog.created_at >= start, LoginLog.created_at < end)) or 0
+        ai_calls = db.scalar(select(func.count(AIUsageLog.id)).where(AIUsageLog.created_at >= start, AIUsageLog.created_at < end)) or 0
+        activity.append({"date": start.strftime("%m-%d"), "active_users": int(active_users), "ai_calls": int(ai_calls)})
+
+    ai_distribution = [
+        {"module": module or "unknown", "count": int(count)}
+        for module, count in db.execute(select(AIUsageLog.module, func.count(AIUsageLog.id)).group_by(AIUsageLog.module))
+    ]
+    course_ranking = [
+        {"course_id": course_id, "name": name, "active_users": int(count)}
+        for course_id, name, count in db.execute(
+            select(Course.id, Course.name, func.count(CourseMembership.id))
+            .join(CourseMembership, CourseMembership.course_id == Course.id, isouter=True)
+            .where(Course.deleted_at.is_(None))
+            .group_by(Course.id, Course.name)
+            .order_by(func.count(CourseMembership.id).desc())
+            .limit(5)
+        )
+    ]
+    recent_users = [_model_dict(item) for item in db.scalars(select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc()).limit(5))]
+    recent_operations = [_model_dict(item) for item in db.scalars(select(OperationLog).order_by(OperationLog.created_at.desc()).limit(8))]
+    pending_tasks = []
+    pending_materials = db.scalar(
+        select(func.count(CourseMaterial.id)).where(CourseMaterial.deleted_at.is_(None), CourseMaterial.parse_status.in_(["pending", "processing", "failed"]))
+    ) or 0
+    if pending_materials:
+        pending_tasks.append({"type": "warning", "title": f"资料处理 {int(pending_materials)} 条", "level": "高"})
+    if queue_pending:
+        pending_tasks.append({"type": "warning", "title": f"队列积压 {int(queue_pending)} 条", "level": "中"})
+    return {
+        "stats": {
+            "users_total": int(users_total),
+            "active_courses": int(active_courses),
+            "today_ai_calls": int(today_ai_calls),
+            "async_pending": int(queue_pending),
+        },
+        "activity_trend": activity,
+        "ai_distribution": ai_distribution,
+        "service_health": get_service_health(db),
+        "recent_operations": recent_operations,
+        "course_ranking": course_ranking,
+        "recent_users": recent_users,
+        "pending_tasks": pending_tasks,
     }
 
 
@@ -728,6 +1103,41 @@ def list_backups(db: Session) -> list[BackupRecord]:
     return list(db.scalars(select(BackupRecord).order_by(BackupRecord.created_at.desc())))
 
 
+def get_backup_summary(db: Session) -> dict:
+    backups = list_backups(db)
+    total_size = 0
+    for item in backups:
+        if item.file_path and Path(item.file_path).exists():
+            total_size += Path(item.file_path).stat().st_size
+    last = backups[0] if backups else None
+    return {
+        "last_backup": _model_dict(last) if last else None,
+        "backup_count": len(backups),
+        "total_size_bytes": total_size,
+        "total_size_label": _human_size(total_size),
+        "oldest_at": backups[-1].created_at if backups else None,
+    }
+
+
+def verify_backup(db: Session, *, backup_id: int) -> dict:
+    record = db.get(BackupRecord, backup_id)
+    if record is None:
+        raise not_found("备份不存在")
+    ok = bool(record.file_path and Path(record.file_path).exists())
+    if ok and str(record.file_path).endswith(".zip"):
+        try:
+            with zipfile.ZipFile(record.file_path) as archive:
+                bad = archive.testzip()
+            ok = bad is None
+        except Exception:
+            ok = False
+    record.detail = {**(record.detail or {}), "verified_at": datetime.now(UTC).isoformat(), "verified": ok}
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return {"success": ok, "message": "备份正常" if ok else "备份损坏或缺失", "id": record.id}
+
+
 def delete_backup(db: Session, *, backup_id: int) -> None:
     record = db.get(BackupRecord, backup_id)
     if record is None:
@@ -736,6 +1146,17 @@ def delete_backup(db: Session, *, backup_id: int) -> None:
         Path(record.file_path).unlink(missing_ok=True)
     db.delete(record)
     db.commit()
+
+
+def mark_error_log_resolved(db: Session, *, error_id: int, resolved: bool = True) -> dict:
+    record = db.get(SystemErrorLog, error_id)
+    if record is None:
+        raise not_found("错误日志不存在")
+    record.detail = {**(record.detail or {}), "resolved": resolved, "resolved_at": datetime.now(UTC).isoformat() if resolved else None}
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return _model_dict(record)
 
 
 def restore_backup(db: Session, *, backup_id: int) -> dict:

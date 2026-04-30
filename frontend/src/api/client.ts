@@ -36,11 +36,28 @@ async function request<T>(path: string, init: RequestInit = {}, query?: Record<s
   return payload.data;
 }
 
+async function download(path: string, filename?: string, query?: Record<string, unknown>) {
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(buildUrl(path, query), { headers });
+  if (!response.ok) throw new Error("下载失败");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename || "download";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   get: <T>(path: string, query?: Record<string, unknown>) => request<T>(path, {}, query),
   post: <T>(path: string, body?: unknown, query?: Record<string, unknown>) =>
     request<T>(path, { method: "POST", body: body instanceof FormData ? body : JSON.stringify(body ?? {}) }, query),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(body ?? {}) }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" })
+  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  download
 };

@@ -20,9 +20,22 @@
 
 ## 二、管理员能力 M8
 
+### 0. 总览与健康
+
+- `GET /api/v1/admin/dashboard`
+- `GET /api/v1/admin/service-health`
+- `POST /api/v1/admin/service-health/test-all`
+
+说明：
+
+- `dashboard` 返回总览仪表盘所需的统计卡、趋势图、服务状态、最近操作、课程排行、最近注册、待处理事项。
+- `service-health` 返回数据库、Redis、向量数据库、Celery、OSS、OCR、TTS、邮件、LLM 状态。
+
 ### 1. 用户管理
 
 - `GET /api/v1/admin/users`
+- `GET /api/v1/admin/users/stats`
+- `GET /api/v1/admin/users/{user_id}`
 - `POST /api/v1/admin/users/admin`
 - `PATCH /api/v1/admin/users/{user_id}`
 - `POST /api/v1/admin/users/{user_id}/reset-password`
@@ -41,6 +54,7 @@
 ### 2. 课程管理
 
 - `GET /api/v1/admin/courses`
+- `GET /api/v1/admin/courses/stats`
 - `GET /api/v1/admin/courses/{course_id}`
 - `POST /api/v1/admin/courses/{course_id}/deactivate`
 - `POST /api/v1/admin/courses/{course_id}/takeover`
@@ -174,6 +188,7 @@
 
 - `GET /api/v1/admin/system-settings`
 - `PUT /api/v1/admin/system-settings/{key}`
+- `POST /api/v1/admin/system-settings/restore-defaults`
 
 默认参数含义：
 
@@ -187,7 +202,11 @@
 - `tts.default_rate`：默认 TTS 语速
 - `tts.default_volume`：默认 TTS 音量
 - `system.announcement`：系统公告内容
+- `system.announcement_enabled`：公告是否启用
+- `system.announcement_scope`：公告展示对象
+- `system.logo_url`：平台 Logo 地址
 - `backup.schedule`：数据库定期备份计划
+- `backup.notify_email`：备份失败通知邮箱
 
 #### 更新公告示例
 
@@ -200,6 +219,7 @@
 ### 7. 系统监控
 
 - `GET /api/v1/admin/monitoring/overview`
+- `GET /api/v1/admin/monitoring/timeseries`
 
 返回字段：
 
@@ -217,6 +237,7 @@
 - `GET /api/v1/admin/logs/login`
 - `GET /api/v1/admin/logs/operations`
 - `GET /api/v1/admin/logs/errors`
+- `POST /api/v1/admin/logs/errors/{error_id}/resolve`
 
 通用参数：
 
@@ -242,9 +263,12 @@
 
 ### 9. 数据备份
 
+- `GET /api/v1/admin/backups/summary`
 - `GET /api/v1/admin/backups`
 - `POST /api/v1/admin/backups`
 - `POST /api/v1/admin/backups/{backup_id}/restore`
+- `POST /api/v1/admin/backups/{backup_id}/verify`
+- `GET /api/v1/admin/backups/{backup_id}/download`
 - `DELETE /api/v1/admin/backups/{backup_id}`
 
 说明：
