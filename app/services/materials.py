@@ -25,6 +25,7 @@ from app.services.parser import parse_material
 from app.services.storage import storage_service
 from app.services.tts import tts_service
 from app.services.usage import log_ai_usage
+from app.services.vector_store import vector_store
 
 
 ALLOWED_EXTENSIONS = {
@@ -186,6 +187,7 @@ def update_material(
     if material is None or material.deleted_at is not None:
         raise not_found("资料不存在")
     _assert_material_owner(db, material, user)
+    metadata_changed = title is not None or chapter_id_provided
     if title is not None:
         material.title = title
     if category is not None:
@@ -198,6 +200,16 @@ def update_material(
             if chapter is None or chapter.course_id != material.course_id:
                 raise bad_request("章节不存在或不属于当前课程")
         material.chapter_id = chapter_id
+    chunks = list(db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.material_id == material.id))) if metadata_changed else []
+    if metadata_changed and chunks:
+        for chunk in chunks:
+            chunk.chapter_id = material.chapter_id
+            source_meta = dict(chunk.source_meta or {})
+            source_meta["material_title"] = material.title
+            source_meta["chapter_id"] = material.chapter_id
+            chunk.source_meta = source_meta
+            db.add(chunk)
+        vector_store.upsert_chunks(db, chunks=chunks)
     db.add(material)
     log_operation(
         db,
@@ -218,6 +230,7 @@ def delete_material(db: Session, *, material_id: int, user: User) -> None:
     _assert_material_owner(db, material, user)
     from datetime import UTC, datetime
 
+    vector_store.delete_material(db, course_id=material.course_id, material_id=material.id)
     material.deleted_at = datetime.now(UTC)
     db.add(material)
     log_operation(
@@ -317,6 +330,7 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
             db.commit()
             db.refresh(lesson)
         else:
+            vector_store.delete_material(db, course_id=material.course_id, material_id=material.id)
             db.execute(delete(LessonPage).where(LessonPage.lesson_id == lesson.id))
             db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.material_id == material.id))
             db.commit()
@@ -348,6 +362,7 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
             created_pages.append(page)
         db.commit()
 
+        created_chunks: list[KnowledgeChunk] = []
         for page in created_pages:
             chunk = KnowledgeChunk(
                 course_id=material.course_id,
@@ -362,9 +377,13 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
                     "material_title": material.title,
                     "page_number": page.page_number,
                     "chapter_id": material.chapter_id,
+                    "lesson_page_id": page.id,
                 },
             )
             db.add(chunk)
+            created_chunks.append(chunk)
+        db.flush()
+        vector_store.upsert_chunks(db, chunks=created_chunks)
         material.parse_status = ProcessStatus.READY.value
         material.vector_status = ProcessStatus.READY.value
         db.add(material)

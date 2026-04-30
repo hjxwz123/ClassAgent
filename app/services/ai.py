@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from hashlib import blake2b
 from typing import Any
 
 import httpx
+from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -36,6 +39,20 @@ def _parse_json_payload(value: str) -> Any:
         return json.loads(text[start : end + 1])
 
 
+RAG_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "你是课程知识问答助手。只能依据给定课程资料回答；如果资料不足，必须说明资料不足，不能编造。",
+        ),
+        (
+            "human",
+            "课程资料：\n{context}\n\n历史问题：\n{history}\n\n学生问题：{question}\n请用中文回答，并给出关键依据。",
+        ),
+    ]
+)
+
+
 class AIService:
     def __init__(self) -> None:
         self.settings = get_settings()
@@ -50,6 +67,12 @@ class AIService:
         if endpoint.endswith("/chat/completions"):
             return endpoint
         return f"{endpoint}/chat/completions"
+
+    def _embedding_endpoint(self, endpoint: str) -> str:
+        endpoint = endpoint.rstrip("/")
+        if endpoint.endswith("/embeddings"):
+            return endpoint
+        return f"{endpoint}/embeddings"
 
     def _call_chat(
         self,
@@ -107,6 +130,65 @@ class AIService:
         except Exception:
             if self._fallback_allowed():
                 return None
+            raise
+
+    def _local_embedding(self, text: str, *, dimension: int) -> list[float]:
+        features = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]", text.lower())
+        tokens = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]{2,16}", text.lower())
+        features.extend(tokens)
+        compact = "".join(re.findall(r"[\u4e00-\u9fffA-Za-z0-9]", text.lower()))
+        for size in (2, 3):
+            features.extend(compact[index : index + size] for index in range(max(len(compact) - size + 1, 0)))
+        if not features:
+            features = ["empty"]
+        vector = [0.0] * dimension
+        for feature in features:
+            digest = blake2b(feature.encode("utf-8"), digest_size=8).digest()
+            bucket = int.from_bytes(digest[:4], "big") % dimension
+            sign = 1.0 if digest[4] % 2 == 0 else -1.0
+            weight = 1.0 + min(len(feature), 8) / 8
+            vector[bucket] += sign * weight
+        norm = math.sqrt(sum(value * value for value in vector)) or 1.0
+        return [round(value / norm, 8) for value in vector]
+
+    def embed_texts(self, db: Session | None, texts: Sequence[str]) -> list[list[float]]:
+        if not texts:
+            return []
+        dimension = self.settings.embedding_dimension
+        config = get_default_model_config(db, "embedding")
+        if config is None or config.provider == "mock" or config.purpose != "embedding":
+            if self._fallback_allowed():
+                return [self._local_embedding(text, dimension=dimension) for text in texts]
+            raise bad_request("缺少 embedding 模型配置，请先在管理员模型配置中启用 embedding")
+        if not config.endpoint:
+            if self._fallback_allowed():
+                return [self._local_embedding(text, dimension=dimension) for text in texts]
+            raise bad_request("embedding 模型配置缺少 endpoint")
+
+        headers = {"Content-Type": "application/json"}
+        if config.api_key:
+            headers["Authorization"] = f"Bearer {config.api_key}"
+        headers.update(config.extra_config.get("headers") or {})
+        payload: dict[str, Any] = {
+            "model": config.model_name,
+            "input": list(texts),
+        }
+        if config.extra_config.get("dimensions"):
+            payload["dimensions"] = config.extra_config["dimensions"]
+        try:
+            with httpx.Client(timeout=self.settings.external_service_timeout_seconds) as client:
+                response = client.post(self._embedding_endpoint(config.endpoint), headers=headers, json=payload)
+            if response.status_code >= 400:
+                raise bad_request(f"Embedding 调用失败: HTTP {response.status_code} {response.text[:300]}")
+            body = response.json()
+            rows = body.get("data") or []
+            embeddings = [row.get("embedding") for row in rows if isinstance(row, dict)]
+            if len(embeddings) != len(texts) or not all(isinstance(item, list) for item in embeddings):
+                raise bad_request("Embedding 响应格式不符合 OpenAI 兼容规范")
+            return [[float(value) for value in embedding] for embedding in embeddings]
+        except Exception:
+            if self._fallback_allowed():
+                return [self._local_embedding(text, dimension=dimension) for text in texts]
             raise
 
     def _call_json(self, db: Session | None, *, purpose: str, system_prompt: str, user_prompt: str) -> Any | None:
@@ -184,16 +266,16 @@ class AIService:
             )
         context = "\n\n".join(_clean_text(item) for item in contexts if item)
         history_text = "\n".join(history or [])
+        messages = RAG_ANSWER_PROMPT.format_messages(
+            context=context[:8000],
+            history=history_text[:1000],
+            question=question,
+        )
         result = self._call_chat(
             db,
             purpose="qa",
-            system_prompt=(
-                "你是课程知识问答助手。只能依据给定课程资料回答；如果资料不足，必须说明资料不足，不能编造。"
-            ),
-            user_prompt=(
-                f"课程资料：\n{context[:8000]}\n\n历史问题：\n{history_text[:1000]}\n\n"
-                f"学生问题：{question}\n请用中文回答，并给出关键依据。"
-            ),
+            system_prompt=str(messages[0].content),
+            user_prompt=str(messages[1].content),
         )
         if result:
             return result.strip(), False

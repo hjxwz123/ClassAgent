@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Chapter, KnowledgeChunk, KnowledgePoint
 from app.services.ai import ai_service
+from app.services.vector_store import vector_store
 
 
 def search_course_knowledge(
@@ -18,21 +19,40 @@ def search_course_knowledge(
     lesson_page_id: int | None = None,
     limit: int = 5,
 ) -> list[KnowledgeChunk]:
-    statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
+    rows = vector_store.query_course(
+        db,
+        course_id=course_id,
+        query=query,
+        chapter_id=chapter_id,
+        lesson_page_id=lesson_page_id,
+        limit=limit,
+    )
+    if not rows:
+        backfill_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
+        if chapter_id is not None:
+            backfill_statement = backfill_statement.where(KnowledgeChunk.chapter_id == chapter_id)
+        chunks_to_index = list(db.scalars(backfill_statement))
+        if chunks_to_index:
+            vector_store.upsert_chunks(db, chunks=chunks_to_index)
+            db.commit()
+            rows = vector_store.query_course(
+                db,
+                course_id=course_id,
+                query=query,
+                chapter_id=chapter_id,
+                lesson_page_id=lesson_page_id,
+                limit=limit,
+            )
+    chunk_ids = [chunk_id for chunk_id, _ in rows]
+    if not chunk_ids:
+        return []
+    statement = select(KnowledgeChunk).where(KnowledgeChunk.id.in_(chunk_ids), KnowledgeChunk.course_id == course_id)
     if chapter_id is not None:
         statement = statement.where(KnowledgeChunk.chapter_id == chapter_id)
-    chunks = list(db.scalars(statement))
-    query_tokens = ai_service.extract_keywords(query, limit=10)
-    scored: list[tuple[int, KnowledgeChunk]] = []
-    for chunk in chunks:
-        tokens = set(chunk.tokens or [])
-        score = sum(1 for token in query_tokens if token.lower() in tokens)
-        if lesson_page_id is not None and chunk.lesson_page_id == lesson_page_id:
-            score += 2
-        if score > 0:
-            scored.append((score, chunk))
-    scored.sort(key=lambda item: item[0], reverse=True)
-    return [chunk for _, chunk in scored[:limit]]
+    if lesson_page_id is not None:
+        statement = statement.where(KnowledgeChunk.lesson_page_id == lesson_page_id)
+    chunks = {chunk.id: chunk for chunk in db.scalars(statement)}
+    return [chunks[chunk_id] for chunk_id in chunk_ids if chunk_id in chunks][:limit]
 
 
 def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None = None) -> list[KnowledgePoint]:

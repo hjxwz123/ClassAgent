@@ -28,6 +28,7 @@ from app.db.models import (
     SystemSetting,
     User,
 )
+from app.services.vector_store import vector_store
 
 
 def assert_admin(user: User) -> None:
@@ -188,6 +189,7 @@ def remove_material_admin(db: Session, *, material_id: int) -> None:
     material = db.get(CourseMaterial, material_id)
     if material is None or material.deleted_at is not None:
         raise not_found("资料不存在")
+    vector_store.delete_material(db, course_id=material.course_id, material_id=material.id)
     material.deleted_at = datetime.now(UTC)
     db.add(material)
     db.commit()

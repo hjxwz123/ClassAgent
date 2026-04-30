@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
-from app.core.config import GENERATED_DIR, STORAGE_DIR, UPLOAD_DIR, get_settings, validate_production_settings
+from app.core.config import GENERATED_DIR, STORAGE_DIR, UPLOAD_DIR, VECTOR_DIR, get_settings, validate_production_settings
 from app.core.security import decode_access_token
 from app.db.models import ApiRequestLog, SystemErrorLog
 from app.db import session as db_session
@@ -20,7 +20,7 @@ from app.services.bootstrap import ensure_default_admin, ensure_system_settings
 async def lifespan(_: FastAPI):
     validate_production_settings()
     db_session.init_db()
-    for directory in (STORAGE_DIR, UPLOAD_DIR, GENERATED_DIR):
+    for directory in (STORAGE_DIR, UPLOAD_DIR, GENERATED_DIR, VECTOR_DIR):
         directory.mkdir(parents=True, exist_ok=True)
     with db_session.SessionLocal() as db:
         ensure_default_admin(db)

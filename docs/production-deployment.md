@@ -10,6 +10,7 @@
 | --- | --- |
 | MySQL 8.x | 主数据库 |
 | Redis 7.x | 缓存、Celery Broker、任务结果 |
+| Chroma | 课程资料向量库与 RAG 检索 |
 | FastAPI / Uvicorn | 后端 API 服务 |
 | Celery Worker | 资料解析、讲解生成、音频生成等后台任务 |
 
@@ -36,6 +37,7 @@ cp .env.production.example .env
 | `CELERY_TASK_ALWAYS_EAGER` | 生产必须是 `false` |
 | `PUBLIC_BASE_URL` | 换成线上访问域名 |
 | `ADMIN_DEFAULT_PASSWORD` | 换成真实管理员初始密码 |
+| `CHROMA_PERSIST_DIR` | Chroma 持久化目录，默认 `storage/vectors/chroma` |
 
 推荐生产配置：
 
@@ -109,6 +111,11 @@ http://127.0.0.1:8000/docs
 - `POST /api/v1/admin/model-configs`
 - `POST /api/v1/admin/model-configs/{config_id}/test`
 
+至少需要配置：
+
+- `purpose=qa`：课程问答
+- `purpose=embedding`：资料向量化和 RAG 检索
+
 再按需配置外部服务：
 
 - `POST /api/v1/admin/service-configs`
@@ -138,8 +145,8 @@ pytest
 - 管理员登录
 - 模型配置测试通过
 - 资料上传后 Celery worker 能完成解析
+- 资料上传后 `vector_status=ready`
 - PPT/PDF/DOCX/TXT 至少各上传一个样例
 - 学生问答能返回真实模型结果
 - 题目图片 OCR 能识别
 - 讲解音频能播放
-

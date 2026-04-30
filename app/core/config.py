@@ -12,6 +12,7 @@ RUNTIME_DIR = STORAGE_DIR / "runtime"
 BACKUP_DIR = STORAGE_DIR / "backups"
 UPLOAD_DIR = STORAGE_DIR / "uploads"
 GENERATED_DIR = STORAGE_DIR / "generated"
+VECTOR_DIR = STORAGE_DIR / "vectors"
 
 
 class Settings(BaseSettings):
@@ -36,6 +37,11 @@ class Settings(BaseSettings):
     external_storage_mode: Literal["auto", "local", "oss"] = "auto"
     external_service_timeout_seconds: float = 30.0
     public_base_url: str = "http://127.0.0.1:8000"
+    vector_store_provider: Literal["chroma"] = "chroma"
+    chroma_persist_dir: str = str(VECTOR_DIR / "chroma")
+    embedding_dimension: int = 384
+    vector_query_limit: int = 5
+    vector_max_distance: float = 0.85
     default_upload_limit_mb: int = 50
     max_course_materials: int = 200
     script_max_length: int = 3000
@@ -74,6 +80,8 @@ def validate_production_settings(settings: Settings | None = None) -> None:
         errors.append("DATABASE_URL 生产环境不能使用 SQLite")
     if current.celery_task_always_eager:
         errors.append("CELERY_TASK_ALWAYS_EAGER 生产环境必须为 false")
+    if current.external_ai_mode == "mock":
+        errors.append("EXTERNAL_AI_MODE 生产环境不能使用 mock")
     if not current.celery_broker_url.startswith("redis://") and not current.celery_broker_url.startswith("rediss://"):
         errors.append("CELERY_BROKER_URL 应配置为 Redis 地址")
     if errors:

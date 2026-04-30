@@ -14,6 +14,8 @@ storage/runtime/
 storage/backups/
 storage/uploads/
 storage/generated/
+storage/vectors/
+storage/tmp_chroma_probe/
 coverage.xml
 .coverage
 frontend/node_modules/

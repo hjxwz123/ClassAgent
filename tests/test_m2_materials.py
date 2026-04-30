@@ -4,8 +4,12 @@ from pathlib import Path
 import fitz
 from docx import Document
 from pptx import Presentation
+from sqlalchemy import select
 
+from app.db import session as db_session
+from app.db.models import KnowledgeChunk
 from app.services.parser import parse_material
+from app.services.vector_store import vector_store
 
 
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
@@ -157,6 +161,12 @@ def test_material_management_flow(client):
     assert len(detail["pages"]) == 2
     assert detail["pages"][0]["script_text"]
     assert detail["pages"][0]["audio_url"].endswith(".wav")
+    with db_session.SessionLocal() as db:
+        chunks = list(db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.material_id == material["id"])))
+        assert len(chunks) == 2
+        assert all(isinstance(chunk.embedding, list) and chunk.embedding for chunk in chunks)
+        vector_rows = vector_store.query_course(db, course_id=course["id"], query="函数变化趋势怎样理解", limit=2)
+        assert vector_rows
 
     page_id = detail["pages"][0]["id"]
     update_script_resp = client.patch(

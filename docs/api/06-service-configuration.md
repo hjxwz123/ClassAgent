@@ -25,6 +25,8 @@ cp .env.example .env
 | `CELERY_TASK_ALWAYS_EAGER` | 是否同步执行任务，开发环境默认 `true` |
 | `EXTERNAL_AI_MODE` | AI 调用模式，生产建议 `strict` |
 | `EXTERNAL_STORAGE_MODE` | 存储模式，默认 `auto` |
+| `CHROMA_PERSIST_DIR` | Chroma 向量库持久化目录 |
+| `EMBEDDING_DIMENSION` | 开发环境本地 embedding 维度 |
 | `EXTERNAL_SERVICE_TIMEOUT_SECONDS` | 外部服务请求超时时间 |
 | `PUBLIC_BASE_URL` | 对外访问地址 |
 | `ADMIN_DEFAULT_EMAIL` | 默认管理员邮箱 |
@@ -97,6 +99,22 @@ http://127.0.0.1:8000/docs
 - `GET /api/v1/admin/model-configs`
 - `POST /api/v1/admin/model-configs`
 - `POST /api/v1/admin/model-configs/{config_id}/test`
+
+生产问答必须额外配置 Embedding：
+
+```json
+{
+  "provider": "openai",
+  "model_name": "text-embedding-3-small",
+  "purpose": "embedding",
+  "endpoint": "https://api.openai.com/v1",
+  "api_key": "sk-xxxx",
+  "is_default": true,
+  "extra_config": {
+    "dimensions": 1536
+  }
+}
+```
 - `GET /api/v1/admin/model-usage`
 
 适用场景：
