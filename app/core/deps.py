@@ -4,7 +4,9 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.core.enums import UserRole
+from datetime import UTC, datetime
+
+from app.core.enums import UserRole, UserStatus
 from app.core.errors import forbidden, unauthorized
 from app.core.security import decode_access_token
 from app.db.models import User
@@ -27,6 +29,11 @@ def get_current_user(
     user = db.get(User, int(payload["sub"]))
     if user is None or user.deleted_at is not None:
         raise unauthorized()
+    if user.status != UserStatus.ACTIVE.value:
+        raise unauthorized("账号已被禁用")
+    user.last_seen_at = datetime.now(UTC)
+    db.add(user)
+    db.commit()
     return user
 
 

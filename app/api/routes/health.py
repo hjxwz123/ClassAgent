@@ -5,7 +5,7 @@ from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.responses import success_response
-from app.db.session import SessionLocal
+from app.db import session as db_session
 
 
 router = APIRouter()
@@ -14,7 +14,7 @@ router = APIRouter()
 @router.get("")
 def health_check():
     settings = get_settings()
-    with SessionLocal() as db:
+    with db_session.SessionLocal() as db:
         db.execute(text("SELECT 1"))
     return success_response(
         data={

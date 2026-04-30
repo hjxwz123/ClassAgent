@@ -10,14 +10,17 @@ from starlette.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
 from app.core.config import GENERATED_DIR, STORAGE_DIR, UPLOAD_DIR, get_settings
-from app.db.session import init_db
+from app.db import session as db_session
+from app.services.bootstrap import ensure_default_admin
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    init_db()
+    db_session.init_db()
     for directory in (STORAGE_DIR, UPLOAD_DIR, GENERATED_DIR):
         directory.mkdir(parents=True, exist_ok=True)
+    with db_session.SessionLocal() as db:
+        ensure_default_admin(db)
     yield
 
 
