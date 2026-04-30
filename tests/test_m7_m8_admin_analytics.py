@@ -193,10 +193,18 @@ def test_teacher_analytics_and_admin_operations(client):
     assert materials_resp.status_code == 200, materials_resp.text
     assert len(materials_resp.json()["data"]) >= 1
     material_id = materials_resp.json()["data"][0]["id"]
+    filtered_materials_resp = client.get(
+        "/api/v1/admin/materials",
+        params={"material_type": "pptx", "teacher_id": materials_resp.json()["data"][0]["uploader_id"]},
+        headers=admin_headers,
+    )
+    assert filtered_materials_resp.status_code == 200, filtered_materials_resp.text
+    assert len(filtered_materials_resp.json()["data"]) >= 1
 
     material_stats_resp = client.get("/api/v1/admin/materials/stats", headers=admin_headers)
     assert material_stats_resp.status_code == 200, material_stats_resp.text
     assert material_stats_resp.json()["data"]["total"] >= 1
+    assert material_stats_resp.json()["data"]["by_type"]
 
     model_save_resp = client.post(
         "/api/v1/admin/model-configs",
@@ -294,17 +302,41 @@ def test_teacher_analytics_and_admin_operations(client):
 
     login_logs_resp = client.get("/api/v1/admin/logs/login", headers=admin_headers)
     assert login_logs_resp.status_code == 200, login_logs_resp.text
+    login_logs_filtered_resp = client.get(
+        "/api/v1/admin/logs/login",
+        params={"user_id": target_student["id"], "limit": 10},
+        headers=admin_headers,
+    )
+    assert login_logs_filtered_resp.status_code == 200, login_logs_filtered_resp.text
     operation_logs_resp = client.get("/api/v1/admin/logs/operations", headers=admin_headers)
     assert operation_logs_resp.status_code == 200, operation_logs_resp.text
+    operation_logs_filtered_resp = client.get(
+        "/api/v1/admin/logs/operations",
+        params={"action": "material.create", "target_type": "material", "limit": 10},
+        headers=admin_headers,
+    )
+    assert operation_logs_filtered_resp.status_code == 200, operation_logs_filtered_resp.text
     error_logs_resp = client.get("/api/v1/admin/logs/errors", headers=admin_headers)
     assert error_logs_resp.status_code == 200, error_logs_resp.text
+    error_logs_filtered_resp = client.get(
+        "/api/v1/admin/logs/errors",
+        params={"level": "error", "limit": 10},
+        headers=admin_headers,
+    )
+    assert error_logs_filtered_resp.status_code == 200, error_logs_filtered_resp.text
 
     backup_create_resp = client.post("/api/v1/admin/backups", headers=admin_headers)
     assert backup_create_resp.status_code == 200, backup_create_resp.text
     assert backup_create_resp.json()["data"]["status"] == "success"
+    backup_id = backup_create_resp.json()["data"]["id"]
     backup_list_resp = client.get("/api/v1/admin/backups", headers=admin_headers)
     assert backup_list_resp.status_code == 200, backup_list_resp.text
     assert len(backup_list_resp.json()["data"]) >= 1
 
     delete_material_resp = client.delete(f"/api/v1/admin/materials/{material_id}", headers=admin_headers)
     assert delete_material_resp.status_code == 200, delete_material_resp.text
+
+    backup_restore_resp = client.post(f"/api/v1/admin/backups/{backup_id}/restore", headers=admin_headers)
+    assert backup_restore_resp.status_code == 200, backup_restore_resp.text
+    backup_delete_resp = client.delete(f"/api/v1/admin/backups/{backup_id}", headers=admin_headers)
+    assert backup_delete_resp.status_code == 200, backup_delete_resp.text

@@ -191,6 +191,7 @@
 - `ai_call_count_30m`
 - `ai_failure_count_30m`
 - `async_queue_pending`
+- `celery_queue_length`
 - `database_status`
 - `cache_status`
 
@@ -200,24 +201,47 @@
 - `GET /api/v1/admin/logs/operations`
 - `GET /api/v1/admin/logs/errors`
 
-每个日志接口都支持 `limit` 参数，默认 `100`。
+通用参数：
+
+- `limit`
+- `start_at`
+- `end_at`
+
+登录日志额外支持：
+
+- `user_id`
+- `success`
+
+操作日志额外支持：
+
+- `user_id`
+- `action`
+- `target_type`
+
+错误日志额外支持：
+
+- `level`
+- `source`
 
 ### 9. 数据备份
 
 - `GET /api/v1/admin/backups`
 - `POST /api/v1/admin/backups`
+- `POST /api/v1/admin/backups/{backup_id}/restore`
+- `DELETE /api/v1/admin/backups/{backup_id}`
 
 说明：
 
-- SQLite 环境会直接复制数据库文件。
-- 非 SQLite 环境会先生成备份元信息文件，便于后续接入真实备份脚本。
+- SQLite 环境会备份数据库文件和 Chroma 向量库。
+- MySQL 环境会调用 `mysqldump` 生成 SQL 备份，并同步打包 Chroma 向量库。
+- 恢复后需要重启 API 与 Celery 服务。
 
 ## 阿里云官方参考
 
 - OSS 初始化与 Endpoint / Region / Bucket 要求：
   - https://www.alibabacloud.com/help/en/oss/initialization-2
-- OCR Python SDK 与 `ImageSyncScanRequest`：
-  - https://www.alibabacloud.com/help/en/content-moderation/latest/python-sdk-ocr
+- OCR Python SDK 与 `RecognizeGeneral`：
+  - https://help.aliyun.com/zh/ocr/developer-reference/api-ocr-api-2021-07-07-recognizegeneral
 - TTS RESTful API 与 `appkey/token/voice/speech_rate/volume`：
   - https://www.alibabacloud.com/help/en/isi/developer-reference/restful-api-3
 

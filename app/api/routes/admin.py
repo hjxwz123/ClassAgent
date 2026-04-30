@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -22,6 +23,7 @@ from app.services.admin import (
     create_admin_user,
     create_backup,
     deactivate_course_admin,
+    delete_backup,
     get_course_detail_admin,
     get_material_stats,
     get_model_usage_stats,
@@ -38,6 +40,7 @@ from app.services.admin import (
     list_users,
     remove_material_admin,
     reset_user_password,
+    restore_backup,
     save_model_config,
     save_service_config,
     soft_delete_user,
@@ -180,9 +183,24 @@ def list_materials_admin_endpoint(
     db: Annotated[Session, Depends(get_db)],
     category: str | None = Query(default=None),
     keyword: str | None = Query(default=None),
+    material_type: str | None = Query(default=None),
+    teacher_id: int | None = Query(default=None),
+    start_at: datetime | None = Query(default=None),
+    end_at: datetime | None = Query(default=None),
 ):
     assert_admin(user)
-    items = [sa_dict(item) for item in list_materials_admin(db, category=category, keyword=keyword)]
+    items = [
+        sa_dict(item)
+        for item in list_materials_admin(
+            db,
+            category=category,
+            keyword=keyword,
+            material_type=material_type,
+            teacher_id=teacher_id,
+            start_at=start_at,
+            end_at=end_at,
+        )
+    ]
     return success_response(data=items, request_id=request.state.request_id)
 
 
@@ -344,9 +362,26 @@ def list_login_logs_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     limit: int = Query(default=100, ge=1, le=500),
+    user_id: int | None = Query(default=None),
+    success: bool | None = Query(default=None),
+    start_at: datetime | None = Query(default=None),
+    end_at: datetime | None = Query(default=None),
 ):
     assert_admin(user)
-    return success_response(data=[sa_dict(item) for item in list_login_logs(db, limit=limit)], request_id=request.state.request_id)
+    return success_response(
+        data=[
+            sa_dict(item)
+            for item in list_login_logs(
+                db,
+                limit=limit,
+                user_id=user_id,
+                success=success,
+                start_at=start_at,
+                end_at=end_at,
+            )
+        ],
+        request_id=request.state.request_id,
+    )
 
 
 @router.get("/logs/operations")
@@ -355,9 +390,28 @@ def list_operation_logs_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     limit: int = Query(default=100, ge=1, le=500),
+    user_id: int | None = Query(default=None),
+    action: str | None = Query(default=None),
+    target_type: str | None = Query(default=None),
+    start_at: datetime | None = Query(default=None),
+    end_at: datetime | None = Query(default=None),
 ):
     assert_admin(user)
-    return success_response(data=[sa_dict(item) for item in list_operation_logs(db, limit=limit)], request_id=request.state.request_id)
+    return success_response(
+        data=[
+            sa_dict(item)
+            for item in list_operation_logs(
+                db,
+                limit=limit,
+                user_id=user_id,
+                action=action,
+                target_type=target_type,
+                start_at=start_at,
+                end_at=end_at,
+            )
+        ],
+        request_id=request.state.request_id,
+    )
 
 
 @router.get("/logs/errors")
@@ -366,9 +420,19 @@ def list_error_logs_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     limit: int = Query(default=100, ge=1, le=500),
+    level: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    start_at: datetime | None = Query(default=None),
+    end_at: datetime | None = Query(default=None),
 ):
     assert_admin(user)
-    return success_response(data=[sa_dict(item) for item in list_error_logs(db, limit=limit)], request_id=request.state.request_id)
+    return success_response(
+        data=[
+            sa_dict(item)
+            for item in list_error_logs(db, limit=limit, level=level, source=source, start_at=start_at, end_at=end_at)
+        ],
+        request_id=request.state.request_id,
+    )
 
 
 @router.get("/backups")
@@ -390,3 +454,26 @@ def create_backup_endpoint(
     assert_admin(user)
     backup = create_backup(db, trigger_user_id=user.id)
     return success_response(data=sa_dict(backup), request_id=request.state.request_id)
+
+
+@router.post("/backups/{backup_id}/restore")
+def restore_backup_endpoint(
+    backup_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    return success_response(data=restore_backup(db, backup_id=backup_id), request_id=request.state.request_id)
+
+
+@router.delete("/backups/{backup_id}")
+def delete_backup_endpoint(
+    backup_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    delete_backup(db, backup_id=backup_id)
+    return success_response(message="备份已删除", request_id=request.state.request_id)

@@ -11,6 +11,7 @@
 | MySQL 8.x | 主数据库 |
 | Redis 7.x | 缓存、Celery Broker、任务结果 |
 | Chroma | 课程资料向量库与 RAG 检索 |
+| mysqldump / mysql | MySQL 备份与恢复 |
 | FastAPI / Uvicorn | 后端 API 服务 |
 | Celery Worker | 资料解析、讲解生成、音频生成等后台任务 |
 

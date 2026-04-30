@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+import tempfile
+import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
-from sqlalchemy import func, select
+import redis
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.core.config import BACKUP_DIR, get_settings
+from app.core.config import BACKUP_DIR, VECTOR_DIR, get_settings
 from app.core.enums import BackupStatus, ConfigScope, CourseStatus, UserRole, UserStatus
 from app.core.errors import bad_request, forbidden, not_found
 from app.core.security import decrypt_secret, encrypt_secret, hash_password, mask_secret
@@ -164,10 +168,27 @@ def deactivate_course_admin(db: Session, *, course_id: int) -> Course:
     return course
 
 
-def list_materials_admin(db: Session, *, category: str | None, keyword: str | None) -> list[CourseMaterial]:
+def list_materials_admin(
+    db: Session,
+    *,
+    category: str | None,
+    keyword: str | None,
+    material_type: str | None = None,
+    teacher_id: int | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> list[CourseMaterial]:
     statement = select(CourseMaterial).where(CourseMaterial.deleted_at.is_(None))
     if category:
         statement = statement.where(CourseMaterial.category == category)
+    if material_type:
+        statement = statement.where(CourseMaterial.material_type == material_type)
+    if teacher_id is not None:
+        statement = statement.where(CourseMaterial.uploader_id == teacher_id)
+    if start_at is not None:
+        statement = statement.where(CourseMaterial.created_at >= start_at)
+    if end_at is not None:
+        statement = statement.where(CourseMaterial.created_at <= end_at)
     if keyword:
         like = f"%{keyword}%"
         statement = statement.where((CourseMaterial.title.like(like)) | (CourseMaterial.original_filename.like(like)))
@@ -183,7 +204,34 @@ def get_material_stats(db: Session) -> dict:
         .group_by(CourseMaterial.category)
     ):
         by_category[category] = count
-    return {"total": int(total), "by_category": by_category}
+    by_type = {
+        material_type: count
+        for material_type, count in db.execute(
+            select(CourseMaterial.material_type, func.count(CourseMaterial.id))
+            .where(CourseMaterial.deleted_at.is_(None))
+            .group_by(CourseMaterial.material_type)
+        )
+    }
+    by_teacher = {
+        str(teacher_id): count
+        for teacher_id, count in db.execute(
+            select(CourseMaterial.uploader_id, func.count(CourseMaterial.id))
+            .where(CourseMaterial.deleted_at.is_(None))
+            .group_by(CourseMaterial.uploader_id)
+        )
+    }
+    date_expr = func.date(CourseMaterial.created_at)
+    by_day = {
+        str(day): count
+        for day, count in db.execute(
+            select(date_expr, func.count(CourseMaterial.id))
+            .where(CourseMaterial.deleted_at.is_(None))
+            .group_by(date_expr)
+            .order_by(date_expr.desc())
+            .limit(30)
+        )
+    }
+    return {"total": int(total), "by_category": by_category, "by_type": by_type, "by_teacher": by_teacher, "by_day": by_day}
 
 
 def remove_material_admin(db: Session, *, material_id: int) -> None:
@@ -464,30 +512,136 @@ def get_monitoring_overview(db: Session) -> dict:
     ai_failures = db.scalar(
         select(func.count(AIUsageLog.id)).where(AIUsageLog.created_at >= since, AIUsageLog.success.is_(False))
     ) or 0
-    queue_pending = db.scalar(
-        select(func.count(AsyncTaskLog.id)).where(AsyncTaskLog.status.in_(["pending", "processing"]))
-    ) or 0
+    queue_pending = db.scalar(select(func.count(AsyncTaskLog.id)).where(AsyncTaskLog.status.in_(["pending", "processing"]))) or 0
+    database_status = "ok"
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        database_status = "down"
+    cache_status = "not_configured"
+    celery_queue_length: int | None = None
+    settings = get_settings()
+    try:
+        cache_client = redis.Redis.from_url(settings.redis_url, socket_connect_timeout=2, socket_timeout=2)
+        cache_client.ping()
+        cache_status = "ok"
+    except Exception:
+        cache_status = "down"
+    try:
+        broker_client = redis.Redis.from_url(settings.celery_broker_url, socket_connect_timeout=2, socket_timeout=2)
+        broker_client.ping()
+        celery_queue_length = int(broker_client.llen("celery"))
+    except Exception:
+        celery_queue_length = None
     return {
         "online_users": int(online_users),
         "api_call_count_30m": int(api_call_count),
         "ai_call_count_30m": int(ai_calls),
         "ai_failure_count_30m": int(ai_failures),
         "async_queue_pending": int(queue_pending),
-        "database_status": "ok",
-        "cache_status": "configured" if get_settings().redis_url else "not_configured",
+        "celery_queue_length": celery_queue_length,
+        "database_status": database_status,
+        "cache_status": cache_status,
     }
 
 
-def list_login_logs(db: Session, *, limit: int = 100) -> list[LoginLog]:
-    return list(db.scalars(select(LoginLog).order_by(LoginLog.created_at.desc()).limit(limit)))
+def list_login_logs(
+    db: Session,
+    *,
+    limit: int = 100,
+    user_id: int | None = None,
+    success: bool | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> list[LoginLog]:
+    statement = select(LoginLog)
+    if user_id is not None:
+        statement = statement.where(LoginLog.user_id == user_id)
+    if success is not None:
+        statement = statement.where(LoginLog.success.is_(success))
+    if start_at is not None:
+        statement = statement.where(LoginLog.created_at >= start_at)
+    if end_at is not None:
+        statement = statement.where(LoginLog.created_at <= end_at)
+    return list(db.scalars(statement.order_by(LoginLog.created_at.desc()).limit(limit)))
 
 
-def list_operation_logs(db: Session, *, limit: int = 100) -> list[OperationLog]:
-    return list(db.scalars(select(OperationLog).order_by(OperationLog.created_at.desc()).limit(limit)))
+def list_operation_logs(
+    db: Session,
+    *,
+    limit: int = 100,
+    user_id: int | None = None,
+    action: str | None = None,
+    target_type: str | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> list[OperationLog]:
+    statement = select(OperationLog)
+    if user_id is not None:
+        statement = statement.where(OperationLog.user_id == user_id)
+    if action:
+        statement = statement.where(OperationLog.action == action)
+    if target_type:
+        statement = statement.where(OperationLog.target_type == target_type)
+    if start_at is not None:
+        statement = statement.where(OperationLog.created_at >= start_at)
+    if end_at is not None:
+        statement = statement.where(OperationLog.created_at <= end_at)
+    return list(db.scalars(statement.order_by(OperationLog.created_at.desc()).limit(limit)))
 
 
-def list_error_logs(db: Session, *, limit: int = 100) -> list[SystemErrorLog]:
-    return list(db.scalars(select(SystemErrorLog).order_by(SystemErrorLog.created_at.desc()).limit(limit)))
+def list_error_logs(
+    db: Session,
+    *,
+    limit: int = 100,
+    level: str | None = None,
+    source: str | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+) -> list[SystemErrorLog]:
+    statement = select(SystemErrorLog)
+    if level:
+        statement = statement.where(SystemErrorLog.level == level)
+    if source:
+        like = f"%{source}%"
+        statement = statement.where(SystemErrorLog.source.like(like))
+    if start_at is not None:
+        statement = statement.where(SystemErrorLog.created_at >= start_at)
+    if end_at is not None:
+        statement = statement.where(SystemErrorLog.created_at <= end_at)
+    return list(db.scalars(statement.order_by(SystemErrorLog.created_at.desc()).limit(limit)))
+
+
+def _database_path_from_sqlite_url(database_url: str) -> Path:
+    if database_url.startswith("sqlite:////"):
+        return Path(database_url.removeprefix("sqlite:///"))
+    return Path(database_url.removeprefix("sqlite:///"))
+
+
+def _copy_vectors(target_dir: Path) -> None:
+    if VECTOR_DIR.exists():
+        shutil.copytree(VECTOR_DIR, target_dir / "vectors", dirs_exist_ok=True)
+
+
+def _make_zip(source_dir: Path, target_zip: Path) -> Path:
+    archive_base = target_zip.with_suffix("")
+    archive_path = shutil.make_archive(archive_base.as_posix(), "zip", source_dir)
+    return Path(archive_path)
+
+
+def _mysql_command_args(url, command: str) -> list[str]:
+    args = [command]
+    if url.host:
+        args.extend(["-h", url.host])
+    if url.port:
+        args.extend(["-P", str(url.port)])
+    if url.username:
+        args.extend(["-u", url.username])
+    if url.password:
+        args.append(f"-p{url.password}")
+    if url.database:
+        args.append(url.database)
+    return args
 
 
 def create_backup(db: Session, *, trigger_user_id: int | None) -> BackupRecord:
@@ -495,24 +649,33 @@ def create_backup(db: Session, *, trigger_user_id: int | None) -> BackupRecord:
     db.add(record)
     db.commit()
     db.refresh(record)
+    temp_root: Path | None = None
     try:
         timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
-        database_url = db.get_bind().url.render_as_string(hide_password=False)
+        bind_url = db.get_bind().url
+        database_url = bind_url.render_as_string(hide_password=False)
+        temp_root = Path(tempfile.mkdtemp(prefix=f"backup_{timestamp}_", dir=BACKUP_DIR))
         if database_url.startswith("sqlite:///"):
-            source = Path(database_url.removeprefix("sqlite:///"))
-            target = BACKUP_DIR / f"backup_{timestamp}.db"
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
-            record.file_path = target.as_posix()
+            source = _database_path_from_sqlite_url(database_url)
+            shutil.copy2(source, temp_root / "database.db")
         else:
-            target = BACKUP_DIR / f"backup_{timestamp}.json"
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(json.dumps({"database_url": database_url}), encoding="utf-8")
-            record.file_path = target.as_posix()
+            dump_target = temp_root / "database.sql"
+            with dump_target.open("wb") as output:
+                subprocess.run(_mysql_command_args(bind_url, "mysqldump"), stdout=output, check=True, timeout=300)
+        (temp_root / "metadata.json").write_text(
+            json.dumps({"database": "sqlite" if database_url.startswith("sqlite:///") else "mysql"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        _copy_vectors(temp_root)
+        target = _make_zip(temp_root, BACKUP_DIR / f"backup_{timestamp}.zip")
+        shutil.rmtree(temp_root, ignore_errors=True)
+        record.file_path = target.as_posix()
         record.status = BackupStatus.SUCCESS.value
     except Exception as exc:
         record.status = BackupStatus.FAILED.value
         record.detail = {"error": str(exc)}
+        if temp_root is not None:
+            shutil.rmtree(temp_root, ignore_errors=True)
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -521,3 +684,50 @@ def create_backup(db: Session, *, trigger_user_id: int | None) -> BackupRecord:
 
 def list_backups(db: Session) -> list[BackupRecord]:
     return list(db.scalars(select(BackupRecord).order_by(BackupRecord.created_at.desc())))
+
+
+def delete_backup(db: Session, *, backup_id: int) -> None:
+    record = db.get(BackupRecord, backup_id)
+    if record is None:
+        raise not_found("备份不存在")
+    if record.file_path:
+        Path(record.file_path).unlink(missing_ok=True)
+    db.delete(record)
+    db.commit()
+
+
+def restore_backup(db: Session, *, backup_id: int) -> dict:
+    record = db.get(BackupRecord, backup_id)
+    if record is None or not record.file_path:
+        raise not_found("备份不存在")
+    backup_path = Path(record.file_path)
+    if not backup_path.exists():
+        raise not_found("备份文件不存在")
+    bind_url = db.get_bind().url
+    database_url = bind_url.render_as_string(hide_password=False)
+    temp_root = Path(tempfile.mkdtemp(prefix=f"restore_{record.id}_", dir=BACKUP_DIR))
+    try:
+        if backup_path.suffix == ".zip":
+            with zipfile.ZipFile(backup_path) as archive:
+                archive.extractall(temp_root)
+            sqlite_backup = temp_root / "database.db"
+            mysql_backup = temp_root / "database.sql"
+            vector_backup = temp_root / "vectors"
+            if database_url.startswith("sqlite:///") and sqlite_backup.exists():
+                shutil.copy2(sqlite_backup, _database_path_from_sqlite_url(database_url))
+            elif mysql_backup.exists():
+                with mysql_backup.open("rb") as input_file:
+                    subprocess.run(_mysql_command_args(bind_url, "mysql"), stdin=input_file, check=True, timeout=300)
+            else:
+                raise bad_request("备份文件与当前数据库类型不匹配")
+            if vector_backup.exists():
+                if VECTOR_DIR.exists():
+                    shutil.rmtree(VECTOR_DIR)
+                shutil.copytree(vector_backup, VECTOR_DIR)
+        elif database_url.startswith("sqlite:///") and backup_path.suffix == ".db":
+            shutil.copy2(backup_path, _database_path_from_sqlite_url(database_url))
+        else:
+            raise bad_request("不支持的备份文件格式")
+    finally:
+        shutil.rmtree(temp_root, ignore_errors=True)
+    return {"success": True, "message": "备份已恢复，请重启 API 与 Celery 服务使连接重新加载"}
