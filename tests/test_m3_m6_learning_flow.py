@@ -228,6 +228,7 @@ def test_learning_core_flow(client):
     wrong_resp = client.get("/api/v1/learning/wrong-questions", params={"course_id": course["id"]}, headers=student_headers)
     assert wrong_resp.status_code == 200, wrong_resp.text
     assert len(wrong_resp.json()["data"]) >= 1
+    assert "knowledge_point_id" in wrong_resp.json()["data"][0]
 
     wrong_practice_resp = client.post(
         "/api/v1/learning/wrong-questions/practice",
@@ -283,3 +284,7 @@ def test_learning_core_flow(client):
     assert records["qa_count"] >= 1
     assert records["problem_count"] >= 1
     assert records["attempt_count"] >= 1
+    assert records["recent_progress"]
+    assert records["recent_qa"]
+    assert records["recent_problems"]
+    assert records["recent_attempts"]

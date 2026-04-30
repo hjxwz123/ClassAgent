@@ -259,6 +259,12 @@
 - 查询：`GET /api/v1/learning/wrong-questions?course_id=1`
 - 生成重练：`POST /api/v1/learning/wrong-questions/practice?course_id=1`
 
+错题返回中包含：
+
+- `knowledge_point_id`
+- `knowledge_point_name`
+- `wrong_count`
+
 ### 8. 薄弱点分析
 
 - 方法：`GET`
@@ -296,6 +302,10 @@
 - `qa_count`
 - `problem_count`
 - `attempt_count`
+- `recent_progress`
+- `recent_qa`
+- `recent_problems`
+- `recent_attempts`
 
 ## 当前阶段验证结论
 

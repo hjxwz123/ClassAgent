@@ -122,6 +122,8 @@ class WrongQuestionResponse(BaseModel):
     wrong_question_id: int
     question: QuizQuestionPayload
     wrong_count: int
+    knowledge_point_id: int | None = None
+    knowledge_point_name: str | None = None
 
 
 class WeakPointResponse(BaseModel):
@@ -134,3 +136,7 @@ class LearningRecordResponse(BaseModel):
     qa_count: int
     problem_count: int
     attempt_count: int
+    recent_progress: list[dict] = Field(default_factory=list)
+    recent_qa: list[dict] = Field(default_factory=list)
+    recent_problems: list[dict] = Field(default_factory=list)
+    recent_attempts: list[dict] = Field(default_factory=list)

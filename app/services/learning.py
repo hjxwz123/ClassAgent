@@ -190,6 +190,28 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
             expected = question.reference_answer["value"] if isinstance(question.reference_answer, dict) else question.reference_answer
             is_correct = user_answer == expected
             score = question.score if is_correct else 0.0
+        elif question.question_type == QuestionType.MULTIPLE_CHOICE.value:
+            expected = question.reference_answer["value"] if isinstance(question.reference_answer, dict) else question.reference_answer
+            expected_values = sorted(str(item) for item in (expected or []))
+            actual_values = sorted(str(item) for item in (user_answer or []))
+            is_correct = actual_values == expected_values
+            score = question.score if is_correct else 0.0
+        elif question.question_type == QuestionType.BLANK.value:
+            expected = question.reference_answer or {}
+            expected_values = []
+            if isinstance(expected, dict):
+                if "value" in expected:
+                    expected_values = [str(expected["value"])]
+                else:
+                    expected_values = [str(item) for item in expected.get("keywords", [])]
+            elif isinstance(expected, list):
+                expected_values = [str(item) for item in expected]
+            else:
+                expected_values = [str(expected)]
+            actual_text = str(user_answer or "")
+            matched = sum(1 for item in expected_values if item and item in actual_text)
+            is_correct = bool(expected_values) and matched == len(expected_values)
+            score = question.score if is_correct else round(question.score * matched / max(len(expected_values), 1), 2)
         else:
             expected_keywords = []
             if isinstance(question.reference_answer, dict):
@@ -396,9 +418,86 @@ def get_learning_records(db: Session, *, course_id: int, user: User) -> dict:
         .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
         .where(QuizAttempt.user_id == user.id, Quiz.course_id == course_id)
     )
+    progress_rows = list(
+        db.execute(
+            select(LearningProgress, Lesson)
+            .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+            .where(LearningProgress.user_id == user.id, Lesson.course_id == course_id)
+            .order_by(LearningProgress.updated_at.desc())
+            .limit(10)
+        ).all()
+    )
+    qa_rows = list(
+        db.scalars(
+            select(QARecord)
+            .where(QARecord.user_id == user.id, QARecord.course_id == course_id)
+            .order_by(QARecord.created_at.desc())
+            .limit(10)
+        )
+    )
+    problem_rows = list(
+        db.scalars(
+            select(ProblemRecord)
+            .where(ProblemRecord.user_id == user.id, ProblemRecord.course_id == course_id)
+            .order_by(ProblemRecord.created_at.desc())
+            .limit(10)
+        )
+    )
+    attempt_rows = list(
+        db.execute(
+            select(QuizAttempt, Quiz)
+            .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+            .where(QuizAttempt.user_id == user.id, Quiz.course_id == course_id)
+            .order_by(QuizAttempt.created_at.desc())
+            .limit(10)
+        ).all()
+    )
     return {
         "progress_count": int(progress_count or 0),
         "qa_count": int(qa_count or 0),
         "problem_count": int(problem_count or 0),
         "attempt_count": int(attempt_count or 0),
+        "recent_progress": [
+            {
+                "lesson_id": lesson.id,
+                "lesson_title": lesson.title,
+                "current_page": progress.current_page,
+                "progress_percent": progress.progress_percent,
+                "total_study_seconds": progress.total_study_seconds,
+                "updated_at": progress.updated_at,
+            }
+            for progress, lesson in progress_rows
+        ],
+        "recent_qa": [
+            {
+                "id": record.id,
+                "question": record.question,
+                "answer": record.answer,
+                "is_favorite": record.is_favorite,
+                "created_at": record.created_at,
+            }
+            for record in qa_rows
+        ],
+        "recent_problems": [
+            {
+                "id": record.id,
+                "source_type": record.source_type,
+                "text": record.corrected_text or record.ocr_text or record.raw_text,
+                "knowledge_points": record.knowledge_points or [],
+                "created_at": record.created_at,
+            }
+            for record in problem_rows
+        ],
+        "recent_attempts": [
+            {
+                "attempt_id": attempt.id,
+                "quiz_id": quiz.id,
+                "quiz_title": quiz.title,
+                "score": attempt.score,
+                "total_score": attempt.total_score,
+                "accuracy": attempt.accuracy,
+                "created_at": attempt.created_at,
+            }
+            for attempt, quiz in attempt_rows
+        ],
     }

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.core.responses import success_response
-from app.db.models import User
+from app.db.models import KnowledgePoint, User
 from app.db.session import get_db
 from app.schemas.learning import (
     KnowledgePointResponse,
@@ -132,14 +132,18 @@ def get_wrong_questions_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    items = [
-        WrongQuestionResponse(
-            wrong_question_id=wrong.id,
-            question=QuizQuestionPayload.model_validate(question),
-            wrong_count=wrong.wrong_count,
-        ).model_dump(mode="json")
-        for wrong, question in list_wrong_questions(db, course_id=course_id, user=user)
-    ]
+    items = []
+    for wrong, question in list_wrong_questions(db, course_id=course_id, user=user):
+        point = db.get(KnowledgePoint, wrong.knowledge_point_id) if wrong.knowledge_point_id else None
+        items.append(
+            WrongQuestionResponse(
+                wrong_question_id=wrong.id,
+                question=QuizQuestionPayload.model_validate(question),
+                wrong_count=wrong.wrong_count,
+                knowledge_point_id=wrong.knowledge_point_id,
+                knowledge_point_name=point.name if point else None,
+            ).model_dump(mode="json")
+        )
     return success_response(data=items, request_id=request.state.request_id)
 
 
