@@ -197,6 +197,12 @@ def list_materials_admin(
 
 def get_material_stats(db: Session) -> dict:
     total = db.scalar(select(func.count(CourseMaterial.id)).where(CourseMaterial.deleted_at.is_(None))) or 0
+    ready = db.scalar(
+        select(func.count(CourseMaterial.id)).where(CourseMaterial.deleted_at.is_(None), CourseMaterial.parse_status == "ready")
+    ) or 0
+    failed = db.scalar(
+        select(func.count(CourseMaterial.id)).where(CourseMaterial.deleted_at.is_(None), CourseMaterial.parse_status == "failed")
+    ) or 0
     by_category = {}
     for category, count in db.execute(
         select(CourseMaterial.category, func.count(CourseMaterial.id))
@@ -231,7 +237,15 @@ def get_material_stats(db: Session) -> dict:
             .limit(30)
         )
     }
-    return {"total": int(total), "by_category": by_category, "by_type": by_type, "by_teacher": by_teacher, "by_day": by_day}
+    return {
+        "total": int(total),
+        "ready": int(ready),
+        "failed": int(failed),
+        "by_category": by_category,
+        "by_type": by_type,
+        "by_teacher": by_teacher,
+        "by_day": by_day,
+    }
 
 
 def remove_material_admin(db: Session, *, material_id: int) -> None:

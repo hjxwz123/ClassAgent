@@ -163,16 +163,17 @@
             <option value="reference">参考</option>
           </select>
           <button class="btn btn-secondary" @click="loadMaterials"><Search :size="16" />搜索</button>
-          <button v-if="user.role !== 'student'" class="btn btn-primary" @click="showUpload = true"><Upload :size="16" />上传</button>
+          <button v-if="user.role !== 'student'" class="btn btn-primary" @click="openUpload"><Upload :size="16" />上传</button>
         </div>
         <div class="table-wrap">
           <table class="table">
-            <thead><tr><th>标题</th><th>类型</th><th>状态</th><th>操作</th></tr></thead>
+            <thead><tr><th>标题</th><th>类型</th><th>解析</th><th>向量</th><th>操作</th></tr></thead>
             <tbody>
               <tr v-for="item in materials" :key="item.id">
                 <td>{{ item.title }}</td>
                 <td>{{ item.material_type }}</td>
                 <td><span class="tag" :class="statusClass(item.parse_status)">{{ item.parse_status }}</span></td>
+                <td><span class="tag" :class="statusClass(item.vector_status)">{{ item.vector_status }}</span></td>
                 <td class="ops">
                   <button class="btn btn-ghost btn-xs" @click="loadMaterialDetail(item.id)">查看</button>
                   <a v-if="item.preview_url" class="btn btn-ghost btn-xs" :href="item.preview_url" target="_blank">预览</a>
@@ -229,14 +230,18 @@
           <div v-if="qaResult" class="ai-box result">
             <div v-if="qaResult.is_out_of_scope" class="alert alert-warning">
               <AlertTriangle :size="16" />
-              <div><strong>该问题超出课程资料范围</strong><br><span>以下回答仅供参考，无法保证与课程内容一致。</span></div>
+              <div><strong>超出范围</strong></div>
             </div>
             <p>{{ qaResult.answer }}</p>
+            <div v-if="qaResult.sources?.length" class="source-list">
+              <span v-for="(source, index) in qaResult.sources" :key="index" class="tag">
+                {{ source.material_title || '资料' }} · {{ source.page_number || '-' }}
+              </span>
+            </div>
             <button class="btn btn-ghost btn-xs" @click="favoriteQa(qaResult.record_id, true)">收藏</button>
             <button class="btn btn-ghost btn-xs" @click="feedbackQa(qaResult.record_id, 'positive')">好评</button>
             <button class="btn btn-ghost btn-xs" @click="feedbackQa(qaResult.record_id, 'negative')">差评</button>
           </div>
-          <p class="ai-note">AI 回答仅供学习参考，可能存在不准确的情况，请结合课程材料综合判断。</p>
         </section>
         <aside class="card">
           <div class="card-head"><h2 class="card-title">历史</h2><button class="btn btn-ghost btn-sm" @click="loadQaHistory">刷新</button></div>
@@ -266,6 +271,9 @@
           <div v-if="activeProblem" class="ai-box">
             <textarea v-model="correctedText" class="textarea"></textarea>
             <button class="btn btn-secondary" @click="confirmProblem">确认</button>
+            <div v-if="activeProblem.common_mistakes?.length" class="source-list">
+              <span v-for="item in activeProblem.common_mistakes" :key="item" class="tag tag-warning">{{ item }}</span>
+            </div>
             <div class="guided">
               <button class="row" @click="loadGuidance(1)"><ChevronDown :size="16" />思路</button>
               <p v-if="guidance[1]">{{ guidance[1].content }}</p>
@@ -273,6 +281,9 @@
               <p v-if="guidance[2]">{{ guidance[2].content }}</p>
               <button class="row" @click="loadGuidance(3)"><Lock :size="16" />解析</button>
               <p v-if="guidance[3]">{{ guidance[3].content }}</p>
+              <div v-if="guidance[3]?.similar_questions?.length" class="source-list">
+                <span v-for="item in guidance[3].similar_questions" :key="item" class="tag">{{ item }}</span>
+              </div>
             </div>
           </div>
         </section>
@@ -323,7 +334,13 @@
               <h3>{{ quizDetail.quiz.title }}</h3>
               <div v-for="question in quizDetail.questions" :key="question.id" class="question">
                 <strong>{{ question.stem }}</strong>
-                <select v-if="question.options" v-model="quizAnswers[question.id]" class="select">
+                <div v-if="question.question_type === 'multiple_choice' && question.options" class="checks">
+                  <label v-for="(option, index) in question.options" :key="index" class="check">
+                    <input type="checkbox" :value="index" @change="toggleMultiFromEvent(question.id, Number(index), $event)" />
+                    {{ option }}
+                  </label>
+                </div>
+                <select v-else-if="question.options" v-model="quizAnswers[question.id]" class="select">
                   <option v-for="(option, index) in question.options" :key="index" :value="index">{{ option }}</option>
                 </select>
                 <textarea v-else v-model="quizAnswers[question.id]" class="textarea"></textarea>
@@ -337,14 +354,17 @@
           </section>
           <aside class="card">
             <div class="card-head"><h2 class="card-title">知识</h2><button class="btn btn-ghost btn-sm" @click="loadWrongPractice">重练</button></div>
+            <select v-model="knowledgeLevel" class="select">
+              <option value="beginner">入门</option><option value="standard">标准</option><option value="advanced">进阶</option>
+            </select>
             <div class="list">
               <div v-for="item in knowledge" :key="item.id" class="ai-box mini">
                 <span class="tag tag-ai">AI</span>
                 <strong>{{ item.name }}</strong>
-                <p>{{ item.description }}</p>
+                <p>{{ knowledgeText(item) }}</p>
               </div>
               <div v-for="item in wrongQuestions" :key="item.wrong_question_id" class="row">
-                <span>{{ item.question.stem }}</span><span class="tag tag-danger">{{ item.wrong_count }}</span>
+                <span>{{ item.knowledge_point_name || item.question.stem }}</span><span class="tag tag-danger">{{ item.wrong_count }}</span>
               </div>
               <div v-for="item in weakPoints" :key="item.knowledge_point" class="row">
                 <span>{{ item.knowledge_point }}</span><span class="tag tag-warning">{{ item.wrong_count }}</span>
@@ -438,9 +458,13 @@
   </ModalPanel>
 
   <ModalPanel :open="showUpload" title="上传资料" @close="showUpload = false">
-    <select v-model.number="uploadForm.course_id" class="select">
+    <select v-model.number="uploadForm.course_id" class="select" @change="loadUploadChapters">
       <option :value="0">课程</option>
       <option v-for="course in courses" :key="course.id" :value="course.id">{{ course.name }}</option>
+    </select>
+    <select v-model.number="uploadForm.chapter_id" class="select">
+      <option :value="0">章节</option>
+      <option v-for="chapter in uploadChapters" :key="chapter.id" :value="chapter.id">{{ chapter.title }}</option>
     </select>
     <input v-model="uploadForm.title" class="input" placeholder="标题" />
     <select v-model="uploadForm.category" class="select">
@@ -469,7 +493,7 @@ import CourseCard from "../components/CourseCard.vue";
 import ModalPanel from "../components/ModalPanel.vue";
 import RadarChart from "../components/RadarChart.vue";
 import StatCard from "../components/StatCard.vue";
-import type { Course, CourseDetail, Lesson, LessonPage, Material, MaterialDetail, Quiz, User as UserType } from "../types";
+import type { Chapter, Course, CourseDetail, Lesson, LessonPage, Material, MaterialDetail, Quiz, User as UserType } from "../types";
 import AdminPanels from "./admin/AdminPanels.vue";
 import MaterialPanel from "./parts/MaterialPanel.vue";
 
@@ -501,6 +525,7 @@ const plans = ref<any[]>([]);
 const tasks = ref<any[]>([]);
 const records = ref<any | null>(null);
 const analytics = ref<any | null>(null);
+const uploadChapters = ref<Chapter[]>([]);
 
 const joinCode = ref("");
 const showCourseForm = ref(false);
@@ -515,12 +540,13 @@ const quizAnswers = reactive<Record<number, any>>({});
 const attempt = ref<any | null>(null);
 const analyticsDays = ref(30);
 const uploadFile = ref<File | null>(null);
+const knowledgeLevel = ref<"beginner" | "standard" | "advanced">("standard");
 
 const courseForm = reactive({ name: "", term: "", description: "" });
 const courseEdit = reactive({ name: "", term: "", description: "" });
 const chapterForm = reactive({ title: "", description: "", order_index: 1 });
 const materialFilter = reactive({ keyword: "", category: "" });
-const uploadForm = reactive({ course_id: 0, title: "", category: "courseware" });
+const uploadForm = reactive({ course_id: 0, chapter_id: 0, title: "", category: "courseware" });
 const quizForm = reactive({ title: "章节练习", quiz_type: props.user.role === "student" ? "practice" : "course", question_count: 5 });
 const planForm = reactive({ title: "复习计划", goal: "", available_days: 7, daily_minutes: 30 });
 const profileForm = reactive({ nickname: props.user.nickname, avatar_url: props.user.avatar_url || "", bio: props.user.bio || "" });
@@ -579,6 +605,18 @@ function statusClass(status: string) {
   if (["pending", "review"].includes(status)) return "tag-warning";
   if (["failed", "inactive"].includes(status)) return "tag-danger";
   return "";
+}
+function knowledgeText(item: any) {
+  const content = item.content_by_level?.[knowledgeLevel.value];
+  if (!content) return item.description || "";
+  return [content.definition, content.principle, content.example, content.common_mistake].filter(Boolean).join(" ");
+}
+function toggleMulti(questionId: number, index: number, checked: boolean) {
+  const current = Array.isArray(quizAnswers[questionId]) ? [...quizAnswers[questionId]] : [];
+  quizAnswers[questionId] = checked ? [...new Set([...current, index])] : current.filter((item) => item !== index);
+}
+function toggleMultiFromEvent(questionId: number, index: number, event: Event) {
+  toggleMulti(questionId, index, (event.target as HTMLInputElement).checked);
 }
 async function run<T>(task: () => Promise<T>, ok?: string) {
   try {
@@ -671,13 +709,25 @@ async function loadMaterialDetail(id: number) {
 function pickUploadFile(event: Event) {
   uploadFile.value = ((event.target as HTMLInputElement).files || [])[0] || null;
 }
+async function openUpload() {
+  uploadForm.course_id = selectedCourseId.value || courses.value[0]?.id || 0;
+  uploadForm.chapter_id = selectedChapterId.value || 0;
+  await loadUploadChapters();
+  showUpload.value = true;
+}
+async function loadUploadChapters() {
+  uploadChapters.value = [];
+  if (!uploadForm.course_id) return;
+  const detail = await run(() => api.get<CourseDetail>(`/courses/${uploadForm.course_id}`));
+  uploadChapters.value = detail?.chapters || [];
+}
 async function uploadMaterial() {
   if (!uploadFile.value || !uploadForm.course_id) return;
   const form = new FormData();
   form.set("course_id", String(uploadForm.course_id));
   form.set("title", uploadForm.title);
   form.set("category", uploadForm.category);
-  if (selectedChapterId.value) form.set("chapter_id", String(selectedChapterId.value));
+  if (uploadForm.chapter_id) form.set("chapter_id", String(uploadForm.chapter_id));
   form.set("file", uploadFile.value);
   await run(() => api.post("/materials", form), "已上传");
   showUpload.value = false;
@@ -904,6 +954,19 @@ onMounted(async () => {
 .tiny { max-width: 96px; }
 .ops { white-space: nowrap; }
 .list { display: grid; gap: var(--space-2); }
+.source-list, .checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-body-sm);
+}
 .row {
   display: flex;
   align-items: center;
