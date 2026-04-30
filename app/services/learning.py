@@ -172,21 +172,21 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
     quiz, questions = get_quiz_detail(db, quiz_id=quiz_id, user=user)
     if user.role != UserRole.STUDENT.value:
         raise forbidden("仅学生可提交测验")
-    question_map = {question.id: question for question in questions}
+    answer_map = {int(item["question_id"]): item.get("answer") for item in answers if item.get("question_id") is not None}
     attempt = QuizAttempt(quiz_id=quiz_id, user_id=user.id, total_score=quiz.total_score, submitted_at=datetime.now(UTC))
     db.add(attempt)
     db.commit()
     db.refresh(attempt)
     total_score = 0.0
-    for answer_payload in answers:
-        question = question_map.get(answer_payload["question_id"])
-        if question is None:
-            continue
-        user_answer = answer_payload.get("answer")
+    for question in questions:
+        user_answer = answer_map.get(question.id)
         is_correct = False
         score = 0.0
         feedback = question.explanation
-        if question.question_type in {QuestionType.SINGLE_CHOICE.value, QuestionType.JUDGE.value}:
+        has_answer = user_answer is not None and user_answer != "" and user_answer != []
+        if not has_answer:
+            feedback = "本题未作答。"
+        elif question.question_type in {QuestionType.SINGLE_CHOICE.value, QuestionType.JUDGE.value}:
             expected = question.reference_answer["value"] if isinstance(question.reference_answer, dict) else question.reference_answer
             is_correct = user_answer == expected
             score = question.score if is_correct else 0.0

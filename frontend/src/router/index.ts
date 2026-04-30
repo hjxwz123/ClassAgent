@@ -3,10 +3,22 @@ import { useSessionStore } from "../stores/session";
 import type { Role } from "../types";
 import AdminView from "../views/AdminView.vue";
 import AuthView from "../views/AuthView.vue";
+import StudentView from "../views/StudentView.vue";
 import TeacherView from "../views/TeacherView.vue";
-import WorkspaceView from "../views/WorkspaceView.vue";
 
 export const routeByPage: Record<string, string> = {
+  studentHome: "/home",
+  studentCourses: "/courses",
+  studentCourseHome: "/courses/detail",
+  studentMaterials: "/materials",
+  studentLessons: "/lessons",
+  studentQa: "/qa",
+  studentTutoring: "/tutoring",
+  studentKnowledge: "/knowledge",
+  studentQuizzes: "/quizzes",
+  studentWrongBook: "/wrong-book",
+  studentPlans: "/plans",
+  studentProfile: "/profile",
   courses: "/courses",
   courseDetail: "/courses/detail",
   materials: "/materials",
@@ -42,14 +54,14 @@ export const routeByPage: Record<string, string> = {
 export function defaultRouteForRole(role?: Role | null) {
   if (role === "admin") return routeByPage.adminDashboard;
   if (role === "teacher") return routeByPage.teacherDashboard;
-  return routeByPage.courses;
+  return routeByPage.studentHome;
 }
 
-const workspaceRoute = (path: string, pageKey: string, roles: Role[]): RouteRecordRaw => ({
+const studentRoute = (path: string, pageKey: string): RouteRecordRaw => ({
   path,
-  component: WorkspaceView,
+  component: StudentView,
   props: { pageKey },
-  meta: { requiresAuth: true, roles, pageKey }
+  meta: { requiresAuth: true, roles: ["student"], pageKey }
 });
 
 const adminRoute = (path: string, pageKey: string): RouteRecordRaw => ({
@@ -67,17 +79,21 @@ const teacherRoute = (path: string, pageKey: string): RouteRecordRaw => ({
 });
 
 const routes: RouteRecordRaw[] = [
-  { path: "/", redirect: "/courses" },
+  { path: "/", redirect: "/home" },
   { path: "/auth", component: AuthView, meta: { public: true } },
-  workspaceRoute("/courses", "courses", ["student"]),
-  workspaceRoute("/courses/detail", "courseDetail", ["student"]),
-  workspaceRoute("/materials", "materials", ["student"]),
-  workspaceRoute("/lessons", "lessons", ["student"]),
-  workspaceRoute("/qa", "qa", ["student"]),
-  workspaceRoute("/tutoring", "tutoring", ["student"]),
-  workspaceRoute("/learning", "learning", ["student"]),
-  workspaceRoute("/plans", "plans", ["student"]),
-  workspaceRoute("/profile", "profile", ["student"]),
+  studentRoute("/home", "studentHome"),
+  studentRoute("/courses", "studentCourses"),
+  studentRoute("/courses/detail", "studentCourseHome"),
+  studentRoute("/materials", "studentMaterials"),
+  studentRoute("/lessons", "studentCourseHome"),
+  studentRoute("/qa", "studentQa"),
+  studentRoute("/tutoring", "studentTutoring"),
+  studentRoute("/knowledge", "studentKnowledge"),
+  studentRoute("/quizzes", "studentQuizzes"),
+  studentRoute("/wrong-book", "studentWrongBook"),
+  studentRoute("/learning", "studentQuizzes"),
+  studentRoute("/plans", "studentPlans"),
+  studentRoute("/profile", "studentProfile"),
   teacherRoute("/teacher", "teacherDashboard"),
   teacherRoute("/teacher/courses", "teacherCourses"),
   teacherRoute("/teacher/courses/new", "teacherCourseForm"),
@@ -98,7 +114,7 @@ const routes: RouteRecordRaw[] = [
   adminRoute("/admin/monitor", "adminMonitor"),
   adminRoute("/admin/logs", "adminLogs"),
   adminRoute("/admin/backups", "adminBackups"),
-  { path: "/:pathMatch(.*)*", redirect: "/courses" }
+  { path: "/:pathMatch(.*)*", redirect: "/home" }
 ];
 
 export const router = createRouter({

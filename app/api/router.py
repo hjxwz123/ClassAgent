@@ -9,6 +9,7 @@ from app.api.routes.courses import router as courses_router
 from app.api.routes.health import router as health_router
 from app.api.routes.materials import router as materials_router
 from app.api.routes.qa import router as qa_router
+from app.api.routes.student import router as student_router
 from app.api.routes.teacher import router as teacher_router
 from app.api.routes.tutoring import router as tutoring_router
 
@@ -25,3 +26,4 @@ api_router.include_router(learning_router, prefix="/learning", tags=["learning"]
 api_router.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
 api_router.include_router(teacher_router, prefix="/teacher", tags=["teacher"])
+api_router.include_router(student_router, prefix="/student", tags=["student"])

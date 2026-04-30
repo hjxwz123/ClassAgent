@@ -148,6 +148,17 @@ class LessonPage(TimestampMixin, Base):
     subtitle_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class PageNote(TimestampMixin, Base):
+    __tablename__ = "page_notes"
+    __table_args__ = (UniqueConstraint("user_id", "lesson_page_id", name="uq_page_note"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"), index=True)
+    lesson_page_id: Mapped[int] = mapped_column(ForeignKey("lesson_pages.id"), index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+
+
 class KnowledgeChunk(TimestampMixin, Base):
     __tablename__ = "knowledge_chunks"
 

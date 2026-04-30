@@ -1,0 +1,504 @@
+from __future__ import annotations
+
+from collections import Counter
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.core.enums import CourseStatus, LessonStatus, ProcessStatus, QuizStatus, UserRole
+from app.core.errors import bad_request, forbidden, not_found
+from app.db.models import (
+    Chapter,
+    Course,
+    CourseMaterial,
+    CourseMembership,
+    KnowledgePoint,
+    LearningProgress,
+    Lesson,
+    LessonPage,
+    PageNote,
+    ProblemRecord,
+    QARecord,
+    Quiz,
+    QuizAttempt,
+    QuizQuestion,
+    StudyCheckin,
+    StudyPlan,
+    StudyPlanTask,
+    User,
+    UserPreference,
+    WrongQuestion,
+)
+from app.services.ai import ai_service
+from app.services.courses import _get_course_or_404
+
+
+STUDENT_PROFILE_KEY = "student.profile"
+STUDENT_NOTICE_KEY = "student.notifications"
+
+DEFAULT_STUDENT_NOTICES = [
+    {"key": "lesson", "label": "新课堂发布", "enabled": True},
+    {"key": "quiz", "label": "测验发布提醒", "enabled": True},
+    {"key": "qa", "label": "AI 问答完成", "enabled": True},
+    {"key": "plan", "label": "学习计划提醒", "enabled": True, "time": "20:00"},
+]
+
+
+def _as_dict(item) -> dict:
+    data = dict(item.__dict__)
+    data.pop("_sa_instance_state", None)
+    return data
+
+
+def _assert_student(user: User) -> None:
+    if user.role != UserRole.STUDENT.value:
+        raise forbidden("仅学生可访问")
+
+
+def _assert_joined(db: Session, *, course_id: int, user: User) -> Course:
+    _assert_student(user)
+    course = _get_course_or_404(db, course_id)
+    membership = db.scalar(
+        select(CourseMembership.id).where(CourseMembership.course_id == course_id, CourseMembership.user_id == user.id)
+    )
+    if membership is None:
+        raise forbidden("仅可访问已加入课程")
+    return course
+
+
+def _preference(db: Session, *, user_id: int, key: str):
+    item = db.scalar(select(UserPreference).where(UserPreference.user_id == user_id, UserPreference.preference_key == key))
+    return item.preference_value if item is not None else None
+
+
+def _set_preference(db: Session, *, user_id: int, key: str, value) -> None:
+    item = db.scalar(select(UserPreference).where(UserPreference.user_id == user_id, UserPreference.preference_key == key))
+    if item is None:
+        item = UserPreference(user_id=user_id, preference_key=key, preference_value=value)
+    else:
+        item.preference_value = value
+    db.add(item)
+
+
+def _joined_courses(db: Session, user: User) -> list[Course]:
+    _assert_student(user)
+    return list(
+        db.scalars(
+            select(Course)
+            .join(CourseMembership, CourseMembership.course_id == Course.id)
+            .where(CourseMembership.user_id == user.id, Course.deleted_at.is_(None))
+            .order_by(CourseMembership.joined_at.desc())
+        )
+    )
+
+
+def _teacher(db: Session, course: Course) -> User | None:
+    return db.get(User, course.teacher_id)
+
+
+def _course_student_total(db: Session, course_id: int) -> int:
+    return int(
+        db.scalar(
+            select(func.count(CourseMembership.id)).where(
+                CourseMembership.course_id == course_id,
+                CourseMembership.role == UserRole.STUDENT.value,
+            )
+        )
+        or 0
+    )
+
+
+def _course_progress(db: Session, *, course_id: int, user_id: int) -> dict:
+    lessons = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id, Lesson.status == LessonStatus.PUBLISHED.value)))
+    lesson_ids = [lesson.id for lesson in lessons]
+    progresses = (
+        list(db.scalars(select(LearningProgress).where(LearningProgress.user_id == user_id, LearningProgress.lesson_id.in_(lesson_ids))))
+        if lesson_ids
+        else []
+    )
+    completed = len([item for item in progresses if item.completed_at is not None or item.progress_percent >= 100])
+    studied = len([item for item in progresses if item.progress_percent > 0])
+    progress_percent = round(sum(item.progress_percent for item in progresses) / max(len(lessons), 1), 2) if lessons else 0
+    last_progress = max(progresses, key=lambda item: item.updated_at, default=None)
+    return {
+        "lesson_total": len(lessons),
+        "completed_lessons": completed,
+        "studied_lessons": studied,
+        "progress_percent": progress_percent,
+        "study_seconds": sum(item.total_study_seconds for item in progresses),
+        "last_progress": _as_dict(last_progress) if last_progress else None,
+    }
+
+
+def _course_summary(db: Session, *, course: Course, user: User) -> dict:
+    teacher = _teacher(db, course)
+    material_count = db.scalar(
+        select(func.count(CourseMaterial.id)).where(CourseMaterial.course_id == course.id, CourseMaterial.deleted_at.is_(None))
+    )
+    qa_count = db.scalar(select(func.count(QARecord.id)).where(QARecord.course_id == course.id, QARecord.user_id == user.id))
+    wrong_count = db.scalar(select(func.sum(WrongQuestion.wrong_count)).where(WrongQuestion.course_id == course.id, WrongQuestion.user_id == user.id))
+    progress = _course_progress(db, course_id=course.id, user_id=user.id)
+    data = _as_dict(course)
+    data.update(
+        {
+            "teacher": _as_dict(teacher) if teacher else None,
+            "student_count": _course_student_total(db, course.id),
+            "material_count": int(material_count or 0),
+            "qa_count": int(qa_count or 0),
+            "wrong_count": int(wrong_count or 0),
+            **progress,
+        }
+    )
+    if progress["last_progress"]:
+        lesson = db.get(Lesson, progress["last_progress"]["lesson_id"])
+        data["last_lesson"] = _as_dict(lesson) if lesson else None
+    else:
+        data["last_lesson"] = None
+    return data
+
+
+def list_student_course_summaries(db: Session, user: User) -> list[dict]:
+    return [_course_summary(db, course=course, user=user) for course in _joined_courses(db, user)]
+
+
+def preview_course_by_code(db: Session, *, course_code: str, user: User) -> dict:
+    _assert_student(user)
+    course = db.scalar(select(Course).where(Course.course_code == course_code.upper(), Course.deleted_at.is_(None)))
+    if course is None or course.status != CourseStatus.ACTIVE.value:
+        raise not_found("课程码不存在或已停用")
+    teacher = _teacher(db, course)
+    joined = db.scalar(select(CourseMembership.id).where(CourseMembership.course_id == course.id, CourseMembership.user_id == user.id))
+    return {
+        "course": _as_dict(course),
+        "teacher": _as_dict(teacher) if teacher else None,
+        "student_count": _course_student_total(db, course.id),
+        "lesson_count": int(db.scalar(select(func.count(Lesson.id)).where(Lesson.course_id == course.id, Lesson.status == LessonStatus.PUBLISHED.value)) or 0),
+        "already_joined": joined is not None,
+    }
+
+
+def _recent_lesson(db: Session, *, course_ids: list[int], user: User) -> dict | None:
+    if not course_ids:
+        return None
+    row = db.execute(
+        select(LearningProgress, Lesson, Course)
+        .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+        .join(Course, Course.id == Lesson.course_id)
+        .where(LearningProgress.user_id == user.id, Lesson.course_id.in_(course_ids), Lesson.status == LessonStatus.PUBLISHED.value)
+        .order_by(LearningProgress.updated_at.desc())
+        .limit(1)
+    ).first()
+    if row:
+        progress, lesson, course = row
+        return {"progress": _as_dict(progress), "lesson": _as_dict(lesson), "course": _as_dict(course)}
+    lesson_row = db.execute(
+        select(Lesson, Course)
+        .join(Course, Course.id == Lesson.course_id)
+        .where(Lesson.course_id.in_(course_ids), Lesson.status == LessonStatus.PUBLISHED.value)
+        .order_by(Lesson.published_at.desc().nullslast(), Lesson.created_at.desc())
+        .limit(1)
+    ).first()
+    if not lesson_row:
+        return None
+    lesson, course = lesson_row
+    return {"progress": None, "lesson": _as_dict(lesson), "course": _as_dict(course)}
+
+
+def _today_tasks(db: Session, user: User) -> list[dict]:
+    today = datetime.now(UTC).date().isoformat()
+    rows = list(
+        db.execute(
+            select(StudyPlanTask, StudyPlan)
+            .join(StudyPlan, StudyPlan.id == StudyPlanTask.plan_id)
+            .where(StudyPlan.user_id == user.id, StudyPlanTask.task_date == today)
+            .order_by(StudyPlanTask.id.asc())
+        )
+    )
+    return [{**_as_dict(task), "plan": _as_dict(plan)} for task, plan in rows]
+
+
+def _learning_stats(db: Session, *, user: User, course_ids: list[int]) -> dict:
+    if not course_ids:
+        return {"study_hours": 0, "completion_rate": 0, "accuracy": 0, "qa_count": 0, "wrong_count": 0, "streak_days": 0}
+    progress_rows = list(
+        db.scalars(
+            select(LearningProgress)
+            .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+            .where(LearningProgress.user_id == user.id, Lesson.course_id.in_(course_ids))
+        )
+    )
+    lesson_total = int(
+        db.scalar(select(func.count(Lesson.id)).where(Lesson.course_id.in_(course_ids), Lesson.status == LessonStatus.PUBLISHED.value)) or 0
+    )
+    completed = len([item for item in progress_rows if item.completed_at is not None or item.progress_percent >= 100])
+    attempts = list(
+        db.scalars(
+            select(QuizAttempt)
+            .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+            .where(QuizAttempt.user_id == user.id, Quiz.course_id.in_(course_ids))
+        )
+    )
+    checkins = list(db.scalars(select(StudyCheckin).where(StudyCheckin.user_id == user.id).order_by(StudyCheckin.checked_in_at.desc())))
+    checkin_days = {item.checked_in_at.date().isoformat() for item in checkins}
+    streak = 0
+    cursor = datetime.now(UTC).date()
+    while cursor.isoformat() in checkin_days:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return {
+        "study_hours": round(sum(item.total_study_seconds for item in progress_rows) / 3600, 1),
+        "completion_rate": round(completed / max(lesson_total, 1) * 100, 2) if lesson_total else 0,
+        "accuracy": round(sum(item.accuracy for item in attempts) / max(len(attempts), 1), 2) if attempts else 0,
+        "qa_count": int(db.scalar(select(func.count(QARecord.id)).where(QARecord.user_id == user.id, QARecord.course_id.in_(course_ids))) or 0),
+        "wrong_count": int(db.scalar(select(func.sum(WrongQuestion.wrong_count)).where(WrongQuestion.user_id == user.id, WrongQuestion.course_id.in_(course_ids))) or 0),
+        "streak_days": streak,
+    }
+
+
+def _activities(db: Session, *, user: User, course_ids: list[int], limit: int = 8) -> list[dict]:
+    if not course_ids:
+        return []
+    activities: list[dict] = []
+    for progress, lesson in db.execute(
+        select(LearningProgress, Lesson)
+        .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+        .where(LearningProgress.user_id == user.id, Lesson.course_id.in_(course_ids))
+        .order_by(LearningProgress.updated_at.desc())
+        .limit(limit)
+    ):
+        activities.append({"type": "lesson", "title": f"学习 {lesson.title}", "meta": f"{progress.progress_percent}%", "time": progress.updated_at})
+    for record in db.scalars(select(QARecord).where(QARecord.user_id == user.id, QARecord.course_id.in_(course_ids)).order_by(QARecord.created_at.desc()).limit(limit)):
+        activities.append({"type": "qa", "title": record.question, "meta": "AI 问答", "time": record.created_at})
+    for attempt, quiz in db.execute(
+        select(QuizAttempt, Quiz)
+        .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+        .where(QuizAttempt.user_id == user.id, Quiz.course_id.in_(course_ids))
+        .order_by(QuizAttempt.created_at.desc())
+        .limit(limit)
+    ):
+        activities.append({"type": "quiz", "title": f"提交 {quiz.title}", "meta": f"{attempt.score}分", "time": attempt.created_at})
+    for problem in db.scalars(select(ProblemRecord).where(ProblemRecord.user_id == user.id, ProblemRecord.course_id.in_(course_ids)).order_by(ProblemRecord.created_at.desc()).limit(limit)):
+        activities.append({"type": "tutoring", "title": (problem.corrected_text or problem.ocr_text or problem.raw_text or "题目辅导")[:48], "meta": "AI 辅导", "time": problem.created_at})
+    return sorted(activities, key=lambda item: item["time"], reverse=True)[:limit]
+
+
+def get_student_dashboard(db: Session, user: User) -> dict:
+    courses = list_student_course_summaries(db, user)
+    course_ids = [course["id"] for course in courses]
+    tasks = _today_tasks(db, user)
+    stats = _learning_stats(db, user=user, course_ids=course_ids)
+    weak = []
+    if course_ids:
+        counter: Counter[str] = Counter()
+        rows = db.execute(
+            select(WrongQuestion, QuizQuestion)
+            .join(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
+            .where(WrongQuestion.user_id == user.id, WrongQuestion.course_id.in_(course_ids))
+        )
+        for wrong, question in rows:
+            if question.knowledge_point_id:
+                point = db.get(KnowledgePoint, question.knowledge_point_id)
+                counter[point.name if point else "未命名"] += wrong.wrong_count
+        weak = [{"name": name, "count": count} for name, count in counter.most_common(5)]
+    recommendation_text = ai_service.generate_teaching_suggestion(
+        high_frequency_questions=stats["qa_count"],
+        weak_points=[item["name"] for item in weak],
+        inactive_students=0,
+        db=db,
+    )
+    return {
+        "courses": courses,
+        "today_tasks": tasks,
+        "continue_learning": _recent_lesson(db, course_ids=course_ids, user=user),
+        "stats": stats,
+        "recommendation": {
+            "text": recommendation_text,
+            "lesson": _recent_lesson(db, course_ids=course_ids, user=user),
+            "weak_points": weak,
+        },
+        "activities": _activities(db, user=user, course_ids=course_ids, limit=8),
+        "notifications": get_student_notifications(db, user),
+    }
+
+
+def get_student_course_home(db: Session, *, course_id: int, user: User) -> dict:
+    course = _assert_joined(db, course_id=course_id, user=user)
+    teacher = _teacher(db, course)
+    chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
+    lessons = []
+    for lesson in db.scalars(select(Lesson).where(Lesson.course_id == course_id, Lesson.status == LessonStatus.PUBLISHED.value).order_by(Lesson.created_at.asc())):
+        progress = db.scalar(select(LearningProgress).where(LearningProgress.lesson_id == lesson.id, LearningProgress.user_id == user.id))
+        row = _as_dict(lesson)
+        row["progress"] = _as_dict(progress) if progress else None
+        row["progress_percent"] = progress.progress_percent if progress else 0
+        row["current_page"] = progress.current_page if progress else 1
+        lessons.append(row)
+    materials = [
+        _as_dict(item)
+        for item in db.scalars(
+            select(CourseMaterial)
+            .where(CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None))
+            .order_by(CourseMaterial.created_at.desc())
+            .limit(8)
+        )
+    ]
+    quizzes = [
+        _as_dict(item)
+        for item in db.scalars(
+            select(Quiz)
+            .where(Quiz.course_id == course_id, Quiz.status == QuizStatus.PUBLISHED.value)
+            .order_by(Quiz.created_at.desc())
+            .limit(6)
+        )
+    ]
+    recent_qa = [
+        _as_dict(item)
+        for item in db.scalars(
+            select(QARecord)
+            .where(QARecord.course_id == course_id, QARecord.user_id == user.id)
+            .order_by(QARecord.created_at.desc())
+            .limit(4)
+        )
+    ]
+    stats = _learning_stats(db, user=user, course_ids=[course_id])
+    return {
+        "course": _as_dict(course),
+        "teacher": _as_dict(teacher) if teacher else None,
+        "chapters": [_as_dict(item) for item in chapters],
+        "lessons": lessons,
+        "materials": materials,
+        "quizzes": quizzes,
+        "recent_qa": recent_qa,
+        "stats": stats,
+        "student_count": _course_student_total(db, course_id),
+        "quick_questions": ["这节课重点是什么？", "帮我举个例子", "出一道练习题", "总结本章知识点"],
+    }
+
+
+def get_page_note(db: Session, *, page_id: int, user: User) -> dict:
+    page = db.get(LessonPage, page_id)
+    if page is None:
+        raise not_found("页面不存在")
+    lesson = db.get(Lesson, page.lesson_id)
+    if lesson is None:
+        raise not_found("课堂不存在")
+    _assert_joined(db, course_id=lesson.course_id, user=user)
+    note = db.scalar(select(PageNote).where(PageNote.user_id == user.id, PageNote.lesson_page_id == page_id))
+    if note is None:
+        return {"id": None, "lesson_id": lesson.id, "lesson_page_id": page_id, "content": "", "updated_at": None}
+    return _as_dict(note)
+
+
+def save_page_note(db: Session, *, page_id: int, user: User, content: str) -> dict:
+    if len(content) > 8000:
+        raise bad_request("笔记不能超过8000字")
+    page = db.get(LessonPage, page_id)
+    if page is None:
+        raise not_found("页面不存在")
+    lesson = db.get(Lesson, page.lesson_id)
+    if lesson is None:
+        raise not_found("课堂不存在")
+    _assert_joined(db, course_id=lesson.course_id, user=user)
+    note = db.scalar(select(PageNote).where(PageNote.user_id == user.id, PageNote.lesson_page_id == page_id))
+    if note is None:
+        note = PageNote(user_id=user.id, lesson_id=lesson.id, lesson_page_id=page_id, content=content)
+    else:
+        note.content = content
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return _as_dict(note)
+
+
+def get_student_profile(db: Session, user: User) -> dict:
+    courses = list_student_course_summaries(db, user)
+    course_ids = [course["id"] for course in courses]
+    stats = _learning_stats(db, user=user, course_ids=course_ids)
+    achievements = [
+        {"key": "streak7", "name": "连续7天", "unlocked": stats["streak_days"] >= 7},
+        {"key": "quiz", "name": "完成测验", "unlocked": stats["accuracy"] > 0},
+        {"key": "qa", "name": "提问达人", "unlocked": stats["qa_count"] >= 10},
+        {"key": "finish", "name": "课堂完成", "unlocked": stats["completion_rate"] >= 80},
+        {"key": "streak30", "name": "连续30天", "unlocked": stats["streak_days"] >= 30},
+    ]
+    return {
+        "user": _as_dict(user),
+        "student_profile": _preference(db, user_id=user.id, key=STUDENT_PROFILE_KEY) or {"school": "", "bio": user.bio or ""},
+        "notification_settings": _preference(db, user_id=user.id, key=STUDENT_NOTICE_KEY) or DEFAULT_STUDENT_NOTICES,
+        "stats": stats,
+        "achievements": achievements,
+        "activities": _activities(db, user=user, course_ids=course_ids, limit=20),
+    }
+
+
+def update_student_profile(
+    db: Session,
+    *,
+    user: User,
+    nickname: str | None,
+    avatar_url: str | None,
+    bio: str | None,
+    school: str | None,
+) -> dict:
+    _assert_student(user)
+    if nickname is not None:
+        user.nickname = nickname
+    if avatar_url is not None:
+        user.avatar_url = avatar_url
+    if bio is not None:
+        user.bio = bio
+    current = _preference(db, user_id=user.id, key=STUDENT_PROFILE_KEY) or {}
+    if not isinstance(current, dict):
+        current = {}
+    if school is not None:
+        current["school"] = school
+    if bio is not None:
+        current["bio"] = bio
+    db.add(user)
+    _set_preference(db, user_id=user.id, key=STUDENT_PROFILE_KEY, value=current)
+    db.commit()
+    db.refresh(user)
+    return get_student_profile(db, user)
+
+
+def update_student_notifications(db: Session, *, user: User, settings: list[dict]) -> list[dict]:
+    _assert_student(user)
+    label_map = {item["key"]: item["label"] for item in DEFAULT_STUDENT_NOTICES}
+    normalized = []
+    for item in settings:
+        key = str(item.get("key", "")).strip()
+        if key not in label_map:
+            continue
+        normalized.append({"key": key, "label": label_map[key], "enabled": bool(item.get("enabled", False)), "time": item.get("time") or "20:00"})
+    if not normalized:
+        raise bad_request("通知设置不能为空")
+    existing = {item["key"] for item in normalized}
+    for item in DEFAULT_STUDENT_NOTICES:
+        if item["key"] not in existing:
+            normalized.append(item)
+    _set_preference(db, user_id=user.id, key=STUDENT_NOTICE_KEY, value=normalized)
+    db.commit()
+    return normalized
+
+
+def get_student_notifications(db: Session, user: User) -> list[dict]:
+    _assert_student(user)
+    course_ids = [course.id for course in _joined_courses(db, user)]
+    notifications: list[dict] = []
+    if course_ids:
+        for lesson in db.scalars(
+            select(Lesson)
+            .where(Lesson.course_id.in_(course_ids), Lesson.status == LessonStatus.PUBLISHED.value)
+            .order_by(Lesson.published_at.desc().nullslast(), Lesson.created_at.desc())
+            .limit(4)
+        ):
+            notifications.append({"type": "lesson", "title": f"新课堂：{lesson.title}", "time": lesson.published_at or lesson.created_at, "unread": True})
+        failed_material = db.scalar(
+            select(CourseMaterial)
+            .where(CourseMaterial.course_id.in_(course_ids), CourseMaterial.parse_status == ProcessStatus.FAILED.value)
+            .order_by(CourseMaterial.updated_at.desc())
+        )
+        if failed_material:
+            notifications.append({"type": "material", "title": f"资料处理失败：{failed_material.title}", "time": failed_material.updated_at, "unread": True})
+    return notifications[:8]
