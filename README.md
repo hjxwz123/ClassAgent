@@ -22,6 +22,14 @@ pip install -e '.[dev]'
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
+## 前端启动
+
+```bash
+cd frontend
+npm install
+npm run dev -- --port 5173
+```
+
 ## 测试
 
 ```bash

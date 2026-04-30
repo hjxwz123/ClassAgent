@@ -16,3 +16,6 @@ storage/uploads/
 storage/generated/
 coverage.xml
 .coverage
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
