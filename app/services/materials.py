@@ -291,8 +291,7 @@ def regenerate_page_script(db: Session, *, page_id: int, user: User) -> LessonPa
 
 
 def _tokenize(content: str) -> list[str]:
-    tokens = [item.strip().lower() for item in content.replace("\n", " ").replace("，", " ").replace("。", " ").split(" ")]
-    return [token for token in tokens if token]
+    return ai_service.extract_keywords(content, limit=20)
 
 
 def process_material_pipeline(db: Session, material_id: int) -> None:
