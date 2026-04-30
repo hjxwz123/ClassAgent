@@ -43,6 +43,16 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class UserPreference(TimestampMixin, Base):
+    __tablename__ = "user_preferences"
+    __table_args__ = (UniqueConstraint("user_id", "preference_key", name="uq_user_preference"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    preference_key: Mapped[str] = mapped_column(String(128), index=True)
+    preference_value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(JSON, nullable=True)
+
+
 class EmailCode(TimestampMixin, Base):
     __tablename__ = "email_codes"
     __table_args__ = (UniqueConstraint("email", "purpose", "code", name="uq_email_code"),)
