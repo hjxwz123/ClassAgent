@@ -142,9 +142,29 @@
 }
 ```
 
+#### 邮件配置建议字段
+
+```json
+{
+  "service_type": "email",
+  "provider": "smtp",
+  "name": "smtp-mail",
+  "config": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "username": "noreply@example.com",
+    "password": "邮箱授权码",
+    "sender": "noreply@example.com",
+    "use_tls": true,
+    "use_ssl": false
+  },
+  "is_enabled": true
+}
+```
+
 说明：
 
-- 当前后端已支持对配置进行加密存储和字段完整性校验。
+- 当前后端已支持对配置进行加密存储和连通性测试。
 - `provider=mock` 时，测试接口会直接返回成功，便于本地联调。
 
 ### 6. 系统参数

@@ -218,6 +218,25 @@ def test_teacher_analytics_and_admin_operations(client):
     assert model_test_resp.status_code == 200, model_test_resp.text
     assert model_test_resp.json()["data"]["success"] is True
 
+    embedding_save_resp = client.post(
+        "/api/v1/admin/model-configs",
+        json={
+            "provider": "mock",
+            "model_name": "mock-embedding",
+            "purpose": "embedding",
+            "endpoint": None,
+            "api_key": "mock-key",
+            "is_default": True,
+            "extra_config": {"dimensions": 384},
+        },
+        headers=admin_headers,
+    )
+    assert embedding_save_resp.status_code == 200, embedding_save_resp.text
+    embedding_id = embedding_save_resp.json()["data"]["id"]
+    embedding_test_resp = client.post(f"/api/v1/admin/model-configs/{embedding_id}/test", headers=admin_headers)
+    assert embedding_test_resp.status_code == 200, embedding_test_resp.text
+    assert embedding_test_resp.json()["data"]["success"] is True
+
     service_save_resp = client.post(
         "/api/v1/admin/service-configs",
         json={
@@ -235,6 +254,23 @@ def test_teacher_analytics_and_admin_operations(client):
     service_test_resp = client.post(f"/api/v1/admin/service-configs/{service_id}/test", headers=admin_headers)
     assert service_test_resp.status_code == 200, service_test_resp.text
     assert service_test_resp.json()["data"]["success"] is True
+
+    email_save_resp = client.post(
+        "/api/v1/admin/service-configs",
+        json={
+            "service_type": "email",
+            "provider": "mock",
+            "name": "mock-email",
+            "config": {"host": "localhost", "port": 25, "sender": "noreply@example.com"},
+            "is_enabled": True,
+        },
+        headers=admin_headers,
+    )
+    assert email_save_resp.status_code == 200, email_save_resp.text
+    email_id = email_save_resp.json()["data"]["id"]
+    email_test_resp = client.post(f"/api/v1/admin/service-configs/{email_id}/test", headers=admin_headers)
+    assert email_test_resp.status_code == 200, email_test_resp.text
+    assert email_test_resp.json()["data"]["success"] is True
 
     settings_resp = client.get("/api/v1/admin/system-settings", headers=admin_headers)
     assert settings_resp.status_code == 200, settings_resp.text

@@ -109,7 +109,7 @@
 ### 返回说明
 
 - 开发环境会返回 `debug_code`，前端联调可直接使用。
-- 生产环境 `debug_code` 为 `null`，后续接入真实邮件服务即可。
+- 生产环境 `debug_code` 为 `null`，验证码通过 `service_type=email` 的 SMTP 服务发送。
 
 ## 7. 确认重置密码
 

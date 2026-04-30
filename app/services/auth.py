@@ -19,6 +19,7 @@ from app.schemas.auth import (
 )
 from app.schemas.common import UserSummary
 from app.services.audit import log_login, log_operation
+from app.services.email import email_service
 
 
 REGISTERABLE_ROLES = {UserRole.STUDENT.value, UserRole.TEACHER.value}
@@ -133,6 +134,7 @@ def create_password_reset_code(db: Session, email: str) -> PasswordResetCodeResp
         expires_at=datetime.now(UTC) + timedelta(minutes=10),
     )
     db.add(record)
+    email_service.send_password_reset_code(db, to_email=email, code=code)
     log_operation(
         db,
         user_id=user.id,

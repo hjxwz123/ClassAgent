@@ -24,3 +24,16 @@ def test_production_settings_accept_mysql_and_async_celery() -> None:
     )
 
     validate_production_settings(settings)
+
+
+def test_production_settings_reject_mock_ai() -> None:
+    settings = Settings(
+        app_env="production",
+        secret_key="replace-with-a-long-random-secret",
+        database_url="mysql+pymysql://class_agent:password@127.0.0.1:3306/class_agent?charset=utf8mb4",
+        celery_task_always_eager=False,
+        external_ai_mode="mock",
+    )
+
+    with pytest.raises(RuntimeError, match="mock"):
+        validate_production_settings(settings)

@@ -28,6 +28,7 @@ from app.db.models import (
     SystemSetting,
     User,
 )
+from app.services.email import email_service
 from app.services.vector_store import vector_store
 
 
@@ -264,24 +265,37 @@ def test_model_config(db: Session, *, config_id: int) -> dict:
     api_key = decrypt_secret(config.api_key_encrypted) if config.api_key_encrypted else None
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+    headers.update((config.extra_config or {}).get("headers") or {})
     endpoint = config.endpoint.rstrip("/")
-    if not endpoint.endswith("/chat/completions"):
-        endpoint = f"{endpoint}/chat/completions"
-    payload = {
-        "model": config.model_name,
-        "messages": [{"role": "user", "content": "请回复 ok"}],
-        "temperature": 0,
-        "max_tokens": 8,
-    }
+    if config.purpose == "embedding":
+        if not endpoint.endswith("/embeddings"):
+            endpoint = f"{endpoint}/embeddings"
+        payload = {"model": config.model_name, "input": ["连接测试"]}
+        if (config.extra_config or {}).get("dimensions"):
+            payload["dimensions"] = (config.extra_config or {})["dimensions"]
+    else:
+        if not endpoint.endswith("/chat/completions"):
+            endpoint = f"{endpoint}/chat/completions"
+        payload = {
+            "model": config.model_name,
+            "messages": [{"role": "user", "content": "请回复 ok"}],
+            "temperature": 0,
+            "max_tokens": 8,
+        }
     try:
         with httpx.Client(timeout=5.0) as client:
             response = client.post(endpoint, headers=headers, json=payload)
         if response.status_code >= 400:
             return {"success": False, "message": f"HTTP {response.status_code}: {response.text[:200]}"}
         body = response.json()
-        choices = body.get("choices") or []
-        if not choices:
-            return {"success": False, "message": "响应中没有 choices"}
+        if config.purpose == "embedding":
+            data = body.get("data") or []
+            if not data or not isinstance(data[0].get("embedding") if isinstance(data[0], dict) else None, list):
+                return {"success": False, "message": "响应中没有 embedding"}
+        else:
+            choices = body.get("choices") or []
+            if not choices:
+                return {"success": False, "message": "响应中没有 choices"}
         return {"success": True, "message": "模型配置可用"}
     except Exception as exc:
         return {"success": False, "message": str(exc)}
@@ -370,6 +384,7 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
         "oss": ["access_key_id", "access_key_secret", "endpoint", "bucket"],
         "ocr": ["access_key_id", "access_key_secret", "endpoint", "region"],
         "tts": ["appkey", "token", "url", "voice"],
+        "email": ["host", "port", "sender"],
     }.get(record.service_type, [])
     missing = [key for key in required_keys if not config.get(key)]
     if missing:
@@ -389,6 +404,31 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
         except Exception as exc:
             return {"success": False, "message": f"OSS 连接失败: {exc}"}
         return {"success": True, "message": "OSS 配置可用"}
+    if record.service_type == "email":
+        return email_service.test_config(config)
+    if record.service_type == "tts":
+        try:
+            payload = {
+                "appkey": config["appkey"],
+                "token": config["token"],
+                "text": "连接测试",
+                "format": str(config.get("format") or "wav").lower(),
+                "sample_rate": int(config.get("sample_rate") or 16000),
+                "voice": config.get("voice") or get_settings().default_tts_voice,
+                "speech_rate": int(config.get("speech_rate", get_settings().default_tts_rate)),
+                "volume": int(config.get("volume", get_settings().default_tts_volume)),
+            }
+            with httpx.Client(timeout=get_settings().external_service_timeout_seconds) as client:
+                if str(config.get("method", "GET")).upper() == "POST":
+                    response = client.post(str(config["url"]), json=payload)
+                else:
+                    response = client.get(str(config["url"]), params=payload)
+            content_type = response.headers.get("content-type", "")
+            if response.status_code >= 400 or "json" in content_type.lower():
+                return {"success": False, "message": f"TTS 连接失败: {response.text[:200]}"}
+        except Exception as exc:
+            return {"success": False, "message": f"TTS 连接失败: {exc}"}
+        return {"success": True, "message": "TTS 配置可用"}
     return {"success": True, "message": "配置字段完整"}
 
 

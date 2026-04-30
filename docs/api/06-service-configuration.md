@@ -59,7 +59,7 @@ ADMIN_DEFAULT_NAME=系统管理员
 
 ## 2. 外部服务 API 配置
 
-大模型、OSS、OCR、TTS 这类外部服务，不通过 `.env` 直接维护，而是通过管理员接口写入数据库。
+大模型、Embedding、OSS、OCR、TTS、邮件这类外部服务，不通过 `.env` 直接维护，而是通过管理员接口写入数据库。
 
 这样做的原因：
 
@@ -187,7 +187,7 @@ http://127.0.0.1:8000/docs
 - 阿里云 OSS
 - 阿里云 OCR
 - 阿里云 TTS
-- 后续其他第三方服务
+- SMTP 邮件服务
 
 ### 5.1 OSS 配置示例
 
@@ -252,23 +252,49 @@ http://127.0.0.1:8000/docs
 }
 ```
 
+### 5.4 邮件配置示例
+
+用于找回密码验证码。
+
+```json
+{
+  "service_type": "email",
+  "provider": "smtp",
+  "name": "smtp-mail",
+  "config": {
+    "host": "smtp.example.com",
+    "port": 587,
+    "username": "noreply@example.com",
+    "password": "邮箱授权码",
+    "sender": "noreply@example.com",
+    "use_tls": true,
+    "use_ssl": false
+  },
+  "is_enabled": true
+}
+```
+
 ## 6. 配置建议
 
 建议按下面方式区分：
 
 - `model-configs`：配置大模型接口
-- `service-configs`：配置 OSS / OCR / TTS 等基础服务
+- `service-configs`：配置 OSS / OCR / TTS / Email 等基础服务
 - `.env`：配置应用自身运行参数
 
 不要把阿里云的所有信息都硬编码到代码里，也不要把可动态调整的服务配置全部塞进 `.env`。
 
 ## 7. 当前项目现状
 
-当前后端已经预留了完整的配置入口和测试接口，但部分第三方能力仍是本地 mock 实现。也就是说：
+当前后端已经提供真实服务接入：
 
-- 配置入口已经有了
-- 接口文档已经有了
-- 真实接入某些云服务时，仍需要把对应服务实现替换成正式 SDK / HTTP 调用
+- OSS：阿里云 OSS SDK
+- OCR：阿里云 OCR SDK
+- TTS：阿里云 TTS REST 调用
+- Email：SMTP
+- Embedding：OpenAI 兼容 `/embeddings`
+
+开发环境未配置时可使用本地占位能力，生产环境必须配置真实服务。
 
 如果你接下来要接阿里云，优先看：
 

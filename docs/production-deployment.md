@@ -115,11 +115,17 @@ http://127.0.0.1:8000/docs
 
 - `purpose=qa`：课程问答
 - `purpose=embedding`：资料向量化和 RAG 检索
+- `purpose=script`：讲解脚本生成
+- `purpose=quiz`：测验生成
+- `purpose=tutoring`：题目辅导
+- `purpose=analysis`：教学建议
 
 再按需配置外部服务：
 
 - `POST /api/v1/admin/service-configs`
 - `POST /api/v1/admin/service-configs/{config_id}/test`
+
+生产找回密码需要配置 `service_type=email` 的 SMTP 服务。
 
 ## 7. 存储模式
 
