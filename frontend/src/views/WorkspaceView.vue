@@ -1,7 +1,7 @@
 <template>
   <section v-if="classroomLesson" class="classroom">
     <header class="slim">
-      <button class="btn btn-ghost" @click="classroomLesson = null"><ArrowLeft :size="16" />返回</button>
+      <button class="btn btn-ghost" @click="closeClassroom"><ArrowLeft :size="16" />返回</button>
       <strong>{{ classroomLesson.lesson.title }}</strong>
       <div class="progress" role="progressbar" :aria-valuenow="progressValue" aria-valuemin="0" aria-valuemax="100">
         <span :style="{ width: `${progressValue}%` }"></span>
@@ -28,9 +28,14 @@
         <div v-if="activePage?.subtitle_text" class="subtitle">{{ activePage.subtitle_text }}</div>
         <div class="player">
           <button class="btn btn-ghost icon-btn" aria-label="上一页" @click="prevPage"><SkipBack :size="18" /></button>
-          <button class="btn btn-primary icon-btn" aria-label="播放"><Play :size="18" /></button>
+          <button class="btn btn-primary icon-btn" :aria-label="audioPlaying ? '暂停' : '播放'" @click="toggleAudio">
+            <component :is="audioPlaying ? Pause : Play" :size="18" />
+          </button>
           <button class="btn btn-ghost icon-btn" aria-label="下一页" @click="nextPage"><SkipForward :size="18" /></button>
-          <audio v-if="activePage?.audio_url" :src="activePage.audio_url" controls></audio>
+          <select v-model.number="playbackRate" class="select speed" @change="syncRate">
+            <option :value="0.75">0.75x</option><option :value="1">1x</option><option :value="1.25">1.25x</option><option :value="1.5">1.5x</option><option :value="2">2x</option>
+          </select>
+          <audio v-if="activePage?.audio_url" ref="audioRef" :src="activePage.audio_url" controls @play="audioPlaying = true" @pause="audioPlaying = false"></audio>
           <button class="btn btn-secondary" @click="saveProgress(false)">进度</button>
           <button class="btn btn-secondary" @click="saveProgress(true)">完成</button>
         </div>
@@ -48,7 +53,12 @@
           <div class="messages">
             <div v-for="item in qaMessages" :key="item.id" class="bubble" :class="item.role">
               <span v-if="item.role === 'ai'" class="avatar"><Bot :size="16" /></span>
-              <p>{{ item.text }}</p>
+              <div>
+                <p>{{ item.text }}</p>
+                <div v-if="item.sources?.length" class="source-list">
+                  <span v-for="(source, index) in item.sources" :key="index" class="tag">{{ source.material_title || '资料' }} · {{ source.page_number || '-' }}</span>
+                </div>
+              </div>
             </div>
           </div>
           <form class="askbar" @submit.prevent="askInClass">
@@ -72,7 +82,7 @@
     </header>
     <aside class="sidebar">
       <nav>
-        <button v-for="item in nav" :key="item.key" class="nav-item" :class="{ active: active === item.key }" @click="active = item.key">
+        <button v-for="item in nav" :key="item.key" class="nav-item" :class="{ active: active === item.key }" @click="go(item.key)">
           <component :is="item.icon" :size="20" />{{ item.label }}
         </button>
       </nav>
@@ -153,6 +163,10 @@
           <select v-model.number="selectedCourseId" class="select short" @change="loadCourseScoped">
             <option :value="0">课程</option>
             <option v-for="course in courses" :key="course.id" :value="course.id">{{ course.name }}</option>
+          </select>
+          <select v-model.number="selectedChapterId" class="select short" @change="loadMaterials">
+            <option :value="0">章节</option>
+            <option v-for="chapter in courseChapters" :key="chapter.id" :value="chapter.id">{{ chapter.title }}</option>
           </select>
           <input v-model="materialFilter.keyword" class="input short" placeholder="关键词" />
           <select v-model="materialFilter.category" class="select short">
@@ -242,6 +256,7 @@
             <button class="btn btn-ghost btn-xs" @click="feedbackQa(qaResult.record_id, 'positive')">好评</button>
             <button class="btn btn-ghost btn-xs" @click="feedbackQa(qaResult.record_id, 'negative')">差评</button>
           </div>
+          <p class="ai-note">AI 回答仅供学习参考，可能存在不准确的情况，请结合课程材料综合判断。</p>
         </section>
         <aside class="card">
           <div class="card-head"><h2 class="card-title">历史</h2><button class="btn btn-ghost btn-sm" @click="loadQaHistory">刷新</button></div>
@@ -250,7 +265,14 @@
             <div v-for="item in qaHistory" :key="item.id" class="history">
               <strong>{{ item.question }}</strong>
               <p>{{ item.answer }}</p>
-              <span v-if="item.is_favorite" class="tag tag-primary">收藏</span>
+              <div v-if="item.sources?.length" class="source-list">
+                <span v-for="(source, index) in item.sources" :key="index" class="tag">{{ source.material_title || '资料' }} · {{ source.page_number || '-' }}</span>
+              </div>
+              <div class="mini-actions">
+                <button class="btn btn-ghost btn-xs" @click="favoriteQa(item.id, !item.is_favorite)">{{ item.is_favorite ? '取消' : '收藏' }}</button>
+                <button class="btn btn-ghost btn-xs" @click="feedbackQa(item.id, 'positive')">好评</button>
+                <button class="btn btn-ghost btn-xs" @click="feedbackQa(item.id, 'negative')">差评</button>
+              </div>
             </div>
           </div>
         </aside>
@@ -266,11 +288,15 @@
           <textarea v-model="problemText" class="textarea" placeholder="题干"></textarea>
           <div class="toolbar">
             <button class="btn btn-ai" @click="createTextProblem"><Sparkles :size="16" />文本</button>
-            <input ref="problemFile" type="file" class="file" @change="createImageProblem" />
+            <button class="btn btn-secondary" @click="openProblemFile"><Upload :size="16" />图片</button>
+            <input ref="problemFile" type="file" class="file" accept="image/*" @change="createImageProblem" />
           </div>
           <div v-if="activeProblem" class="ai-box">
             <textarea v-model="correctedText" class="textarea"></textarea>
             <button class="btn btn-secondary" @click="confirmProblem">确认</button>
+            <div v-if="activeProblem.knowledge_points?.length" class="source-list">
+              <span v-for="item in activeProblem.knowledge_points" :key="item" class="tag tag-ai">{{ item }}</span>
+            </div>
             <div v-if="activeProblem.common_mistakes?.length" class="source-list">
               <span v-for="item in activeProblem.common_mistakes" :key="item" class="tag tag-warning">{{ item }}</span>
             </div>
@@ -285,6 +311,7 @@
                 <span v-for="item in guidance[3].similar_questions" :key="item" class="tag">{{ item }}</span>
               </div>
             </div>
+            <p class="ai-note">AI 回答仅供学习参考，可能存在不准确的情况，请结合课程材料综合判断。</p>
           </div>
         </section>
         <aside class="card">
@@ -302,6 +329,10 @@
           <select v-model.number="selectedCourseId" class="select short" @change="loadLearning">
             <option :value="0">课程</option>
             <option v-for="course in courses" :key="course.id" :value="course.id">{{ course.name }}</option>
+          </select>
+          <select v-model.number="selectedChapterId" class="select short" @change="loadLearning">
+            <option :value="0">章节</option>
+            <option v-for="chapter in courseChapters" :key="chapter.id" :value="chapter.id">{{ chapter.title }}</option>
           </select>
           <button class="btn btn-secondary" @click="loadLearning">刷新</button>
         </div>
@@ -350,6 +381,7 @@
                 <button v-if="user.role !== 'student'" class="btn btn-secondary" @click="publishQuiz">发布</button>
               </div>
               <span v-if="attempt" class="tag tag-success">得分 {{ attempt.score }}</span>
+              <div v-if="attempt?.ai_feedback" class="ai-box feedback-box"><span class="tag tag-ai">AI</span><p>{{ attempt.ai_feedback }}</p></div>
             </div>
           </section>
           <aside class="card">
@@ -372,6 +404,15 @@
             </div>
           </aside>
         </div>
+        <article v-if="records" class="card record-card">
+          <div class="card-head"><h2 class="card-title">记录</h2><span class="tag">{{ records.attempt_count || 0 }}</span></div>
+          <div class="record-grid">
+            <div><strong>课堂</strong><p v-for="item in records.recent_progress || []" :key="item.lesson_id">{{ item.lesson_title }} · {{ item.progress_percent }}%</p></div>
+            <div><strong>问答</strong><p v-for="item in records.recent_qa || []" :key="item.id">{{ item.question }}</p></div>
+            <div><strong>题目</strong><p v-for="item in records.recent_problems || []" :key="item.id">{{ item.text }}</p></div>
+            <div><strong>测验</strong><p v-for="item in records.recent_attempts || []" :key="item.attempt_id">{{ item.quiz_title }} · {{ item.score }}</p></div>
+          </div>
+        </article>
       </section>
 
       <section v-if="active === 'plans'" class="page split">
@@ -422,6 +463,12 @@
         <div v-if="analytics" class="split">
           <article class="card"><RadarChart :items="radarItems" /></article>
           <article class="ai-box"><span class="tag tag-ai">AI</span><p>{{ analytics.suggestion }}</p></article>
+        </div>
+        <div v-if="analytics" class="analytics-grid">
+          <article class="card"><h2 class="card-title">高频问</h2><div v-for="item in analytics.high_frequency_questions || []" :key="item.question" class="row"><span>{{ item.question }}</span><span class="tag">{{ item.count }}</span></div></article>
+          <article class="card"><h2 class="card-title">薄弱点</h2><div v-for="item in analytics.weak_points || []" :key="item.knowledge_point" class="row"><span>{{ item.knowledge_point }}</span><span class="tag tag-danger">{{ item.wrong_count }}</span></div></article>
+          <article class="card"><h2 class="card-title">分布</h2><div v-for="item in analytics.score_distribution || []" :key="item.range" class="row"><span>{{ item.range }}</span><span class="tag">{{ item.count }}</span></div></article>
+          <article class="card"><h2 class="card-title">低活跃</h2><div v-for="item in analytics.inactive_students || []" :key="item.user_id" class="row"><span>{{ item.user_id }}</span><span class="tag tag-warning">{{ item.status }}</span></div></article>
         </div>
       </section>
 
@@ -479,13 +526,21 @@
       <button class="btn btn-primary" @click="uploadMaterial">上传</button>
     </template>
   </ModalPanel>
+
+  <ModalPanel :open="showResumePrompt" title="继续学习" @close="showResumePrompt = false">
+    <div class="resume-line">第{{ resumePage }}页</div>
+    <template #footer>
+      <button class="btn btn-secondary" @click="startFromFirst">从头</button>
+      <button class="btn btn-primary" @click="resumeLesson">继续</button>
+    </template>
+  </ModalPanel>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import {
   AlertTriangle, ArrowLeft, BarChart2, Bell, BookMarked, BookOpen, Bot, CalendarCheck, ChevronDown,
-  ClipboardList, GraduationCap, Layers, Lock, LogOut, MessageCircle, Pencil, Play, Plus, RefreshCw,
+  ClipboardList, GraduationCap, Layers, Lock, LogOut, MessageCircle, Pause, Pencil, Play, Plus, RefreshCw,
   Search, Send, Settings, Shield, SkipBack, SkipForward, Sparkles, Upload, User, Users, XCircle
 } from "lucide-vue-next";
 import { api } from "../api/client";
@@ -502,6 +557,7 @@ const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "e
 
 const active = ref("courses");
 const courses = ref<Course[]>([]);
+const courseChapters = ref<Chapter[]>([]);
 const selectedCourseId = ref(0);
 const courseDetail = ref<CourseDetail | null>(null);
 const members = ref<any[]>([]);
@@ -513,7 +569,8 @@ const materials = ref<Material[]>([]);
 const materialDetail = ref<MaterialDetail | null>(null);
 const qaHistory = ref<any[]>([]);
 const qaResult = ref<any | null>(null);
-const qaMessages = ref<Array<{ id: number; role: "user" | "ai"; text: string }>>([]);
+const qaMessages = ref<Array<{ id: number; role: "user" | "ai"; text: string; sources?: any[] }>>([]);
+const qaConversationId = ref<number | null>(null);
 const problemHistory = ref<any[]>([]);
 const activeProblem = ref<any | null>(null);
 const knowledge = ref<any[]>([]);
@@ -541,6 +598,14 @@ const attempt = ref<any | null>(null);
 const analyticsDays = ref(30);
 const uploadFile = ref<File | null>(null);
 const knowledgeLevel = ref<"beginner" | "standard" | "advanced">("standard");
+const audioRef = ref<HTMLAudioElement | null>(null);
+const audioPlaying = ref(false);
+const playbackRate = ref(1);
+const problemFile = ref<HTMLInputElement | null>(null);
+const showResumePrompt = ref(false);
+const resumePage = ref(1);
+const pageStartedAt = ref(Date.now());
+let studyTimer: number | undefined;
 
 const courseForm = reactive({ name: "", term: "", description: "" });
 const courseEdit = reactive({ name: "", term: "", description: "" });
@@ -580,6 +645,7 @@ const nav = computed(() => {
   }
   return [
     { key: "courses", label: "我的课程", icon: BookOpen },
+    { key: "materials", label: "课程资料", icon: Upload },
     { key: "lessons", label: "课堂学习", icon: GraduationCap },
     { key: "qa", label: "问答历史", icon: MessageCircle },
     { key: "tutoring", label: "题目辅导", icon: Pencil },
@@ -599,6 +665,17 @@ const radarItems = computed(() => (weakPoints.value.length ? weakPoints.value : 
 
 function emitNotice(type: "success" | "warning" | "error" | "info", text: string) {
   emit("notice", type, text);
+}
+async function go(key: string) {
+  active.value = key;
+  if (key === "courseDetail") await ensureCourseDetail();
+  if (key === "materials") await loadMaterials();
+  if (key === "lessons") await loadLessons();
+  if (key === "qa") await loadQaHistory();
+  if (key === "tutoring") await loadProblemHistory();
+  if (key === "learning") await loadLearning();
+  if (key === "plans") await loadPlans();
+  if (key === "analytics") await loadAnalytics();
 }
 function statusClass(status: string) {
   if (["ready", "published", "active"].includes(status)) return "tag-success";
@@ -630,9 +707,11 @@ async function run<T>(task: () => Promise<T>, ok?: string) {
 }
 async function refresh() {
   if (active.value === "courses") await loadCourses();
+  if (active.value === "courseDetail") await ensureCourseDetail();
   if (active.value === "materials") await loadMaterials();
   if (active.value === "lessons") await loadLessons();
   if (active.value === "qa") await loadQaHistory();
+  if (active.value === "tutoring") await loadProblemHistory();
   if (active.value === "learning") await loadLearning();
   if (active.value === "plans") await loadPlans();
   if (active.value === "analytics") await loadAnalytics();
@@ -641,12 +720,14 @@ async function loadCourses() {
   const path = props.user.role === "student" ? "/courses/enrolled" : "/courses/teaching";
   courses.value = (await run(() => api.get<Course[]>(path))) || [];
   if (!selectedCourseId.value && courses.value[0]) selectedCourseId.value = courses.value[0].id;
+  await loadCourseChapters();
 }
 async function openCourse(id: number) {
   selectedCourseId.value = id;
   const detail = await run(() => api.get<CourseDetail>(`/courses/${id}`));
   if (!detail) return;
   courseDetail.value = detail;
+  courseChapters.value = detail.chapters;
   Object.assign(courseEdit, {
     name: detail.course.name,
     term: detail.course.term,
@@ -654,6 +735,11 @@ async function openCourse(id: number) {
   });
   active.value = "courseDetail";
   await Promise.all([loadMembers(), loadCourseScoped()]);
+}
+async function ensureCourseDetail() {
+  if (!selectedCourseId.value && courses.value[0]) selectedCourseId.value = courses.value[0].id;
+  if (!selectedCourseId.value) return;
+  if (!courseDetail.value || courseDetail.value.course.id !== selectedCourseId.value) await openCourse(selectedCourseId.value);
 }
 async function createCourse() {
   await run(() => api.post<Course>("/courses", courseForm), "已创建");
@@ -693,12 +779,20 @@ async function loadMembers() {
   if (!selectedCourseId.value) return;
   members.value = (await run(() => api.get<any[]>(`/courses/${selectedCourseId.value}/members`))) || [];
 }
+async function loadCourseChapters() {
+  courseChapters.value = [];
+  if (!selectedCourseId.value) return;
+  const detail = await run(() => api.get<CourseDetail>(`/courses/${selectedCourseId.value}`));
+  courseChapters.value = detail?.chapters || [];
+}
 async function loadCourseScoped() {
+  await loadCourseChapters();
   await Promise.all([loadMaterials(), loadLessons(), loadLearning(), loadPlans()]);
 }
 async function loadMaterials() {
   materials.value = (await run(() => api.get<Material[]>("/materials", {
     course_id: selectedCourseId.value || undefined,
+    chapter_id: selectedChapterId.value || undefined,
     keyword: materialFilter.keyword,
     category: materialFilter.category
   }))) || [];
@@ -763,18 +857,73 @@ async function openLesson(id: number) {
   if (!detail) return;
   classroomLesson.value = detail;
   currentPage.value = 1;
+  qaMessages.value = [];
+  qaConversationId.value = null;
   const progress = await run(() => api.get<any>(`/lessons/${id}/progress`));
-  if (progress?.current_page) currentPage.value = progress.current_page;
+  if (progress?.current_page && progress.current_page > 1 && !progress.completed_at) {
+    resumePage.value = progress.current_page;
+    showResumePrompt.value = true;
+  } else if (progress?.current_page) {
+    currentPage.value = progress.current_page;
+  }
+  startStudyTimer();
 }
 async function publishLesson(id: number, publish: boolean) {
   await run(() => api.post(`/lessons/${id}/${publish ? "publish" : "unpublish"}`), publish ? "已发布" : "已撤回");
   await loadLessons();
 }
-function prevPage() { currentPage.value = Math.max(1, currentPage.value - 1); }
-function nextPage() { currentPage.value = Math.min(classroomLesson.value?.pages.length || 1, currentPage.value + 1); }
-async function saveProgress(completed: boolean) {
+function syncRate() {
+  if (audioRef.value) audioRef.value.playbackRate = playbackRate.value;
+}
+async function toggleAudio() {
+  if (!audioRef.value) return;
+  syncRate();
+  if (audioRef.value.paused) await audioRef.value.play();
+  else audioRef.value.pause();
+}
+function resetPageClock() {
+  pageStartedAt.value = Date.now();
+}
+function startStudyTimer() {
+  stopStudyTimer();
+  resetPageClock();
+  studyTimer = window.setInterval(() => saveProgress(false, true), 60000);
+}
+function stopStudyTimer() {
+  if (studyTimer) window.clearInterval(studyTimer);
+  studyTimer = undefined;
+}
+function startFromFirst() {
+  currentPage.value = 1;
+  showResumePrompt.value = false;
+  resetPageClock();
+}
+function resumeLesson() {
+  currentPage.value = resumePage.value;
+  showResumePrompt.value = false;
+  resetPageClock();
+}
+async function closeClassroom() {
+  await saveProgress(false, true);
+  stopStudyTimer();
+  classroomLesson.value = null;
+  audioPlaying.value = false;
+}
+async function prevPage() {
+  currentPage.value = Math.max(1, currentPage.value - 1);
+  audioPlaying.value = false;
+  await saveProgress(false, true);
+}
+async function nextPage() {
+  currentPage.value = Math.min(classroomLesson.value?.pages.length || 1, currentPage.value + 1);
+  audioPlaying.value = false;
+  await saveProgress(false, true);
+}
+async function saveProgress(completed: boolean, silent = false) {
   if (!classroomLesson.value) return;
-  await run(() => api.post(`/lessons/${classroomLesson.value!.lesson.id}/progress`, { current_page: currentPage.value, added_seconds: 60, completed }), "已保存");
+  const added = Math.max(0, Math.round((Date.now() - pageStartedAt.value) / 1000));
+  resetPageClock();
+  await run(() => api.post(`/lessons/${classroomLesson.value!.lesson.id}/progress`, { current_page: currentPage.value, added_seconds: added, completed }), silent ? undefined : "已保存");
 }
 async function askInClass() {
   if (!classroomLesson.value || !qaQuestion.value.trim()) return;
@@ -783,14 +932,19 @@ async function askInClass() {
   qaQuestion.value = "";
   const data = await run(() => api.post<any>("/qa/ask", {
     course_id: classroomLesson.value!.lesson.course_id,
+    conversation_id: qaConversationId.value,
     lesson_page_id: activePage.value?.id,
     question
   }));
-  if (data) qaMessages.value.push({ id: Date.now() + 1, role: "ai", text: data.answer });
+  if (data) {
+    qaConversationId.value = data.conversation_id;
+    qaMessages.value.push({ id: Date.now() + 1, role: "ai", text: data.answer, sources: data.sources || [] });
+  }
 }
 async function askQuestion() {
   if (!selectedCourseId.value) return;
-  qaResult.value = await run(() => api.post("/qa/ask", { course_id: selectedCourseId.value, question: qaQuestion.value }));
+  qaResult.value = await run(() => api.post<any>("/qa/ask", { course_id: selectedCourseId.value, conversation_id: qaConversationId.value, question: qaQuestion.value }));
+  if (qaResult.value?.conversation_id) qaConversationId.value = qaResult.value.conversation_id;
   qaQuestion.value = "";
   await loadQaHistory();
 }
@@ -809,6 +963,9 @@ async function createTextProblem() {
   activeProblem.value = await run(() => api.post("/tutoring/problems/text", { course_id: selectedCourseId.value, text: problemText.value }), "已提交");
   correctedText.value = activeProblem.value?.corrected_text || problemText.value;
   await loadProblemHistory();
+}
+function openProblemFile() {
+  problemFile.value?.click();
 }
 async function createImageProblem(event: Event) {
   const file = ((event.target as HTMLInputElement).files || [])[0];
@@ -895,8 +1052,19 @@ async function changePassword() {
 }
 
 onMounted(async () => {
+  if (props.user.role === "admin") {
+    active.value = "adminUsers";
+    return;
+  }
   await loadCourses();
-  if (props.user.role === "admin") active.value = "adminUsers";
+});
+watch(currentPage, async () => {
+  await nextTick();
+  syncRate();
+  if (audioPlaying.value && audioRef.value) await audioRef.value.play().catch(() => undefined);
+});
+onBeforeUnmount(() => {
+  stopStudyTimer();
 });
 </script>
 
@@ -989,7 +1157,21 @@ onMounted(async () => {
 }
 .history p, .mini p { margin: 0; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
 .result { margin-top: var(--space-4); }
-.file { color: var(--color-text-secondary); }
+.file { display: none; }
+.mini-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.guided { display: grid; gap: var(--space-2); margin-top: var(--space-3); }
+.guided p { margin: 0; color: var(--color-text-secondary); font-size: var(--text-body-sm); line-height: var(--leading-relaxed); }
+.quiz { display: grid; gap: var(--space-4); margin-top: var(--space-4); }
+.feedback-box { margin-top: var(--space-3); }
+.feedback-box p { margin: var(--space-2) 0 0; }
+.record-card { margin-top: var(--space-4); }
+.record-grid, .analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+.record-grid p { margin: var(--space-2) 0 0; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
+.resume-line { color: var(--color-text-primary); font-size: var(--text-h3); font-weight: var(--font-weight-semibold); }
 .classroom { min-height: 100vh; background: #0F172A; color: var(--color-text-inverse); }
 .slim {
   display: grid;
