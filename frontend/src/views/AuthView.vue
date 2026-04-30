@@ -6,10 +6,11 @@
         <strong>课程学习助手</strong>
       </div>
       <div class="tabs" role="tablist">
-        <button class="btn btn-sm" :class="mode === 'login' ? 'btn-primary' : 'btn-ghost'" @click="mode = 'login'">登录</button>
-        <button class="btn btn-sm" :class="mode === 'register' ? 'btn-primary' : 'btn-ghost'" @click="mode = 'register'">注册</button>
-        <button class="btn btn-sm" :class="mode === 'reset' ? 'btn-primary' : 'btn-ghost'" @click="mode = 'reset'">找回</button>
+        <button class="btn btn-sm" :class="mode === 'login' ? 'btn-primary' : 'btn-ghost'" @click="setMode('login')">登录</button>
+        <button class="btn btn-sm" :class="mode === 'register' ? 'btn-primary' : 'btn-ghost'" @click="setMode('register')">注册</button>
+        <button class="btn btn-sm" :class="mode === 'reset' ? 'btn-primary' : 'btn-ghost'" @click="setMode('reset')">找回</button>
       </div>
+      <p v-if="formError" class="form-error"><AlertCircle :size="15" />{{ formError }}</p>
 
       <form v-if="mode === 'login'" @submit.prevent="login">
         <label class="label">邮箱</label>
@@ -59,7 +60,7 @@
 
 <script setup lang="ts">
 import { reactive, ref } from "vue";
-import { Bot, KeyRound, LogIn, UserPlus } from "lucide-vue-next";
+import { AlertCircle, Bot, KeyRound, LogIn, UserPlus } from "lucide-vue-next";
 import { api } from "../api/client";
 import { useSessionStore } from "../stores/session";
 import type { Role, User } from "../types";
@@ -68,13 +69,28 @@ const emit = defineEmits<{ authed: [user: User]; notice: [type: "success" | "war
 
 const mode = ref<"login" | "register" | "reset">("login");
 const loading = ref(false);
+const formError = ref("");
 const loginForm = reactive({ email: "", password: "" });
 const registerForm = reactive({ email: "", password: "", nickname: "", role: "student" as Role });
 const identityNo = ref("");
 const resetForm = reactive({ email: "", code: "", new_password: "" });
 const session = useSessionStore();
 
+function setMode(value: "login" | "register" | "reset") {
+  mode.value = value;
+  formError.value = "";
+}
+function fail(text: string) {
+  formError.value = text;
+  return false;
+}
+function validatePassword(value: string) {
+  return value.length >= 8 || fail("密码至少8位");
+}
+
 async function login() {
+  formError.value = "";
+  if (!validatePassword(loginForm.password)) return;
   loading.value = true;
   try {
     const data = await api.post<{ access_token: string; user: User }>("/auth/login", loginForm);
@@ -82,6 +98,7 @@ async function login() {
     emit("authed", data.user);
     emit("notice", "success", "已登录");
   } catch (error) {
+    formError.value = (error as Error).message;
     emit("notice", "error", (error as Error).message);
   } finally {
     loading.value = false;
@@ -89,6 +106,10 @@ async function login() {
 }
 
 async function register() {
+  formError.value = "";
+  if (!registerForm.nickname.trim()) return fail("昵称不能为空");
+  if (!identityNo.value.trim()) return fail(registerForm.role === "student" ? "学号不能为空" : "工号不能为空");
+  if (!validatePassword(registerForm.password)) return;
   loading.value = true;
   try {
     const payload: Record<string, unknown> = { ...registerForm };
@@ -98,6 +119,7 @@ async function register() {
     mode.value = "login";
     emit("notice", "success", "已注册");
   } catch (error) {
+    formError.value = (error as Error).message;
     emit("notice", "error", (error as Error).message);
   } finally {
     loading.value = false;
@@ -105,12 +127,15 @@ async function register() {
 }
 
 async function sendCode() {
+  formError.value = "";
+  if (!resetForm.email.trim()) return fail("邮箱不能为空");
   loading.value = true;
   try {
     const data = await api.post<{ debug_code?: string | null }>("/auth/password/reset/request", { email: resetForm.email });
     if (data.debug_code) resetForm.code = data.debug_code;
     emit("notice", "success", "已发送");
   } catch (error) {
+    formError.value = (error as Error).message;
     emit("notice", "error", (error as Error).message);
   } finally {
     loading.value = false;
@@ -118,12 +143,16 @@ async function sendCode() {
 }
 
 async function resetPassword() {
+  formError.value = "";
+  if (!resetForm.code.trim()) return fail("验证码不能为空");
+  if (!validatePassword(resetForm.new_password)) return;
   loading.value = true;
   try {
     await api.post("/auth/password/reset/confirm", resetForm);
     mode.value = "login";
     emit("notice", "success", "已重置");
   } catch (error) {
+    formError.value = (error as Error).message;
     emit("notice", "error", (error as Error).message);
   } finally {
     loading.value = false;
@@ -165,6 +194,7 @@ async function resetPassword() {
   background: var(--color-ai-gradient);
 }
 .tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-6); }
+.form-error { display: flex; align-items: center; gap: 6px; min-height: 34px; border: 1px solid var(--color-danger-200); border-radius: var(--radius-md); background: var(--color-danger-50); color: var(--color-danger-700); padding: 0 10px; font-size: var(--text-body-sm); }
 .label { margin-top: var(--space-4); }
 .wide { width: 100%; margin-top: var(--space-6); }
 .inline { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2); margin-top: var(--space-2); }

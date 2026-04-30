@@ -1,11 +1,12 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.core.responses import success_response
-from app.db.models import KnowledgePoint, User
+from app.db.models import KnowledgePoint, QuizAnswer, QuizQuestion, User
 from app.db.session import get_db
 from app.schemas.learning import (
     KnowledgePointResponse,
@@ -42,6 +43,41 @@ from app.services.learning import (
 
 
 router = APIRouter()
+
+
+def _reference_answer(question: QuizQuestion):
+    if isinstance(question.reference_answer, dict) and "value" in question.reference_answer:
+        return question.reference_answer["value"]
+    return question.reference_answer
+
+
+def _attempt_detail(db: Session, attempt) -> dict:
+    rows = list(
+        db.execute(
+            select(QuizAnswer, QuizQuestion)
+            .join(QuizQuestion, QuizQuestion.id == QuizAnswer.question_id)
+            .where(QuizAnswer.attempt_id == attempt.id)
+            .order_by(QuizQuestion.id.asc())
+        )
+    )
+    attempt_payload = QuizAttemptResponse.model_validate(attempt).model_dump(mode="json")
+    return {
+        **attempt_payload,
+        "attempt": attempt_payload,
+        "answers": [
+            {
+                "id": answer.id,
+                "question_id": question.id,
+                "question": QuizQuestionPayload.model_validate(question).model_dump(mode="json"),
+                "user_answer": answer.user_answer,
+                "correct_answer": _reference_answer(question),
+                "is_correct": answer.is_correct,
+                "score": answer.score,
+                "feedback": answer.feedback,
+            }
+            for answer, question in rows
+        ],
+    }
 
 
 @router.get("/knowledge-points")
@@ -122,7 +158,7 @@ def submit_quiz_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     attempt = submit_quiz(db, quiz_id=quiz_id, user=user, answers=payload.answers)
-    return success_response(data=QuizAttemptResponse.model_validate(attempt).model_dump(mode="json"), request_id=request.state.request_id)
+    return success_response(data=_attempt_detail(db, attempt), request_id=request.state.request_id)
 
 
 @router.get("/wrong-questions")

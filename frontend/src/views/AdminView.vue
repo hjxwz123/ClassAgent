@@ -160,7 +160,7 @@
                   <td><BookOpen :size="14" /> {{ item.course_count || '-' }}</td>
                   <td>{{ shortDate(item.created_at) }}</td>
                   <td :class="{ stale: isStale(item.last_login_at) }">{{ relativeTime(item.last_login_at) }}</td>
-                  <td class="row-actions"><button class="icon-action" @click="openUserDetail(item.id)"><Eye :size="15" /></button><button class="icon-action" @click="quickRole(item)"><UserCheck :size="15" /></button><button class="icon-action" @click="resetUser(item.id)"><KeyRound :size="15" /></button><button class="icon-action danger" @click="deleteUser(item.id)"><Trash2 :size="15" /></button></td>
+                  <td class="row-actions"><button class="text-action" @click="openUserDetail(item.id)"><Eye :size="14" />详情</button><button class="text-action" @click="quickRole(item)"><UserCheck :size="14" />角色</button><button class="text-action" @click="resetUser(item.id)"><KeyRound :size="14" />重置</button><button class="text-action danger" @click="deleteUser(item.id)"><Trash2 :size="14" />删除</button></td>
                 </tr>
                 <tr v-if="!users.length"><td colspan="8"><EmptyState text="暂无用户" /></td></tr>
               </tbody>
@@ -330,6 +330,7 @@
     <div v-if="adminModalOpen" class="modal-mask">
       <article class="modal">
         <div class="modal-head"><Shield :size="20" /><h2>创建管理员账号</h2><button class="icon-action" @click="adminModalOpen = false"><X :size="16" /></button></div>
+        <p v-if="adminFormError" class="form-error"><AlertCircle :size="15" />{{ adminFormError }}</p>
         <div class="form-grid"><label>用户名<input v-model="adminForm.nickname" class="input" /></label><label>邮箱<input v-model="adminForm.email" class="input" type="email" /></label><label>初始密码<input v-model="adminForm.password" class="input" type="password" /></label><label>确认密码<input v-model="adminForm.confirm" class="input" type="password" /></label><label class="wide-field">备注<textarea v-model="adminForm.note" class="textarea"></textarea></label></div>
         <footer><button class="btn btn-secondary" @click="adminModalOpen = false">取消</button><button class="btn btn-primary" @click="createAdmin"><Plus :size="16" />创建</button></footer>
       </article>
@@ -405,6 +406,7 @@ const courseDrawer = ref<any | null>(null);
 const previewItem = ref<any | null>(null);
 const logDetail = ref<any | null>(null);
 const adminModalOpen = ref(false);
+const adminFormError = ref("");
 const selectedUsers = ref<number[]>([]);
 const selectedCourses = ref<number[]>([]);
 const selectedMaterials = ref<number[]>([]);
@@ -739,14 +741,21 @@ function hydrateServices() {
   }
 }
 async function createAdmin() {
-  if (!adminForm.email || !adminForm.nickname || !adminForm.password || adminForm.password !== adminForm.confirm) {
-    emit("notice", "warning", "表单错误");
-    return;
+  adminFormError.value = "";
+  if (!adminForm.nickname.trim()) return void (adminFormError.value = "用户名不能为空");
+  if (!adminForm.email.trim()) return void (adminFormError.value = "邮箱不能为空");
+  if (adminForm.password.length < 8) return void (adminFormError.value = "密码至少8位");
+  if (adminForm.password !== adminForm.confirm) return void (adminFormError.value = "两次密码不一致");
+  try {
+    await api.post("/admin/users/admin", { email: adminForm.email, nickname: adminForm.nickname, password: adminForm.password });
+    emit("notice", "success", "已创建");
+    adminModalOpen.value = false;
+    Object.assign(adminForm, { email: "", nickname: "", password: "", confirm: "", note: "" });
+    await loadUsers();
+  } catch (error) {
+    adminFormError.value = (error as Error).message;
+    emit("notice", "error", (error as Error).message);
   }
-  await run(() => api.post("/admin/users/admin", { email: adminForm.email, nickname: adminForm.nickname, password: adminForm.password }), "已创建");
-  adminModalOpen.value = false;
-  Object.assign(adminForm, { email: "", nickname: "", password: "", confirm: "", note: "" });
-  await loadUsers();
 }
 async function openUserDetail(id: number) { userDrawer.value = await run(() => api.get(`/admin/users/${id}`)); }
 async function quickRole(item: any) {
@@ -828,6 +837,7 @@ async function restoreBackupAction() { if (restoreConfirm.value !== "CONFIRM" ||
 
 watch(() => props.pageKey, (key) => { active.value = key || "adminDashboard"; loadActive(); });
 watch(logType, loadLogs);
+watch(adminModalOpen, (open) => { if (open) adminFormError.value = ""; });
 watch(autoRefresh, (enabled) => {
   if (refreshTimer) window.clearInterval(refreshTimer);
   if (enabled) refreshTimer = window.setInterval(() => active.value === "adminMonitor" && loadMonitor(), 30000);
@@ -876,6 +886,11 @@ const ServiceConfigCard = defineComponent({
 .health-pill.warn { background: var(--color-danger-50); color: var(--color-danger-700); }
 .notice-btn, .icon-action { position: relative; display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); }
 .notice-btn:hover, .icon-action:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
+.text-action { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 30px; border: 0; border-radius: var(--radius-md); background: var(--color-bg-muted); color: var(--color-text-secondary); padding: 0 8px; font-size: var(--text-caption); }
+.text-action:hover { background: var(--color-primary-50); color: var(--color-primary-700); }
+.text-action.danger { color: var(--color-danger-700); }
+.text-action.danger:hover { background: var(--color-danger-50); color: var(--color-danger-700); }
+.form-error { display: flex; align-items: center; gap: 6px; min-height: 34px; border: 1px solid var(--color-danger-100); border-radius: var(--radius-md); background: var(--color-danger-50); color: var(--color-danger-700); padding: 0 10px; font-size: var(--text-body-sm); }
 .notice-btn em { position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; border-radius: 8px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; }
 .divider { width: 1px; height: 24px; background: var(--color-border-default); }
 .avatar { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: var(--radius-full); background: var(--color-ai-gradient); color: white; font-weight: 700; }
