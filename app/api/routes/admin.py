@@ -24,6 +24,8 @@ from app.services.admin import (
     create_backup,
     deactivate_course_admin,
     delete_backup,
+    delete_model_config,
+    delete_service_config,
     get_course_detail_admin,
     get_material_stats,
     get_model_usage_stats,
@@ -269,6 +271,18 @@ def test_model_config_endpoint(
     return success_response(data=test_model_config(db, config_id=config_id), request_id=request.state.request_id)
 
 
+@router.delete("/model-configs/{config_id}")
+def delete_model_config_endpoint(
+    config_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    delete_model_config(db, config_id=config_id)
+    return success_response(message="模型配置已删除", request_id=request.state.request_id)
+
+
 @router.get("/model-usage")
 def get_model_usage_endpoint(
     request: Request,
@@ -318,6 +332,18 @@ def test_service_config_endpoint(
 ):
     assert_admin(user)
     return success_response(data=test_service_config(db, config_id=config_id), request_id=request.state.request_id)
+
+
+@router.delete("/service-configs/{config_id}")
+def delete_service_config_endpoint(
+    config_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    delete_service_config(db, config_id=config_id)
+    return success_response(message="服务配置已删除", request_id=request.state.request_id)
 
 
 @router.get("/system-settings")

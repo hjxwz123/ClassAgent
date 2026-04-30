@@ -538,6 +538,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import {
   AlertTriangle, ArrowLeft, BarChart2, Bell, BookMarked, BookOpen, Bot, CalendarCheck, ChevronDown,
   ClipboardList, GraduationCap, Layers, Lock, LogOut, MessageCircle, Pause, Pencil, Play, Plus, RefreshCw,
@@ -548,14 +549,16 @@ import CourseCard from "../components/CourseCard.vue";
 import ModalPanel from "../components/ModalPanel.vue";
 import RadarChart from "../components/RadarChart.vue";
 import StatCard from "../components/StatCard.vue";
+import { routeByPage } from "../router";
 import type { Chapter, Course, CourseDetail, Lesson, LessonPage, Material, MaterialDetail, Quiz, User as UserType } from "../types";
 import AdminPanels from "./admin/AdminPanels.vue";
 import MaterialPanel from "./parts/MaterialPanel.vue";
 
-const props = defineProps<{ user: UserType }>();
+const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
+const router = useRouter();
 
-const active = ref("courses");
+const active = ref(props.pageKey || (props.user.role === "admin" ? "adminUsers" : "courses"));
 const courses = ref<Course[]>([]);
 const courseChapters = ref<Chapter[]>([]);
 const selectedCourseId = ref(0);
@@ -667,7 +670,9 @@ function emitNotice(type: "success" | "warning" | "error" | "info", text: string
   emit("notice", type, text);
 }
 async function go(key: string) {
-  active.value = key;
+  await router.push(routeByPage[key] || routeByPage.courses);
+}
+async function loadPage(key: string) {
   if (key === "courseDetail") await ensureCourseDetail();
   if (key === "materials") await loadMaterials();
   if (key === "lessons") await loadLessons();
@@ -734,6 +739,7 @@ async function openCourse(id: number) {
     description: detail.course.description || ""
   });
   active.value = "courseDetail";
+  if (props.pageKey !== "courseDetail") await router.push(routeByPage.courseDetail);
   await Promise.all([loadMembers(), loadCourseScoped()]);
 }
 async function ensureCourseDetail() {
@@ -767,6 +773,7 @@ async function leaveCourse() {
   await run(() => api.post(`/courses/${selectedCourseId.value}/leave`), "已退出");
   courseDetail.value = null;
   active.value = "courses";
+  await router.push(routeByPage.courses);
   await loadCourses();
 }
 async function createChapter() {
@@ -1052,12 +1059,18 @@ async function changePassword() {
 }
 
 onMounted(async () => {
-  if (props.user.role === "admin") {
-    active.value = "adminUsers";
-    return;
-  }
+  active.value = props.pageKey || (props.user.role === "admin" ? "adminUsers" : "courses");
+  if (props.user.role === "admin") return;
   await loadCourses();
+  await loadPage(active.value);
 });
+watch(
+  () => props.pageKey,
+  async (key) => {
+    active.value = key || (props.user.role === "admin" ? "adminUsers" : "courses");
+    if (props.user.role !== "admin") await loadPage(active.value);
+  }
+);
 watch(currentPage, async () => {
   await nextTick();
   syncRate();

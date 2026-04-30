@@ -315,6 +315,15 @@ def save_model_config(
     return config
 
 
+def delete_model_config(db: Session, *, config_id: int) -> None:
+    config = db.get(ModelConfig, config_id)
+    if config is None or config.deleted_at is not None:
+        raise not_found("模型配置不存在")
+    config.deleted_at = datetime.now(UTC)
+    db.add(config)
+    db.commit()
+
+
 def test_model_config(db: Session, *, config_id: int) -> dict:
     config = db.get(ModelConfig, config_id)
     if config is None or config.deleted_at is not None:
@@ -421,6 +430,16 @@ def save_service_config(
     record = db.get(ServiceConfig, config_id) if config_id else ServiceConfig()
     if record is None:
         raise not_found("服务配置不存在")
+    if config_id and record.config_encrypted:
+        existing = json.loads(decrypt_secret(record.config_encrypted))
+        merged = dict(existing)
+        for key, value in config.items():
+            if value in {None, ""}:
+                continue
+            if isinstance(value, str) and "*" in value and key in existing:
+                continue
+            merged[key] = value
+        config = merged
     record.scope = ConfigScope.SERVICE.value
     record.service_type = service_type
     record.provider = provider
@@ -433,6 +452,15 @@ def save_service_config(
     return record
 
 
+def delete_service_config(db: Session, *, config_id: int) -> None:
+    record = db.get(ServiceConfig, config_id)
+    if record is None or record.deleted_at is not None:
+        raise not_found("服务配置不存在")
+    record.deleted_at = datetime.now(UTC)
+    db.add(record)
+    db.commit()
+
+
 def test_service_config(db: Session, *, config_id: int) -> dict:
     record = db.get(ServiceConfig, config_id)
     if record is None or record.deleted_at is not None:
@@ -440,7 +468,7 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
     config = json.loads(decrypt_secret(record.config_encrypted))
     if record.provider == "mock":
         return {"success": True, "message": "mock 服务配置可用"}
-    if record.service_type == "storage" and record.provider == "local":
+    if record.provider == "local":
         return {"success": True, "message": "本地存储可用"}
     required_keys = {
         "oss": ["access_key_id", "access_key_secret", "endpoint", "bucket"],

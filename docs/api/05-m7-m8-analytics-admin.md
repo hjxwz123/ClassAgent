@@ -64,6 +64,7 @@
 - `GET /api/v1/admin/model-configs`
 - `POST /api/v1/admin/model-configs`
 - `POST /api/v1/admin/model-configs/{config_id}/test`
+- `DELETE /api/v1/admin/model-configs/{config_id}`
 - `GET /api/v1/admin/model-usage`
 
 #### 保存模型配置示例
@@ -87,6 +88,7 @@
 - `GET /api/v1/admin/service-configs`
 - `POST /api/v1/admin/service-configs`
 - `POST /api/v1/admin/service-configs/{config_id}/test`
+- `DELETE /api/v1/admin/service-configs/{config_id}`
 
 #### OSS 配置建议字段
 
@@ -166,11 +168,26 @@
 
 - 当前后端已支持对配置进行加密存储和连通性测试。
 - `provider=mock` 时，测试接口会直接返回成功，便于本地联调。
+- 未配置 OSS 或禁用 OSS 时，文件会自动使用本地存储。
 
 ### 6. 系统参数
 
 - `GET /api/v1/admin/system-settings`
 - `PUT /api/v1/admin/system-settings/{key}`
+
+默认参数含义：
+
+- `upload.max_size_mb`：单文件上传上限，单位 MB
+- `course.material.max_count`：单课程资料数量上限
+- `lesson.script.max_length`：课堂讲解脚本最大长度
+- `qa.context.turn_limit`：问答多轮上下文轮数
+- `quiz.default_question_count`：默认测验题量
+- `tutoring.default_release_level`：题目辅导默认开放级别
+- `tts.default_voice`：默认 TTS 音色
+- `tts.default_rate`：默认 TTS 语速
+- `tts.default_volume`：默认 TTS 音量
+- `system.announcement`：系统公告内容
+- `backup.schedule`：数据库定期备份计划
 
 #### 更新公告示例
 

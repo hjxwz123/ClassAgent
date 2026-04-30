@@ -5,6 +5,8 @@
 - Vue3
 - TypeScript
 - Vite
+- Vue Router
+- Pinia
 - Lucide Icons
 - ECharts
 
@@ -19,6 +21,29 @@
 - M7 高频问题、薄弱点、低活跃、成绩分布、完成率、AI 建议、雷达图、时间筛选
 - M8 用户、课程、资料、模型、服务、系统参数、监控、日志、备份
 
+## 页面路由
+
+- `/auth`
+- `/courses`
+- `/courses/detail`
+- `/materials`
+- `/lessons`
+- `/qa`
+- `/tutoring`
+- `/learning`
+- `/plans`
+- `/analytics`
+- `/profile`
+- `/admin/users`
+- `/admin/courses`
+- `/admin/materials`
+- `/admin/models`
+- `/admin/services`
+- `/admin/system`
+- `/admin/monitor`
+- `/admin/logs`
+- `/admin/backups`
+
 ## 管理端新增入口
 
 - 模型用途包含 `embedding`
@@ -28,6 +53,10 @@
 - 监控展示数据库、缓存、异步队列、Celery 状态
 - 资料审核展示按类型、分类、教师、时间统计
 - 服务配置展示 OSS / 本地存储状态
+- 模型配置展示用途说明，支持编辑、测试、删除
+- 服务配置展示用途和必填字段，支持编辑、测试、删除
+- OSS、OCR、TTS、邮件各自独立配置区域
+- 系统参数展示参数含义
 
 ## 验证
 

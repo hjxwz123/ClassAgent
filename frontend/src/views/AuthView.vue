@@ -58,9 +58,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { reactive, ref } from "vue";
 import { Bot, KeyRound, LogIn, UserPlus } from "lucide-vue-next";
-import { api, setToken } from "../api/client";
+import { api } from "../api/client";
+import { useSessionStore } from "../stores/session";
 import type { Role, User } from "../types";
 
 const emit = defineEmits<{ authed: [user: User]; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
@@ -71,12 +72,13 @@ const loginForm = reactive({ email: "", password: "" });
 const registerForm = reactive({ email: "", password: "", nickname: "", role: "student" as Role });
 const identityNo = ref("");
 const resetForm = reactive({ email: "", code: "", new_password: "" });
+const session = useSessionStore();
 
 async function login() {
   loading.value = true;
   try {
     const data = await api.post<{ access_token: string; user: User }>("/auth/login", loginForm);
-    setToken(data.access_token);
+    session.setSession(data.access_token, data.user);
     emit("authed", data.user);
     emit("notice", "success", "已登录");
   } catch (error) {

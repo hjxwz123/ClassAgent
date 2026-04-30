@@ -99,6 +99,7 @@ http://127.0.0.1:8000/docs
 - `GET /api/v1/admin/model-configs`
 - `POST /api/v1/admin/model-configs`
 - `POST /api/v1/admin/model-configs/{config_id}/test`
+- `DELETE /api/v1/admin/model-configs/{config_id}`
 
 生产问答必须额外配置 Embedding：
 
@@ -181,6 +182,7 @@ http://127.0.0.1:8000/docs
 - `GET /api/v1/admin/service-configs`
 - `POST /api/v1/admin/service-configs`
 - `POST /api/v1/admin/service-configs/{config_id}/test`
+- `DELETE /api/v1/admin/service-configs/{config_id}`
 
 适用场景：
 

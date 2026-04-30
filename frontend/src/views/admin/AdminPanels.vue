@@ -113,9 +113,30 @@
 
   <section v-if="active === 'adminModels'" class="page split">
     <section class="card">
-      <div class="card-head"><h2 class="card-title">模型配置</h2><button class="btn btn-primary" @click="saveModel"><Save :size="16" />保存</button></div>
+      <div class="card-head">
+        <h2 class="card-title">模型配置</h2>
+        <div class="ops"><button class="btn btn-ghost btn-sm" @click="resetModelForm">新建</button><button class="btn btn-primary" @click="saveModel"><Save :size="16" />保存</button></div>
+      </div>
+      <div class="model-purpose-grid">
+        <button
+          v-for="item in purposeEntries"
+          :key="item.key"
+          class="config-tile"
+          :class="{ active: modelForm.purpose === item.key }"
+          @click="configureModelPurpose(item.key)"
+        >
+          <strong>{{ item.label }}</strong>
+          <span>{{ item.desc }}</span>
+          <em>{{ configuredModels(item.key).length || 0 }}</em>
+        </button>
+      </div>
       <div class="form-row">
-        <input v-model="modelForm.provider" class="input" placeholder="提供商" />
+        <select v-model="modelForm.provider" class="select">
+          <option value="openai">OpenAI</option>
+          <option value="qwen">通义千问</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="mock">Mock</option>
+        </select>
         <input v-model="modelForm.model_name" class="input" placeholder="模型" />
       </div>
       <div class="form-row">
@@ -127,18 +148,27 @@
       <input v-model="modelForm.api_key" class="input" type="password" placeholder="API Key" />
       <label class="check"><input v-model="modelForm.is_default" type="checkbox" />默认</label>
       <textarea v-model="modelExtra" class="textarea" placeholder="配置 JSON"></textarea>
-      <DataTable :headers="['模型','用途','默认','密钥','操作']">
+      <div class="hint-grid">
+        <div><strong>{{ labelOf(purposeLabels, modelForm.purpose) }}</strong><span>{{ purposeDescriptions[modelForm.purpose] }}</span></div>
+        <div><strong>默认</strong><span>该用途优先调用</span></div>
+      </div>
+      <DataTable :headers="['模型','用途','说明','默认','密钥','操作']">
         <tr v-for="item in models" :key="item.id">
           <td><strong>{{ item.provider }}</strong><br><small>{{ item.model_name }}</small></td>
           <td>{{ labelOf(purposeLabels, item.purpose) }}</td>
+          <td>{{ purposeDescriptions[item.purpose] || '-' }}</td>
           <td><span class="tag" :class="item.is_default ? 'tag-success' : ''">{{ boolLabel(item.is_default) }}</span></td>
           <td>{{ item.api_key || '-' }}</td>
-          <td class="ops"><button class="btn btn-ghost btn-xs" @click="pickModel(item)">编辑</button><button class="btn btn-ghost btn-xs" @click="testModel(item.id)">测试</button></td>
+          <td class="ops"><button class="btn btn-ghost btn-xs" @click="pickModel(item)">编辑</button><button class="btn btn-ghost btn-xs" @click="testModel(item.id)">测试</button><button class="btn btn-ghost btn-xs" @click="deleteModel(item.id)">删除</button></td>
         </tr>
-        <tr v-if="!models.length"><td colspan="5" class="muted">暂无</td></tr>
+        <tr v-if="!models.length"><td colspan="6" class="muted">暂无</td></tr>
       </DataTable>
     </section>
     <aside class="card">
+      <div class="card-head"><h2 class="card-title">用途</h2></div>
+      <div v-for="item in purposeEntries" :key="item.key" class="desc-row">
+        <strong>{{ item.label }}</strong><span>{{ item.desc }}</span>
+      </div>
       <div class="card-head"><h2 class="card-title">用量</h2><button class="btn btn-ghost btn-sm" @click="loadUsage"><RefreshCw :size="14" />刷新</button></div>
       <div v-for="item in usage.items || []" :key="item.provider" class="usage-row">
         <strong>{{ item.provider }}</strong>
@@ -150,35 +180,98 @@
     </aside>
   </section>
 
-  <section v-if="active === 'adminServices'" class="page split">
-    <section class="card">
-      <div class="card-head"><h2 class="card-title">服务配置</h2><button class="btn btn-primary" @click="saveService"><Save :size="16" />保存</button></div>
-      <div class="form-row">
-        <select v-model="serviceForm.service_type" class="select">
-          <option value="oss">OSS</option><option value="ocr">OCR</option><option value="tts">TTS</option><option value="email">邮件</option>
-        </select>
-        <select v-model="serviceForm.provider" class="select">
-          <option value="aliyun">阿里云</option><option value="smtp">SMTP</option><option value="local">本地</option><option value="mock">Mock</option>
-        </select>
-      </div>
-      <input v-model="serviceForm.name" class="input" placeholder="名称" />
-      <label class="check"><input v-model="serviceForm.is_enabled" type="checkbox" />启用</label>
-      <textarea v-model="serviceConfig" class="textarea" placeholder="配置 JSON"></textarea>
-      <DataTable :headers="['服务','提供方','启用','操作']">
-        <tr v-for="item in services" :key="item.id">
-          <td>{{ labelOf(serviceLabels, item.service_type) }}<br><small>{{ item.name }}</small></td>
-          <td>{{ labelOf(providerLabels, item.provider) }}</td>
-          <td><span class="tag" :class="item.is_enabled ? 'tag-success' : ''">{{ boolLabel(item.is_enabled) }}</span></td>
-          <td class="ops"><button class="btn btn-ghost btn-xs" @click="pickService(item)">编辑</button><button class="btn btn-ghost btn-xs" @click="testService(item.id)">测试</button></td>
-        </tr>
-        <tr v-if="!services.length"><td colspan="4" class="muted">暂无</td></tr>
-      </DataTable>
-    </section>
-    <aside class="card">
-      <div class="card-head"><h2 class="card-title">存储</h2><span class="tag tag-primary">{{ storageMode }}</span></div>
-      <div class="row"><span>OSS</span><span class="tag">{{ ossEnabled ? '启用' : '未配' }}</span></div>
-      <div class="row"><span>本地</span><span class="tag tag-success">可用</span></div>
-    </aside>
+  <section v-if="active === 'adminServices'" class="page">
+    <div class="service-config-grid">
+      <article class="card service-card">
+        <div class="card-head"><h2 class="card-title">OSS</h2><span class="tag" :class="statusClass(serviceDrafts.oss.config_id ? 'active' : 'not_configured')">{{ serviceDrafts.oss.config_id ? '已配置' : '未配置' }}</span></div>
+        <p class="card-desc">{{ serviceDescriptions.oss }}</p>
+        <div class="form-row">
+          <select v-model="serviceDrafts.oss.provider" class="select"><option value="aliyun">阿里云</option><option value="local">本地</option><option value="mock">Mock</option></select>
+          <input v-model="serviceDrafts.oss.name" class="input" placeholder="名称" />
+        </div>
+        <div v-if="serviceDrafts.oss.provider === 'aliyun'" class="config-fields">
+          <input v-model="serviceDrafts.oss.access_key_id" class="input" placeholder="AccessKey ID" />
+          <input v-model="serviceDrafts.oss.access_key_secret" class="input" type="password" placeholder="AccessKey Secret" />
+          <input v-model="serviceDrafts.oss.endpoint" class="input" placeholder="Endpoint" />
+          <input v-model="serviceDrafts.oss.region" class="input" placeholder="Region" />
+          <input v-model="serviceDrafts.oss.bucket" class="input" placeholder="Bucket" />
+        </div>
+        <label class="check"><input v-model="serviceDrafts.oss.is_enabled" type="checkbox" />启用</label>
+        <div class="card-actions">
+          <button class="btn btn-primary" @click="saveServiceType('oss')">保存</button>
+          <button class="btn btn-secondary" @click="testServiceType('oss')">测试</button>
+          <button class="btn btn-ghost" @click="deleteServiceType('oss')">删除</button>
+        </div>
+      </article>
+
+      <article class="card service-card">
+        <div class="card-head"><h2 class="card-title">OCR</h2><span class="tag" :class="statusClass(serviceDrafts.ocr.config_id ? 'active' : 'not_configured')">{{ serviceDrafts.ocr.config_id ? '已配置' : '未配置' }}</span></div>
+        <p class="card-desc">{{ serviceDescriptions.ocr }}</p>
+        <div class="form-row">
+          <select v-model="serviceDrafts.ocr.provider" class="select"><option value="aliyun">阿里云</option><option value="mock">Mock</option></select>
+          <input v-model="serviceDrafts.ocr.name" class="input" placeholder="名称" />
+        </div>
+        <div v-if="serviceDrafts.ocr.provider === 'aliyun'" class="config-fields">
+          <input v-model="serviceDrafts.ocr.access_key_id" class="input" placeholder="AccessKey ID" />
+          <input v-model="serviceDrafts.ocr.access_key_secret" class="input" type="password" placeholder="AccessKey Secret" />
+          <input v-model="serviceDrafts.ocr.endpoint" class="input" placeholder="Endpoint" />
+          <input v-model="serviceDrafts.ocr.region" class="input" placeholder="Region" />
+        </div>
+        <label class="check"><input v-model="serviceDrafts.ocr.is_enabled" type="checkbox" />启用</label>
+        <div class="card-actions">
+          <button class="btn btn-primary" @click="saveServiceType('ocr')">保存</button>
+          <button class="btn btn-secondary" @click="testServiceType('ocr')">测试</button>
+          <button class="btn btn-ghost" @click="deleteServiceType('ocr')">删除</button>
+        </div>
+      </article>
+
+      <article class="card service-card">
+        <div class="card-head"><h2 class="card-title">TTS</h2><span class="tag" :class="statusClass(serviceDrafts.tts.config_id ? 'active' : 'not_configured')">{{ serviceDrafts.tts.config_id ? '已配置' : '未配置' }}</span></div>
+        <p class="card-desc">{{ serviceDescriptions.tts }}</p>
+        <div class="form-row">
+          <select v-model="serviceDrafts.tts.provider" class="select"><option value="aliyun">阿里云</option><option value="mock">Mock</option></select>
+          <input v-model="serviceDrafts.tts.name" class="input" placeholder="名称" />
+        </div>
+        <div v-if="serviceDrafts.tts.provider === 'aliyun'" class="config-fields">
+          <input v-model="serviceDrafts.tts.appkey" class="input" placeholder="AppKey" />
+          <input v-model="serviceDrafts.tts.token" class="input" type="password" placeholder="Token" />
+          <input v-model="serviceDrafts.tts.url" class="input" placeholder="URL" />
+          <input v-model="serviceDrafts.tts.voice" class="input" placeholder="音色" />
+          <input v-model.number="serviceDrafts.tts.speech_rate" class="input" type="number" placeholder="语速" />
+          <input v-model.number="serviceDrafts.tts.volume" class="input" type="number" placeholder="音量" />
+        </div>
+        <label class="check"><input v-model="serviceDrafts.tts.is_enabled" type="checkbox" />启用</label>
+        <div class="card-actions">
+          <button class="btn btn-primary" @click="saveServiceType('tts')">保存</button>
+          <button class="btn btn-secondary" @click="testServiceType('tts')">测试</button>
+          <button class="btn btn-ghost" @click="deleteServiceType('tts')">删除</button>
+        </div>
+      </article>
+
+      <article class="card service-card">
+        <div class="card-head"><h2 class="card-title">邮件</h2><span class="tag" :class="statusClass(serviceDrafts.email.config_id ? 'active' : 'not_configured')">{{ serviceDrafts.email.config_id ? '已配置' : '未配置' }}</span></div>
+        <p class="card-desc">{{ serviceDescriptions.email }}</p>
+        <div class="form-row">
+          <select v-model="serviceDrafts.email.provider" class="select"><option value="smtp">SMTP</option><option value="mock">Mock</option></select>
+          <input v-model="serviceDrafts.email.name" class="input" placeholder="名称" />
+        </div>
+        <div v-if="serviceDrafts.email.provider === 'smtp'" class="config-fields">
+          <input v-model="serviceDrafts.email.host" class="input" placeholder="Host" />
+          <input v-model.number="serviceDrafts.email.port" class="input" type="number" placeholder="Port" />
+          <input v-model="serviceDrafts.email.sender" class="input" placeholder="发件人" />
+          <input v-model="serviceDrafts.email.username" class="input" placeholder="用户名" />
+          <input v-model="serviceDrafts.email.password" class="input" type="password" placeholder="密码" />
+          <label class="check"><input v-model="serviceDrafts.email.use_ssl" type="checkbox" />SSL</label>
+          <label class="check"><input v-model="serviceDrafts.email.use_tls" type="checkbox" />TLS</label>
+        </div>
+        <label class="check"><input v-model="serviceDrafts.email.is_enabled" type="checkbox" />启用</label>
+        <div class="card-actions">
+          <button class="btn btn-primary" @click="saveServiceType('email')">保存</button>
+          <button class="btn btn-secondary" @click="testServiceType('email')">测试</button>
+          <button class="btn btn-ghost" @click="deleteServiceType('email')">删除</button>
+        </div>
+      </article>
+    </div>
   </section>
 
   <section v-if="active === 'adminSystem'" class="page split">
@@ -186,10 +279,13 @@
       <div class="card-head"><h2 class="card-title">系统参数</h2><button class="btn btn-primary" @click="saveSetting"><Save :size="16" />保存</button></div>
       <input v-model="settingKey" class="input" placeholder="Key" />
       <textarea v-model="settingValue" class="textarea" placeholder="Value JSON"></textarea>
+      <div class="hint-grid">
+        <div><strong>含义</strong><span>{{ settingDescription(settingKey) }}</span></div>
+      </div>
     </section>
     <aside class="card">
       <div v-for="item in settings" :key="item.id" class="row" @click="pickSetting(item)">
-        <span>{{ item.setting_key }}</span><span class="tag">{{ item.category }}</span>
+        <span><strong>{{ item.setting_key }}</strong><small>{{ settingDescription(item.setting_key, item.description) }}</small></span><span class="tag">{{ item.category }}</span>
       </div>
       <div v-if="!settings.length" class="muted">暂无</div>
     </aside>
@@ -280,8 +376,13 @@ const adminForm = reactive({ email: "", password: "Admin123456", nickname: "" })
 const takeoverTeacher = ref<number | null>(null);
 const modelForm = reactive({ config_id: null as number | null, provider: "openai", model_name: "", purpose: "general", endpoint: "", api_key: "", is_default: true });
 const modelExtra = ref('{"temperature":0.2}');
-const serviceForm = reactive({ config_id: null as number | null, service_type: "oss", provider: "aliyun", name: "", is_enabled: true });
-const serviceConfig = ref("{}");
+type ServiceKey = "oss" | "ocr" | "tts" | "email";
+const serviceDrafts = reactive({
+  oss: { config_id: null as number | null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "", bucket: "" },
+  ocr: { config_id: null as number | null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "" },
+  tts: { config_id: null as number | null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", url: "", voice: "", speech_rate: 0, volume: 50 },
+  email: { config_id: null as number | null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false }
+});
 const settingKey = ref("");
 const settingValue = ref("{}");
 const logType = ref("login");
@@ -293,11 +394,43 @@ const statusLabels: Record<string, string> = { active: "启用", disabled: "禁�
 const categoryLabels: Record<string, string> = { courseware: "课件", handout: "讲义", exercise: "练习", reference: "参考" };
 const materialTypeLabels: Record<string, string> = { ppt: "PPT", pptx: "PPT", pdf: "PDF", doc: "Word", docx: "Word", txt: "TXT" };
 const purposeLabels: Record<string, string> = { general: "通用", qa: "问答", embedding: "向量", script: "讲稿", quiz: "测验", tutoring: "辅导", analysis: "分析", study_plan: "计划" };
-const serviceLabels: Record<string, string> = { oss: "OSS", ocr: "OCR", tts: "TTS", email: "邮件" };
-const providerLabels: Record<string, string> = { aliyun: "阿里云", smtp: "SMTP", local: "本地", mock: "Mock" };
+const purposeDescriptions: Record<string, string> = {
+  general: "通用兜底模型",
+  qa: "课程 RAG 问答",
+  embedding: "资料向量化",
+  script: "课堂讲稿生成",
+  quiz: "测验与评分",
+  tutoring: "题目分级辅导",
+  analysis: "教学分析建议",
+  study_plan: "学习计划生成"
+};
+const serviceDescriptions: Record<string, string> = {
+  oss: "未配默认本地",
+  ocr: "图片题识别",
+  tts: "讲稿转语音",
+  email: "验证码邮件"
+};
+const serviceRequiredKeys: Record<string, string[]> = {
+  oss: ["access_key_id", "access_key_secret", "endpoint", "bucket"],
+  ocr: ["access_key_id", "access_key_secret", "endpoint", "region"],
+  tts: ["appkey", "token", "url", "voice"],
+  email: ["host", "port", "sender"]
+};
+const settingDescriptions: Record<string, string> = {
+  "upload.max_size_mb": "单文件上传上限，单位 MB",
+  "course.material.max_count": "单课程资料数量上限",
+  "lesson.script.max_length": "课堂讲解脚本最大长度",
+  "qa.context.turn_limit": "问答多轮上下文轮数",
+  "quiz.default_question_count": "默认测验题量",
+  "tutoring.default_release_level": "题目辅导默认开放级别",
+  "tts.default_voice": "默认 TTS 音色",
+  "tts.default_rate": "默认 TTS 语速",
+  "tts.default_volume": "默认 TTS 音量",
+  "system.announcement": "系统公告内容",
+  "backup.schedule": "数据库定期备份计划"
+};
 
-const ossEnabled = computed(() => services.value.some((item) => item.service_type === "oss" && item.is_enabled && item.provider !== "local"));
-const storageMode = computed(() => (ossEnabled.value ? "OSS" : "本地"));
+const purposeEntries = computed(() => Object.entries(purposeLabels).map(([key, label]) => ({ key, label, desc: purposeDescriptions[key] })));
 const monitorRows = computed(() => [
   { label: "数据库", value: overview.value.database_status || "-", status: overview.value.database_status || "not_configured", icon: Database },
   { label: "缓存", value: overview.value.cache_status || "-", status: overview.value.cache_status || "not_configured", icon: Server },
@@ -344,6 +477,14 @@ function logMeta(item: any) {
   if (logType.value === "operations") return item.user_id ? `用户 ${item.user_id}` : "-";
   return item.source || "-";
 }
+function parseJsonObject(value: string) {
+  const parsed = JSON.parse(value || "{}");
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("JSON 必须是对象");
+  return parsed as Record<string, unknown>;
+}
+function settingDescription(key: string, fallback?: string) {
+  return settingDescriptions[key] || fallback || "自定义系统参数";
+}
 async function run<T>(task: () => Promise<T>, ok?: string) {
   try {
     const data = await task();
@@ -371,27 +512,144 @@ async function deleteMaterial(id: number) { await run(() => api.delete(`/admin/m
 async function loadModels() { models.value = (await run(() => api.get<any[]>("/admin/model-configs"))) || []; await loadUsage(); }
 async function loadUsage() { usage.value = (await run(() => api.get("/admin/model-usage"))) || {}; }
 async function saveModel() {
-  await run(() => api.post("/admin/model-configs", { ...modelForm, extra_config: JSON.parse(modelExtra.value || "{}") }), "已保存");
+  if (!modelForm.provider.trim() || !modelForm.model_name.trim() || !modelForm.purpose.trim()) {
+    props.notice("warning", "模型必填");
+    return;
+  }
+  if (modelForm.provider !== "mock" && !modelForm.endpoint.trim()) {
+    props.notice("warning", "Endpoint 必填");
+    return;
+  }
+  if (!modelForm.config_id && modelForm.provider !== "mock" && !modelForm.api_key.trim()) {
+    props.notice("warning", "密钥必填");
+    return;
+  }
+  let extra_config: Record<string, unknown>;
+  try {
+    extra_config = parseJsonObject(modelExtra.value);
+  } catch (error) {
+    props.notice("warning", (error as Error).message);
+    return;
+  }
+  await run(() => api.post("/admin/model-configs", { ...modelForm, extra_config }), "已保存");
+  resetModelForm();
   await loadModels();
 }
 function pickModel(item: any) {
   Object.assign(modelForm, { config_id: item.id, provider: item.provider, model_name: item.model_name, purpose: item.purpose, endpoint: item.endpoint || "", api_key: "", is_default: item.is_default });
   modelExtra.value = JSON.stringify(item.extra_config || {}, null, 2);
 }
+function configuredModels(purpose: string) {
+  return models.value.filter((item) => item.purpose === purpose);
+}
+function configureModelPurpose(purpose: string) {
+  const current = configuredModels(purpose)[0];
+  if (current) pickModel(current);
+  else Object.assign(modelForm, { config_id: null, purpose, provider: "openai", model_name: "", endpoint: "", api_key: "", is_default: true });
+}
+function resetModelForm() {
+  Object.assign(modelForm, { config_id: null, provider: "openai", model_name: "", purpose: "general", endpoint: "", api_key: "", is_default: true });
+  modelExtra.value = '{"temperature":0.2}';
+}
 async function testModel(id: number) { const data = await run(() => api.post<any>(`/admin/model-configs/${id}/test`)); if (data) props.notice(data.success ? "success" : "warning", data.message); }
-async function loadServices() { services.value = (await run(() => api.get<any[]>("/admin/service-configs"))) || []; }
-async function saveService() {
-  await run(() => api.post("/admin/service-configs", { ...serviceForm, config: JSON.parse(serviceConfig.value || "{}") }), "已保存");
+async function deleteModel(id: number) { await run(() => api.delete(`/admin/model-configs/${id}`), "已删除"); await loadModels(); }
+async function loadServices() {
+  services.value = (await run(() => api.get<any[]>("/admin/service-configs"))) || [];
+  hydrateServiceDrafts();
+}
+function hydrateServiceDrafts() {
+  (["oss", "ocr", "tts", "email"] as ServiceKey[]).forEach((key) => {
+    const item = services.value.find((service) => service.service_type === key);
+    if (!item) return;
+    Object.assign(serviceDrafts[key], {
+      config_id: item.id,
+      provider: item.provider,
+      name: item.name,
+      is_enabled: item.is_enabled,
+      ...(item.config || {})
+    });
+  });
+}
+function serviceConfigPayload(type: ServiceKey) {
+  if (type === "oss") {
+    const item = serviceDrafts.oss;
+    return { access_key_id: item.access_key_id, access_key_secret: item.access_key_secret, endpoint: item.endpoint, region: item.region, bucket: item.bucket };
+  }
+  if (type === "ocr") {
+    const item = serviceDrafts.ocr;
+    return { access_key_id: item.access_key_id, access_key_secret: item.access_key_secret, endpoint: item.endpoint, region: item.region };
+  }
+  if (type === "tts") {
+    const item = serviceDrafts.tts;
+    return { appkey: item.appkey, token: item.token, url: item.url, voice: item.voice, speech_rate: item.speech_rate, volume: item.volume };
+  }
+  const item = serviceDrafts.email;
+  return { host: item.host, port: item.port, sender: item.sender, username: item.username, password: item.password, use_ssl: item.use_ssl, use_tls: item.use_tls };
+}
+function validateServiceType(type: ServiceKey) {
+  const draft = serviceDrafts[type];
+  if (!draft.name.trim() || !draft.provider.trim()) return "服务必填";
+  if (["local", "mock"].includes(draft.provider)) return "";
+  const config = serviceConfigPayload(type) as Record<string, unknown>;
+  const missing = (serviceRequiredKeys[type] || []).filter((key) => !config[key]);
+  return missing.length ? `缺少 ${missing.join(", ")}` : "";
+}
+async function saveServiceType(type: ServiceKey) {
+  const error = validateServiceType(type);
+  if (error) {
+    props.notice("warning", error);
+    return;
+  }
+  const draft = serviceDrafts[type];
+  await run(() => api.post("/admin/service-configs", {
+    config_id: draft.config_id,
+    service_type: type,
+    provider: draft.provider,
+    name: draft.name,
+    is_enabled: draft.is_enabled,
+    config: serviceConfigPayload(type)
+  }), "已保存");
   await loadServices();
 }
-function pickService(item: any) {
-  Object.assign(serviceForm, { config_id: item.id, service_type: item.service_type, provider: item.provider, name: item.name, is_enabled: item.is_enabled });
-  serviceConfig.value = JSON.stringify(item.config || {}, null, 2);
+async function testServiceType(type: ServiceKey) {
+  const id = serviceDrafts[type].config_id;
+  if (!id) {
+    props.notice("warning", "先保存");
+    return;
+  }
+  const data = await run(() => api.post<any>(`/admin/service-configs/${id}/test`));
+  if (data) props.notice(data.success ? "success" : "warning", data.message);
 }
-async function testService(id: number) { const data = await run(() => api.post<any>(`/admin/service-configs/${id}/test`)); if (data) props.notice(data.success ? "success" : "warning", data.message); }
+async function deleteServiceType(type: ServiceKey) {
+  const id = serviceDrafts[type].config_id;
+  if (!id) return;
+  await run(() => api.delete(`/admin/service-configs/${id}`), "已删除");
+  resetServiceDraft(type);
+  await loadServices();
+}
+function resetServiceDraft(type: ServiceKey) {
+  if (type === "oss") Object.assign(serviceDrafts.oss, { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "", bucket: "" });
+  if (type === "ocr") Object.assign(serviceDrafts.ocr, { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "" });
+  if (type === "tts") Object.assign(serviceDrafts.tts, { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", url: "", voice: "", speech_rate: 0, volume: 50 });
+  if (type === "email") Object.assign(serviceDrafts.email, { config_id: null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false });
+}
 async function loadSettings() { settings.value = (await run(() => api.get<any[]>("/admin/system-settings"))) || []; }
 function pickSetting(item: any) { settingKey.value = item.setting_key; settingValue.value = JSON.stringify(item.setting_value ?? {}, null, 2); }
-async function saveSetting() { await run(() => api.put(`/admin/system-settings/${settingKey.value}`, { value: JSON.parse(settingValue.value || "null") }), "已保存"); await loadSettings(); }
+async function saveSetting() {
+  if (!settingKey.value.trim()) {
+    props.notice("warning", "Key 必填");
+    return;
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(settingValue.value || "null");
+  } catch {
+    props.notice("warning", "JSON 错误");
+    return;
+  }
+  await run(() => api.put(`/admin/system-settings/${settingKey.value}`, { value }), "已保存");
+  await loadSettings();
+}
 async function loadOverview() { overview.value = (await run(() => api.get("/admin/monitoring/overview"))) || {}; }
 function logQuery() {
   const base: Record<string, unknown> = { limit: logLimit.value, start_at: logFilter.start_at, end_at: logFilter.end_at };
@@ -477,6 +735,76 @@ onMounted(loadActive);
   border-bottom: 1px solid var(--color-border-subtle);
   padding: var(--space-3) 0;
 }
+.model-purpose-grid, .service-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.config-tile {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1) var(--space-3);
+  min-height: 84px;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  padding: var(--space-3);
+  text-align: left;
+}
+.config-tile span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+.config-tile em {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  align-self: center;
+  min-width: 28px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+  font-style: normal;
+  text-align: center;
+}
+.config-tile.active {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+}
+.service-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+}
+.config-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.hint-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-3) 0 var(--space-4);
+}
+.hint-grid div, .desc-row {
+  display: grid;
+  gap: var(--space-1);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+.desc-row { margin-bottom: var(--space-2); }
+.hint-grid span, .desc-row span {
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
 .check {
   display: inline-flex;
   align-items: center;
@@ -484,7 +812,7 @@ onMounted(loadActive);
   color: var(--color-text-secondary);
   font-size: var(--text-body-sm);
 }
-small { color: var(--color-text-muted); }
+small { display: block; color: var(--color-text-muted); }
 @media (max-width: 767px) {
   .admin-form .form-row { grid-template-columns: 1fr; }
 }
