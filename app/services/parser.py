@@ -1,11 +1,24 @@
+from __future__ import annotations
+
+import json
+import time
+from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
-import fitz
-from docx import Document
-from pptx import Presentation
+from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.enums import MaterialType
 from app.core.errors import bad_request
+from app.services.runtime_config import RuntimeServiceConfig, get_enabled_service_config
+
+
+SERVICE_TYPE = "doc_parser"
+DEFAULT_ENDPOINT = "docmind-api.cn-hangzhou.aliyuncs.com"
+DEFAULT_REGION = "cn-hangzhou"
+DEFAULT_LAYOUT_STEP_SIZE = 100
+SUPPORTED_MATERIAL_TYPES = {MaterialType.PPTX.value, MaterialType.PDF.value, MaterialType.DOCX.value, MaterialType.TXT.value}
 
 
 def _normalize_page(title: str | None, content: str, page_number: int) -> dict:
@@ -17,61 +30,325 @@ def _normalize_page(title: str | None, content: str, page_number: int) -> dict:
     }
 
 
-def parse_pptx(path: Path) -> list[dict]:
-    presentation = Presentation(path.as_posix())
-    pages: list[dict] = []
-    for index, slide in enumerate(presentation.slides, start=1):
-        parts: list[str] = []
-        title = slide.shapes.title.text if slide.shapes.title and slide.shapes.title.text else None
-        for shape in slide.shapes:
-            if hasattr(shape, "text") and shape.text:
-                parts.append(shape.text)
-        pages.append(_normalize_page(title, "\n".join(parts), index))
-    return pages
+def _to_plain_data(value: Any) -> Any:
+    if value is None:
+        return None
+    if hasattr(value, "to_map"):
+        return value.to_map()
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return {}
+        if text.startswith("{") or text.startswith("["):
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                return {"text": text}
+        return {"text": text}
+    if isinstance(value, list):
+        return [_to_plain_data(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _to_plain_data(item) for key, item in value.items()}
+    return value
 
 
-def parse_pdf(path: Path) -> list[dict]:
-    pages: list[dict] = []
-    document = fitz.open(path.as_posix())
-    for index, page in enumerate(document, start=1):
-        pages.append(_normalize_page(f"第{index}页", page.get_text("text"), index))
-    return pages
+def _read_value(value: Any, *keys: str) -> Any:
+    if value is None:
+        return None
+    for key in keys:
+        if isinstance(value, dict):
+            for candidate in {key, key[:1].upper() + key[1:], key[:1].lower() + key[1:]}:
+                if candidate in value:
+                    return value[candidate]
+        if hasattr(value, key):
+            return getattr(value, key)
+    return None
 
 
-def parse_docx(path: Path) -> list[dict]:
-    document = Document(path.as_posix())
-    paragraphs = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
-    if not paragraphs:
-        return [_normalize_page("文档内容", "", 1)]
-    grouped: list[dict] = []
-    buffer: list[str] = []
-    page_number = 1
-    for paragraph in paragraphs:
-        buffer.append(paragraph)
-        if len("\n".join(buffer)) >= 700:
-            grouped.append(_normalize_page(f"第{page_number}段", "\n".join(buffer), page_number))
-            page_number += 1
-            buffer = []
-    if buffer:
-        grouped.append(_normalize_page(f"第{page_number}段", "\n".join(buffer), page_number))
-    return grouped
+def _as_bool(value: Any, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes", "on", "启用", "是"}
 
 
-def parse_txt(path: Path) -> list[dict]:
-    content = path.read_text(encoding="utf-8")
-    blocks = [block.strip() for block in content.split("\n\n") if block.strip()]
-    if not blocks:
-        return [_normalize_page("文本内容", "", 1)]
-    return [_normalize_page(f"第{index}段", block, index) for index, block in enumerate(blocks, start=1)]
+def _bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    return max(minimum, min(maximum, number))
 
 
-def parse_material(path: Path, material_type: str) -> list[dict]:
-    if material_type == MaterialType.PPTX.value:
-        return parse_pptx(path)
-    if material_type == MaterialType.PDF.value:
-        return parse_pdf(path)
-    if material_type == MaterialType.DOCX.value:
-        return parse_docx(path)
-    if material_type == MaterialType.TXT.value:
-        return parse_txt(path)
-    raise bad_request("暂不支持该资料类型解析")
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _api_error_message(body: Any) -> str | None:
+    data = _to_plain_data(body)
+    if not isinstance(data, dict):
+        return None
+    code = data.get("Code") or data.get("code")
+    if code is None:
+        return None
+    if str(code).lower() in {"200", "ok", "success"}:
+        return None
+    return str(data.get("Message") or data.get("message") or code)
+
+
+def _output_formats(value: Any) -> list[str] | None:
+    if value is None or value == "":
+        return ["markdown"]
+    if isinstance(value, str):
+        items = [item.strip() for item in value.split(",")]
+    elif isinstance(value, list):
+        items = [str(item).strip() for item in value]
+    else:
+        items = [str(value).strip()]
+    formats = [item for item in items if item]
+    return formats or None
+
+
+def _layout_text(layout: dict) -> str:
+    for key in ("markdownContent", "markdown_content", "llmResult", "llm_result", "text"):
+        value = layout.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    blocks = layout.get("blocks")
+    if isinstance(blocks, list):
+        pieces = [str(block.get("text", "")).strip() for block in blocks if isinstance(block, dict)]
+        return "\n".join(piece for piece in pieces if piece)
+    return ""
+
+
+def _layout_title(layout: dict, fallback: str | None = None) -> str | None:
+    text = str(layout.get("text") or fallback or "").strip()
+    if not text:
+        content = _layout_text(layout)
+        text = content.splitlines()[0].strip("# ").strip() if content else ""
+    return text[:120] or None
+
+
+class DocParserService:
+    def __init__(self) -> None:
+        self.settings = get_settings()
+
+    def _client(self, config: dict):
+        required = ["access_key_id", "access_key_secret"]
+        missing = [key for key in required if not config.get(key)]
+        if missing:
+            raise bad_request(f"文档解析配置缺少字段: {', '.join(missing)}")
+        try:
+            from alibabacloud_docmind_api20220711.client import Client as DocMindClient
+            from alibabacloud_tea_openapi import models as openapi_models
+        except ImportError as exc:
+            raise RuntimeError("缺少阿里云文档解析 SDK 依赖") from exc
+
+        return DocMindClient(
+            openapi_models.Config(
+                access_key_id=config["access_key_id"],
+                access_key_secret=config["access_key_secret"],
+                endpoint=str(config.get("endpoint") or DEFAULT_ENDPOINT),
+                region_id=str(config.get("region") or DEFAULT_REGION),
+                type="access_key",
+                connect_timeout=int(self.settings.external_service_timeout_seconds * 1000),
+                read_timeout=int(self.settings.external_service_timeout_seconds * 1000),
+            )
+        )
+
+    def _runtime_options(self):
+        from alibabacloud_tea_util import models as util_models
+
+        return util_models.RuntimeOptions(
+            connect_timeout=int(self.settings.external_service_timeout_seconds * 1000),
+            read_timeout=int(self.settings.external_service_timeout_seconds * 1000),
+        )
+
+    def _submit_job(self, path: Path, filename: str, config: dict) -> str:
+        try:
+            from alibabacloud_docmind_api20220711 import models as docmind_models
+        except ImportError as exc:
+            raise RuntimeError("缺少阿里云文档解析 SDK 依赖") from exc
+
+        extension = (Path(filename).suffix or path.suffix).lower().lstrip(".")
+        if not extension:
+            raise bad_request("文档解析需要文件后缀")
+        llm_enhancement = _as_bool(config.get("llm_enhancement"), True) or _as_bool(config.get("output_html_table"), False)
+        request = docmind_models.SubmitDocParserJobAdvanceRequest(
+            file_name=filename,
+            file_name_extension=extension,
+            formula_enhancement=_as_bool(config.get("formula_enhancement"), False),
+            llm_enhancement=llm_enhancement,
+            output_html_table=_as_bool(config.get("output_html_table"), False),
+            output_format=_output_formats(config.get("output_format")),
+            page_index=str(config.get("page_index")).strip() if config.get("page_index") else None,
+        )
+        if llm_enhancement and config.get("enhancement_mode", "VLM"):
+            request.enhancement_mode = str(config.get("enhancement_mode") or "VLM")
+        with path.open("rb") as file_object:
+            request.file_url_object = file_object
+            response = self._client(config).submit_doc_parser_job_advance(request, self._runtime_options())
+        if error_message := _api_error_message(response.body):
+            raise bad_request(f"文档解析任务提交失败: {error_message}")
+        data = _read_value(response.body, "data") if response.body else None
+        task_id = _read_value(data, "id")
+        if not task_id:
+            body = response.body.to_map() if response.body and hasattr(response.body, "to_map") else {}
+            raise bad_request(f"文档解析任务提交失败: {body.get('Message') or body.get('message') or '未返回任务 ID'}")
+        return str(task_id)
+
+    def _query_status(self, task_id: str, config: dict) -> dict:
+        from alibabacloud_docmind_api20220711 import models as docmind_models
+
+        request = docmind_models.QueryDocParserStatusRequest(id=task_id)
+        response = self._client(config).query_doc_parser_status(request)
+        if error_message := _api_error_message(response.body):
+            raise bad_request(f"文档解析状态查询失败: {error_message}")
+        body = _to_plain_data(response.body)
+        data = _to_plain_data(_read_value(response.body, "data")) if response.body else None
+        if isinstance(data, dict):
+            return data
+        if isinstance(body, dict):
+            return body.get("Data") or body.get("data") or body
+        return {}
+
+    def _wait_for_success(self, task_id: str, config: dict) -> dict:
+        timeout_seconds = _bounded_int(config.get("timeout_seconds") or config.get("timeout"), default=600, minimum=30, maximum=7200)
+        poll_interval = _bounded_int(config.get("poll_interval_seconds"), default=5, minimum=1, maximum=60)
+        deadline = time.monotonic() + timeout_seconds
+        last_status: dict = {}
+        while time.monotonic() < deadline:
+            last_status = self._query_status(task_id, config)
+            status = str(last_status.get("Status") or last_status.get("status") or "").lower()
+            if status == "success":
+                return last_status
+            if status in {"fail", "failed"}:
+                message = last_status.get("Message") or last_status.get("message") or last_status.get("Code") or "处理失败"
+                raise bad_request(f"文档解析失败: {message}")
+            time.sleep(poll_interval)
+        progress = last_status.get("Processing") or last_status.get("processing") or 0
+        raise bad_request(f"文档解析超时，当前进度 {progress}%")
+
+    def _get_result_batch(self, task_id: str, config: dict, layout_num: int, step_size: int) -> list[dict]:
+        from alibabacloud_docmind_api20220711 import models as docmind_models
+
+        request = docmind_models.GetDocParserResultRequest(
+            id=task_id,
+            layout_num=layout_num,
+            layout_step_size=step_size,
+        )
+        response = self._client(config).get_doc_parser_result(request)
+        if error_message := _api_error_message(response.body):
+            raise bad_request(f"文档解析结果获取失败: {error_message}")
+        data = _to_plain_data(_read_value(response.body, "data")) if response.body else {}
+        if isinstance(data, dict):
+            layouts = data.get("layouts") or data.get("Layouts") or []
+        else:
+            layouts = []
+        if not isinstance(layouts, list):
+            raise bad_request("文档解析结果格式异常")
+        return [layout for layout in layouts if isinstance(layout, dict)]
+
+    def _collect_layouts(self, task_id: str, config: dict) -> list[dict]:
+        step_size = _bounded_int(
+            config.get("layout_step_size"),
+            default=DEFAULT_LAYOUT_STEP_SIZE,
+            minimum=1,
+            maximum=3000,
+        )
+        layouts: list[dict] = []
+        layout_num = 0
+        while True:
+            batch = self._get_result_batch(task_id, config, layout_num, step_size)
+            if not batch:
+                break
+            layouts.extend(batch)
+            layout_num += len(batch)
+            if len(batch) < step_size:
+                break
+        return layouts
+
+    def _pages_from_layouts(self, layouts: list[dict]) -> list[dict]:
+        grouped: dict[int, list[dict]] = defaultdict(list)
+        for index, layout in enumerate(layouts):
+            raw_page = layout.get("pageNum", layout.get("page_num", layout.get("pageNumber", 0)))
+            try:
+                page_number = int(raw_page) + 1
+            except (TypeError, ValueError):
+                page_number = 1
+            layout["_fallback_order"] = index
+            grouped[page_number].append(layout)
+
+        pages: list[dict] = []
+        for page_number in sorted(grouped):
+            page_layouts = sorted(grouped[page_number], key=lambda item: _safe_int(item.get("index"), item["_fallback_order"]))
+            pieces = [piece for piece in (_layout_text(layout) for layout in page_layouts) if piece]
+            title = None
+            for layout in page_layouts:
+                if str(layout.get("type", "")).lower() == "title":
+                    title = _layout_title(layout)
+                    break
+            pages.append(_normalize_page(title or f"第{page_number}页", "\n\n".join(pieces), page_number))
+        return pages
+
+    def _mock_pages(self, material_type: str, service: RuntimeServiceConfig) -> list[dict]:
+        config = service.config
+        configured_pages = config.get("mock_pages_by_type", {}).get(material_type) if isinstance(config.get("mock_pages_by_type"), dict) else None
+        configured_pages = configured_pages or config.get("mock_pages")
+        if isinstance(configured_pages, list) and configured_pages:
+            pages = []
+            for index, page in enumerate(configured_pages, start=1):
+                if isinstance(page, dict):
+                    pages.append(
+                        _normalize_page(
+                            str(page.get("page_title") or page.get("title") or f"第{index}页"),
+                            str(page.get("page_text") or page.get("content") or page.get("text") or ""),
+                            _safe_int(page.get("page_number"), index),
+                        )
+                    )
+                else:
+                    pages.append(_normalize_page(f"第{index}页", str(page), index))
+            return pages
+
+        default_counts = {MaterialType.PPTX.value: 2, MaterialType.PDF.value: 1, MaterialType.DOCX.value: 1, MaterialType.TXT.value: 2}
+        counts = config.get("mock_page_counts") if isinstance(config.get("mock_page_counts"), dict) else {}
+        count = _bounded_int(counts.get(material_type), default=default_counts.get(material_type, 1), minimum=1, maximum=20)
+        default_text = (
+            "极限定义\n极限描述函数在某点附近的变化趋势。\n矩阵可以表示线性变换。\n"
+            "连续函数在区间内没有跳跃。行列式反映缩放系数。"
+        )
+        text = str(config.get("mock_text") or default_text)
+        return [_normalize_page(f"模拟解析第{index}页", text, index) for index in range(1, count + 1)]
+
+    def parse(self, path: Path, material_type: str, db: Session | None, filename: str | None = None) -> list[dict]:
+        if material_type not in SUPPORTED_MATERIAL_TYPES:
+            raise bad_request("暂不支持该资料类型解析")
+        service = get_enabled_service_config(db, SERVICE_TYPE)
+        if service is None:
+            raise bad_request("文档解析服务未配置，请先在管理员后台配置阿里云文档解析服务")
+        if service.provider == "mock":
+            if self.settings.app_env == "production":
+                raise bad_request("生产环境不允许使用 Mock 文档解析服务")
+            return self._mock_pages(material_type, service)
+        if service.provider != "aliyun":
+            raise bad_request(f"暂不支持的文档解析服务提供方: {service.provider}")
+
+        task_id = self._submit_job(path, filename or path.name, service.config)
+        self._wait_for_success(task_id, service.config)
+        pages = self._pages_from_layouts(self._collect_layouts(task_id, service.config))
+        if not pages:
+            raise bad_request("文档解析未返回有效内容")
+        return pages
+
+
+doc_parser_service = DocParserService()
+
+
+def parse_material(path: Path, material_type: str, db: Session | None = None, filename: str | None = None) -> list[dict]:
+    return doc_parser_service.parse(path, material_type, db, filename=filename)

@@ -297,6 +297,36 @@
               </div>
             </article>
 
+            <article class="aliyun-card aliyun-doc-parser">
+              <header class="aliyun-card-head">
+                <div class="aliyun-card-title">
+                  <span class="aliyun-card-icon"><FileCheck :size="20" /></span>
+                  <h2>阿里云文档解析</h2>
+                </div>
+                <span class="tag" :class="statusClass(serviceStatus('doc_parser'))">{{ statusText(serviceStatus('doc_parser')) }}</span>
+                <div class="aliyun-card-actions">
+                  <button class="btn btn-secondary btn-sm" @click="testServiceType('doc_parser')"><RefreshCw :size="14" />测试</button>
+                  <button class="btn btn-primary btn-sm" @click="saveServiceType('doc_parser')"><Save :size="14" />保存</button>
+                  <button class="btn btn-ghost btn-sm aliyun-delete" @click="deleteServiceType('doc_parser')"><Trash2 :size="14" />删除</button>
+                </div>
+              </header>
+              <div class="aliyun-field-grid">
+                <label>供应商 / 类型<select v-model="serviceDrafts.doc_parser.provider" class="select"><option value="aliyun">阿里云 DocMind</option><option value="mock">Mock</option></select></label>
+                <label>配置名称<input v-model="serviceDrafts.doc_parser.name" class="input" /></label>
+                <label>AccessKey ID<input v-model="serviceDrafts.doc_parser.access_key_id" class="input" type="password" /></label>
+                <label>AccessKey Secret<input v-model="serviceDrafts.doc_parser.access_key_secret" class="input" type="password" /></label>
+                <label>Endpoint<input v-model="serviceDrafts.doc_parser.endpoint" class="input" /></label>
+                <label>Region<input v-model="serviceDrafts.doc_parser.region" class="input" /></label>
+                <label>任务超时<input v-model.number="serviceDrafts.doc_parser.timeout_seconds" class="input" type="number" min="30" /></label>
+                <label>轮询间隔<input v-model.number="serviceDrafts.doc_parser.poll_interval_seconds" class="input" type="number" min="1" /></label>
+                <label>拉取步长<input v-model.number="serviceDrafts.doc_parser.layout_step_size" class="input" type="number" min="1" max="3000" /></label>
+                <label>增强模式<select v-model="serviceDrafts.doc_parser.enhancement_mode" class="select"><option value="VLM">VLM</option><option value="">关闭</option></select></label>
+                <label>大模型增强<span class="aliyun-check"><input v-model="serviceDrafts.doc_parser.llm_enhancement" type="checkbox" />启用</span></label>
+                <label>公式增强<span class="aliyun-check"><input v-model="serviceDrafts.doc_parser.formula_enhancement" type="checkbox" />启用</span></label>
+                <label>HTML 表格<span class="aliyun-check"><input v-model="serviceDrafts.doc_parser.output_html_table" type="checkbox" />启用</span></label>
+              </div>
+            </article>
+
             <article class="aliyun-card aliyun-tts">
               <header class="aliyun-card-head">
                 <div class="aliyun-card-title">
@@ -481,7 +511,7 @@ const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
 const router = useRouter();
 
-type ServiceKey = "oss" | "ocr" | "tts" | "email";
+type ServiceKey = "oss" | "ocr" | "doc_parser" | "tts" | "email";
 
 const routeByKey: Record<string, string> = {
   profile: "/profile",
@@ -568,6 +598,7 @@ const backupNotifyEmail = ref("");
 const serviceDrafts = reactive<Record<ServiceKey, any>>({
   oss: { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "", bucket: "", url_expire_hours: 24 },
   ocr: { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "", timeout: 10, retries: 3, accuracy: "normal" },
+  doc_parser: { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "docmind-api.cn-hangzhou.aliyuncs.com", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
   tts: { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", token: "", url: "", voice: "xiaoyun", speech_rate: 0, volume: 50, sample_rate: 16000, format: "wav" },
   email: { config_id: null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false }
 });
@@ -732,7 +763,7 @@ function sizeLabel(size?: number) {
   return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 function serviceIcon(key: string) {
-  return { mysql: Database, redis: Server, vector: Layers, celery: Activity, oss: Cloud, tts: Volume2, ocr: Scan, email: FileText, llm: Sparkles }[key] || Server;
+  return { mysql: Database, redis: Server, vector: Layers, celery: Activity, oss: Cloud, tts: Volume2, ocr: Scan, doc_parser: FileCheck, email: FileText, llm: Sparkles }[key] || Server;
 }
 function fileIcon(type: string) {
   if (["ppt", "pptx"].includes(type)) return FileCheck;
@@ -976,7 +1007,7 @@ function serviceMissing(type: ServiceKey) {
   const draft = serviceDrafts[type];
   if (!draft.name || !draft.provider) return "服务必填";
   if (["mock", "local"].includes(draft.provider)) return "";
-  const required: Record<ServiceKey, string[]> = { oss: ["access_key_id", "access_key_secret", "endpoint", "bucket"], ocr: ["access_key_id", "access_key_secret", "endpoint"], tts: ["appkey", "token", "url", "voice"], email: ["host", "port", "sender"] };
+  const required: Record<ServiceKey, string[]> = { oss: ["access_key_id", "access_key_secret", "endpoint", "bucket"], ocr: ["access_key_id", "access_key_secret", "endpoint"], doc_parser: ["access_key_id", "access_key_secret", "endpoint"], tts: ["appkey", "token", "url", "voice"], email: ["host", "port", "sender"] };
   const missing = required[type].filter((key) => !draft[key]);
   return missing.length ? `缺少 ${missing.join(",")}` : "";
 }
@@ -1254,6 +1285,7 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .aliyun-card-icon { display: inline-flex; flex: 0 0 44px; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-600); box-shadow: inset 0 0 0 1px rgba(37,99,235,.08); }
 .aliyun-oss .aliyun-card-icon { background: var(--color-info-50); color: var(--color-info-700); }
 .aliyun-ocr .aliyun-card-icon { background: var(--color-success-50); color: var(--color-success-700); }
+.aliyun-doc-parser .aliyun-card-icon { background: var(--color-primary-50); color: var(--color-primary-700); }
 .aliyun-tts .aliyun-card-icon { background: var(--color-ai-light); color: #6D28D9; }
 .aliyun-email .aliyun-card-icon { background: var(--color-warning-50); color: var(--color-warning-700); }
 .aliyun-delete { color: var(--color-danger-700); }

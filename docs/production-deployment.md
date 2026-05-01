@@ -126,6 +126,8 @@ http://127.0.0.1:8000/docs
 - `POST /api/v1/admin/service-configs`
 - `POST /api/v1/admin/service-configs/{config_id}/test`
 
+资料上传解析必须配置 `service_type=doc_parser`、`provider=aliyun` 的阿里云文档解析（大模型版）服务。
+
 生产找回密码需要配置 `service_type=email` 的 SMTP 服务。
 
 ## 7. 存储模式

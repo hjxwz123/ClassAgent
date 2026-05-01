@@ -190,6 +190,7 @@ http://127.0.0.1:8000/docs
 
 - 阿里云 OSS
 - 阿里云 OCR
+- 阿里云文档解析（大模型版）
 - 阿里云 TTS
 - SMTP 邮件服务
 
@@ -234,7 +235,40 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-### 5.3 TTS 配置示例
+### 5.3 文档解析配置示例
+
+用于课程资料 `.pptx`、`.pdf`、`.docx`、`.txt` 的内容抽取。后端使用阿里云文档解析（大模型版）异步接口，不再使用本地 Python 文档解析库。
+
+```json
+{
+  "service_type": "doc_parser",
+  "provider": "aliyun",
+  "name": "aliyun-doc-parser",
+  "config": {
+    "access_key_id": "xxx",
+    "access_key_secret": "xxx",
+    "endpoint": "docmind-api.cn-hangzhou.aliyuncs.com",
+    "region": "cn-hangzhou",
+    "timeout_seconds": 600,
+    "poll_interval_seconds": 5,
+    "layout_step_size": 100,
+    "output_format": "markdown",
+    "llm_enhancement": true,
+    "enhancement_mode": "VLM",
+    "formula_enhancement": false,
+    "output_html_table": false
+  },
+  "is_enabled": true
+}
+```
+
+处理流程：
+
+1. `SubmitDocParserJobAdvance` 上传本地文件流并提交异步任务。
+2. `QueryDocParserStatus` 按 `poll_interval_seconds` 轮询，直到 `success` 或 `Fail`。
+3. `GetDocParserResult` 按 `layout_step_size` 分段读取 layouts，并生成课堂页面原文。
+
+### 5.4 TTS 配置示例
 
 ```json
 {
@@ -256,7 +290,7 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-### 5.4 邮件配置示例
+### 5.5 邮件配置示例
 
 用于找回密码验证码。
 
@@ -294,11 +328,12 @@ http://127.0.0.1:8000/docs
 
 - OSS：阿里云 OSS SDK
 - OCR：阿里云 OCR SDK
+- 文档解析：阿里云 DocMind 文档解析（大模型版）SDK
 - TTS：阿里云 TTS REST 调用
 - Email：SMTP
 - Embedding：OpenAI 兼容 `/embeddings`
 
-开发环境未配置时可使用本地占位能力，生产环境必须配置真实服务。
+开发环境可显式配置 `provider=mock` 做联调占位；生产环境必须配置真实服务。文档解析没有本地解析回退。
 
 如果你接下来要接阿里云，优先看：
 
@@ -310,4 +345,5 @@ http://127.0.0.1:8000/docs
 
 - 阿里云 OSS Python SDK 上传对象：<https://help.aliyun.com/zh/oss/developer-reference/upload-an-object>
 - 阿里云 OCR 通用文字识别 RecognizeGeneral：<https://help.aliyun.com/zh/ocr/developer-reference/api-ocr-api-2021-07-07-recognizegeneral>
+- 阿里云文档解析（大模型版）：<https://help.aliyun.com/zh/document-mind/developer-reference/api-overview>
 - 阿里云智能语音交互 RESTful TTS：<https://help.aliyun.com/zh/isi/developer-reference/restful-api-3>

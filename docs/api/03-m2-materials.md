@@ -4,6 +4,7 @@
 
 - 支持文件：`.pptx`、`.pdf`、`.docx`、`.txt`
 - 默认大小上限：`50MB`
+- 文档内容解析依赖管理员配置的 `service_type=doc_parser` 阿里云文档解析服务
 - 分类枚举：
   - `courseware`
   - `handout`
@@ -33,11 +34,13 @@
 
 上传成功后会自动触发：
 
-1. 文档解析
+1. 阿里云文档解析（大模型版）异步任务
 2. 课堂页面生成
 3. 每页脚本生成
 4. 音频生成
 5. 向量化入库
+
+文档解析流程为 `SubmitDocParserJobAdvance` 提交本地文件流、`QueryDocParserStatus` 轮询任务状态、`GetDocParserResult` 分段读取版面结果，并使用返回的 Markdown/文本内容生成课堂页面。后端不再使用 `pymupdf`、`python-docx`、`python-pptx` 等本地 Python 文档解析库处理资料内容。
 
 向量化使用 Chroma 持久化向量库。生产环境需先配置 `purpose=embedding` 的模型；开发环境仅用于本地验证时会生成确定性本地 embedding。
 
@@ -148,5 +151,5 @@
 
 ## 当前阶段验证结论
 
-- 已通过 `pptx/pdf/docx/txt` 四类解析测试。
+- 已通过 `pptx/pdf/docx/txt` 四类资料处理链路测试。
 - 已通过资料上传、自动处理、Chroma 向量入库、详情查询、页面脚本编辑、页面脚本重生成、资料检索、重新处理、软删除的集成测试。
