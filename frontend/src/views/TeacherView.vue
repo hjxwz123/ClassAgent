@@ -7,7 +7,7 @@
         <i></i>
         <div class="course-switch">
           <button @click="courseMenuOpen = !courseMenuOpen">{{ currentCourse?.name || '选择课程' }}<ChevronDown :size="16" /></button>
-          <Transition name="top-menu" :duration="{ enter: 260, leave: 220 }">
+          <Transition name="top-menu">
             <div v-if="courseMenuOpen" class="course-popover top-menu-panel">
               <button v-for="course in courses.slice(0, 8)" :key="course.id" :class="{ active: currentCourseId === course.id }" @click="selectCourse(course.id)">
                 <Check v-if="currentCourseId === course.id" :size="15" />{{ course.name }}
@@ -23,7 +23,7 @@
         <i></i>
         <div class="user-menu">
           <button @click="userMenuOpen = !userMenuOpen"><span class="avatar">{{ firstChar(teacherName) }}</span><b>{{ teacherName }}</b><ChevronDown :size="16" /></button>
-          <Transition name="top-menu" :duration="{ enter: 260, leave: 220 }">
+          <Transition name="top-menu">
             <div v-if="userMenuOpen" class="user-popover top-menu-panel">
               <button @click="go('teacherProfile')"><User :size="15" />个人中心</button>
               <button @click="go('teacherProfile')"><Settings :size="15" />账号设置</button>
@@ -77,7 +77,8 @@
         </section>
       </div>
 
-      <section v-if="active === 'teacherDashboard'" class="teacher-content">
+      <TransitionGroup name="page-switch" tag="div" class="teacher-page-stack">
+      <section v-if="active === 'teacherDashboard'" key="teacherDashboard" class="teacher-content">
         <article class="welcome">
           <div><Sparkles :size="24" /><section><h1>{{ greeting }}，{{ teacherName }}老师</h1><p>{{ todayText }} · {{ focusCount }} 门课程</p></section></div>
           <button class="btn white-btn" @click="enterRecentCourse"><Presentation :size="16" />最近课程</button>
@@ -128,7 +129,7 @@
         </div>
       </section>
 
-      <section v-if="active === 'teacherCourses'" class="teacher-content">
+      <section v-if="active === 'teacherCourses'" key="teacherCourses" class="teacher-content">
         <article class="filter-card"><div class="search-box"><Search :size="16" /><input v-model="courseFilter.keyword" placeholder="搜索课程名称" /></div><select v-model="courseFilter.term" class="select"><option value="">全部学期</option><option v-for="term in courseTerms" :key="term" :value="term">{{ term }}</option></select><select v-model="courseFilter.status" class="select"><option value="">全部</option><option value="active">进行中</option><option value="inactive">已停用</option></select><span></span><div class="view-toggle"><button type="button" :class="{ active: courseView === 'grid' }" @click="courseView = 'grid'" aria-label="网格"><Grid2X2 :size="16" /></button><button type="button" :class="{ active: courseView === 'list' }" @click="courseView = 'list'" aria-label="列表"><FileText :size="16" /></button></div></article>
         <div v-if="courseView === 'grid'" class="course-grid">
           <article v-for="course in filteredCourses" :key="course.id" class="course-card" :class="{ inactive: course.status !== 'active' }">
@@ -141,7 +142,7 @@
         <EmptyState v-if="!filteredCourses.length" text="还没有课程"><button class="btn btn-primary" @click="newCourse"><Plus :size="16" />创建课程</button></EmptyState>
       </section>
 
-      <section v-if="active === 'teacherCourseForm'" class="teacher-content form-content">
+      <section v-if="active === 'teacherCourseForm'" key="teacherCourseForm" class="teacher-content form-content">
         <section class="course-form-layout">
           <article class="panel-card form-panel">
             <div class="form-section"><h2>基本信息</h2><label>课程名称<input v-model="courseForm.name" class="input" maxlength="50" /></label><label>课程简介<textarea v-model="courseForm.description" class="textarea" maxlength="500"></textarea><small>{{ courseForm.description.length }} / 500</small></label><label>学期<input v-model="courseForm.term" class="input" /></label><label>课程封面色<div class="color-row"><button v-for="color in palette" :key="color" :style="{ background: color }" :class="{ active: courseForm.cover_color === color }" @click="courseForm.cover_color = color"></button></div></label></div>
@@ -153,7 +154,7 @@
         <div class="fixed-actions"><span><Edit2 :size="15" />有未保存的更改</span><div><button class="btn btn-ghost" @click="go('teacherCourses')">取消</button><button v-if="courseForm.id" class="btn btn-danger" @click="deleteCourse">删除课程</button><button class="btn btn-secondary" @click="saveCourse">保存草稿</button><button class="btn btn-primary" @click="saveCourse">{{ courseForm.id ? '保存修改' : '创建课程' }}</button></div></div>
       </section>
 
-      <section v-if="active === 'teacherCourseHome'" class="teacher-content">
+      <section v-if="active === 'teacherCourseHome'" key="teacherCourseHome" class="teacher-content">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <article class="course-hero" :style="{ background: courseColor(currentCourse.id) }"><span><BookOpen :size="36" /></span><div><h1>{{ courseHome.course?.name || currentCourse.name }}</h1><p>{{ currentCourse.term }} · {{ currentCourse.course_code }}</p><small><Users :size="15" />{{ courseHome.quick_counts?.student_count || 0 }} 学生 <Presentation :size="15" />{{ courseHome.quick_counts?.lesson_count || 0 }} 课堂 <File :size="15" />{{ courseHome.quick_counts?.material_count || 0 }} 资料</small></div><section><button class="btn ghost-white" @click="editCourse(currentCourse)"><Pencil :size="16" />编辑课程</button><button class="btn ghost-white" @click="copyText(currentCourse.course_code)"><Share2 :size="16" />分享课程码</button></section></article>
@@ -163,7 +164,7 @@
         </template>
       </section>
 
-      <section v-if="active === 'teacherMaterials'" class="teacher-content">
+      <section v-if="active === 'teacherMaterials'" key="teacherMaterials" class="teacher-content">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <div class="metric-grid three compact"><MetricCard :icon="File" label="资料总数" :value="materialSummary.total || 0" sub="份" /><MetricCard :icon="Database" label="存储用量" :value="sizeLabel(materialSummary.size_bytes)" sub="课程资料" tone="success" /><MetricCard :icon="Sparkles" label="已解析" :value="`${materialSummary.ready || 0}/${materialSummary.total || 0}`" sub="AI" tone="ai" /></div>
@@ -171,7 +172,7 @@
         </template>
       </section>
 
-      <section v-if="active === 'teacherPpt'" class="ppt-workbench">
+      <section v-if="active === 'teacherPpt'" key="teacherPpt" class="ppt-workbench">
         <header class="ppt-head"><button class="btn btn-ghost" @click="go('teacherMaterials')"><ArrowLeft :size="16" />返回资料管理</button><strong>{{ materialDetail?.material?.title || 'PPT 工作台' }}</strong></header>
         <aside class="thumb-column"><div class="thumb-top"><strong>{{ materialDetail?.material?.title || '-' }}</strong><small>{{ reviewedCount }}/{{ pages.length }} 页已审核</small><progress :value="reviewedCount" :max="Math.max(pages.length, 1)"></progress><label><input type="checkbox" @change="markAllReviewed" />全选审核</label><button class="btn btn-ghost btn-sm" @click="regenCurrent"><RefreshCw :size="14" />批量重新生成</button></div><button v-for="page in pages" :key="page.id" class="thumb-card" :class="{ active: currentPageId === page.id }" @click="currentPageId = page.id"><span>{{ page.page_number }}</span><div>{{ page.page_title || `第${page.page_number}页` }}</div><CheckCircle v-if="page.script_status === 'ready'" :size="16" /><Clock v-else :size="16" /><small>{{ page.script_text?.slice(0, 20) }}</small></button></aside>
         <main class="ppt-stage"><div class="stage-top"><button class="icon-action" @click="prevPage"><ChevronLeft :size="18" /></button>第 {{ currentPageIndex + 1 }} / {{ pages.length }} 页<button class="icon-action" @click="nextPage"><ChevronRight :size="18" /></button><button class="icon-action"><ZoomIn :size="18" /></button><button class="icon-action"><Maximize :size="18" /></button></div><article class="slide-preview"><h2>{{ activePage?.page_title || `第${currentPageIndex + 1}页` }}</h2><p>{{ activePage?.page_text }}</p></article><div class="stage-controls"><button class="icon-action" @click="firstPage"><SkipBack :size="18" /></button><button class="icon-action" @click="prevPage"><ChevronLeft :size="18" /></button><button class="icon-action" @click="nextPage"><ChevronRight :size="18" /></button><button class="icon-action" @click="lastPage"><SkipForward :size="18" /></button><button class="icon-action"><Grid2X2 :size="18" /></button><button class="icon-action"><Presentation :size="18" /></button></div></main>
@@ -179,7 +180,7 @@
         <footer class="ppt-status"><span>{{ materialDetail?.material?.title }} · 已审核 {{ reviewedCount }}/{{ pages.length }} 页 · 已保存</span><div><button class="btn btn-secondary btn-sm" @click="markAllReviewed">批量审核</button><button class="btn btn-ghost btn-sm" @click="regenCurrent">语音合成</button><button class="btn btn-primary btn-sm" @click="publishLessonFromMaterial">发布课堂</button></div></footer>
       </section>
 
-      <section v-if="active === 'teacherLessons'" class="teacher-content">
+      <section v-if="active === 'teacherLessons'" key="teacherLessons" class="teacher-content">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <article class="filter-card"><div class="search-box"><Search :size="16" /><input v-model="lessonFilter.keyword" placeholder="课堂名称" /></div><select v-model.number="lessonFilter.chapter_id" class="select"><option :value="0">全部章节</option><option v-for="chapter in courseHome.chapters || []" :key="chapter.id" :value="chapter.id">{{ chapter.title }}</option></select><select v-model="lessonFilter.status" class="select"><option value="">全部</option><option value="published">已发布</option><option value="ready">草稿</option></select><select v-model="lessonSort" class="select"><option value="created">创建时间</option><option value="published">发布时间</option><option value="students">学习人数</option></select></article>
@@ -187,7 +188,7 @@
         </template>
       </section>
 
-      <section v-if="active === 'teacherStudents'" class="teacher-content">
+      <section v-if="active === 'teacherStudents'" key="teacherStudents" class="teacher-content">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <div class="metric-grid four compact"><MetricCard :icon="Users" label="学生总数" :value="studentPayload.stats?.total || 0" sub="本周新增" /><MetricCard :icon="Activity" label="活跃学生" :value="studentPayload.stats?.active_7d || 0" sub="近7天" tone="success" /><MetricCard :icon="CheckCircle" label="完成率" :value="`${studentPayload.stats?.average_completion || 0}%`" sub="平均" tone="success" /><MetricCard :icon="UserX" label="长期未活跃" :value="studentPayload.stats?.inactive_14d || 0" sub="14天" :danger="(studentPayload.stats?.inactive_14d || 0) > 0" /></div>
@@ -196,7 +197,7 @@
         </template>
       </section>
 
-      <section v-if="active === 'teacherAnalytics'" class="teacher-content">
+      <section v-if="active === 'teacherAnalytics'" key="teacherAnalytics" class="teacher-content">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <article class="ai-suggestion"><span><Sparkles :size="20" /></span><div><h2>AI 教学建议</h2><p>{{ analysis.suggestion || '暂无建议' }}</p></div><button class="btn btn-ghost btn-sm" @click="loadAnalysis"><RefreshCw :size="14" />重新生成</button><span class="tag tag-ai">AI</span></article>
@@ -209,33 +210,44 @@
         </template>
       </section>
 
-      <section v-if="active === 'teacherProfile'" class="teacher-content profile-content">
+      <section v-if="active === 'teacherProfile'" key="teacherProfile" class="teacher-content profile-content">
         <article class="profile-card"><span class="avatar large">{{ firstChar(teacherName) }}<Camera :size="18" /></span><div><h1>{{ profileForm.nickname }}<span class="tag tag-primary">教师</span></h1><p><Mail :size="15" />{{ user.email }}</p><p><IdCard :size="15" />{{ user.employee_no || '-' }}</p><small><Clock :size="14" />{{ registeredDays }} 天</small></div><button class="btn btn-secondary btn-sm" @click="profileEditing = true"><Pencil :size="14" />编辑信息</button></article>
         <div class="profile-tabs"><button :class="{ active: profileTab === 'base' }" @click="profileTab = 'base'"><User :size="16" />基本信息</button><button :class="{ active: profileTab === 'security' }" @click="profileTab = 'security'"><Lock :size="16" />账号安全</button><button :class="{ active: profileTab === 'notice' }" @click="profileTab = 'notice'"><Bell :size="16" />通知设置</button></div>
-        <article v-if="profileTab === 'base'" class="panel-card profile-form"><label>姓名<input v-model="profileForm.nickname" class="input" :readonly="!profileEditing" /></label><label>邮箱<input :value="user.email" class="input" readonly /></label><label>学校/单位<input v-model="profileForm.organization" class="input" :readonly="!profileEditing" /></label><label>所在院系<input v-model="profileForm.department" class="input" :readonly="!profileEditing" /></label><label>个人简介<textarea v-model="profileForm.bio" class="textarea" :readonly="!profileEditing"></textarea></label><footer><button class="btn btn-ghost" @click="profileEditing = false">取消</button><button class="btn btn-primary" @click="saveProfile">保存修改</button></footer></article>
-        <article v-if="profileTab === 'security'" class="panel-card profile-form"><div class="panel-head"><h2><Lock :size="18" />修改密码</h2></div><label>当前密码<input v-model="passwordForm.old_password" class="input" type="password" /></label><label>新密码<input v-model="passwordForm.new_password" class="input" type="password" /></label><div class="strength"><i :style="{ width: passwordStrength + '%' }"></i></div><label>确认新密码<input v-model="passwordConfirm" class="input" type="password" /></label><button class="btn btn-primary btn-sm" @click="changePassword">修改密码</button></article>
-        <article v-if="profileTab === 'notice'" class="panel-card notice-list"><label v-for="item in noticeSettings" :key="item.key"><input v-model="item.enabled" type="checkbox" />{{ item.label }}</label><button class="btn btn-primary btn-sm" @click="saveNotice">保存设置</button></article>
+        <Transition name="fade-slide" mode="out-in">
+          <article v-if="profileTab === 'base'" key="base" class="panel-card profile-form"><label>姓名<input v-model="profileForm.nickname" class="input" :readonly="!profileEditing" /></label><label>邮箱<input :value="user.email" class="input" readonly /></label><label>学校/单位<input v-model="profileForm.organization" class="input" :readonly="!profileEditing" /></label><label>所在院系<input v-model="profileForm.department" class="input" :readonly="!profileEditing" /></label><label>个人简介<textarea v-model="profileForm.bio" class="textarea" :readonly="!profileEditing"></textarea></label><footer><button class="btn btn-ghost" @click="profileEditing = false">取消</button><button class="btn btn-primary" @click="saveProfile">保存修改</button></footer></article>
+          <article v-else-if="profileTab === 'security'" key="security" class="panel-card profile-form"><div class="panel-head"><h2><Lock :size="18" />修改密码</h2></div><label>当前密码<input v-model="passwordForm.old_password" class="input" type="password" /></label><label>新密码<input v-model="passwordForm.new_password" class="input" type="password" /></label><div class="strength"><i :style="{ width: passwordStrength + '%' }"></i></div><label>确认新密码<input v-model="passwordConfirm" class="input" type="password" /></label><button class="btn btn-primary btn-sm" @click="changePassword">修改密码</button></article>
+          <article v-else key="notice" class="panel-card notice-list"><label v-for="item in noticeSettings" :key="item.key"><input v-model="item.enabled" type="checkbox" />{{ item.label }}</label><button class="btn btn-primary btn-sm" @click="saveNotice">保存设置</button></article>
+        </Transition>
       </section>
+      </TransitionGroup>
     </main>
 
-    <div v-if="uploadOpen" class="modal-mask">
-      <article class="modal">
-        <div class="modal-head"><Upload :size="20" /><h2>上传课程资料</h2><button class="icon-action" @click="uploadOpen = false"><X :size="16" /></button></div>
-        <label class="upload-drop"><Upload :size="40" /><span>拖拽上传</span><input type="file" multiple @change="pickUploadFiles" /></label>
-        <div v-for="item in uploadQueue" :key="item.id" class="upload-row"><File :size="18" /><span>{{ item.file.name }}</span><small>{{ sizeLabel(item.file.size) }}</small><select v-model.number="item.chapter_id" class="select"><option :value="0">章节</option><option v-for="chapter in courseHome.chapters || []" :key="chapter.id" :value="chapter.id">{{ chapter.title }}</option></select><select v-model="item.category" class="select"><option value="courseware">课件</option><option value="handout">讲义</option><option value="exercise">习题</option><option value="reference">参考资料</option></select><button class="icon-action danger" @click="removeUpload(item.id)"><Trash2 :size="15" /></button></div>
-        <footer><button class="btn btn-ghost" @click="uploadOpen = false">取消</button><button class="btn btn-primary" :disabled="!uploadQueue.length" @click="uploadMaterials">确认上传</button></footer>
-      </article>
-    </div>
+    <Transition name="modal-pop">
+      <div v-if="uploadOpen" class="modal-mask">
+        <article class="modal">
+          <div class="modal-head"><Upload :size="20" /><h2>上传课程资料</h2><button class="icon-action" @click="uploadOpen = false"><X :size="16" /></button></div>
+          <label class="upload-drop"><Upload :size="40" /><span>拖拽上传</span><input type="file" multiple @change="pickUploadFiles" /></label>
+          <div v-for="item in uploadQueue" :key="item.id" class="upload-row"><File :size="18" /><span>{{ item.file.name }}</span><small>{{ sizeLabel(item.file.size) }}</small><select v-model.number="item.chapter_id" class="select"><option :value="0">章节</option><option v-for="chapter in courseHome.chapters || []" :key="chapter.id" :value="chapter.id">{{ chapter.title }}</option></select><select v-model="item.category" class="select"><option value="courseware">课件</option><option value="handout">讲义</option><option value="exercise">习题</option><option value="reference">参考资料</option></select><button class="icon-action danger" @click="removeUpload(item.id)"><Trash2 :size="15" /></button></div>
+          <footer><button class="btn btn-ghost" @click="uploadOpen = false">取消</button><button class="btn btn-primary" :disabled="!uploadQueue.length" @click="uploadMaterials">确认上传</button></footer>
+        </article>
+      </div>
+    </Transition>
 
-    <aside v-if="studentDrawer" class="drawer">
-      <div class="drawer-head"><span class="avatar">{{ firstChar(studentDrawer.student.nickname) }}</span><div><h2>{{ studentDrawer.student.nickname }}</h2><small>{{ studentDrawer.student.student_no || '-' }} · {{ studentDrawer.student.email }}</small></div><button class="icon-action" @click="studentDrawer = null"><X :size="16" /></button></div>
-      <div class="profile-tabs small-tabs"><button :class="{ active: studentTab === 'base' }" @click="studentTab = 'base'">基本信息</button><button :class="{ active: studentTab === 'data' }" @click="studentTab = 'data'">学习数据</button><button :class="{ active: studentTab === 'qa' }" @click="studentTab = 'qa'">问答记录</button></div>
-      <section v-if="studentTab === 'base'" class="drawer-body"><InfoRow label="加入时间" :value="formatTime(studentDrawer.membership.joined_at)" /><InfoRow label="加入方式" value="课程码" /><InfoRow label="邮箱" :value="studentDrawer.student.email" /><InfoRow label="学号" :value="studentDrawer.student.student_no || '-'" /><div class="drawer-actions"><button class="btn btn-secondary" @click="remindStudent(studentDrawer.student.id)"><Bell :size="16" />发送提醒</button><button class="btn btn-danger" @click="removeStudent(studentDrawer.student.id)">移出课程</button></div></section>
-      <section v-if="studentTab === 'data'" class="drawer-body"><div v-for="item in studentDrawer.lesson_progress" :key="item.lesson.id" class="drawer-progress"><span>{{ item.lesson.title }}</span><ProgressBar :value="item.progress_percent" /><small>{{ item.current_page }}/{{ item.lesson.page_count }}</small></div><div class="drawer-stats">提问 {{ studentDrawer.stats.qa_total }} · 测验 {{ studentDrawer.stats.attempt_total }} · 平均 {{ studentDrawer.stats.average_score }} · 错题 {{ studentDrawer.stats.wrong_total }}</div><div class="tag-list"><span v-for="item in studentDrawer.weak_points" :key="item.name" class="tag tag-warning">{{ item.name }}</span></div></section>
-      <section v-if="studentTab === 'qa'" class="drawer-body"><div v-for="item in studentDrawer.qa_records" :key="item.id" class="qa-record"><MessageCircle :size="16" /><div><strong>{{ item.question }}</strong><p>{{ item.answer }}</p><small>{{ formatTime(item.created_at) }}</small></div></div><EmptyState v-if="!studentDrawer.qa_records.length" text="暂无问答" /></section>
-    </aside>
+    <Transition name="drawer">
+      <aside v-if="studentDrawer" class="drawer">
+        <div class="drawer-head"><span class="avatar">{{ firstChar(studentDrawer.student.nickname) }}</span><div><h2>{{ studentDrawer.student.nickname }}</h2><small>{{ studentDrawer.student.student_no || '-' }} · {{ studentDrawer.student.email }}</small></div><button class="icon-action" @click="studentDrawer = null"><X :size="16" /></button></div>
+        <div class="profile-tabs small-tabs"><button :class="{ active: studentTab === 'base' }" @click="studentTab = 'base'">基本信息</button><button :class="{ active: studentTab === 'data' }" @click="studentTab = 'data'">学习数据</button><button :class="{ active: studentTab === 'qa' }" @click="studentTab = 'qa'">问答记录</button></div>
+        <Transition name="fade-slide" mode="out-in">
+          <section v-if="studentTab === 'base'" key="base" class="drawer-body"><InfoRow label="加入时间" :value="formatTime(studentDrawer.membership.joined_at)" /><InfoRow label="加入方式" value="课程码" /><InfoRow label="邮箱" :value="studentDrawer.student.email" /><InfoRow label="学号" :value="studentDrawer.student.student_no || '-'" /><div class="drawer-actions"><button class="btn btn-secondary" @click="remindStudent(studentDrawer.student.id)"><Bell :size="16" />发送提醒</button><button class="btn btn-danger" @click="removeStudent(studentDrawer.student.id)">移出课程</button></div></section>
+          <section v-else-if="studentTab === 'data'" key="data" class="drawer-body"><div v-for="item in studentDrawer.lesson_progress" :key="item.lesson.id" class="drawer-progress"><span>{{ item.lesson.title }}</span><ProgressBar :value="item.progress_percent" /><small>{{ item.current_page }}/{{ item.lesson.page_count }}</small></div><div class="drawer-stats">提问 {{ studentDrawer.stats.qa_total }} · 测验 {{ studentDrawer.stats.attempt_total }} · 平均 {{ studentDrawer.stats.average_score }} · 错题 {{ studentDrawer.stats.wrong_total }}</div><div class="tag-list"><span v-for="item in studentDrawer.weak_points" :key="item.name" class="tag tag-warning">{{ item.name }}</span></div></section>
+          <section v-else key="qa" class="drawer-body"><div v-for="item in studentDrawer.qa_records" :key="item.id" class="qa-record"><MessageCircle :size="16" /><div><strong>{{ item.question }}</strong><p>{{ item.answer }}</p><small>{{ formatTime(item.created_at) }}</small></div></div><EmptyState v-if="!studentDrawer.qa_records.length" text="暂无问答" /></section>
+        </Transition>
+      </aside>
+    </Transition>
 
-    <div v-if="previewItem" class="modal-mask"><article class="modal preview-modal"><div class="modal-head"><FileText :size="20" /><h2>{{ previewItem.title }}</h2><button class="icon-action" @click="previewItem = null"><X :size="16" /></button></div><iframe v-if="previewItem.preview_url" :src="previewItem.preview_url"></iframe><EmptyState v-else text="暂无预览" /></article></div>
+    <Transition name="modal-pop">
+      <div v-if="previewItem" class="modal-mask"><article class="modal preview-modal"><div class="modal-head"><FileText :size="20" /><h2>{{ previewItem.title }}</h2><button class="icon-action" @click="previewItem = null"><X :size="16" /></button></div><iframe v-if="previewItem.preview_url" :src="previewItem.preview_url"></iframe><EmptyState v-else text="暂无预览" /></article></div>
+    </Transition>
   </section>
 </template>
 
@@ -486,10 +498,11 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .nav-group button:disabled { opacity: 0.45; }
 .teacher-main { margin-left: 240px; padding-top: 60px; }
 .teacher-main.immersive { padding-top: 60px; }
+.teacher-page-stack { display: contents; }
 .breadcrumb { height: 56px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: white; padding: 0 32px; }
 .breadcrumb span { color: var(--color-text-secondary); }
 .breadcrumb strong { color: var(--color-text-primary); }
-.teacher-content { display: grid; gap: 16px; padding: 32px 32px 64px; animation: fade-slide-up 250ms var(--ease-out); }
+.teacher-content { display: grid; gap: 16px; padding: 32px 32px 64px; animation: fade-slide-up var(--duration-base) var(--ease-out); }
 .welcome { height: 88px; display: flex; align-items: center; justify-content: space-between; border-radius: var(--radius-xl); color: white; background: var(--color-ai-gradient); padding: 0 32px; }
 .welcome > div { display: flex; align-items: center; gap: 14px; }
 .welcome h1 { margin: 0; font-size: var(--text-h2); }
@@ -543,7 +556,7 @@ progress { width: 100%; height: 6px; accent-color: var(--color-primary-600); }
 .task-item { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; min-height: 34px; }
 .task-item span { color: var(--color-text-body); }
 .task-item small { color: var(--color-text-muted); }
-.task-item .processing { color: var(--color-primary-600); animation: spin 1s linear infinite; }
+.task-item .processing { color: var(--color-primary-600); animation: spin var(--duration-slower) linear infinite; }
 .task-item .failed { color: var(--color-danger-500); }
 .task-item .ready { color: var(--color-success-500); }
 .filter-card { min-height: 56px; display: grid; grid-template-columns: 240px 140px 120px 1fr auto; align-items: center; gap: 10px; padding: 10px 14px; }
@@ -551,7 +564,7 @@ progress { width: 100%; height: 6px; accent-color: var(--color-primary-600); }
 .search-box input { width: 100%; border: 0; outline: 0; }
 .search-box.small { height: 32px; }
 .segmented-control { display: flex; background: var(--color-bg-muted); border-radius: var(--radius-md); padding: 4px; }
-.segment-btn { min-height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-muted); padding: 6px 16px; font-size: 13px; font-weight: 500; transition: all 200ms var(--ease-out); }
+.segment-btn { min-height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-muted); padding: 6px 16px; font-size: 13px; font-weight: 500; transition: all var(--duration-fast) var(--ease-out); }
 .segment-btn.active { background: white; color: var(--color-text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .view-toggle { display: inline-flex; overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
 .view-toggle button { min-height: 32px; border: 0; background: white; color: var(--color-text-secondary); padding: 0 10px; }

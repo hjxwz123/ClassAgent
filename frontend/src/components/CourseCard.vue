@@ -33,7 +33,7 @@ defineEmits<{ open: [] }>();
   box-shadow: var(--shadow-sm);
   transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out);
 }
-.course-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.course-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
 .cover {
   position: relative;
   display: flex;
@@ -43,6 +43,8 @@ defineEmits<{ open: [] }>();
   color: var(--color-text-inverse);
   background: var(--color-ai-gradient);
 }
+.cover svg { transition: transform var(--duration-base) var(--ease-out); }
+.course-card:hover .cover svg { transform: scale(1.05); }
 .cover .tag {
   position: absolute;
   top: var(--space-3);

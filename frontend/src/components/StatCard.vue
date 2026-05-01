@@ -30,7 +30,9 @@ const trendClass = computed(() => (props.danger ? "danger" : "success"));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   padding: var(--space-5);
+  transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out);
 }
+.stat-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
 .stat-top {
   display: flex;
   align-items: center;

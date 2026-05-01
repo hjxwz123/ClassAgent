@@ -36,7 +36,7 @@
           <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
             <span class="avatar">管</span><span>{{ user.nickname }}</span><ChevronDown :size="16" />
           </button>
-          <Transition name="top-menu" :duration="{ enter: 260, leave: 220 }">
+          <Transition name="top-menu">
             <div v-if="userMenuOpen" class="admin-account-menu top-menu-panel">
               <button @click="go('profile')"><User :size="15" />资料</button>
               <button @click="$emit('logout')"><LogOut :size="15" />退出</button>
@@ -68,8 +68,8 @@
         </section>
       </div>
 
-      <section class="admin-content">
-        <section v-if="active === 'adminDashboard'" class="admin-page">
+      <TransitionGroup name="page-switch" tag="section" class="admin-content">
+        <section v-if="active === 'adminDashboard'" key="adminDashboard" class="admin-page">
           <article class="welcome-card">
             <span class="welcome-icon"><Sparkles :size="24" /></span>
             <div><h1>欢迎回来，管理员</h1><p>{{ todayText }} · {{ health?.status === 'ok' ? '平台运行正常' : '存在异常服务' }}</p></div>
@@ -109,7 +109,7 @@
           </div>
         </section>
 
-        <section v-if="active === 'adminUsers'" class="admin-page">
+        <section v-if="active === 'adminUsers'" key="adminUsers" class="admin-page">
           <div class="metric-grid three">
             <MetricCard :icon="Users" label="全部用户" :value="userStats.total || 0" :trend="`本周 +${userStats.weekly_new || 0}`" />
             <MetricCard :icon="GraduationCap" label="教师" :value="userStats.teachers || 0" trend="授课账号" tone="success" />
@@ -145,7 +145,7 @@
           </article>
         </section>
 
-        <section v-if="active === 'adminCourses'" class="admin-page">
+        <section v-if="active === 'adminCourses'" key="adminCourses" class="admin-page">
           <div class="metric-grid four">
             <MetricCard :icon="BookOpen" label="全部课程" :value="courseStats.total || 0" trend="平台课程" />
             <MetricCard :icon="Activity" label="活跃课程" :value="courseStats.active || 0" trend="正常开放" tone="success" />
@@ -185,7 +185,7 @@
           </div>
         </section>
 
-        <section v-if="active === 'adminMaterials'" class="admin-page">
+        <section v-if="active === 'adminMaterials'" key="adminMaterials" class="admin-page">
           <div class="metric-grid three">
             <MetricCard :icon="File" label="全部资料" :value="materialStats.total || 0" trend="平台文件" />
             <MetricCard :icon="Upload" label="本月新增" :value="materialStats.monthly_new || 0" trend="上传量" tone="info" />
@@ -215,7 +215,7 @@
           </article>
         </section>
 
-        <section v-if="active === 'adminModels'" class="admin-page model-layout">
+        <section v-if="active === 'adminModels'" key="adminModels" class="admin-page model-layout">
           <aside class="vertical-tabs"><button :class="{ active: modelTab === 'llm' }" @click="modelTab = 'llm'">大模型</button><button :class="{ active: modelTab === 'embedding' }" @click="modelTab = 'embedding'">Embedding</button><button :class="{ active: modelTab === 'usage' }" @click="modelTab = 'usage'">调用统计</button></aside>
           <section class="model-content">
             <div v-if="modelWarning" class="alert alert-danger"><AlertTriangle :size="16" />{{ modelWarning }}<button class="link-btn" @click="modelTab = 'llm'">配置</button></div>
@@ -238,7 +238,7 @@
           </section>
         </section>
 
-        <section v-if="active === 'adminServices'" class="admin-page page-view aliyun-page">
+        <section v-if="active === 'adminServices'" key="adminServices" class="admin-page page-view aliyun-page">
           <div class="page-header aliyun-page-head">
             <div class="breadcrumb"><span>系统管理</span><ChevronRight :size="14" /><span>阿里云服务</span></div>
             <div class="header-actions">
@@ -351,7 +351,7 @@
           </div>
         </section>
 
-        <section v-if="active === 'adminSystem'" class="admin-page page-view">
+        <section v-if="active === 'adminSystem'" key="adminSystem" class="admin-page page-view">
           <div class="page-header">
             <div class="breadcrumb"><span>系统管理</span><ChevronRight :size="14" /><span>系统参数</span></div>
             <div class="header-actions">
@@ -381,7 +381,7 @@
           </div>
         </section>
 
-        <section v-if="active === 'adminMonitor'" class="admin-page">
+        <section v-if="active === 'adminMonitor'" key="adminMonitor" class="admin-page">
           <div class="monitor-top"><span><RefreshCw :size="16" :class="{ spin: autoRefresh }" />{{ lastUpdatedText }}</span><label class="switch-line"><input v-model="autoRefresh" type="checkbox" />自动刷新</label></div>
           <div class="service-overview">
             <article v-for="item in healthItems" :key="item.key" class="monitor-service" :class="statusClass(item.status)"><component :is="serviceIcon(item.key)" :size="20" /><div><strong>{{ item.name }}</strong><span>{{ item.detail }}</span></div><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></article>
@@ -394,14 +394,14 @@
           <div class="monitor-bottom"><article class="panel-card"><div class="panel-head"><h2><Activity :size="18" />异步任务</h2></div><p>待处理：{{ overview.async_queue_pending || 0 }} · Celery：{{ overview.celery_queue_length ?? '-' }}</p></article><article class="panel-card"><div class="panel-head"><h2><Database :size="18" />数据库缓存</h2></div><p>数据库：{{ statusText(overview.database_status) }} · Redis：{{ statusText(overview.cache_status) }}</p></article></div>
         </section>
 
-        <section v-if="active === 'adminLogs'" class="admin-page">
+        <section v-if="active === 'adminLogs'" key="adminLogs" class="admin-page">
           <div class="log-tabs"><button :class="{ active: logType === 'login' }" @click="logType = 'login'"><UserCheck :size="16" />登录日志</button><button :class="{ active: logType === 'operations' }" @click="logType = 'operations'"><Pencil :size="16" />操作日志</button><button :class="{ active: logType === 'errors' }" @click="logType = 'errors'"><AlertCircle :size="16" />错误日志</button></div>
           <article class="filter-card"><div class="search-field"><Search :size="16" /><input v-model="logKeyword" placeholder="关键词/IP地址" @keyup.enter="loadLogs" /></div><select v-if="logType === 'login'" v-model="logFilter.success" class="select"><option value="">全部</option><option value="true">成功</option><option value="false">失败</option></select><input v-if="logType === 'operations'" v-model="logFilter.action" class="input" placeholder="操作类型" /><select v-if="logType === 'errors'" v-model="logFilter.level" class="select"><option value="">全部</option><option value="warning">WARNING</option><option value="error">ERROR</option><option value="critical">CRITICAL</option></select><input v-model="logFilter.start_at" class="input" type="datetime-local" /><input v-model="logFilter.end_at" class="input" type="datetime-local" /><button class="btn btn-secondary" @click="loadLogs"><Search :size="16" />查询</button></article>
           <article v-if="logType === 'errors' && todayErrors" class="alert alert-danger"><XCircle :size="16" />今日错误 {{ todayErrors }} 次<button class="link-btn" @click="logFilter.level = 'error'; loadLogs()">筛选</button></article>
           <article class="table-card"><table class="admin-table"><thead><tr><th>时间</th><th>主体</th><th>内容</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in logs" :key="item.id"><td>{{ formatTime(item.created_at) }}</td><td>{{ logSubject(item) }}</td><td><code>{{ logContent(item) }}</code></td><td><span class="tag">{{ logMeta(item) }}</span></td><td><span class="tag" :class="item.detail?.resolved ? 'tag-success' : 'tag-warning'">{{ item.detail?.resolved ? '已处理' : '未处理' }}</span></td><td><button class="icon-action" @click="logDetail = item"><Eye :size="15" /></button><button v-if="logType === 'errors'" class="icon-action" @click="resolveError(item.id)"><CheckCircle :size="15" /></button></td></tr><tr v-if="!logs.length"><td colspan="6"><EmptyState text="暂无日志" /></td></tr></tbody></table></article>
         </section>
 
-        <section v-if="active === 'adminBackups'" class="admin-page">
+        <section v-if="active === 'adminBackups'" key="adminBackups" class="admin-page">
           <article class="backup-summary"><div><span>最后备份</span><strong>{{ backupSummary.last_backup ? relativeTime(backupSummary.last_backup.created_at) : '暂无' }}</strong><small>{{ backupSummary.last_backup?.status || '-' }}</small></div><div><span>备份文件</span><strong>{{ backupSummary.backup_count || 0 }}</strong><small>最旧：{{ shortDate(backupSummary.oldest_at) }}</small></div><div><span>总大小</span><strong>{{ backupSummary.total_size_label || '0 B' }}</strong><small>本地存储</small></div></article>
           <div class="backup-layout">
             <article class="panel-card"><div class="panel-head"><h2><File :size="18" />备份文件</h2><span class="tag">{{ backups.length }}</span></div><table class="admin-table compact-table"><thead><tr><th>名称</th><th>类型</th><th>大小</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in backups" :key="item.id" :class="{ disabled: item.status === 'failed' }"><td class="mono">{{ item.backup_name }}</td><td><span class="tag">全量</span></td><td>{{ sizeLabel(item.file_size_bytes) }}</td><td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td><td>{{ formatTime(item.created_at) }}</td><td class="row-actions"><button class="icon-action" @click="downloadBackup(item)"><Download :size="15" /></button><button class="icon-action" @click="verifyBackup(item.id)"><ShieldCheck :size="15" /></button><button class="icon-action danger" @click="deleteBackup(item.id)"><Trash2 :size="15" /></button></td></tr></tbody></table></article>
@@ -409,45 +409,57 @@
           </div>
           <article class="danger-zone"><AlertTriangle :size="18" /><div><strong>数据恢复</strong><span>恢复将覆盖当前数据。</span></div><select v-model.number="restoreBackupId" class="select"><option :value="0">选择备份</option><option v-for="item in backups" :key="item.id" :value="item.id">{{ item.backup_name }}</option></select><input v-model="restoreConfirm" class="input" placeholder="CONFIRM" /><button class="btn btn-danger" :disabled="restoreConfirm !== 'CONFIRM' || !restoreBackupId" @click="restoreBackupAction">恢复</button></article>
         </section>
-      </section>
+      </TransitionGroup>
     </main>
 
-    <aside v-if="userDrawer" class="drawer">
-      <div class="drawer-head"><h2>{{ userDrawer.user.nickname }}</h2><span class="tag">{{ roleText(userDrawer.user.role) }}</span><button class="icon-action" @click="userDrawer = null"><X :size="16" /></button></div>
-      <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="邮箱" :value="userDrawer.user.email" /><InfoRow label="状态" :value="statusText(userDrawer.user.status)" /><InfoRow label="注册" :value="formatTime(userDrawer.user.created_at)" /></section><section><h3>账号权限</h3><label class="drawer-field">用户角色<select class="select" :value="userDrawer.user.role" :disabled="isPending(`role:${userDrawer.user.id}`)" @change="selectUserRole(userDrawer.user, $event)"><option v-for="role in userRoleOptions" :key="role.value" :value="role.value">{{ role.label }}</option></select></label></section><section><h3>已加入课程</h3><div v-for="item in userDrawer.courses" :key="item.id" class="row-card"><span>{{ item.name }}</span><span class="tag">{{ item.role }}</span></div></section><section><h3>操作日志</h3><div v-for="item in userDrawer.logs" :key="item.id" class="timeline-item"><i></i><strong>{{ item.action }}</strong><span>{{ formatTime(item.created_at) }}</span></div></section></div>
-      <div class="drawer-foot"><button class="btn btn-danger" :data-loading="isPending(`delete:${userDrawer.user.id}`)" :disabled="isPending(`delete:${userDrawer.user.id}`)" @click="deleteUser(userDrawer.user.id)">删除</button><button class="btn btn-secondary" :data-loading="isPending(`reset:${userDrawer.user.id}`)" :disabled="isPending(`reset:${userDrawer.user.id}`)" @click="resetUser(userDrawer.user.id)">重置密码</button></div>
-    </aside>
+    <Transition name="drawer">
+      <aside v-if="userDrawer" class="drawer">
+        <div class="drawer-head"><h2>{{ userDrawer.user.nickname }}</h2><span class="tag">{{ roleText(userDrawer.user.role) }}</span><button class="icon-action" @click="userDrawer = null"><X :size="16" /></button></div>
+        <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="邮箱" :value="userDrawer.user.email" /><InfoRow label="状态" :value="statusText(userDrawer.user.status)" /><InfoRow label="注册" :value="formatTime(userDrawer.user.created_at)" /></section><section><h3>账号权限</h3><label class="drawer-field">用户角色<select class="select" :value="userDrawer.user.role" :disabled="isPending(`role:${userDrawer.user.id}`)" @change="selectUserRole(userDrawer.user, $event)"><option v-for="role in userRoleOptions" :key="role.value" :value="role.value">{{ role.label }}</option></select></label></section><section><h3>已加入课程</h3><div v-for="item in userDrawer.courses" :key="item.id" class="row-card"><span>{{ item.name }}</span><span class="tag">{{ item.role }}</span></div></section><section><h3>操作日志</h3><div v-for="item in userDrawer.logs" :key="item.id" class="timeline-item"><i></i><strong>{{ item.action }}</strong><span>{{ formatTime(item.created_at) }}</span></div></section></div>
+        <div class="drawer-foot"><button class="btn btn-danger" :data-loading="isPending(`delete:${userDrawer.user.id}`)" :disabled="isPending(`delete:${userDrawer.user.id}`)" @click="deleteUser(userDrawer.user.id)">删除</button><button class="btn btn-secondary" :data-loading="isPending(`reset:${userDrawer.user.id}`)" :disabled="isPending(`reset:${userDrawer.user.id}`)" @click="resetUser(userDrawer.user.id)">重置密码</button></div>
+      </aside>
+    </Transition>
 
-    <aside v-if="courseDrawer" class="drawer wide">
-      <div class="drawer-head"><h2>{{ courseDrawer.course.name }}</h2><span class="tag" :class="statusClass(courseDrawer.course.status)">{{ statusText(courseDrawer.course.status) }}</span><button class="icon-action" @click="courseDrawer = null"><X :size="16" /></button></div>
-      <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="课程码" :value="courseDrawer.course.course_code" /><InfoRow label="教师" :value="String(courseDrawer.course.teacher_id)" /><InfoRow label="学生" :value="String(courseDrawer.student_count)" /><InfoRow label="资料" :value="String(courseDrawer.material_count)" /></section><section><h3>学生列表</h3><div v-for="item in courseDrawer.students" :key="item.membership_id" class="row-card"><span>{{ item.user.nickname }}</span><span class="tag">{{ item.user.email }}</span></div></section><section><h3>课程资料</h3><div v-for="item in courseDrawer.materials" :key="item.id" class="row-card"><span>{{ item.title }}</span><button class="link-btn" @click="deleteMaterial(item.id)">删除</button></div></section><section><h3>课堂列表</h3><div v-for="item in courseDrawer.lessons" :key="item.id" class="row-card"><span>{{ item.title }}</span><span class="tag">{{ item.status }}</span></div></section></div>
-      <div class="drawer-foot"><input v-model.number="takeoverTeacherId" class="input" type="number" placeholder="教师ID" /><button class="btn btn-secondary" @click="takeoverCourse(courseDrawer.course.id)">接管</button><button class="btn btn-danger" @click="deactivateCourse(courseDrawer.course.id)">下架</button></div>
-    </aside>
+    <Transition name="drawer">
+      <aside v-if="courseDrawer" class="drawer wide">
+        <div class="drawer-head"><h2>{{ courseDrawer.course.name }}</h2><span class="tag" :class="statusClass(courseDrawer.course.status)">{{ statusText(courseDrawer.course.status) }}</span><button class="icon-action" @click="courseDrawer = null"><X :size="16" /></button></div>
+        <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="课程码" :value="courseDrawer.course.course_code" /><InfoRow label="教师" :value="String(courseDrawer.course.teacher_id)" /><InfoRow label="学生" :value="String(courseDrawer.student_count)" /><InfoRow label="资料" :value="String(courseDrawer.material_count)" /></section><section><h3>学生列表</h3><div v-for="item in courseDrawer.students" :key="item.membership_id" class="row-card"><span>{{ item.user.nickname }}</span><span class="tag">{{ item.user.email }}</span></div></section><section><h3>课程资料</h3><div v-for="item in courseDrawer.materials" :key="item.id" class="row-card"><span>{{ item.title }}</span><button class="link-btn" @click="deleteMaterial(item.id)">删除</button></div></section><section><h3>课堂列表</h3><div v-for="item in courseDrawer.lessons" :key="item.id" class="row-card"><span>{{ item.title }}</span><span class="tag">{{ item.status }}</span></div></section></div>
+        <div class="drawer-foot"><input v-model.number="takeoverTeacherId" class="input" type="number" placeholder="教师ID" /><button class="btn btn-secondary" @click="takeoverCourse(courseDrawer.course.id)">接管</button><button class="btn btn-danger" @click="deactivateCourse(courseDrawer.course.id)">下架</button></div>
+      </aside>
+    </Transition>
 
-    <div v-if="adminModalOpen" class="modal-mask">
-      <article class="modal">
-        <div class="modal-head"><Shield :size="20" /><h2>创建管理员账号</h2><button class="icon-action" @click="adminModalOpen = false"><X :size="16" /></button></div>
-        <p v-if="adminFormError" class="form-error"><AlertCircle :size="15" />{{ adminFormError }}</p>
-        <div class="form-grid"><label>用户名<input v-model="adminForm.nickname" class="input" /></label><label>邮箱<input v-model="adminForm.email" class="input" type="email" /></label><label>初始密码<input v-model="adminForm.password" class="input" type="password" /></label><label>确认密码<input v-model="adminForm.confirm" class="input" type="password" /></label><label class="wide-field">备注<textarea v-model="adminForm.note" class="textarea"></textarea></label></div>
-        <footer><button class="btn btn-secondary" @click="adminModalOpen = false">取消</button><button class="btn btn-primary" @click="createAdmin"><Plus :size="16" />创建</button></footer>
-      </article>
-    </div>
+    <Transition name="modal-pop">
+      <div v-if="adminModalOpen" class="modal-mask">
+        <article class="modal">
+          <div class="modal-head"><Shield :size="20" /><h2>创建管理员账号</h2><button class="icon-action" @click="adminModalOpen = false"><X :size="16" /></button></div>
+          <p v-if="adminFormError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ adminFormError }}</p>
+          <div class="form-grid"><label>用户名<input v-model="adminForm.nickname" class="input" :aria-invalid="adminFormError.includes('用户名')" /></label><label>邮箱<input v-model="adminForm.email" class="input" type="email" :aria-invalid="adminFormError.includes('邮箱')" /></label><label>初始密码<input v-model="adminForm.password" class="input" type="password" :aria-invalid="adminFormError.includes('密码')" /></label><label>确认密码<input v-model="adminForm.confirm" class="input" type="password" :aria-invalid="adminFormError.includes('密码') || adminFormError.includes('不一致')" /></label><label class="wide-field">备注<textarea v-model="adminForm.note" class="textarea"></textarea></label></div>
+          <footer><button class="btn btn-secondary" @click="adminModalOpen = false">取消</button><button class="btn btn-primary" @click="createAdmin"><Plus :size="16" />创建</button></footer>
+        </article>
+      </div>
+    </Transition>
 
-    <div v-if="resetPasswordResult" class="modal-mask">
-      <article class="modal password-modal">
-        <div class="modal-head"><KeyRound :size="20" /><h2>新密码</h2><button class="icon-action" @click="resetPasswordResult = ''"><X :size="16" /></button></div>
-        <div class="password-box">{{ resetPasswordResult }}</div>
-        <footer><button class="btn btn-secondary" @click="copyPassword">复制</button><button class="btn btn-primary" @click="resetPasswordResult = ''">关闭</button></footer>
-      </article>
-    </div>
+    <Transition name="modal-pop">
+      <div v-if="resetPasswordResult" class="modal-mask">
+        <article class="modal password-modal">
+          <div class="modal-head"><KeyRound :size="20" /><h2>新密码</h2><button class="icon-action" @click="resetPasswordResult = ''"><X :size="16" /></button></div>
+          <div class="password-box">{{ resetPasswordResult }}</div>
+          <footer><button class="btn btn-secondary" @click="copyPassword">复制</button><button class="btn btn-primary" @click="resetPasswordResult = ''">关闭</button></footer>
+        </article>
+      </div>
+    </Transition>
 
-    <div v-if="previewItem" class="modal-mask">
-      <article class="modal preview-modal"><div class="modal-head"><FileText :size="20" /><h2>{{ previewItem.title }}</h2><button class="icon-action" @click="previewItem = null"><X :size="16" /></button></div><iframe v-if="previewItem.preview_url" :src="previewItem.preview_url"></iframe><EmptyState v-else text="暂无预览" /></article>
-    </div>
+    <Transition name="modal-pop">
+      <div v-if="previewItem" class="modal-mask">
+        <article class="modal preview-modal"><div class="modal-head"><FileText :size="20" /><h2>{{ previewItem.title }}</h2><button class="icon-action" @click="previewItem = null"><X :size="16" /></button></div><iframe v-if="previewItem.preview_url" :src="previewItem.preview_url"></iframe><EmptyState v-else text="暂无预览" /></article>
+      </div>
+    </Transition>
 
-    <div v-if="logDetail" class="modal-mask">
-      <article class="modal"><div class="modal-head"><FileText :size="20" /><h2>日志详情</h2><button class="icon-action" @click="logDetail = null"><X :size="16" /></button></div><pre>{{ JSON.stringify(logDetail, null, 2) }}</pre><footer><button class="btn btn-secondary" @click="logDetail = null">关闭</button></footer></article>
-    </div>
+    <Transition name="modal-pop">
+      <div v-if="logDetail" class="modal-mask">
+        <article class="modal"><div class="modal-head"><FileText :size="20" /><h2>日志详情</h2><button class="icon-action" @click="logDetail = null"><X :size="16" /></button></div><pre>{{ JSON.stringify(logDetail, null, 2) }}</pre><footer><button class="btn btn-secondary" @click="logDetail = null">关闭</button></footer></article>
+      </div>
+    </Transition>
   </section>
 </template>
 
@@ -1038,7 +1050,7 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 
 <style scoped>
 .admin-shell { min-width: 1280px; height: 100vh; overflow: hidden; background: var(--color-bg-page); color: var(--color-text-body); }
-.admin-topbar { position: fixed; top: 0; left: 240px; right: 0; z-index: var(--z-sticky); height: 60px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 0 24px; transition: left 250ms var(--ease-out); }
+.admin-topbar { position: fixed; top: 0; left: 240px; right: 0; z-index: var(--z-sticky); height: 60px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 0 24px; transition: left var(--duration-base) var(--ease-out); }
 .collapsed .admin-topbar { left: 64px; }
 .topbar-left { min-width: 1px; }
 .top-actions, .user-trigger, .identity, .panel-head h2, .service-row, .mini-metrics, .monitor-top, .switch-line { display: flex; align-items: center; gap: var(--space-2); }
@@ -1065,23 +1077,23 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .admin-account-menu { position: absolute; right: 0; top: 40px; z-index: var(--z-dropdown); min-width: 150px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 6px; }
 .admin-account-menu button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 8px; background: transparent; padding: 8px; color: var(--color-text-body); }
 .admin-account-menu button:hover { background: var(--color-bg-muted); }
-.admin-sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: calc(var(--z-sticky) + 1); width: 240px; border-right: 1px solid var(--color-border-default); background: var(--color-bg-surface); transition: width 250ms var(--ease-out); display: flex; flex-direction: column; }
+.admin-sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: calc(var(--z-sticky) + 1); width: 240px; border-right: 1px solid var(--color-border-default); background: var(--color-bg-surface); transition: width var(--duration-base) var(--ease-out); display: flex; flex-direction: column; }
 .collapsed .admin-sidebar { width: 64px; }
 .sidebar-header { height: 60px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; padding: 0 20px; }
 .collapsed .sidebar-header { justify-content: center; padding: 0; }
-.menu-btn { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); transition: background 200ms var(--ease-out), color 200ms var(--ease-out); }
+.menu-btn { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out); }
 .menu-btn:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .collapsed .menu-btn { display: none; }
 .sidebar-nav { flex: 1 1 auto; min-height: 0; overflow: visible; overscroll-behavior: contain; padding: 16px 12px; }
 .sidebar-scrollable .sidebar-nav { overflow-y: auto; overflow-x: hidden; }
 .nav-group { margin-bottom: 24px; padding: 0; border-bottom: 0; }
 .nav-title { display: block; padding: 0 12px 8px; color: var(--color-text-muted); font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
-.nav-link { position: relative; display: flex; width: 100%; height: 40px; align-items: center; gap: 12px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); padding: 0 12px; text-align: left; font-size: 14px; transition: all 200ms var(--ease-out); margin-bottom: 4px; }
+.nav-link { position: relative; display: flex; width: 100%; height: 40px; align-items: center; gap: 12px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); padding: 0 12px; text-align: left; font-size: 14px; transition: all var(--duration-fast) var(--ease-out); margin-bottom: 4px; }
 .nav-link.active { background: var(--color-primary-50); color: var(--color-primary-700); }
 .nav-link.active svg { color: var(--color-primary-600); }
 .nav-link.active::before { display: none; }
 .nav-link:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
-.nav-link em { position: absolute; left: 44px; z-index: var(--z-tooltip); visibility: hidden; opacity: 0; pointer-events: none; white-space: nowrap; border-radius: 6px; background: var(--color-text-primary); color: white; padding: 4px 8px; font-style: normal; font-size: var(--text-caption); box-shadow: var(--shadow-lg); transform: translateX(-4px) scale(.96); transform-origin: left center; transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out), visibility 180ms; }
+.nav-link em { position: absolute; left: 44px; z-index: var(--z-tooltip); visibility: hidden; opacity: 0; pointer-events: none; white-space: nowrap; border-radius: 6px; background: var(--color-text-primary); color: white; padding: 4px 8px; font-style: normal; font-size: var(--text-caption); box-shadow: var(--shadow-lg); transform: translateX(-4px) scale(.96); transform-origin: left center; transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), visibility var(--duration-fast); }
 .collapsed .nav-link { justify-content: center; padding: 0; }
 .collapsed .nav-link:hover em { visibility: visible; opacity: 1; transform: translateX(0) scale(1); }
 .sidebar-footer { flex-shrink: 0; border-top: 1px solid var(--color-border-default); padding: 16px 12px; }
@@ -1089,7 +1101,7 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .collapsed .side-user { justify-content: center; padding: 8px; }
 .side-user div { display: grid; gap: 4px; }
 .side-user strong { color: var(--color-text-primary); }
-.admin-main { height: 100vh; margin-left: 240px; padding-top: 60px; overflow-y: auto; transition: margin-left 250ms var(--ease-out); }
+.admin-main { height: 100vh; margin-left: 240px; padding-top: 60px; overflow-y: auto; transition: margin-left var(--duration-base) var(--ease-out); }
 .collapsed .admin-main { margin-left: 64px; }
 .breadcrumb { height: 64px; display: flex; align-items: center; justify-content: space-between; background: transparent; padding: 0 32px; }
 .breadcrumb > div { display: flex; align-items: center; gap: 6px; color: var(--color-text-secondary); }
@@ -1111,7 +1123,7 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .metric-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .metric-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .metric-grid.compact .metric-card strong { font-size: 24px; }
-.metric-card { position: relative; min-height: 132px; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; overflow: hidden; background: white; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out); }
+.metric-card { position: relative; min-height: 132px; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; overflow: hidden; background: white; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }
 .metric-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .metric-card > div { display: flex; align-items: center; gap: 12px; color: var(--color-text-muted); }
 .metric-card strong { display: block; margin-top: 14px; color: var(--color-text-primary); font-size: 28px; font-weight: 700; line-height: 1; }
@@ -1132,7 +1144,7 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .panel-head span { color: var(--color-text-muted); font-size: var(--text-caption); }
 .panel-head strong { color: var(--color-primary-700); font-size: var(--text-h3); }
 .segmented-control { display: flex; background: var(--color-bg-muted); border-radius: var(--radius-md); padding: 4px; }
-.segment-btn { min-height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-muted); padding: 6px 16px; font-size: 13px; font-weight: 500; transition: all 200ms var(--ease-out); }
+.segment-btn { min-height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-muted); padding: 6px 16px; font-size: 13px; font-weight: 500; transition: all var(--duration-fast) var(--ease-out); }
 .segment-btn.active { background: white; color: var(--color-text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .view-toggle { display: inline-flex; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); overflow: hidden; }
 .view-toggle button { min-height: 30px; border: 0; background: white; color: var(--color-text-secondary); padding: 0 10px; }
@@ -1191,13 +1203,13 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .file-pptx, .file-ppt { color: #F97316; }.file-pdf { color: var(--color-danger-500); }.file-docx, .file-doc { color: var(--color-info-500); }
 .model-layout { display: flex; align-items: flex-start; gap: 32px; }
 .vertical-tabs { position: sticky; top: 0; width: 180px; flex-shrink: 0; display: grid; gap: 2px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 8px; }
-.vertical-tabs button { min-height: 38px; border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; padding: 0 16px; color: var(--color-text-secondary); transition: background 200ms var(--ease-out), color 200ms var(--ease-out), transform 200ms var(--ease-out); }
+.vertical-tabs button { min-height: 38px; border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; padding: 0 16px; color: var(--color-text-secondary); transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out); }
 .vertical-tabs button:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .vertical-tabs button.active { background: var(--color-primary-50); color: var(--color-primary-700); font-weight: 600; }
 .model-content { flex: 1; max-width: 900px; display: grid; gap: 24px; min-width: 0; }
 .config-layout { display: flex; align-items: flex-start; gap: 32px; }
 .config-nav { position: sticky; top: 0; width: 180px; flex-shrink: 0; display: grid; gap: 2px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); box-shadow: var(--shadow-sm); padding: 8px; }
-.config-nav-item { min-height: 38px; border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; padding: 0 16px; color: var(--color-text-secondary); transition: background 200ms var(--ease-out), color 200ms var(--ease-out); }
+.config-nav-item { min-height: 38px; border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; padding: 0 16px; color: var(--color-text-secondary); transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out); }
 .config-nav-item:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .config-nav-item.active { background: var(--color-primary-50); color: var(--color-primary-700); font-weight: 600; }
 .config-content { flex: 1; max-width: 900px; min-width: 0; display: grid; gap: 24px; }
@@ -1272,7 +1284,7 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .checkbox-label.inline { min-height: 36px; }
 .check-grid { display: flex; flex-wrap: wrap; gap: 10px; }
 .monitor-top { justify-content: flex-end; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
-.spin { animation: spin 1s linear infinite; }
+.spin { animation: spin var(--duration-slower) linear infinite; }
 .service-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .monitor-service { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; min-height: 72px; border-left: 4px solid var(--color-primary-600); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 12px; }
 .monitor-service.tag-danger { border-left-color: var(--color-danger-500); background: var(--color-danger-50); }
