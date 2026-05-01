@@ -1,11 +1,33 @@
 <template>
   <section class="admin-shell" :class="{ collapsed }">
-    <header class="admin-topbar">
-      <div class="brand-line">
-        <button class="btn btn-ghost icon-btn" aria-label="折叠" @click="collapsed = !collapsed"><Menu :size="20" /></button>
+    <aside class="admin-sidebar">
+      <div class="sidebar-header">
+        <button class="menu-btn" aria-label="折叠" @click="collapsed = !collapsed"><Menu :size="20" /></button>
         <span class="logo-mark"><Sparkles :size="17" /></span>
-        <strong v-if="!collapsed">系统管理后台</strong>
+        <strong v-if="!collapsed" class="logo-text">系统管理后台</strong>
       </div>
+
+      <nav class="sidebar-nav">
+        <div v-for="group in navGroups" :key="group.title" class="nav-group">
+          <span v-if="!collapsed" class="nav-title">{{ group.title }}</span>
+          <button v-for="item in group.items" :key="item.key" class="nav-link" :class="{ active: active === item.key }" @click="go(item.key)">
+            <component :is="item.icon" :size="18" />
+            <span v-if="!collapsed">{{ item.label }}</span>
+            <em v-if="collapsed">{{ item.label }}</em>
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="side-user">
+          <span class="avatar">管</span>
+          <div v-if="!collapsed"><strong>{{ user.nickname }}</strong><span class="tag tag-ai">Super Admin</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <header class="admin-topbar">
+      <div class="topbar-left"></div>
       <div class="top-actions">
         <span class="health-pill" :class="health?.status === 'ok' ? 'ok' : 'warn'"><i></i>{{ health?.status === 'ok' ? '运行正常' : '服务异常' }}</span>
         <button class="notice-btn" aria-label="通知"><Bell :size="20" /><em v-if="alertCount">{{ alertCount }}</em></button>
@@ -21,23 +43,6 @@
         </div>
       </div>
     </header>
-
-    <aside class="admin-sidebar">
-      <nav>
-        <div v-for="group in navGroups" :key="group.title" class="nav-group">
-          <span v-if="!collapsed" class="nav-title">{{ group.title }}</span>
-          <button v-for="item in group.items" :key="item.key" class="nav-link" :class="{ active: active === item.key }" @click="go(item.key)">
-            <component :is="item.icon" :size="16" />
-            <span v-if="!collapsed">{{ item.label }}</span>
-            <em v-if="collapsed">{{ item.label }}</em>
-          </button>
-        </div>
-      </nav>
-      <div class="side-user">
-        <span class="avatar">管</span>
-        <div v-if="!collapsed"><strong>{{ user.nickname }}</strong><span class="tag tag-ai">管理员</span></div>
-      </div>
-    </aside>
 
     <main class="admin-main">
       <div class="breadcrumb">
@@ -73,15 +78,11 @@
             <MetricCard :icon="Sparkles" label="今日 AI" :value="dashboard.stats?.today_ai_calls || 0" trend="调用次数" tone="ai" />
             <MetricCard :icon="Activity" label="异步队列" :value="dashboard.stats?.async_pending || 0" trend="待处理" :danger="(dashboard.stats?.async_pending || 0) > 0" />
           </div>
-          <div class="dashboard-grid">
+          <div class="content-row">
             <section class="left-col">
               <article class="panel-card">
                 <div class="panel-head"><div><h2>活跃度趋势</h2><span>过去 30 天</span></div><Segmented v-model="trendRange" :items="['7天','30天','90天']" /></div>
                 <AdminChart type="line" :height="280" :labels="activityLabels" :series="activitySeries" />
-              </article>
-              <article class="panel-card">
-                <div class="panel-head"><div><h2>AI 调用分布</h2><strong>{{ aiDistributionTotal }} 次</strong></div><button class="btn btn-ghost btn-sm" @click="exportCurrent"><Download :size="14" />导出</button></div>
-                <AdminChart type="bar" :height="240" :labels="aiDistributionLabels" :series="aiDistributionSeries" />
               </article>
             </section>
             <aside class="right-col">
@@ -94,41 +95,10 @@
                     <span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span>
                     <small>{{ item.metric }}</small>
                   </div>
-                </div>
-              </article>
-              <article class="panel-card">
-                <div class="panel-head"><h2><FileText :size="18" />最近操作</h2><button class="link-btn" @click="go('adminLogs')">全部</button></div>
-                <div class="timeline">
-                  <div v-for="item in dashboard.recent_operations || []" :key="item.id" class="timeline-item">
-                    <i :class="opTone(item.action)"></i><strong>{{ item.action }}</strong><span>{{ item.target_type }} · {{ formatTime(item.created_at) }}</span>
-                  </div>
-                  <EmptyState v-if="!(dashboard.recent_operations || []).length" text="暂无操作" />
+                  <EmptyState v-if="!healthItems.length" text="暂无状态" />
                 </div>
               </article>
             </aside>
-          </div>
-          <div class="bottom-grid">
-            <article class="panel-card">
-              <div class="panel-head"><h2><BarChart2 :size="18" />课程 TOP 5</h2></div>
-              <div v-for="(item, index) in dashboard.course_ranking || []" :key="item.course_id" class="rank-row">
-                <b :class="rankClass(index)">{{ rankLabel(index) }}</b><span>{{ item.name }}</span><progress :value="item.active_users" :max="rankMax"></progress><small>{{ item.active_users }}人</small>
-              </div>
-              <EmptyState v-if="!(dashboard.course_ranking || []).length" text="暂无课程" />
-            </article>
-            <article class="panel-card">
-              <div class="panel-head"><h2><UserPlus :size="18" />最近注册</h2></div>
-              <div v-for="item in dashboard.recent_users || []" :key="item.id" class="mini-user">
-                <span class="avatar small">{{ firstChar(item.nickname) }}</span><div><strong>{{ item.nickname }}</strong><span>{{ item.email }}</span></div><span class="tag">{{ roleText(item.role) }}</span>
-              </div>
-              <EmptyState v-if="!(dashboard.recent_users || []).length" text="暂无用户" />
-            </article>
-            <article class="panel-card">
-              <div class="panel-head"><h2><AlertCircle :size="18" />待处理</h2></div>
-              <div v-for="item in dashboard.pending_tasks || []" :key="item.title" class="task-row">
-                <AlertTriangle :size="16" /><span>{{ item.title }}</span><span class="tag tag-warning">{{ item.level }}</span><button class="link-btn" @click="go('adminMonitor')">处理</button>
-              </div>
-              <EmptyState v-if="!(dashboard.pending_tasks || []).length" text="暂无事项" />
-            </article>
           </div>
         </section>
 
@@ -354,7 +324,7 @@ import {
   ChevronRight, Clock, Cloud, Database, Download, Eye, File, FileCheck, FileText, GraduationCap, Grid2X2,
   Inbox, KeyRound, Layers, LayoutDashboard, List, LogOut, Menu, MoreHorizontal, Pencil, Plus, RefreshCw,
   Save, Scan, Search, Server, Settings, Shield, ShieldCheck, Sparkles, Trash2, Upload, User, UserCheck,
-  UserPlus, Users, Volume2, X, XCircle
+  Users, Volume2, X, XCircle
 } from "lucide-vue-next";
 import { api } from "../api/client";
 import type { User as UserType } from "../types";
@@ -499,10 +469,6 @@ const healthItems = computed(() => health.value?.items || dashboard.value.servic
 const alertCount = computed(() => healthItems.value.filter((item: any) => ["down", "not_configured", "failed"].includes(item.status)).length);
 const activityLabels = computed(() => (dashboard.value.activity_trend || []).map((item: any) => item.date));
 const activitySeries = computed(() => [{ name: "活跃用户", data: (dashboard.value.activity_trend || []).map((item: any) => item.active_users), color: "#4F46E5" }, { name: "AI 调用", data: (dashboard.value.activity_trend || []).map((item: any) => item.ai_calls), color: "#06B6D4" }]);
-const aiDistributionLabels = computed(() => (dashboard.value.ai_distribution || []).map((item: any) => moduleText(item.module)));
-const aiDistributionSeries = computed(() => [{ name: "调用", data: (dashboard.value.ai_distribution || []).map((item: any) => item.count), color: "#6366F1" }]);
-const aiDistributionTotal = computed(() => (dashboard.value.ai_distribution || []).reduce((sum: number, item: any) => sum + Number(item.count || 0), 0));
-const rankMax = computed(() => Math.max(1, ...(dashboard.value.course_ranking || []).map((item: any) => item.active_users || 0)));
 const filteredCourses = computed(() => courses.value.filter((item) => !courseTerm.value || String(item.term || "").includes(courseTerm.value)));
 const storagePercent = computed(() => Math.round(((materialStats.value.storage_used_bytes || 0) / (materialStats.value.storage_quota_bytes || 1)) * 100));
 const modelWarning = computed(() => models.value.some((item) => item.purpose !== "embedding") ? "" : "大语言模型未配置");
@@ -550,9 +516,6 @@ function statusText(status: unknown) {
 function roleText(role: string) {
   return { student: "学生", teacher: "教师", admin: "管理员" }[role] || role;
 }
-function moduleText(module: string) {
-  return { qa: "问答", script: "讲解", quiz: "测验", tutoring: "辅导", analysis: "分析", tts: "语音" }[module] || module || "其他";
-}
 function firstChar(value: string) {
   return (value || "-").slice(0, 1);
 }
@@ -582,17 +545,6 @@ function sizeLabel(size?: number) {
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
   return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
-}
-function opTone(action: string) {
-  if (String(action).includes("delete") || String(action).includes("删除")) return "danger";
-  if (String(action).includes("config") || String(action).includes("配置")) return "warning";
-  return "primary";
-}
-function rankLabel(index: number | string) {
-  return Number(index) + 1;
-}
-function rankClass(index: number | string) {
-  return `rank-${Number(index) + 1}`;
 }
 function serviceIcon(key: string) {
   return { mysql: Database, redis: Server, vector: Layers, celery: Activity, oss: Cloud, tts: Volume2, ocr: Scan, email: FileText, llm: Sparkles }[key] || Server;
@@ -875,11 +827,13 @@ const ServiceConfigCard = defineComponent({
 </script>
 
 <style scoped>
-.admin-shell { min-width: 1280px; min-height: 100vh; background: var(--color-bg-page); }
-.admin-topbar { position: fixed; top: 0; left: 0; right: 0; z-index: var(--z-sticky); height: 60px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); box-shadow: var(--shadow-xs); padding: 0 20px; }
-.brand-line, .top-actions, .user-trigger, .identity, .panel-head h2, .service-row, .mini-metrics, .monitor-top, .switch-line { display: flex; align-items: center; gap: var(--space-2); }
-.brand-line strong { color: var(--color-text-primary); font-size: 17px; font-weight: 600; }
-.logo-mark { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; color: white; background: var(--color-ai-gradient); }
+.admin-shell { min-width: 1280px; height: 100vh; overflow: hidden; background: var(--color-bg-page); color: var(--color-text-body); }
+.admin-topbar { position: fixed; top: 0; left: 240px; right: 0; z-index: var(--z-sticky); height: 60px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 0 24px; transition: left 250ms var(--ease-out); }
+.collapsed .admin-topbar { left: 64px; }
+.topbar-left { min-width: 1px; }
+.top-actions, .user-trigger, .identity, .panel-head h2, .service-row, .mini-metrics, .monitor-top, .switch-line { display: flex; align-items: center; gap: var(--space-2); }
+.logo-mark { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: var(--radius-md); color: white; background: var(--color-ai-gradient); }
+.logo-text { min-width: 0; color: var(--color-text-primary); font-size: 16px; font-weight: 600; letter-spacing: .5px; white-space: nowrap; }
 .health-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px; border-radius: var(--radius-full); font-size: var(--text-caption); }
 .health-pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .health-pill.ok { background: var(--color-success-50); color: var(--color-success-700); }
@@ -901,51 +855,62 @@ const ServiceConfigCard = defineComponent({
 .dropdown { position: absolute; right: 0; top: 40px; z-index: var(--z-dropdown); min-width: 150px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 6px; }
 .dropdown button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 8px; background: transparent; padding: 8px; color: var(--color-text-body); }
 .dropdown button:hover { background: var(--color-bg-muted); }
-.admin-sidebar { position: fixed; top: 60px; bottom: 0; left: 0; z-index: var(--z-sticky); width: 220px; border-right: 1px solid var(--color-border-default); background: var(--color-bg-surface); transition: width 250ms var(--ease-out); padding: 16px 12px; display: flex; flex-direction: column; justify-content: space-between; }
+.admin-sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: calc(var(--z-sticky) + 1); width: 240px; border-right: 1px solid var(--color-border-default); background: var(--color-bg-surface); transition: width 250ms var(--ease-out); display: flex; flex-direction: column; }
 .collapsed .admin-sidebar { width: 64px; }
-.nav-group { padding: 10px 0; border-bottom: 1px solid var(--color-border-subtle); }
-.nav-title { display: block; padding: 0 8px 8px; color: var(--color-text-muted); font-size: var(--text-overline); font-weight: 600; }
-.nav-link { position: relative; display: flex; width: 100%; height: 40px; align-items: center; gap: 8px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); padding: 0 10px; text-align: left; }
+.sidebar-header { height: 60px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; padding: 0 20px; }
+.collapsed .sidebar-header { justify-content: center; padding: 0; }
+.menu-btn { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); transition: background 200ms var(--ease-out), color 200ms var(--ease-out); }
+.menu-btn:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
+.collapsed .menu-btn { display: none; }
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 16px 12px; }
+.nav-group { margin-bottom: 24px; padding: 0; border-bottom: 0; }
+.nav-title { display: block; padding: 0 12px 8px; color: var(--color-text-muted); font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+.nav-link { position: relative; display: flex; width: 100%; height: 40px; align-items: center; gap: 12px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); padding: 0 12px; text-align: left; font-size: 14px; transition: all 200ms var(--ease-out); margin-bottom: 4px; }
 .nav-link.active { background: var(--color-primary-50); color: var(--color-primary-700); }
-.nav-link.active::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--color-primary-600); }
+.nav-link.active svg { color: var(--color-primary-600); }
+.nav-link.active::before { display: none; }
 .nav-link:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .nav-link em { display: none; position: absolute; left: 44px; z-index: var(--z-tooltip); white-space: nowrap; border-radius: 6px; background: var(--color-text-primary); color: white; padding: 4px 8px; font-style: normal; font-size: var(--text-caption); }
 .collapsed .nav-link { justify-content: center; padding: 0; }
 .collapsed .nav-link:hover em { display: block; }
-.side-user { display: flex; align-items: center; gap: 10px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); padding: 10px; }
+.sidebar-footer { flex-shrink: 0; border-top: 1px solid var(--color-border-default); padding: 16px 12px; }
+.side-user { display: flex; align-items: center; gap: 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-page); padding: 12px; }
+.collapsed .side-user { justify-content: center; padding: 8px; }
 .side-user div { display: grid; gap: 4px; }
 .side-user strong { color: var(--color-text-primary); }
-.admin-main { margin-left: 220px; padding-top: 60px; transition: margin-left 250ms var(--ease-out); }
+.admin-main { height: 100vh; margin-left: 240px; padding-top: 60px; overflow-y: auto; transition: margin-left 250ms var(--ease-out); }
 .collapsed .admin-main { margin-left: 64px; }
-.breadcrumb { height: 56px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: rgba(255,255,255,0.88); padding: 0 32px; }
+.breadcrumb { height: 64px; display: flex; align-items: center; justify-content: space-between; background: transparent; padding: 0 32px; }
 .breadcrumb > div { display: flex; align-items: center; gap: 6px; color: var(--color-text-secondary); }
 .breadcrumb strong { color: var(--color-text-primary); }
 .page-actions { display: flex; align-items: center; gap: var(--space-2); }
-.admin-content { padding: 32px; }
-.admin-page { display: grid; gap: 16px; animation: fade-slide-up var(--duration-base) var(--ease-out); }
+.admin-content { padding: 0 32px 48px; }
+.admin-page { display: grid; gap: 24px; animation: fade-slide-up var(--duration-base) var(--ease-out); }
 .welcome-card, .panel-card, .filter-card, .table-card, .backup-summary, .danger-zone, .service-config-card { background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
-.welcome-card { min-height: 80px; display: flex; align-items: center; gap: 14px; padding: 18px 22px; }
-.welcome-card h1 { margin: 0; color: var(--color-text-primary); font-size: var(--text-h2); }
-.welcome-card p { margin: 2px 0 0; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
+.welcome-card { min-height: 96px; display: flex; align-items: center; gap: 20px; padding: 24px 32px; }
+.welcome-card h1 { margin: 0; color: var(--color-text-primary); font-size: 20px; font-weight: 600; }
+.welcome-card p { margin: 6px 0 0; color: var(--color-text-muted); font-size: 13px; }
 .welcome-icon, .metric-icon { display: inline-flex; width: 42px; height: 42px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-600); }
-.welcome-icon { color: white; background: var(--color-ai-gradient); }
-.metric-grid { display: grid; gap: 16px; }
+.welcome-icon { width: 48px; height: 48px; border-radius: var(--radius-lg); color: white; background: var(--color-ai-gradient); box-shadow: 0 4px 12px rgba(99, 102, 241, .2); }
+.metric-grid { display: grid; gap: 20px; }
 .metric-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .metric-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .metric-grid.compact .metric-card strong { font-size: 24px; }
-.metric-card { position: relative; min-height: 100px; padding: 18px; overflow: hidden; background: white; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
-.metric-card > div { display: flex; align-items: center; gap: 10px; color: var(--color-text-secondary); }
-.metric-card strong { display: block; margin-top: 12px; color: var(--color-text-primary); font-size: var(--text-display); line-height: 38px; }
-.metric-card small { display: inline-flex; align-items: center; gap: 6px; color: var(--color-success-700); font-size: var(--text-caption); }
+.metric-card { position: relative; min-height: 132px; display: flex; flex-direction: column; justify-content: space-between; padding: 20px; overflow: hidden; background: white; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); transition: transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out); }
+.metric-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.metric-card > div { display: flex; align-items: center; gap: 12px; color: var(--color-text-muted); }
+.metric-card strong { display: block; margin-top: 14px; color: var(--color-text-primary); font-size: 28px; font-weight: 700; line-height: 1; }
+.metric-card small { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-muted); font-size: 12px; margin-top: 8px; }
 .metric-card.success .metric-icon { background: var(--color-success-50); color: var(--color-success-700); }
 .metric-card.info .metric-icon { background: var(--color-info-50); color: var(--color-info-700); }
 .metric-card.ai .metric-icon { background: var(--color-ai-light); color: #6D28D9; }
-.metric-card.danger { border-color: var(--color-danger-100); }
-.metric-card.danger::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--color-danger-500); }
+.metric-card.danger { border-color: #FECACA; background: var(--color-danger-50); }
+.metric-card.danger .metric-icon { background: white; color: var(--color-danger-500); }
+.metric-card.danger strong, .metric-card.danger small { color: var(--color-danger-700); }
+.metric-card.danger::after { display: none; }
 .trend-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.dashboard-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(360px, 2fr); gap: 16px; }
+.content-row { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
 .left-col, .right-col, .service-config-stack { display: grid; gap: 16px; }
-.bottom-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .panel-card, .service-config-card { padding: 20px; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .panel-head h2 { margin: 0; color: var(--color-text-primary); font-size: var(--text-h4); }
