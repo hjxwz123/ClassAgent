@@ -76,7 +76,7 @@ class OCRService:
             openapi_models.Config(
                 access_key_id=config["access_key_id"],
                 access_key_secret=config["access_key_secret"],
-                endpoint=config.get("endpoint") or self.default_endpoint,
+                endpoint=self.default_endpoint,
             )
         )
         request = ocr_models.RecognizeGeneralRequest(body=BytesIO(content))

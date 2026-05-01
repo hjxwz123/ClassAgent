@@ -142,8 +142,16 @@ def create_admin_user_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    admin = create_admin_user(db, email=payload.email, password=payload.password, nickname=payload.nickname)
-    return success_response(data=UserSummary.model_validate(admin).model_dump(mode="json"), request_id=request.state.request_id)
+    created_user = create_admin_user(
+        db,
+        email=payload.email,
+        password=payload.password,
+        nickname=payload.nickname,
+        role=payload.role.value,
+        student_no=payload.student_no,
+        employee_no=payload.employee_no,
+    )
+    return success_response(data=UserSummary.model_validate(created_user).model_dump(mode="json"), request_id=request.state.request_id)
 
 
 @router.get("/users/{user_id}")

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import httpx
 import redis
-from sqlalchemy import distinct, func, select, text
+from sqlalchemy import distinct, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import BACKUP_DIR, VECTOR_DIR, get_settings
@@ -154,21 +154,47 @@ def get_user_detail_admin(db: Session, *, user_id: int) -> dict:
     }
 
 
-def create_admin_user(db: Session, *, email: str, password: str, nickname: str) -> User:
-    exists = db.scalar(select(User).where(User.email == email, User.deleted_at.is_(None)))
+def create_admin_user(
+    db: Session,
+    *,
+    email: str,
+    password: str,
+    nickname: str,
+    role: str = UserRole.ADMIN.value,
+    student_no: str | None = None,
+    employee_no: str | None = None,
+) -> User:
+    if role not in {item.value for item in UserRole}:
+        raise bad_request("角色不合法")
+    if role == UserRole.STUDENT.value and not student_no:
+        raise bad_request("学生账号必须提供学号")
+    if role == UserRole.TEACHER.value and not employee_no:
+        raise bad_request("教师账号必须提供工号")
+    if role != UserRole.STUDENT.value:
+        student_no = None
+    if role != UserRole.TEACHER.value:
+        employee_no = None
+    conditions = [User.email == email]
+    if student_no:
+        conditions.append(User.student_no == student_no)
+    if employee_no:
+        conditions.append(User.employee_no == employee_no)
+    exists = db.scalar(select(User).where(or_(*conditions), User.deleted_at.is_(None)))
     if exists is not None:
-        raise bad_request("邮箱已存在")
-    admin = User(
+        raise bad_request("邮箱、学号或工号已存在")
+    created_user = User(
         email=email,
         password_hash=hash_password(password),
         nickname=nickname,
-        role=UserRole.ADMIN.value,
+        role=role,
         status=UserStatus.ACTIVE.value,
+        student_no=student_no,
+        employee_no=employee_no,
     )
-    db.add(admin)
+    db.add(created_user)
     db.commit()
-    db.refresh(admin)
-    return admin
+    db.refresh(created_user)
+    return created_user
 
 
 def update_user(db: Session, *, user_id: int, status: str | None, role: str | None) -> User:
@@ -637,6 +663,15 @@ def save_service_config(
                 continue
             merged[key] = value
         config = merged
+    if provider == "aliyun":
+        sdk_managed_keys = {
+            "oss": {"endpoint"},
+            "ocr": {"endpoint"},
+            "doc_parser": {"endpoint"},
+            "tts": {"url"},
+        }.get(service_type, set())
+        for key in sdk_managed_keys:
+            config.pop(key, None)
     record.scope = ConfigScope.SERVICE.value
     record.service_type = service_type
     record.provider = provider
@@ -704,7 +739,7 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
                 openapi_models.Config(
                     access_key_id=config["access_key_id"],
                     access_key_secret=config["access_key_secret"],
-                    endpoint=config.get("endpoint") or "docmind-api.cn-hangzhou.aliyuncs.com",
+                    endpoint="docmind-api.cn-hangzhou.aliyuncs.com",
                     region_id=config.get("region") or "cn-hangzhou",
                     type="access_key",
                 )

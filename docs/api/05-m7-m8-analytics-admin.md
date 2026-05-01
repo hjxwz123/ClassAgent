@@ -42,15 +42,19 @@
 - `POST /api/v1/admin/users/{user_id}/reset-password`
 - `DELETE /api/v1/admin/users/{user_id}`
 
-#### 创建管理员示例
+#### 创建用户示例
 
 ```json
 {
-  "email": "admin2@example.com",
-  "password": "Admin123456",
-  "nickname": "二号管理员"
+  "email": "teacher2@example.com",
+  "password": "Teacher123",
+  "nickname": "二号教师",
+  "role": "teacher",
+  "employee_no": "T2026002"
 }
 ```
+
+`role` 可为 `teacher`、`student`、`admin`；教师需提供 `employee_no`，学生需提供 `student_no`。公开注册不允许创建教师账号。
 
 ### 2. 课程管理
 

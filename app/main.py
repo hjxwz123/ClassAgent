@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from time import perf_counter
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -82,6 +82,19 @@ def create_app() -> FastAPI:
                 "code": 422,
                 "message": "请求参数校验失败",
                 "data": exc.errors(),
+            },
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException):
+        detail = exc.detail if isinstance(exc.detail, dict) else {"code": exc.status_code, "message": str(exc.detail)}
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "code": detail.get("code", exc.status_code),
+                "message": detail.get("message", "请求失败"),
+                "data": None,
+                "request_id": getattr(request.state, "request_id", None),
             },
         )
 

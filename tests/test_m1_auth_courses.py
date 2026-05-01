@@ -7,7 +7,11 @@ def register_user(client, *, email, password, nickname, role, student_no=None, e
         "student_no": student_no,
         "employee_no": employee_no,
     }
-    response = client.post("/api/v1/auth/register", json=payload)
+    if role == "teacher":
+        admin_login = login_user(client, email="admin@classagent.com", password="Admin123456")
+        response = client.post("/api/v1/admin/users/admin", json=payload, headers=auth_headers(admin_login["access_token"]))
+    else:
+        response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 200, response.text
     return response.json()["data"]
 
@@ -116,3 +120,56 @@ def test_auth_and_course_management_flow(client):
         headers=auth_headers(relogin["access_token"]),
     )
     assert leave_response.status_code == 200
+
+
+def test_public_register_rejects_teacher_role(client):
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "blocked-teacher@example.com",
+            "password": "Teacher123",
+            "nickname": "自助教师",
+            "role": "teacher",
+            "employee_no": "T-BLOCKED",
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["message"] == "当前角色不允许自助注册"
+
+
+def test_login_error_messages_are_specific(client):
+    register_user(
+        client,
+        email="login-student@example.com",
+        password="Student123",
+        nickname="登录测试",
+        role="student",
+        student_no="S-LOGIN",
+    )
+
+    missing = client.post("/api/v1/auth/login", json={"email": "missing@example.com", "password": "Student123"})
+    assert missing.status_code == 401
+    assert missing.json()["message"] == "账号不存在"
+
+    wrong_password = client.post("/api/v1/auth/login", json={"email": "login-student@example.com", "password": "Student456"})
+    assert wrong_password.status_code == 401
+    assert wrong_password.json()["message"] == "密码错误"
+
+    admin_login = login_user(client, email="admin@classagent.com", password="Admin123456")
+    disabled_user = register_user(
+        client,
+        email="disabled-student@example.com",
+        password="Student123",
+        nickname="禁用测试",
+        role="student",
+        student_no="S-DISABLED",
+    )
+    disable_response = client.patch(
+        f"/api/v1/admin/users/{disabled_user['id']}",
+        json={"status": "disabled"},
+        headers=auth_headers(admin_login["access_token"]),
+    )
+    assert disable_response.status_code == 200, disable_response.text
+    disabled = client.post("/api/v1/auth/login", json={"email": "disabled-student@example.com", "password": "Student123"})
+    assert disabled.status_code == 401
+    assert disabled.json()["message"] == "账号已被禁用"

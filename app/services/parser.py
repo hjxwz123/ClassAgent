@@ -154,7 +154,7 @@ class DocParserService:
             openapi_models.Config(
                 access_key_id=config["access_key_id"],
                 access_key_secret=config["access_key_secret"],
-                endpoint=str(config.get("endpoint") or DEFAULT_ENDPOINT),
+                endpoint=DEFAULT_ENDPOINT,
                 region_id=str(config.get("region") or DEFAULT_REGION),
                 type="access_key",
                 connect_timeout=int(self.settings.external_service_timeout_seconds * 1000),

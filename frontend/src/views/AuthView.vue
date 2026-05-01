@@ -28,19 +28,8 @@
           <input v-model="registerForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
           <label class="label">昵称</label>
           <input v-model="registerForm.nickname" class="input" required :aria-invalid="formError.includes('昵称')" />
-          <div class="form-row">
-            <div>
-              <label class="label">角色</label>
-              <select v-model="registerForm.role" class="select">
-                <option value="student">学生</option>
-                <option value="teacher">教师</option>
-              </select>
-            </div>
-            <div>
-              <label class="label">{{ registerForm.role === 'student' ? '学号' : '工号' }}</label>
-              <input v-model="identityNo" class="input" required :aria-invalid="formError.includes('学号') || formError.includes('工号')" />
-            </div>
-          </div>
+          <label class="label">学号</label>
+          <input v-model="studentNo" class="input" required :aria-invalid="formError.includes('学号')" />
           <label class="label">密码</label>
           <input v-model="registerForm.password" class="input" type="password" required :aria-invalid="formError.includes('密码')" />
           <button class="btn btn-primary wide" :data-loading="loading" :disabled="loading"><UserPlus :size="16" />注册</button>
@@ -67,7 +56,7 @@ import { reactive, ref } from "vue";
 import { AlertCircle, Bot, KeyRound, LogIn, UserPlus } from "lucide-vue-next";
 import { api } from "../api/client";
 import { useSessionStore } from "../stores/session";
-import type { Role, User } from "../types";
+import type { User } from "../types";
 
 const emit = defineEmits<{ authed: [user: User]; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
 
@@ -75,8 +64,8 @@ const mode = ref<"login" | "register" | "reset">("login");
 const loading = ref(false);
 const formError = ref("");
 const loginForm = reactive({ email: "", password: "" });
-const registerForm = reactive({ email: "", password: "", nickname: "", role: "student" as Role });
-const identityNo = ref("");
+const registerForm = reactive({ email: "", password: "", nickname: "" });
+const studentNo = ref("");
 const resetForm = reactive({ email: "", code: "", new_password: "" });
 const session = useSessionStore();
 
@@ -112,13 +101,11 @@ async function login() {
 async function register() {
   formError.value = "";
   if (!registerForm.nickname.trim()) return fail("昵称不能为空");
-  if (!identityNo.value.trim()) return fail(registerForm.role === "student" ? "学号不能为空" : "工号不能为空");
+  if (!studentNo.value.trim()) return fail("学号不能为空");
   if (!validatePassword(registerForm.password)) return;
   loading.value = true;
   try {
-    const payload: Record<string, unknown> = { ...registerForm };
-    if (registerForm.role === "student") payload.student_no = identityNo.value;
-    else payload.employee_no = identityNo.value;
+    const payload: Record<string, unknown> = { ...registerForm, role: "student", student_no: studentNo.value };
     await api.post<User>("/auth/register", payload);
     mode.value = "login";
     emit("notice", "success", "已注册");

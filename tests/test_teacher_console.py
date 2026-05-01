@@ -4,17 +4,19 @@ from app.db.models import CourseMaterial, Lesson, LessonPage
 
 
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": email,
-            "password": password,
-            "nickname": nickname,
-            "role": role,
-            "student_no": student_no,
-            "employee_no": employee_no,
-        },
-    )
+    payload = {
+        "email": email,
+        "password": password,
+        "nickname": nickname,
+        "role": role,
+        "student_no": student_no,
+        "employee_no": employee_no,
+    }
+    if role == "teacher":
+        admin_login = login_user(client, email="admin@classagent.com", password="Admin123456")
+        response = client.post("/api/v1/admin/users/admin", json=payload, headers=auth_headers(admin_login["access_token"]))
+    else:
+        response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 200, response.text
     return response.json()["data"]
 
