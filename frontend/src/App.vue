@@ -4,7 +4,7 @@
       <component
         :is="Component"
         v-if="ready"
-        :key="route.fullPath"
+        :key="String(route.meta.shellKey || route.path)"
         :user="session.user"
         @authed="onAuthed"
         @logout="logout"

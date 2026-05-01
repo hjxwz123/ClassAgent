@@ -7,8 +7,8 @@
         <i></i>
         <div class="course-switch">
           <button @click="courseMenuOpen = !courseMenuOpen">{{ currentCourse?.name || '选择课程' }}<ChevronDown :size="16" /></button>
-          <Transition name="top-popover" appear>
-            <div v-if="courseMenuOpen" class="course-popover top-popover-panel">
+          <Transition name="top-menu" :duration="{ enter: 260, leave: 220 }">
+            <div v-if="courseMenuOpen" class="course-popover top-menu-panel">
               <button v-for="course in courses.slice(0, 8)" :key="course.id" :class="{ active: currentCourseId === course.id }" @click="selectCourse(course.id)">
                 <Check v-if="currentCourseId === course.id" :size="15" />{{ course.name }}
               </button>
@@ -23,8 +23,8 @@
         <i></i>
         <div class="user-menu">
           <button @click="userMenuOpen = !userMenuOpen"><span class="avatar">{{ firstChar(teacherName) }}</span><b>{{ teacherName }}</b><ChevronDown :size="16" /></button>
-          <Transition name="top-popover" appear>
-            <div v-if="userMenuOpen" class="user-popover top-popover-panel">
+          <Transition name="top-menu" :duration="{ enter: 260, leave: 220 }">
+            <div v-if="userMenuOpen" class="user-popover top-menu-panel">
               <button @click="go('teacherProfile')"><User :size="15" />个人中心</button>
               <button @click="go('teacherProfile')"><Settings :size="15" />账号设置</button>
               <button @click="$emit('logout')"><LogOut :size="15" />退出登录</button>

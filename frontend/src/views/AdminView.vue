@@ -36,8 +36,8 @@
           <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
             <span class="avatar">管</span><span>{{ user.nickname }}</span><ChevronDown :size="16" />
           </button>
-          <Transition name="top-popover" appear>
-            <div v-if="userMenuOpen" class="dropdown top-popover-panel">
+          <Transition name="top-menu" :duration="{ enter: 260, leave: 220 }">
+            <div v-if="userMenuOpen" class="admin-account-menu top-menu-panel">
               <button @click="go('profile')"><User :size="15" />资料</button>
               <button @click="$emit('logout')"><LogOut :size="15" />退出</button>
             </div>
@@ -238,57 +238,116 @@
           </section>
         </section>
 
-        <section v-if="active === 'adminServices'" class="admin-page page-view service-page">
-          <div class="page-header">
+        <section v-if="active === 'adminServices'" class="admin-page page-view aliyun-page">
+          <div class="page-header aliyun-page-head">
             <div class="breadcrumb"><span>系统管理</span><ChevronRight :size="14" /><span>阿里云服务</span></div>
             <div class="header-actions">
               <button class="btn btn-secondary" @click="testAllServices"><RefreshCw :size="14" />测试全部</button>
               <button class="btn btn-primary" @click="saveAllServices"><Save :size="14" />保存配置</button>
             </div>
           </div>
-          <div class="config-content service-config-stack">
-            <ServiceConfigCard title="阿里云 OSS" :icon="Cloud" type="oss" :draft="serviceDrafts.oss" :status="serviceStatus('oss')" @save="saveServiceType('oss')" @test="testServiceType('oss')" @remove="deleteServiceType('oss')">
-              <div class="form-group"><label class="form-label">供应商 / 类型</label><select v-model="serviceDrafts.oss.provider" class="form-control select"><option value="aliyun">阿里云 OSS</option><option value="local">本地存储</option><option value="mock">Mock</option></select></div>
-              <div class="form-group"><label class="form-label">配置名称</label><input v-model="serviceDrafts.oss.name" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">AccessKey ID</label><input v-model="serviceDrafts.oss.access_key_id" class="form-control input" type="password" /></div>
-              <div class="form-group"><label class="form-label">AccessKey Secret</label><input v-model="serviceDrafts.oss.access_key_secret" class="form-control input" type="password" /></div>
-              <div class="form-group"><label class="form-label">Bucket 名称</label><input v-model="serviceDrafts.oss.bucket" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">Endpoint</label><input v-model="serviceDrafts.oss.endpoint" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">Region</label><input v-model="serviceDrafts.oss.region" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">URL 过期</label><input v-model.number="serviceDrafts.oss.url_expire_hours" class="form-control input" type="number" /></div>
-            </ServiceConfigCard>
-            <ServiceConfigCard title="阿里云 OCR" :icon="Scan" type="ocr" :draft="serviceDrafts.ocr" :status="serviceStatus('ocr')" @save="saveServiceType('ocr')" @test="testServiceType('ocr')" @remove="deleteServiceType('ocr')">
-              <div class="form-group"><label class="form-label">供应商 / 类型</label><select v-model="serviceDrafts.ocr.provider" class="form-control select"><option value="aliyun">阿里云 OCR</option><option value="mock">Mock</option></select></div>
-              <div class="form-group"><label class="form-label">配置名称</label><input v-model="serviceDrafts.ocr.name" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">AccessKey ID</label><input v-model="serviceDrafts.ocr.access_key_id" class="form-control input" type="password" /></div>
-              <div class="form-group"><label class="form-label">AccessKey Secret</label><input v-model="serviceDrafts.ocr.access_key_secret" class="form-control input" type="password" /></div>
-              <div class="form-group"><label class="form-label">Endpoint</label><input v-model="serviceDrafts.ocr.endpoint" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">超时</label><input v-model.number="serviceDrafts.ocr.timeout" class="form-control input" type="number" /></div>
-              <div class="form-group"><label class="form-label">重试</label><input v-model.number="serviceDrafts.ocr.retries" class="form-control input" type="number" /></div>
-              <div class="form-group"><label class="form-label">精度</label><select v-model="serviceDrafts.ocr.accuracy" class="form-control select"><option value="normal">普通</option><option value="high">高精度</option></select></div>
-            </ServiceConfigCard>
-            <ServiceConfigCard title="阿里云 TTS" :icon="Volume2" type="tts" :draft="serviceDrafts.tts" :status="serviceStatus('tts')" @save="saveServiceType('tts')" @test="testServiceType('tts')" @remove="deleteServiceType('tts')">
-              <div class="form-group"><label class="form-label">供应商 / 类型</label><select v-model="serviceDrafts.tts.provider" class="form-control select"><option value="aliyun">阿里云 TTS</option><option value="mock">Mock</option></select></div>
-              <div class="form-group"><label class="form-label">配置名称</label><input v-model="serviceDrafts.tts.name" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">AccessKey ID</label><input v-model="serviceDrafts.tts.access_key_id" class="form-control input" type="password" /></div>
-              <div class="form-group"><label class="form-label">AccessKey Secret</label><input v-model="serviceDrafts.tts.access_key_secret" class="form-control input" type="password" /></div>
-              <div class="form-group"><label class="form-label">AppKey</label><input v-model="serviceDrafts.tts.appkey" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">Token</label><input v-model="serviceDrafts.tts.token" class="form-control input" type="password" /></div>
-              <div class="form-group"><label class="form-label">URL</label><input v-model="serviceDrafts.tts.url" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">音色</label><input v-model="serviceDrafts.tts.voice" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">语速</label><input v-model.number="serviceDrafts.tts.speech_rate" class="form-control input" type="range" min="-500" max="500" /></div>
-              <div class="form-group"><label class="form-label">音量</label><input v-model.number="serviceDrafts.tts.volume" class="form-control input" type="range" min="0" max="100" /></div>
-            </ServiceConfigCard>
-            <ServiceConfigCard title="邮件服务" :icon="FileText" type="email" :draft="serviceDrafts.email" :status="serviceStatus('email')" @save="saveServiceType('email')" @test="testServiceType('email')" @remove="deleteServiceType('email')">
-              <div class="form-group"><label class="form-label">供应商 / 类型</label><select v-model="serviceDrafts.email.provider" class="form-control select"><option value="smtp">SMTP</option><option value="mock">Mock</option></select></div>
-              <div class="form-group"><label class="form-label">配置名称</label><input v-model="serviceDrafts.email.name" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">Host</label><input v-model="serviceDrafts.email.host" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">Port</label><input v-model.number="serviceDrafts.email.port" class="form-control input" type="number" /></div>
-              <div class="form-group"><label class="form-label">发件人</label><input v-model="serviceDrafts.email.sender" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">用户名</label><input v-model="serviceDrafts.email.username" class="form-control input" /></div>
-              <div class="form-group"><label class="form-label">密码</label><input v-model="serviceDrafts.email.password" class="form-control input" type="password" /></div>
-              <div class="form-group"><label class="form-label">SSL</label><label class="checkbox-label inline"><input v-model="serviceDrafts.email.use_ssl" type="checkbox" />启用</label></div>
-            </ServiceConfigCard>
+          <div class="aliyun-card-list">
+            <article class="aliyun-card aliyun-oss">
+              <header class="aliyun-card-head">
+                <div class="aliyun-card-title">
+                  <span class="aliyun-card-icon"><Cloud :size="20" /></span>
+                  <h2>阿里云 OSS</h2>
+                </div>
+                <span class="tag" :class="statusClass(serviceStatus('oss'))">{{ statusText(serviceStatus('oss')) }}</span>
+                <div class="aliyun-card-actions">
+                  <button class="btn btn-secondary btn-sm" @click="testServiceType('oss')"><RefreshCw :size="14" />测试</button>
+                  <button class="btn btn-primary btn-sm" @click="saveServiceType('oss')"><Save :size="14" />保存</button>
+                  <button class="btn btn-ghost btn-sm aliyun-delete" @click="deleteServiceType('oss')"><Trash2 :size="14" />删除</button>
+                </div>
+              </header>
+              <div class="aliyun-field-grid">
+                <label>供应商 / 类型<select v-model="serviceDrafts.oss.provider" class="select"><option value="aliyun">阿里云 OSS</option><option value="local">本地存储</option><option value="mock">Mock</option></select></label>
+                <label>配置名称<input v-model="serviceDrafts.oss.name" class="input" /></label>
+                <label>AccessKey ID<input v-model="serviceDrafts.oss.access_key_id" class="input" type="password" /></label>
+                <label>AccessKey Secret<input v-model="serviceDrafts.oss.access_key_secret" class="input" type="password" /></label>
+                <label>Bucket 名称<input v-model="serviceDrafts.oss.bucket" class="input" /></label>
+                <label>Endpoint<input v-model="serviceDrafts.oss.endpoint" class="input" /></label>
+                <label>Region<input v-model="serviceDrafts.oss.region" class="input" /></label>
+                <label>URL 过期<input v-model.number="serviceDrafts.oss.url_expire_hours" class="input" type="number" /></label>
+              </div>
+            </article>
+
+            <article class="aliyun-card aliyun-ocr">
+              <header class="aliyun-card-head">
+                <div class="aliyun-card-title">
+                  <span class="aliyun-card-icon"><Scan :size="20" /></span>
+                  <h2>阿里云 OCR</h2>
+                </div>
+                <span class="tag" :class="statusClass(serviceStatus('ocr'))">{{ statusText(serviceStatus('ocr')) }}</span>
+                <div class="aliyun-card-actions">
+                  <button class="btn btn-secondary btn-sm" @click="testServiceType('ocr')"><RefreshCw :size="14" />测试</button>
+                  <button class="btn btn-primary btn-sm" @click="saveServiceType('ocr')"><Save :size="14" />保存</button>
+                  <button class="btn btn-ghost btn-sm aliyun-delete" @click="deleteServiceType('ocr')"><Trash2 :size="14" />删除</button>
+                </div>
+              </header>
+              <div class="aliyun-field-grid">
+                <label>供应商 / 类型<select v-model="serviceDrafts.ocr.provider" class="select"><option value="aliyun">阿里云 OCR</option><option value="mock">Mock</option></select></label>
+                <label>配置名称<input v-model="serviceDrafts.ocr.name" class="input" /></label>
+                <label>AccessKey ID<input v-model="serviceDrafts.ocr.access_key_id" class="input" type="password" /></label>
+                <label>AccessKey Secret<input v-model="serviceDrafts.ocr.access_key_secret" class="input" type="password" /></label>
+                <label>Endpoint<input v-model="serviceDrafts.ocr.endpoint" class="input" /></label>
+                <label>超时<input v-model.number="serviceDrafts.ocr.timeout" class="input" type="number" /></label>
+                <label>重试<input v-model.number="serviceDrafts.ocr.retries" class="input" type="number" /></label>
+                <label>精度<select v-model="serviceDrafts.ocr.accuracy" class="select"><option value="normal">普通</option><option value="high">高精度</option></select></label>
+              </div>
+            </article>
+
+            <article class="aliyun-card aliyun-tts">
+              <header class="aliyun-card-head">
+                <div class="aliyun-card-title">
+                  <span class="aliyun-card-icon"><Volume2 :size="20" /></span>
+                  <h2>阿里云 TTS</h2>
+                </div>
+                <span class="tag" :class="statusClass(serviceStatus('tts'))">{{ statusText(serviceStatus('tts')) }}</span>
+                <div class="aliyun-card-actions">
+                  <button class="btn btn-secondary btn-sm" @click="testServiceType('tts')"><RefreshCw :size="14" />测试</button>
+                  <button class="btn btn-primary btn-sm" @click="saveServiceType('tts')"><Save :size="14" />保存</button>
+                  <button class="btn btn-ghost btn-sm aliyun-delete" @click="deleteServiceType('tts')"><Trash2 :size="14" />删除</button>
+                </div>
+              </header>
+              <div class="aliyun-field-grid">
+                <label>供应商 / 类型<select v-model="serviceDrafts.tts.provider" class="select"><option value="aliyun">阿里云 TTS</option><option value="mock">Mock</option></select></label>
+                <label>配置名称<input v-model="serviceDrafts.tts.name" class="input" /></label>
+                <label>AccessKey ID<input v-model="serviceDrafts.tts.access_key_id" class="input" type="password" /></label>
+                <label>AccessKey Secret<input v-model="serviceDrafts.tts.access_key_secret" class="input" type="password" /></label>
+                <label>AppKey<input v-model="serviceDrafts.tts.appkey" class="input" /></label>
+                <label>Token<input v-model="serviceDrafts.tts.token" class="input" type="password" /></label>
+                <label>URL<input v-model="serviceDrafts.tts.url" class="input" /></label>
+                <label>音色<input v-model="serviceDrafts.tts.voice" class="input" /></label>
+                <label>语速<input v-model.number="serviceDrafts.tts.speech_rate" class="input" type="range" min="-500" max="500" /></label>
+                <label>音量<input v-model.number="serviceDrafts.tts.volume" class="input" type="range" min="0" max="100" /></label>
+              </div>
+            </article>
+
+            <article class="aliyun-card aliyun-email">
+              <header class="aliyun-card-head">
+                <div class="aliyun-card-title">
+                  <span class="aliyun-card-icon"><FileText :size="20" /></span>
+                  <h2>邮件服务</h2>
+                </div>
+                <span class="tag" :class="statusClass(serviceStatus('email'))">{{ statusText(serviceStatus('email')) }}</span>
+                <div class="aliyun-card-actions">
+                  <button class="btn btn-secondary btn-sm" @click="testServiceType('email')"><RefreshCw :size="14" />测试</button>
+                  <button class="btn btn-primary btn-sm" @click="saveServiceType('email')"><Save :size="14" />保存</button>
+                  <button class="btn btn-ghost btn-sm aliyun-delete" @click="deleteServiceType('email')"><Trash2 :size="14" />删除</button>
+                </div>
+              </header>
+              <div class="aliyun-field-grid">
+                <label>供应商 / 类型<select v-model="serviceDrafts.email.provider" class="select"><option value="smtp">SMTP</option><option value="mock">Mock</option></select></label>
+                <label>配置名称<input v-model="serviceDrafts.email.name" class="input" /></label>
+                <label>Host<input v-model="serviceDrafts.email.host" class="input" /></label>
+                <label>Port<input v-model.number="serviceDrafts.email.port" class="input" type="number" /></label>
+                <label>发件人<input v-model="serviceDrafts.email.sender" class="input" /></label>
+                <label>用户名<input v-model="serviceDrafts.email.username" class="input" /></label>
+                <label>密码<input v-model="serviceDrafts.email.password" class="input" type="password" /></label>
+                <label>SSL<span class="aliyun-check"><input v-model="serviceDrafts.email.use_ssl" type="checkbox" />启用</span></label>
+              </div>
+            </article>
           </div>
         </section>
 
@@ -975,27 +1034,6 @@ const MetricCard = defineComponent({
 const TrendingUpIcon = defineComponent(() => () => h("span", { class: "trend-dot" }));
 const EmptyState = defineComponent({ props: { text: { type: String, required: true } }, setup(p) { return () => h("div", { class: "empty" }, [h(Inbox, { size: 28 }), h("span", p.text)]); } });
 const InfoRow = defineComponent({ props: { label: { type: String, required: true }, value: { type: String, required: true } }, setup(p) { return () => h("div", { class: "info-row" }, [h("span", p.label), h("strong", p.value)]); } });
-const ServiceConfigCard = defineComponent({
-  props: { title: { type: String, required: true }, icon: { type: Object, required: true }, type: { type: String, required: true }, draft: { type: Object, required: true }, status: { type: String, required: true } },
-  emits: ["save", "test", "remove"],
-  setup(p, { slots, emit: update }) {
-    return () => h("article", { class: ["service-config-card", `service-${p.type}`] }, [
-      h("div", { class: "service-card-header" }, [
-        h("div", { class: "service-card-title" }, [
-          h("span", { class: "service-card-icon" }, [h(p.icon as any, { size: 20 })]),
-          h("h2", p.title),
-          h("span", { class: ["tag", statusClass(p.status)] }, statusText(p.status))
-        ]),
-        h("div", { class: "service-card-actions" }, [
-          h("button", { class: "btn btn-secondary btn-sm", onClick: () => update("test") }, [h(RefreshCw, { size: 14 }), "测试"]),
-          h("button", { class: "btn btn-primary btn-sm", onClick: () => update("save") }, [h(Save, { size: 14 }), "保存"]),
-          h("button", { class: "btn btn-ghost btn-sm service-delete", onClick: () => update("remove") }, [h(Trash2, { size: 14 }), "删除"])
-        ])
-      ]),
-      h("div", { class: "service-card-body" }, slots.default?.())
-    ]);
-  }
-});
 </script>
 
 <style scoped>
@@ -1024,9 +1062,9 @@ const ServiceConfigCard = defineComponent({
 .avatar.mini { width: 24px; height: 24px; font-size: 12px; margin-right: 6px; }
 .user-menu { position: relative; }
 .user-trigger { border: 0; background: transparent; color: var(--color-text-body); }
-.dropdown { position: absolute; right: 0; top: 40px; z-index: var(--z-dropdown); min-width: 150px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 6px; }
-.dropdown button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 8px; background: transparent; padding: 8px; color: var(--color-text-body); }
-.dropdown button:hover { background: var(--color-bg-muted); }
+.admin-account-menu { position: absolute; right: 0; top: 40px; z-index: var(--z-dropdown); min-width: 150px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 6px; }
+.admin-account-menu button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 8px; background: transparent; padding: 8px; color: var(--color-text-body); }
+.admin-account-menu button:hover { background: var(--color-bg-muted); }
 .admin-sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: calc(var(--z-sticky) + 1); width: 240px; border-right: 1px solid var(--color-border-default); background: var(--color-bg-surface); transition: width 250ms var(--ease-out); display: flex; flex-direction: column; }
 .collapsed .admin-sidebar { width: 64px; }
 .sidebar-header { height: 60px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; padding: 0 20px; }
@@ -1063,7 +1101,7 @@ const ServiceConfigCard = defineComponent({
 .page-header { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .page-header .breadcrumb { height: auto; display: flex; align-items: center; justify-content: flex-start; gap: 6px; background: transparent; color: var(--color-text-secondary); padding: 0; }
 .page-header .breadcrumb span:last-child { color: var(--color-text-primary); font-weight: 600; }
-.welcome-card, .panel-card, .filter-card, .table-card, .backup-summary, .danger-zone, .service-config-card { background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.welcome-card, .panel-card, .filter-card, .table-card, .backup-summary, .danger-zone { background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
 .welcome-card { min-height: 96px; display: flex; align-items: center; gap: 20px; padding: 24px 32px; }
 .welcome-card h1 { margin: 0; color: var(--color-text-primary); font-size: 20px; font-weight: 600; }
 .welcome-card p { margin: 6px 0 0; color: var(--color-text-muted); font-size: 13px; }
@@ -1087,8 +1125,8 @@ const ServiceConfigCard = defineComponent({
 .metric-card.danger::after { display: none; }
 .trend-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .content-row { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
-.left-col, .right-col, .service-config-stack { display: grid; gap: 16px; }
-.panel-card, .service-config-card { padding: 20px; }
+.left-col, .right-col { display: grid; gap: 16px; }
+.panel-card { padding: 20px; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .panel-head h2 { margin: 0; color: var(--color-text-primary); font-size: var(--text-h4); }
 .panel-head span { color: var(--color-text-muted); font-size: var(--text-caption); }
@@ -1193,29 +1231,28 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .purpose-card { display: grid; gap: 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 14px; }
 .purpose-card div { display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); }
 .card-tools { display: flex; align-items: center; gap: 8px; }
-.service-page { gap: 24px; }
-.service-page .page-header { width: 100%; }
-.service-config-stack { width: 100%; max-width: none; display: grid; grid-template-columns: repeat(2, minmax(460px, 1fr)); align-items: start; gap: 24px; }
-.service-config-card { overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); box-shadow: var(--shadow-sm); padding: 0; transition: border-color 200ms var(--ease-out), box-shadow 200ms var(--ease-out), transform 200ms var(--ease-out); }
-.service-config-card:hover { border-color: var(--color-primary-200); box-shadow: var(--shadow-md); transform: translateY(-2px); }
-.service-card-header { display: flex; align-items: center; gap: 18px; min-height: 76px; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 16px 18px; }
-.service-card-title { min-width: 0; flex: 1; display: flex; align-items: center; gap: 12px; }
-.service-card-icon { display: inline-flex; width: 42px; height: 42px; flex: 0 0 42px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-600); box-shadow: inset 0 0 0 1px rgba(37, 99, 235, .08); }
-.service-oss .service-card-icon { background: var(--color-info-50); color: var(--color-info-700); }
-.service-ocr .service-card-icon { background: var(--color-success-50); color: var(--color-success-700); }
-.service-tts .service-card-icon { background: var(--color-ai-light); color: #6D28D9; }
-.service-email .service-card-icon { background: var(--color-warning-50); color: var(--color-warning-700); }
-.service-card-title h2 { min-width: 0; margin: 0; overflow: hidden; color: var(--color-text-primary); font-size: 16px; font-weight: 600; line-height: 24px; text-overflow: ellipsis; white-space: nowrap; }
-.service-card-title .tag { margin-left: 4px; }
-.service-card-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; }
-.service-card-actions .btn-sm { min-height: 32px; padding: 0 11px; }
-.service-delete { color: var(--color-danger-700); }
-.service-delete:hover { background: var(--color-danger-50); color: var(--color-danger-700); }
-.service-card-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; background: var(--color-bg-muted); padding: 18px; }
-.service-card-body .form-group { gap: 8px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-surface); padding: 12px; }
-.service-card-body .form-label { color: var(--color-text-secondary); font-size: 12px; }
-.service-card-body .form-control { height: 38px; border-color: var(--color-border-default); border-radius: var(--radius-md); background: white; }
-.service-card-body .form-control[type="range"] { height: 38px; background: transparent; }
+.aliyun-page { gap: 28px; }
+.aliyun-page-head { max-width: 1160px; }
+.aliyun-card-list { width: 100%; max-width: 1160px; display: grid; gap: 28px; }
+.aliyun-card { overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); box-shadow: var(--shadow-sm); }
+.aliyun-card-head { display: flex; align-items: center; gap: 22px; min-height: 82px; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 18px 26px; white-space: nowrap; }
+.aliyun-card-title { display: inline-flex; flex: 0 0 270px; min-width: 0; align-items: center; gap: 14px; }
+.aliyun-card-title h2 { overflow: hidden; text-overflow: ellipsis; margin: 0; color: var(--color-text-primary); font-size: 16px; font-weight: 600; line-height: 24px; }
+.aliyun-card-head > .tag { flex: 0 0 auto; min-width: 58px; justify-content: center; }
+.aliyun-card-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 10px; margin-left: auto; }
+.aliyun-card-actions .btn-sm { min-height: 34px; min-width: 74px; justify-content: center; padding: 0 12px; }
+.aliyun-card-icon { display: inline-flex; flex: 0 0 44px; width: 44px; height: 44px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-600); box-shadow: inset 0 0 0 1px rgba(37,99,235,.08); }
+.aliyun-oss .aliyun-card-icon { background: var(--color-info-50); color: var(--color-info-700); }
+.aliyun-ocr .aliyun-card-icon { background: var(--color-success-50); color: var(--color-success-700); }
+.aliyun-tts .aliyun-card-icon { background: var(--color-ai-light); color: #6D28D9; }
+.aliyun-email .aliyun-card-icon { background: var(--color-warning-50); color: var(--color-warning-700); }
+.aliyun-delete { color: var(--color-danger-700); }
+.aliyun-delete:hover { background: var(--color-danger-50); color: var(--color-danger-700); }
+.aliyun-field-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; background: var(--color-bg-muted); padding: 26px; }
+.aliyun-field-grid label { display: grid; gap: 9px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-secondary); padding: 14px; font-size: 12px; font-weight: 500; }
+.aliyun-field-grid .input, .aliyun-field-grid .select { height: 38px; border-color: var(--color-border-default); background: white; }
+.aliyun-field-grid input[type="range"] { background: transparent; }
+.aliyun-check { min-height: 38px; display: inline-flex; align-items: center; gap: 8px; color: var(--color-text-body); font-size: var(--text-body-sm); }
 .settings-list { padding: 12px 32px; }
 .setting-row { display: grid; grid-template-columns: 200px minmax(260px, 1fr) 140px; align-items: center; gap: 16px; border-bottom: 1px dashed var(--color-border-default); padding: 20px 0; }
 .setting-row > div { display: grid; gap: 4px; }
