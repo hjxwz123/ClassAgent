@@ -265,8 +265,9 @@
           <input v-model="serviceDrafts.tts.name" class="input" placeholder="名称" />
         </div>
         <div v-if="serviceDrafts.tts.provider === 'aliyun'" class="config-fields">
+          <input v-model="serviceDrafts.tts.access_key_id" class="input" placeholder="AccessKey ID" />
+          <input v-model="serviceDrafts.tts.access_key_secret" class="input" type="password" placeholder="AccessKey Secret" />
           <input v-model="serviceDrafts.tts.appkey" class="input" placeholder="AppKey" />
-          <input v-model="serviceDrafts.tts.token" class="input" type="password" placeholder="Token" />
           <input v-model="serviceDrafts.tts.voice" class="input" placeholder="音色" />
           <input v-model.number="serviceDrafts.tts.speech_rate" class="input" type="number" placeholder="语速" />
           <input v-model.number="serviceDrafts.tts.volume" class="input" type="number" placeholder="音量" />
@@ -412,7 +413,7 @@ const serviceDrafts = reactive({
   oss: { config_id: null as number | null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "" },
   ocr: { config_id: null as number | null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou" },
   doc_parser: { config_id: null as number | null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
-  tts: { config_id: null as number | null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", voice: "", speech_rate: 0, volume: 50 },
+  tts: { config_id: null as number | null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", voice: "", speech_rate: 0, volume: 50 },
   email: { config_id: null as number | null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false }
 });
 const settingKey = ref("");
@@ -447,7 +448,7 @@ const serviceRequiredKeys: Record<string, string[]> = {
   oss: ["access_key_id", "access_key_secret", "bucket"],
   ocr: ["access_key_id", "access_key_secret"],
   doc_parser: ["access_key_id", "access_key_secret"],
-  tts: ["appkey", "token", "voice"],
+  tts: ["access_key_id", "access_key_secret", "appkey", "voice"],
   email: ["host", "port", "sender"]
 };
 const settingDescriptions: Record<string, string> = {
@@ -651,7 +652,7 @@ function serviceConfigPayload(type: ServiceKey) {
   }
   if (type === "tts") {
     const item = serviceDrafts.tts;
-    return { appkey: item.appkey, token: item.token, voice: item.voice, speech_rate: item.speech_rate, volume: item.volume };
+    return { access_key_id: item.access_key_id, access_key_secret: item.access_key_secret, appkey: item.appkey, voice: item.voice, speech_rate: item.speech_rate, volume: item.volume };
   }
   const item = serviceDrafts.email;
   return { host: item.host, port: item.port, sender: item.sender, username: item.username, password: item.password, use_ssl: item.use_ssl, use_tls: item.use_tls };
@@ -701,7 +702,7 @@ function resetServiceDraft(type: ServiceKey) {
   if (type === "oss") Object.assign(serviceDrafts.oss, { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "" });
   if (type === "ocr") Object.assign(serviceDrafts.ocr, { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou" });
   if (type === "doc_parser") Object.assign(serviceDrafts.doc_parser, { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false });
-  if (type === "tts") Object.assign(serviceDrafts.tts, { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", voice: "", speech_rate: 0, volume: 50 });
+  if (type === "tts") Object.assign(serviceDrafts.tts, { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", voice: "", speech_rate: 0, volume: 50 });
   if (type === "email") Object.assign(serviceDrafts.email, { config_id: null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false });
 }
 async function loadSettings() { settings.value = (await run(() => api.get<any[]>("/admin/system-settings"))) || []; }

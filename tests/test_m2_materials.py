@@ -112,6 +112,7 @@ def test_doc_parser_layouts_group_into_ordered_pages():
 
 def test_aliyun_tts_uses_official_nls_sdk(monkeypatch, tmp_path: Path):
     calls: dict[str, object] = {}
+    tts_service._token_cache.clear()
 
     class FakeSynthesizer:
         def __init__(self, **kwargs):
@@ -124,6 +125,11 @@ def test_aliyun_tts_uses_official_nls_sdk(monkeypatch, tmp_path: Path):
 
     monkeypatch.setitem(sys.modules, "nls", SimpleNamespace(NlsSpeechSynthesizer=FakeSynthesizer))
     monkeypatch.setattr(
+        tts_service,
+        "_create_token",
+        lambda config: (calls.update({"token_config": config}) or ("generated-token", 4_102_444_800)),
+    )
+    monkeypatch.setattr(
         "app.services.tts.storage_service.save_bytes",
         lambda content, *, folder, filename, db=None: (calls.update({"content": content, "filename": filename}) or "generated/audio/fake.wav"),
     )
@@ -132,11 +138,12 @@ def test_aliyun_tts_uses_official_nls_sdk(monkeypatch, tmp_path: Path):
     url, duration = tts_service._synthesize_aliyun(
         "连接测试",
         None,
-        {"appkey": "app", "token": "token", "voice": "xiaoyun", "format": "wav"},
+        {"access_key_id": "ak", "access_key_secret": "secret", "appkey": "app", "voice": "xiaoyun", "format": "wav"},
     )
 
+    assert calls["token_config"]["access_key_id"] == "ak"
     assert calls["init"]["appkey"] == "app"
-    assert calls["init"]["token"] == "token"
+    assert calls["init"]["token"] == "generated-token"
     assert calls["init"]["url"] == "wss://nls-gateway.cn-shanghai.aliyuncs.com/ws/v1"
     assert calls["start"]["voice"] == "xiaoyun"
     assert calls["content"] == b"fake-audio"

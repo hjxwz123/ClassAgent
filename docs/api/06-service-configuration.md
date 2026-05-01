@@ -278,8 +278,9 @@ OCR 使用阿里云官方 SDK，管理员页面不显示访问地址字段，后
   "provider": "aliyun",
   "name": "aliyun-tts",
   "config": {
+    "access_key_id": "xxx",
+    "access_key_secret": "xxx",
     "appkey": "xxx",
-    "token": "xxx",
     "voice": "xiaoyun",
     "format": "wav",
     "sample_rate": 16000,
@@ -290,7 +291,7 @@ OCR 使用阿里云官方 SDK，管理员页面不显示访问地址字段，后
 }
 ```
 
-TTS 使用阿里云智能语音交互 Python SDK `nls.NlsSpeechSynthesizer`。管理员页面不显示访问地址字段，后端使用官方默认 WebSocket 入口。
+TTS 使用阿里云智能语音交互 Python SDK `nls.NlsSpeechSynthesizer`。管理员页面不填写 Token 和访问地址；后端用 AccessKey ID / Secret 调用 `CreateToken` 自动生成临时 Token，再使用官方默认 WebSocket 入口合成语音。
 
 ### 5.5 邮件配置示例
 

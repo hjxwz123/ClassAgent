@@ -23,6 +23,7 @@ dependencies = [
   "alibabacloud-ocr-api20210707>=3.1,<4.0",
   "alibabacloud-docmind-api20220711>=1.4,<2.0",
   "nls @ git+https://github.com/aliyun/alibabacloud-nls-python-sdk.git@177972b1f02fcb1f2b229e77320a7286d21785f3",
+  "aliyun-python-sdk-core>=2.15,<3.0",
   "alibabacloud-tea-openapi>=0.3,<1.0",
   "alibabacloud-tea-util>=0.3,<1.0",
   "bcrypt>=4.0,<4.1",
