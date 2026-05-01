@@ -47,7 +47,7 @@
     </header>
 
     <main class="admin-main">
-      <div class="breadcrumb">
+      <div v-if="active !== 'adminServices' && active !== 'adminSystem'" class="breadcrumb">
         <div>
           <span>系统管理</span><ChevronRight :size="14" /><strong>{{ currentTitle }}</strong>
         </div>
@@ -238,7 +238,14 @@
           </section>
         </section>
 
-        <section v-if="active === 'adminServices'" class="admin-page">
+        <section v-if="active === 'adminServices'" class="admin-page page-view">
+          <div class="page-header">
+            <div class="breadcrumb"><span>系统管理</span><ChevronRight :size="14" /><span>阿里云服务</span></div>
+            <div class="header-actions">
+              <button class="btn btn-secondary" @click="testAllServices"><RefreshCw :size="14" />测试全部</button>
+              <button class="btn btn-primary" @click="saveAllServices"><Save :size="14" />保存配置</button>
+            </div>
+          </div>
           <div class="config-content service-config-stack">
             <ServiceConfigCard title="阿里云 OSS" :icon="Cloud" type="oss" :draft="serviceDrafts.oss" :status="serviceStatus('oss')" @save="saveServiceType('oss')" @test="testServiceType('oss')" @remove="deleteServiceType('oss')">
               <div class="form-group"><label class="form-label">供应商 / 类型</label><select v-model="serviceDrafts.oss.provider" class="form-control select"><option value="aliyun">阿里云 OSS</option><option value="local">本地存储</option><option value="mock">Mock</option></select></div>
@@ -285,25 +292,34 @@
           </div>
         </section>
 
-        <section v-if="active === 'adminSystem'" class="admin-page config-layout">
-          <aside class="config-nav"><button v-for="item in settingCategories" :key="item.key" class="config-nav-item" :class="{ active: settingTab === item.key }" @click="settingTab = item.key">{{ item.label }}</button></aside>
-          <section class="config-content">
-            <div v-if="changedSettings.length" class="alert alert-warning"><AlertTriangle :size="16" />{{ changedSettings.length }} 处未保存<button class="link-btn" @click="saveSettings">保存</button><button class="link-btn" @click="loadSettings">放弃</button></div>
-            <article class="config-card settings-card">
-              <div class="card-body">
-                <div v-for="item in activeSettingRows" :key="item.key" class="param-row">
-                  <div class="param-info">
-                    <div class="param-title">{{ item.label }}</div>
-                    <div class="param-desc">{{ item.desc }}</div>
+        <section v-if="active === 'adminSystem'" class="admin-page page-view">
+          <div class="page-header">
+            <div class="breadcrumb"><span>系统管理</span><ChevronRight :size="14" /><span>系统参数</span></div>
+            <div class="header-actions">
+              <button class="btn btn-secondary" @click="restoreSettings">恢复默认</button>
+              <button class="btn btn-primary" @click="saveSettings"><Save :size="14" />保存修改</button>
+            </div>
+          </div>
+          <div class="config-layout">
+            <aside class="config-nav"><button v-for="item in settingCategories" :key="item.key" class="config-nav-item" :class="{ active: settingTab === item.key }" @click="settingTab = item.key">{{ item.label }}</button></aside>
+            <section class="config-content">
+              <div v-if="changedSettings.length" class="alert alert-warning"><AlertTriangle :size="16" />{{ changedSettings.length }} 处未保存<button class="link-btn" @click="saveSettings">保存</button><button class="link-btn" @click="loadSettings">放弃</button></div>
+              <article class="card settings-card">
+                <div class="card-body">
+                  <div v-for="item in activeSettingRows" :key="item.key" class="param-row">
+                    <div class="param-info">
+                      <div class="param-title">{{ item.label }}</div>
+                      <div class="param-desc">{{ item.desc }}</div>
+                    </div>
+                    <div class="param-control">
+                      <component :is="settingControl(item)" :item="item" :drafts="settingDrafts" />
+                    </div>
+                    <div class="param-current">当前值：{{ formatSettingValue(settingDrafts[item.key]) }}</div>
                   </div>
-                  <div class="param-control">
-                    <component :is="settingControl(item)" :item="item" :drafts="settingDrafts" />
-                  </div>
-                  <div class="param-current">当前值：{{ formatSettingValue(settingDrafts[item.key]) }}</div>
                 </div>
-              </div>
-            </article>
-          </section>
+              </article>
+            </section>
+          </div>
         </section>
 
         <section v-if="active === 'adminMonitor'" class="admin-page">
@@ -963,7 +979,7 @@ const ServiceConfigCard = defineComponent({
   props: { title: { type: String, required: true }, icon: { type: Object, required: true }, type: { type: String, required: true }, draft: { type: Object, required: true }, status: { type: String, required: true } },
   emits: ["save", "test", "remove"],
   setup(p, { slots, emit: update }) {
-    return () => h("article", { class: "config-card service-config-card" }, [
+    return () => h("article", { class: "card service-config-card" }, [
       h("div", { class: "card-header" }, [
         h("div", { class: "card-title" }, [
           h(p.icon as any, { size: 20 }),
@@ -1043,6 +1059,10 @@ const ServiceConfigCard = defineComponent({
 .page-actions { display: flex; align-items: center; gap: var(--space-2); }
 .admin-content { padding: 0 32px 48px; }
 .admin-page { display: grid; gap: 24px; animation: fade-slide-up var(--duration-base) var(--ease-out); }
+.page-view { align-content: start; }
+.page-header { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.page-header .breadcrumb { height: auto; display: flex; align-items: center; justify-content: flex-start; gap: 6px; background: transparent; color: var(--color-text-secondary); padding: 0; }
+.page-header .breadcrumb span:last-child { color: var(--color-text-primary); font-weight: 600; }
 .welcome-card, .panel-card, .filter-card, .table-card, .backup-summary, .danger-zone, .service-config-card { background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
 .welcome-card { min-height: 96px; display: flex; align-items: center; gap: 20px; padding: 24px 32px; }
 .welcome-card h1 { margin: 0; color: var(--color-text-primary); font-size: 20px; font-weight: 600; }
@@ -1181,6 +1201,7 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .setting-row > div { display: grid; gap: 4px; }
 .setting-row strong { color: var(--color-text-primary); }
 .setting-row span, .setting-row small { color: var(--color-text-muted); font-size: var(--text-caption); }
+.settings-card { padding: 0; overflow: hidden; }
 .settings-card .card-body { padding: 12px 32px; }
 .param-row { display: grid; grid-template-columns: 200px minmax(260px, 1fr) 140px; align-items: center; gap: 16px; border-bottom: 1px dashed var(--color-border-default); padding: 20px 0; }
 .param-row:last-child { border-bottom: 0; }
