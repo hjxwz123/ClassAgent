@@ -10,50 +10,54 @@
         <button class="btn btn-sm" :class="mode === 'register' ? 'btn-primary' : 'btn-ghost'" @click="setMode('register')">注册</button>
         <button class="btn btn-sm" :class="mode === 'reset' ? 'btn-primary' : 'btn-ghost'" @click="setMode('reset')">找回</button>
       </div>
-      <p v-if="formError" class="form-error"><AlertCircle :size="15" />{{ formError }}</p>
+      <Transition name="fade-slide">
+        <p v-if="formError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ formError }}</p>
+      </Transition>
 
-      <form v-if="mode === 'login'" @submit.prevent="login">
-        <label class="label">邮箱</label>
-        <input v-model="loginForm.email" class="input" type="email" required />
-        <label class="label">密码</label>
-        <input v-model="loginForm.password" class="input" type="password" required />
-        <button class="btn btn-primary wide" :disabled="loading"><LogIn :size="16" />登录</button>
-      </form>
+      <Transition name="page-switch" mode="out-in">
+        <form v-if="mode === 'login'" key="login" @submit.prevent="login">
+          <label class="label">邮箱</label>
+          <input v-model="loginForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
+          <label class="label">密码</label>
+          <input v-model="loginForm.password" class="input" type="password" required :aria-invalid="formError.includes('密码')" />
+          <button class="btn btn-primary wide" :data-loading="loading" :disabled="loading"><LogIn :size="16" />登录</button>
+        </form>
 
-      <form v-else-if="mode === 'register'" @submit.prevent="register">
-        <label class="label">邮箱</label>
-        <input v-model="registerForm.email" class="input" type="email" required />
-        <label class="label">昵称</label>
-        <input v-model="registerForm.nickname" class="input" required />
-        <div class="form-row">
-          <div>
-            <label class="label">角色</label>
-            <select v-model="registerForm.role" class="select">
-              <option value="student">学生</option>
-              <option value="teacher">教师</option>
-            </select>
+        <form v-else-if="mode === 'register'" key="register" @submit.prevent="register">
+          <label class="label">邮箱</label>
+          <input v-model="registerForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
+          <label class="label">昵称</label>
+          <input v-model="registerForm.nickname" class="input" required :aria-invalid="formError.includes('昵称')" />
+          <div class="form-row">
+            <div>
+              <label class="label">角色</label>
+              <select v-model="registerForm.role" class="select">
+                <option value="student">学生</option>
+                <option value="teacher">教师</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">{{ registerForm.role === 'student' ? '学号' : '工号' }}</label>
+              <input v-model="identityNo" class="input" required :aria-invalid="formError.includes('学号') || formError.includes('工号')" />
+            </div>
           </div>
-          <div>
-            <label class="label">{{ registerForm.role === 'student' ? '学号' : '工号' }}</label>
-            <input v-model="identityNo" class="input" required />
-          </div>
-        </div>
-        <label class="label">密码</label>
-        <input v-model="registerForm.password" class="input" type="password" required />
-        <button class="btn btn-primary wide" :disabled="loading"><UserPlus :size="16" />注册</button>
-      </form>
+          <label class="label">密码</label>
+          <input v-model="registerForm.password" class="input" type="password" required :aria-invalid="formError.includes('密码')" />
+          <button class="btn btn-primary wide" :data-loading="loading" :disabled="loading"><UserPlus :size="16" />注册</button>
+        </form>
 
-      <form v-else @submit.prevent="resetPassword">
-        <label class="label">邮箱</label>
-        <input v-model="resetForm.email" class="input" type="email" required />
-        <div class="inline">
-          <input v-model="resetForm.code" class="input" placeholder="验证码" />
-          <button type="button" class="btn btn-secondary" :disabled="loading" @click="sendCode">发送</button>
-        </div>
-        <label class="label">新密码</label>
-        <input v-model="resetForm.new_password" class="input" type="password" required />
-        <button class="btn btn-primary wide" :disabled="loading"><KeyRound :size="16" />重置</button>
-      </form>
+        <form v-else key="reset" @submit.prevent="resetPassword">
+          <label class="label">邮箱</label>
+          <input v-model="resetForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
+          <div class="inline">
+            <input v-model="resetForm.code" class="input" placeholder="验证码" :aria-invalid="formError.includes('验证码')" />
+            <button type="button" class="btn btn-secondary" :data-loading="loading" :disabled="loading" @click="sendCode">发送</button>
+          </div>
+          <label class="label">新密码</label>
+          <input v-model="resetForm.new_password" class="input" type="password" required :aria-invalid="formError.includes('密码')" />
+          <button class="btn btn-primary wide" :data-loading="loading" :disabled="loading"><KeyRound :size="16" />重置</button>
+        </form>
+      </Transition>
     </section>
   </main>
 </template>

@@ -1,23 +1,77 @@
 <template>
   <teleport to="body">
-    <div v-if="open" class="overlay" @click.self="$emit('close')">
-      <section class="modal" role="dialog" aria-modal="true">
+    <Transition name="modal-pop">
+      <div v-if="open" class="overlay modal-mask" @click.self="emit('close')">
+      <section ref="dialogRef" class="modal" role="dialog" aria-modal="true" tabindex="-1" @keydown="trapFocus">
         <header>
           <h2>{{ title }}</h2>
-          <button class="btn btn-ghost icon-btn" aria-label="关闭" @click="$emit('close')"><X :size="18" /></button>
+          <button class="btn btn-ghost icon-btn" aria-label="关闭" @click="emit('close')"><X :size="18" /></button>
         </header>
         <main><slot /></main>
         <footer v-if="$slots.footer"><slot name="footer" /></footer>
       </section>
-    </div>
+      </div>
+    </Transition>
   </teleport>
 </template>
 
 <script setup lang="ts">
+import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { X } from "lucide-vue-next";
 
-defineProps<{ open: boolean; title: string }>();
-defineEmits<{ close: [] }>();
+const props = defineProps<{ open: boolean; title: string }>();
+const emit = defineEmits<{ close: [] }>();
+const dialogRef = ref<HTMLElement | null>(null);
+let previousOverflow = "";
+
+function focusableItems() {
+  return Array.from(dialogRef.value?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), textarea:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])') || []);
+}
+function trapFocus(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    emit("close");
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const items = focusableItems();
+  if (!items.length) {
+    event.preventDefault();
+    return;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape" && props.open) emit("close");
+}
+
+watch(
+  () => props.open,
+  async (open) => {
+    if (open) {
+      previousOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      document.addEventListener("keydown", onDocumentKeydown);
+      await nextTick();
+      (focusableItems()[0] || dialogRef.value)?.focus();
+    } else {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onDocumentKeydown);
+    }
+  },
+  { immediate: true }
+);
+onBeforeUnmount(() => {
+  document.body.style.overflow = previousOverflow;
+  document.removeEventListener("keydown", onDocumentKeydown);
+});
 </script>
 
 <style scoped>

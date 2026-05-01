@@ -44,7 +44,6 @@ export const useSessionStore = defineStore("session", {
     pushToast(type: NoticeType, text: string) {
       const id = Date.now() + Math.random();
       this.toasts.push({ id, type, text });
-      if (type !== "error") window.setTimeout(() => this.closeToast(id), 4000);
     },
     closeToast(id: number) {
       this.toasts = this.toasts.filter((item) => item.id !== id);
