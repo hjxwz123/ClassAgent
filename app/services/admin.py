@@ -904,7 +904,8 @@ def get_monitoring_timeseries(db: Session) -> dict:
     return {"points": points}
 
 
-def get_admin_dashboard(db: Session) -> dict:
+def get_admin_dashboard(db: Session, activity_days: int = 30) -> dict:
+    activity_days = 90 if activity_days == 90 else 7 if activity_days == 7 else 30
     day_start = _day_start()
     users_total = db.scalar(select(func.count(User.id)).where(User.deleted_at.is_(None))) or 0
     active_courses = db.scalar(select(func.count(Course.id)).where(Course.deleted_at.is_(None), Course.status == CourseStatus.ACTIVE.value)) or 0
@@ -913,7 +914,7 @@ def get_admin_dashboard(db: Session) -> dict:
 
     activity = []
     now = datetime.now(UTC)
-    for offset in range(29, -1, -1):
+    for offset in range(activity_days - 1, -1, -1):
         start = (now - timedelta(days=offset)).replace(hour=0, minute=0, second=0, microsecond=0)
         end = start + timedelta(days=1)
         active_users = db.scalar(select(func.count(distinct(LoginLog.user_id))).where(LoginLog.created_at >= start, LoginLog.created_at < end)) or 0

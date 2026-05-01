@@ -139,6 +139,10 @@ def test_teacher_analytics_and_admin_operations(client):
     admin_login = login_user(client, email="admin@classagent.com", password="Admin123456")
     admin_headers = auth_headers(admin_login["access_token"])
 
+    dashboard_resp = client.get("/api/v1/admin/dashboard", params={"activity_days": 7}, headers=admin_headers)
+    assert dashboard_resp.status_code == 200, dashboard_resp.text
+    assert len(dashboard_resp.json()["data"]["activity_trend"]) == 7
+
     analytics_resp = client.get(f"/api/v1/analytics/courses/{course['id']}", headers=teacher_headers)
     assert analytics_resp.status_code == 200, analytics_resp.text
     analytics = analytics_resp.json()["data"]
