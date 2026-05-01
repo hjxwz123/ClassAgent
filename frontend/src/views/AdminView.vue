@@ -815,7 +815,9 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 const Segmented = defineComponent({
   props: { modelValue: { type: String, required: true }, items: { type: Array as PropType<string[]>, required: true } },
   emits: ["update:modelValue"],
-  setup(p, { emit: update }) { return () => h("div", { class: "segmented" }, p.items.map((item) => h("button", { class: { active: p.modelValue === item }, onClick: () => update("update:modelValue", item) }, item))); }
+  setup(p, { emit: update }) {
+    return () => h("div", { class: "segmented-control" }, p.items.map((item) => h("button", { type: "button", class: ["segment-btn", { active: p.modelValue === item }], onClick: () => update("update:modelValue", item) }, item)));
+  }
 });
 const ServiceConfigCard = defineComponent({
   props: { title: { type: String, required: true }, icon: { type: Object, required: true }, type: { type: String, required: true }, draft: { type: Object, required: true }, status: { type: String, required: true } },
@@ -916,9 +918,12 @@ const ServiceConfigCard = defineComponent({
 .panel-head h2 { margin: 0; color: var(--color-text-primary); font-size: var(--text-h4); }
 .panel-head span { color: var(--color-text-muted); font-size: var(--text-caption); }
 .panel-head strong { color: var(--color-primary-700); font-size: var(--text-h3); }
-.segmented, .view-toggle { display: inline-flex; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); overflow: hidden; }
-.segmented button, .view-toggle button { min-height: 30px; border: 0; background: white; color: var(--color-text-secondary); padding: 0 10px; }
-.segmented button.active, .view-toggle button.active { background: var(--color-primary-600); color: white; }
+.segmented-control { display: flex; background: var(--color-bg-muted); border-radius: var(--radius-md); padding: 4px; }
+.segment-btn { min-height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-muted); padding: 6px 16px; font-size: 13px; font-weight: 500; transition: all 200ms var(--ease-out); }
+.segment-btn.active { background: white; color: var(--color-text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.view-toggle { display: inline-flex; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); overflow: hidden; }
+.view-toggle button { min-height: 30px; border: 0; background: white; color: var(--color-text-secondary); padding: 0 10px; }
+.view-toggle button.active { background: var(--color-primary-600); color: white; }
 .service-list { display: grid; }
 .service-row { min-height: 48px; display: grid; grid-template-columns: auto 1fr auto 58px; border-bottom: 1px solid var(--color-border-subtle); }
 .service-row span:nth-child(2) { color: var(--color-text-body); }
