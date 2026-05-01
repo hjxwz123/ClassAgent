@@ -319,7 +319,12 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
     db.add(material)
     db.commit()
     try:
-        pages = parse_material(storage_service.absolute_path(material.storage_path), material.material_type)
+        pages = parse_material(
+            storage_service.absolute_path(material.storage_path),
+            material.material_type,
+            db=db,
+            filename=material.original_filename,
+        )
         if not pages:
             pages = [{"page_number": 1, "page_title": material.title, "page_text": "未提取到资料内容。"}]
         material.extracted_text = "\n\n".join(page["page_text"] for page in pages)

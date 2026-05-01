@@ -267,6 +267,28 @@ def test_teacher_analytics_and_admin_operations(client):
     assert service_test_resp.status_code == 200, service_test_resp.text
     assert service_test_resp.json()["data"]["success"] is True
 
+    doc_parser_save_resp = client.post(
+        "/api/v1/admin/service-configs",
+        json={
+            "service_type": "doc_parser",
+            "provider": "aliyun",
+            "name": "aliyun-doc-parser",
+            "config": {
+                "access_key_id": "test-ak",
+                "access_key_secret": "test-secret",
+                "endpoint": "docmind-api.cn-hangzhou.aliyuncs.com",
+                "region": "cn-hangzhou",
+            },
+            "is_enabled": True,
+        },
+        headers=admin_headers,
+    )
+    assert doc_parser_save_resp.status_code == 200, doc_parser_save_resp.text
+    doc_parser_id = doc_parser_save_resp.json()["data"]["id"]
+    doc_parser_test_resp = client.post(f"/api/v1/admin/service-configs/{doc_parser_id}/test", headers=admin_headers)
+    assert doc_parser_test_resp.status_code == 200, doc_parser_test_resp.text
+    assert doc_parser_test_resp.json()["data"]["success"] is True
+
     email_save_resp = client.post(
         "/api/v1/admin/service-configs",
         json={

@@ -159,6 +159,29 @@
 }
 ```
 
+#### 文档解析配置建议字段
+
+```json
+{
+  "service_type": "doc_parser",
+  "provider": "aliyun",
+  "name": "aliyun-doc-parser",
+  "config": {
+    "access_key_id": "xxx",
+    "access_key_secret": "xxx",
+    "endpoint": "docmind-api.cn-hangzhou.aliyuncs.com",
+    "region": "cn-hangzhou",
+    "timeout_seconds": 600,
+    "poll_interval_seconds": 5,
+    "layout_step_size": 100,
+    "output_format": "markdown",
+    "llm_enhancement": true,
+    "enhancement_mode": "VLM"
+  },
+  "is_enabled": true
+}
+```
+
 #### 邮件配置建议字段
 
 ```json

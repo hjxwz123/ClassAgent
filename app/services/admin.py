@@ -668,6 +668,7 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
     required_keys = {
         "oss": ["access_key_id", "access_key_secret", "endpoint", "bucket"],
         "ocr": ["access_key_id", "access_key_secret", "endpoint", "region"],
+        "doc_parser": ["access_key_id", "access_key_secret", "endpoint"],
         "tts": ["appkey", "token", "url", "voice"],
         "email": ["host", "port", "sender"],
     }.get(record.service_type, [])
@@ -691,6 +692,23 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
         return {"success": True, "message": "OSS 配置可用"}
     if record.service_type == "email":
         return email_service.test_config(config)
+    if record.service_type == "doc_parser":
+        try:
+            from alibabacloud_docmind_api20220711.client import Client as DocMindClient
+            from alibabacloud_tea_openapi import models as openapi_models
+
+            DocMindClient(
+                openapi_models.Config(
+                    access_key_id=config["access_key_id"],
+                    access_key_secret=config["access_key_secret"],
+                    endpoint=config["endpoint"],
+                    region_id=config.get("region") or "cn-hangzhou",
+                    type="access_key",
+                )
+            )
+        except Exception as exc:
+            return {"success": False, "message": f"文档解析 SDK 初始化失败: {exc}"}
+        return {"success": True, "message": "文档解析配置字段完整"}
     if record.service_type == "tts":
         try:
             payload = {
@@ -760,7 +778,13 @@ def get_service_health(db: Session) -> dict:
         item.service_type: item
         for item in db.scalars(select(ServiceConfig).where(ServiceConfig.deleted_at.is_(None), ServiceConfig.is_enabled.is_(True)))
     }
-    for service_type, name in [("oss", "阿里云 OSS"), ("tts", "阿里云 TTS"), ("ocr", "阿里云 OCR"), ("email", "邮件服务")]:
+    for service_type, name in [
+        ("oss", "阿里云 OSS"),
+        ("tts", "阿里云 TTS"),
+        ("ocr", "阿里云 OCR"),
+        ("doc_parser", "阿里云文档解析"),
+        ("email", "邮件服务"),
+    ]:
         config = service_by_type.get(service_type)
         if config is None:
             status = "not_configured"

@@ -226,6 +226,34 @@
       </article>
 
       <article class="card service-card">
+        <div class="card-head"><h2 class="card-title">文档解析</h2><span class="tag" :class="statusClass(serviceDrafts.doc_parser.config_id ? 'active' : 'not_configured')">{{ serviceDrafts.doc_parser.config_id ? '已配置' : '未配置' }}</span></div>
+        <p class="card-desc">{{ serviceDescriptions.doc_parser }}</p>
+        <div class="form-row">
+          <select v-model="serviceDrafts.doc_parser.provider" class="select"><option value="aliyun">阿里云</option><option value="mock">Mock</option></select>
+          <input v-model="serviceDrafts.doc_parser.name" class="input" placeholder="名称" />
+        </div>
+        <div v-if="serviceDrafts.doc_parser.provider === 'aliyun'" class="config-fields">
+          <input v-model="serviceDrafts.doc_parser.access_key_id" class="input" placeholder="AccessKey ID" />
+          <input v-model="serviceDrafts.doc_parser.access_key_secret" class="input" type="password" placeholder="AccessKey Secret" />
+          <input v-model="serviceDrafts.doc_parser.endpoint" class="input" placeholder="Endpoint" />
+          <input v-model="serviceDrafts.doc_parser.region" class="input" placeholder="Region" />
+          <input v-model.number="serviceDrafts.doc_parser.timeout_seconds" class="input" type="number" placeholder="任务超时" />
+          <input v-model.number="serviceDrafts.doc_parser.poll_interval_seconds" class="input" type="number" placeholder="轮询间隔" />
+          <input v-model.number="serviceDrafts.doc_parser.layout_step_size" class="input" type="number" placeholder="拉取步长" />
+          <select v-model="serviceDrafts.doc_parser.enhancement_mode" class="select"><option value="VLM">VLM</option><option value="">关闭增强</option></select>
+          <label class="check"><input v-model="serviceDrafts.doc_parser.llm_enhancement" type="checkbox" />大模型增强</label>
+          <label class="check"><input v-model="serviceDrafts.doc_parser.formula_enhancement" type="checkbox" />公式增强</label>
+          <label class="check"><input v-model="serviceDrafts.doc_parser.output_html_table" type="checkbox" />HTML 表格</label>
+        </div>
+        <label class="check"><input v-model="serviceDrafts.doc_parser.is_enabled" type="checkbox" />启用</label>
+        <div class="card-actions">
+          <button class="btn btn-primary" @click="saveServiceType('doc_parser')">保存</button>
+          <button class="btn btn-secondary" @click="testServiceType('doc_parser')">测试</button>
+          <button class="btn btn-ghost" @click="deleteServiceType('doc_parser')">删除</button>
+        </div>
+      </article>
+
+      <article class="card service-card">
         <div class="card-head"><h2 class="card-title">TTS</h2><span class="tag" :class="statusClass(serviceDrafts.tts.config_id ? 'active' : 'not_configured')">{{ serviceDrafts.tts.config_id ? '已配置' : '未配置' }}</span></div>
         <p class="card-desc">{{ serviceDescriptions.tts }}</p>
         <div class="form-row">
@@ -376,10 +404,11 @@ const adminForm = reactive({ email: "", password: "Admin123456", nickname: "" })
 const takeoverTeacher = ref<number | null>(null);
 const modelForm = reactive({ config_id: null as number | null, provider: "openai", model_name: "", purpose: "general", endpoint: "", api_key: "", is_default: true });
 const modelExtra = ref('{"temperature":0.2}');
-type ServiceKey = "oss" | "ocr" | "tts" | "email";
+type ServiceKey = "oss" | "ocr" | "doc_parser" | "tts" | "email";
 const serviceDrafts = reactive({
   oss: { config_id: null as number | null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "", bucket: "" },
   ocr: { config_id: null as number | null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "" },
+  doc_parser: { config_id: null as number | null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "docmind-api.cn-hangzhou.aliyuncs.com", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
   tts: { config_id: null as number | null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", url: "", voice: "", speech_rate: 0, volume: 50 },
   email: { config_id: null as number | null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false }
 });
@@ -407,12 +436,14 @@ const purposeDescriptions: Record<string, string> = {
 const serviceDescriptions: Record<string, string> = {
   oss: "未配默认本地",
   ocr: "图片题识别",
+  doc_parser: "资料文档解析",
   tts: "讲稿转语音",
   email: "验证码邮件"
 };
 const serviceRequiredKeys: Record<string, string[]> = {
   oss: ["access_key_id", "access_key_secret", "endpoint", "bucket"],
   ocr: ["access_key_id", "access_key_secret", "endpoint", "region"],
+  doc_parser: ["access_key_id", "access_key_secret", "endpoint"],
   tts: ["appkey", "token", "url", "voice"],
   email: ["host", "port", "sender"]
 };
@@ -558,7 +589,7 @@ async function loadServices() {
   hydrateServiceDrafts();
 }
 function hydrateServiceDrafts() {
-  (["oss", "ocr", "tts", "email"] as ServiceKey[]).forEach((key) => {
+  (["oss", "ocr", "doc_parser", "tts", "email"] as ServiceKey[]).forEach((key) => {
     const item = services.value.find((service) => service.service_type === key);
     if (!item) return;
     Object.assign(serviceDrafts[key], {
@@ -578,6 +609,23 @@ function serviceConfigPayload(type: ServiceKey) {
   if (type === "ocr") {
     const item = serviceDrafts.ocr;
     return { access_key_id: item.access_key_id, access_key_secret: item.access_key_secret, endpoint: item.endpoint, region: item.region };
+  }
+  if (type === "doc_parser") {
+    const item = serviceDrafts.doc_parser;
+    return {
+      access_key_id: item.access_key_id,
+      access_key_secret: item.access_key_secret,
+      endpoint: item.endpoint,
+      region: item.region,
+      timeout_seconds: item.timeout_seconds,
+      poll_interval_seconds: item.poll_interval_seconds,
+      layout_step_size: item.layout_step_size,
+      output_format: item.output_format,
+      llm_enhancement: item.llm_enhancement,
+      enhancement_mode: item.enhancement_mode,
+      formula_enhancement: item.formula_enhancement,
+      output_html_table: item.output_html_table
+    };
   }
   if (type === "tts") {
     const item = serviceDrafts.tts;
@@ -630,6 +678,7 @@ async function deleteServiceType(type: ServiceKey) {
 function resetServiceDraft(type: ServiceKey) {
   if (type === "oss") Object.assign(serviceDrafts.oss, { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "", bucket: "" });
   if (type === "ocr") Object.assign(serviceDrafts.ocr, { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "" });
+  if (type === "doc_parser") Object.assign(serviceDrafts.doc_parser, { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "docmind-api.cn-hangzhou.aliyuncs.com", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false });
   if (type === "tts") Object.assign(serviceDrafts.tts, { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", url: "", voice: "", speech_rate: 0, volume: 50 });
   if (type === "email") Object.assign(serviceDrafts.email, { config_id: null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false });
 }

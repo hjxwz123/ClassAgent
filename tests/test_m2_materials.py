@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.db import session as db_session
 from app.db.models import KnowledgeChunk
-from app.services.parser import parse_material
+from app.services.parser import doc_parser_service, parse_material
 from app.services.vector_store import vector_store
 
 
@@ -70,7 +70,7 @@ def build_txt_bytes() -> bytes:
     return "矩阵可以表示线性变换。\n\n行列式反映缩放系数。".encode("utf-8")
 
 
-def test_document_parsers_cover_all_supported_types(tmp_path: Path):
+def test_document_parsers_cover_all_supported_types(client, tmp_path: Path):
     pptx_path = tmp_path / "demo.pptx"
     pptx_path.write_bytes(build_pptx_bytes())
     pdf_path = tmp_path / "demo.pdf"
@@ -80,10 +80,27 @@ def test_document_parsers_cover_all_supported_types(tmp_path: Path):
     txt_path = tmp_path / "demo.txt"
     txt_path.write_bytes(build_txt_bytes())
 
-    assert len(parse_material(pptx_path, "pptx")) == 2
-    assert len(parse_material(pdf_path, "pdf")) == 1
-    assert len(parse_material(docx_path, "docx")) >= 1
-    assert len(parse_material(txt_path, "txt")) == 2
+    with db_session.SessionLocal() as db:
+        assert len(parse_material(pptx_path, "pptx", db=db, filename="demo.pptx")) == 2
+        assert len(parse_material(pdf_path, "pdf", db=db, filename="demo.pdf")) == 1
+        assert len(parse_material(docx_path, "docx", db=db, filename="demo.docx")) >= 1
+        assert len(parse_material(txt_path, "txt", db=db, filename="demo.txt")) == 2
+
+
+def test_doc_parser_layouts_group_into_ordered_pages():
+    pages = doc_parser_service._pages_from_layouts(
+        [
+            {"pageNum": 1, "index": 2, "markdownContent": "第二页正文"},
+            {"pageNum": 0, "index": 1, "type": "text", "text": "第一页正文"},
+            {"pageNum": 0, "index": 0, "type": "title", "text": "第一页标题", "markdownContent": "# 第一页标题"},
+        ]
+    )
+    assert len(pages) == 2
+    assert pages[0]["page_number"] == 1
+    assert pages[0]["page_title"] == "第一页标题"
+    assert pages[0]["page_text"].startswith("# 第一页标题")
+    assert pages[1]["page_number"] == 2
+    assert "第二页正文" in pages[1]["page_text"]
 
 
 def test_material_management_flow(client):
