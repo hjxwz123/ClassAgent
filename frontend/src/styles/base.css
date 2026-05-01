@@ -138,12 +138,8 @@ svg { display: block; flex-shrink: 0; }
   transform: translateY(8px);
 }
 
-.dropdown,
-.course-popover,
-.user-popover,
 .select-popover,
 .menu-popover,
-.notice-popover,
 .popover-card {
   transform-origin: top right;
   animation: popover-in var(--duration-base) var(--ease-out) both;
@@ -172,35 +168,12 @@ svg { display: block; flex-shrink: 0; }
   transform: translateY(-6px) scale(0.96);
 }
 .popover-leave-active { pointer-events: none; }
-.top-popover-panel {
-  animation: none !important;
+.top-menu-panel {
   transform-origin: top right;
   will-change: opacity, transform, filter;
 }
-.top-popover-enter-active,
-.top-popover-leave-active {
-  transition:
-    opacity 260ms var(--ease-out),
-    transform 260ms var(--ease-spring),
-    filter 260ms var(--ease-out);
-}
-.top-popover-enter-from,
-.top-popover-leave-to {
-  opacity: 0;
-  filter: blur(3px);
-  transform: translate3d(0, -12px, 0) scale(0.92);
-}
-.top-popover-enter-to,
-.top-popover-leave-from {
-  opacity: 1;
-  filter: blur(0);
-  transform: translate3d(0, 0, 0) scale(1);
-}
-.top-popover-leave-active {
-  pointer-events: none;
-  transition-duration: 180ms;
-  transition-timing-function: var(--ease-out);
-}
+.top-menu-enter-active { animation: top-menu-in 260ms var(--ease-out) both; }
+.top-menu-leave-active { animation: top-menu-out 220ms var(--ease-out) both; pointer-events: none; }
 .tag {
   transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
@@ -234,6 +207,15 @@ button[data-loading="true"]::before {
 @keyframes popover-in {
   from { opacity: 0; transform: translateY(-6px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes top-menu-in {
+  0% { opacity: 0; filter: blur(4px); transform: translate3d(0, -12px, 0) scale(0.92); }
+  60% { opacity: 1; filter: blur(0); transform: translate3d(0, 2px, 0) scale(1.01); }
+  100% { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes top-menu-out {
+  0% { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); }
+  100% { opacity: 0; filter: blur(4px); transform: translate3d(0, -10px, 0) scale(0.94); }
 }
 @keyframes drawer-slide-in {
   from { opacity: 0; transform: translateX(24px); }

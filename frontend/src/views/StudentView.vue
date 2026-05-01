@@ -137,14 +137,14 @@
         <button class="top-icon" @click="noticeOpen = !noticeOpen"><Bell :size="19" /><em v-if="unreadCount">{{ unreadCount }}</em></button>
         <button class="avatar-btn" @click="userMenuOpen = !userMenuOpen"><span>{{ firstChar(user.nickname) }}</span></button>
       </div>
-      <transition name="top-popover" appear>
-        <div v-if="noticeOpen" class="notice-pop top-popover-panel">
+      <transition name="top-menu" :duration="{ enter: 260, leave: 220 }">
+        <div v-if="noticeOpen" class="notice-pop top-menu-panel">
           <div v-for="item in notifications" :key="`${item.type}-${item.title}`" class="notice-item"><Bell :size="15" /><div><strong>{{ item.title }}</strong><small>{{ relativeTime(item.time) }}</small></div><i v-if="item.unread"></i></div>
           <EmptyState v-if="!notifications.length" text="暂无通知" />
         </div>
       </transition>
-      <transition name="top-popover" appear>
-        <div v-if="userMenuOpen" class="user-pop top-popover-panel">
+      <transition name="top-menu" :duration="{ enter: 260, leave: 220 }">
+        <div v-if="userMenuOpen" class="user-pop top-menu-panel">
           <div class="user-card"><strong>{{ user.nickname }}</strong><small>{{ user.email }}</small></div>
           <button @click="go('studentProfile')"><User :size="15" />个人中心</button>
           <button @click="go('studentProfile')"><BarChart2 :size="15" />学习档案</button>

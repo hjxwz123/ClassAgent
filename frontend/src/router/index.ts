@@ -61,26 +61,26 @@ const studentRoute = (path: string, pageKey: string): RouteRecordRaw => ({
   path,
   component: StudentView,
   props: { pageKey },
-  meta: { requiresAuth: true, roles: ["student"], pageKey }
+  meta: { requiresAuth: true, roles: ["student"], pageKey, shellKey: "student" }
 });
 
 const adminRoute = (path: string, pageKey: string): RouteRecordRaw => ({
   path,
   component: AdminView,
   props: { pageKey },
-  meta: { requiresAuth: true, roles: ["admin"], pageKey }
+  meta: { requiresAuth: true, roles: ["admin"], pageKey, shellKey: "admin" }
 });
 
 const teacherRoute = (path: string, pageKey: string): RouteRecordRaw => ({
   path,
   component: TeacherView,
   props: { pageKey },
-  meta: { requiresAuth: true, roles: ["teacher"], pageKey }
+  meta: { requiresAuth: true, roles: ["teacher"], pageKey, shellKey: "teacher" }
 });
 
 const routes: RouteRecordRaw[] = [
   { path: "/", redirect: "/home" },
-  { path: "/auth", component: AuthView, meta: { public: true } },
+  { path: "/auth", component: AuthView, meta: { public: true, shellKey: "auth" } },
   studentRoute("/home", "studentHome"),
   studentRoute("/courses", "studentCourses"),
   studentRoute("/courses/detail", "studentCourseHome"),
