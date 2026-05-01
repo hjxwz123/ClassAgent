@@ -923,12 +923,11 @@ function copyPassword() {
   navigator.clipboard?.writeText(resetPasswordResult.value);
   emit("notice", "success", "已复制");
 }
-async function resetUser(id: number, password = generateTempPassword(), ask = true, silent = false) {
-  if (ask && !window.confirm(`将用户密码重置为：${password}`)) return false;
+async function resetUser(id: number, password = generateTempPassword(), silent = false) {
   const updated = await withPending(`reset:${id}`, async () => run(() => api.post(`/admin/users/${id}/reset-password`, { new_password: password })));
   if (!updated) return false;
   resetPasswordResult.value = password;
-  if (!silent) emit("notice", "success", `新密码：${password}`);
+  if (!silent) emit("notice", "success", "已重置");
   return true;
 }
 async function deleteUser(id: number) { await withPending(`delete:${id}`, async () => { await run(() => api.delete(`/admin/users/${id}`), "已删除"); userDrawer.value = null; await loadUsers(); }); }
@@ -936,14 +935,13 @@ async function batchDisableUsers() { for (const id of selectedUsers.value) await
 async function batchResetUsers() {
   if (!selectedUsers.value.length) return;
   const password = generateTempPassword();
-  if (!window.confirm(`将 ${selectedUsers.value.length} 个用户密码重置为：${password}`)) return;
   let successCount = 0;
   for (const id of selectedUsers.value) {
-    if (await resetUser(id, password, false, true)) successCount += 1;
+    if (await resetUser(id, password, true)) successCount += 1;
   }
   if (!successCount) return;
   resetPasswordResult.value = password;
-  emit("notice", "success", `${successCount} 人新密码：${password}`);
+  emit("notice", "success", `已重置 ${successCount} 人`);
   selectedUsers.value = [];
 }
 async function batchDeleteUsers() { for (const id of selectedUsers.value) await run(() => api.delete(`/admin/users/${id}`)); selectedUsers.value = []; await loadUsers(); }
