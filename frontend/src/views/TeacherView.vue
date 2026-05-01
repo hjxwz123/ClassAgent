@@ -7,12 +7,14 @@
         <i></i>
         <div class="course-switch">
           <button @click="courseMenuOpen = !courseMenuOpen">{{ currentCourse?.name || '选择课程' }}<ChevronDown :size="16" /></button>
-          <div v-if="courseMenuOpen" class="course-popover">
-            <button v-for="course in courses.slice(0, 8)" :key="course.id" :class="{ active: currentCourseId === course.id }" @click="selectCourse(course.id)">
-              <Check v-if="currentCourseId === course.id" :size="15" />{{ course.name }}
-            </button>
-            <button @click="go('teacherCourseForm')"><Plus :size="15" />创建课程</button>
-          </div>
+          <Transition name="popover">
+            <div v-if="courseMenuOpen" class="course-popover">
+              <button v-for="course in courses.slice(0, 8)" :key="course.id" :class="{ active: currentCourseId === course.id }" @click="selectCourse(course.id)">
+                <Check v-if="currentCourseId === course.id" :size="15" />{{ course.name }}
+              </button>
+              <button @click="go('teacherCourseForm')"><Plus :size="15" />创建课程</button>
+            </div>
+          </Transition>
         </div>
       </div>
       <div class="header-actions">
@@ -21,11 +23,13 @@
         <i></i>
         <div class="user-menu">
           <button @click="userMenuOpen = !userMenuOpen"><span class="avatar">{{ firstChar(teacherName) }}</span><b>{{ teacherName }}</b><ChevronDown :size="16" /></button>
-          <div v-if="userMenuOpen" class="user-popover">
-            <button @click="go('teacherProfile')"><User :size="15" />个人中心</button>
-            <button @click="go('teacherProfile')"><Settings :size="15" />账号设置</button>
-            <button @click="$emit('logout')"><LogOut :size="15" />退出登录</button>
-          </div>
+          <Transition name="popover">
+            <div v-if="userMenuOpen" class="user-popover">
+              <button @click="go('teacherProfile')"><User :size="15" />个人中心</button>
+              <button @click="go('teacherProfile')"><Settings :size="15" />账号设置</button>
+              <button @click="$emit('logout')"><LogOut :size="15" />退出登录</button>
+            </div>
+          </Transition>
         </div>
       </div>
     </header>
