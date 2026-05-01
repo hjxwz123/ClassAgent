@@ -1,5 +1,7 @@
 from io import BytesIO
 from pathlib import Path
+import sys
+from types import SimpleNamespace
 
 import fitz
 from docx import Document
@@ -9,6 +11,7 @@ from sqlalchemy import select
 from app.db import session as db_session
 from app.db.models import KnowledgeChunk
 from app.services.parser import doc_parser_service, parse_material
+from app.services.tts import tts_service
 from app.services.vector_store import vector_store
 
 
@@ -101,6 +104,40 @@ def test_doc_parser_layouts_group_into_ordered_pages():
     assert pages[0]["page_text"].startswith("# 第一页标题")
     assert pages[1]["page_number"] == 2
     assert "第二页正文" in pages[1]["page_text"]
+
+
+def test_aliyun_tts_uses_official_nls_sdk(monkeypatch, tmp_path: Path):
+    calls: dict[str, object] = {}
+
+    class FakeSynthesizer:
+        def __init__(self, **kwargs):
+            calls["init"] = kwargs
+            self.on_data = kwargs["on_data"]
+
+        def start(self, **kwargs):
+            calls["start"] = kwargs
+            self.on_data(b"fake-audio")
+
+    monkeypatch.setitem(sys.modules, "nls", SimpleNamespace(NlsSpeechSynthesizer=FakeSynthesizer))
+    monkeypatch.setattr(
+        "app.services.tts.storage_service.save_bytes",
+        lambda content, *, folder, filename, db=None: (calls.update({"content": content, "filename": filename}) or "generated/audio/fake.wav"),
+    )
+    monkeypatch.setattr("app.services.tts.storage_service.public_url", lambda relative_path, db=None: f"/static/{relative_path}")
+
+    url, duration = tts_service._synthesize_aliyun(
+        "连接测试",
+        None,
+        {"appkey": "app", "token": "token", "voice": "xiaoyun", "format": "wav"},
+    )
+
+    assert calls["init"]["appkey"] == "app"
+    assert calls["init"]["token"] == "token"
+    assert calls["init"]["url"] == "wss://nls-gateway.cn-shanghai.aliyuncs.com/ws/v1"
+    assert calls["start"]["voice"] == "xiaoyun"
+    assert calls["content"] == b"fake-audio"
+    assert url == "/static/generated/audio/fake.wav"
+    assert duration >= 2
 
 
 def test_material_management_flow(client):

@@ -12,6 +12,13 @@ class StorageService:
     def __init__(self) -> None:
         self.settings = get_settings()
 
+    def _oss_endpoint(self, config: dict) -> str:
+        endpoint = str(config.get("endpoint") or "").strip()
+        if endpoint:
+            return endpoint
+        region = str(config.get("region") or "cn-hangzhou").strip()
+        return f"https://oss-{region}.aliyuncs.com"
+
     def _relative_to_storage(self, path: Path) -> str:
         return path.relative_to(STORAGE_DIR).as_posix()
 
@@ -28,17 +35,18 @@ class StorageService:
             raise RuntimeError("缺少 oss2 依赖，无法上传 OSS") from exc
 
         config = service.config
-        required = ["access_key_id", "access_key_secret", "endpoint", "bucket"]
+        required = ["access_key_id", "access_key_secret", "bucket"]
         missing = [key for key in required if not config.get(key)]
         if missing:
             raise RuntimeError(f"OSS 配置缺少字段: {', '.join(missing)}")
         region = config.get("region")
+        endpoint = self._oss_endpoint(config)
         if region and config.get("signature_version", "v4") != "v1":
             auth = oss2.AuthV4(config["access_key_id"], config["access_key_secret"])
-            bucket = oss2.Bucket(auth, config["endpoint"], config["bucket"], region=region)
+            bucket = oss2.Bucket(auth, endpoint, config["bucket"], region=region)
         else:
             auth = oss2.Auth(config["access_key_id"], config["access_key_secret"])
-            bucket = oss2.Bucket(auth, config["endpoint"], config["bucket"])
+            bucket = oss2.Bucket(auth, endpoint, config["bucket"])
         bucket.put_object(relative_path, content)
 
     def _oss_public_url(self, relative_path: str, service: RuntimeServiceConfig) -> str:
@@ -47,10 +55,10 @@ class StorageService:
             return f"{str(config['public_base_url']).rstrip('/')}/{relative_path}"
         if config.get("cdn_domain"):
             return f"{str(config['cdn_domain']).rstrip('/')}/{relative_path}"
-        endpoint = str(config.get("endpoint", "")).strip()
         bucket = str(config.get("bucket", "")).strip()
-        if not endpoint or not bucket:
+        if not bucket:
             return f"{self.settings.public_base_url}/static/{relative_path}"
+        endpoint = self._oss_endpoint(config)
         endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip("/")
         return f"https://{bucket}.{endpoint}/{relative_path}"
 

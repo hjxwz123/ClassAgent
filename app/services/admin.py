@@ -39,6 +39,8 @@ from app.db.models import (
 )
 from app.services.bootstrap import default_system_settings
 from app.services.email import email_service
+from app.services.storage import storage_service
+from app.services.tts import tts_service
 from app.services.vector_store import vector_store
 
 
@@ -666,10 +668,10 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
     if record.provider == "local":
         return {"success": True, "message": "本地存储可用"}
     required_keys = {
-        "oss": ["access_key_id", "access_key_secret", "endpoint", "bucket"],
-        "ocr": ["access_key_id", "access_key_secret", "endpoint", "region"],
-        "doc_parser": ["access_key_id", "access_key_secret", "endpoint"],
-        "tts": ["appkey", "token", "url", "voice"],
+        "oss": ["access_key_id", "access_key_secret", "bucket"],
+        "ocr": ["access_key_id", "access_key_secret"],
+        "doc_parser": ["access_key_id", "access_key_secret"],
+        "tts": ["appkey", "token", "voice"],
         "email": ["host", "port", "sender"],
     }.get(record.service_type, [])
     missing = [key for key in required_keys if not config.get(key)]
@@ -680,12 +682,13 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
             import oss2
 
             region = config.get("region")
+            endpoint = storage_service._oss_endpoint(config)
             if region and config.get("signature_version", "v4") != "v1":
                 auth = oss2.AuthV4(config["access_key_id"], config["access_key_secret"])
-                bucket = oss2.Bucket(auth, config["endpoint"], config["bucket"], region=region)
+                bucket = oss2.Bucket(auth, endpoint, config["bucket"], region=region)
             else:
                 auth = oss2.Auth(config["access_key_id"], config["access_key_secret"])
-                bucket = oss2.Bucket(auth, config["endpoint"], config["bucket"])
+                bucket = oss2.Bucket(auth, endpoint, config["bucket"])
             bucket.get_bucket_info()
         except Exception as exc:
             return {"success": False, "message": f"OSS 连接失败: {exc}"}
@@ -701,7 +704,7 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
                 openapi_models.Config(
                     access_key_id=config["access_key_id"],
                     access_key_secret=config["access_key_secret"],
-                    endpoint=config["endpoint"],
+                    endpoint=config.get("endpoint") or "docmind-api.cn-hangzhou.aliyuncs.com",
                     region_id=config.get("region") or "cn-hangzhou",
                     type="access_key",
                 )
@@ -710,28 +713,7 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
             return {"success": False, "message": f"文档解析 SDK 初始化失败: {exc}"}
         return {"success": True, "message": "文档解析配置字段完整"}
     if record.service_type == "tts":
-        try:
-            payload = {
-                "appkey": config["appkey"],
-                "token": config["token"],
-                "text": "连接测试",
-                "format": str(config.get("format") or "wav").lower(),
-                "sample_rate": int(config.get("sample_rate") or 16000),
-                "voice": config.get("voice") or get_settings().default_tts_voice,
-                "speech_rate": int(config.get("speech_rate", get_settings().default_tts_rate)),
-                "volume": int(config.get("volume", get_settings().default_tts_volume)),
-            }
-            with httpx.Client(timeout=get_settings().external_service_timeout_seconds) as client:
-                if str(config.get("method", "GET")).upper() == "POST":
-                    response = client.post(str(config["url"]), json=payload)
-                else:
-                    response = client.get(str(config["url"]), params=payload)
-            content_type = response.headers.get("content-type", "")
-            if response.status_code >= 400 or "json" in content_type.lower():
-                return {"success": False, "message": f"TTS 连接失败: {response.text[:200]}"}
-        except Exception as exc:
-            return {"success": False, "message": f"TTS 连接失败: {exc}"}
-        return {"success": True, "message": "TTS 配置可用"}
+        return tts_service.test_config(config)
     return {"success": True, "message": "配置字段完整"}
 
 
