@@ -1,10 +1,15 @@
 from pydantic import BaseModel, EmailStr, Field
 
+from app.core.enums import UserRole
+
 
 class AdminUserCreateRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=64)
     nickname: str = Field(min_length=2, max_length=50)
+    role: UserRole = UserRole.ADMIN
+    student_no: str | None = Field(default=None, max_length=64)
+    employee_no: str | None = Field(default=None, max_length=64)
 
 
 class AdminUserUpdateRequest(BaseModel):

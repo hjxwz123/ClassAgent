@@ -14,6 +14,13 @@
       <div class="form-row">
         <input v-model="adminForm.email" class="input" placeholder="邮箱" />
         <input v-model="adminForm.nickname" class="input" placeholder="昵称" />
+        <select v-model="adminForm.role" class="select short">
+          <option value="teacher">教师</option>
+          <option value="admin">管理员</option>
+          <option value="student">学生</option>
+        </select>
+        <input v-if="adminForm.role === 'teacher'" v-model="adminForm.employee_no" class="input short" placeholder="工号" />
+        <input v-if="adminForm.role === 'student'" v-model="adminForm.student_no" class="input short" placeholder="学号" />
         <input v-model="adminForm.password" class="input" type="password" placeholder="密码" />
         <button class="btn btn-primary" @click="createAdmin"><Plus :size="16" />创建</button>
       </div>
@@ -192,7 +199,6 @@
         <div v-if="serviceDrafts.oss.provider === 'aliyun'" class="config-fields">
           <input v-model="serviceDrafts.oss.access_key_id" class="input" placeholder="AccessKey ID" />
           <input v-model="serviceDrafts.oss.access_key_secret" class="input" type="password" placeholder="AccessKey Secret" />
-          <input v-model="serviceDrafts.oss.endpoint" class="input" placeholder="按 Region 自动生成" />
           <input v-model="serviceDrafts.oss.region" class="input" placeholder="Region" />
           <input v-model="serviceDrafts.oss.bucket" class="input" placeholder="Bucket" />
         </div>
@@ -214,7 +220,6 @@
         <div v-if="serviceDrafts.ocr.provider === 'aliyun'" class="config-fields">
           <input v-model="serviceDrafts.ocr.access_key_id" class="input" placeholder="AccessKey ID" />
           <input v-model="serviceDrafts.ocr.access_key_secret" class="input" type="password" placeholder="AccessKey Secret" />
-          <input v-model="serviceDrafts.ocr.endpoint" class="input" placeholder="服务入口默认官方地址" />
           <input v-model="serviceDrafts.ocr.region" class="input" placeholder="Region" />
         </div>
         <label class="check"><input v-model="serviceDrafts.ocr.is_enabled" type="checkbox" />启用</label>
@@ -235,7 +240,6 @@
         <div v-if="serviceDrafts.doc_parser.provider === 'aliyun'" class="config-fields">
           <input v-model="serviceDrafts.doc_parser.access_key_id" class="input" placeholder="AccessKey ID" />
           <input v-model="serviceDrafts.doc_parser.access_key_secret" class="input" type="password" placeholder="AccessKey Secret" />
-          <input v-model="serviceDrafts.doc_parser.endpoint" class="input" placeholder="服务入口默认官方地址" />
           <input v-model="serviceDrafts.doc_parser.region" class="input" placeholder="Region" />
           <input v-model.number="serviceDrafts.doc_parser.timeout_seconds" class="input" type="number" placeholder="任务超时" />
           <input v-model.number="serviceDrafts.doc_parser.poll_interval_seconds" class="input" type="number" placeholder="轮询间隔" />
@@ -263,7 +267,6 @@
         <div v-if="serviceDrafts.tts.provider === 'aliyun'" class="config-fields">
           <input v-model="serviceDrafts.tts.appkey" class="input" placeholder="AppKey" />
           <input v-model="serviceDrafts.tts.token" class="input" type="password" placeholder="Token" />
-          <input v-model="serviceDrafts.tts.url" class="input" placeholder="服务入口默认官方地址" />
           <input v-model="serviceDrafts.tts.voice" class="input" placeholder="音色" />
           <input v-model.number="serviceDrafts.tts.speech_rate" class="input" type="number" placeholder="语速" />
           <input v-model.number="serviceDrafts.tts.volume" class="input" type="number" placeholder="音量" />
@@ -400,16 +403,16 @@ const backups = ref<any[]>([]);
 const userFilter = reactive({ role: "", status: "", keyword: "" });
 const courseFilter = reactive({ keyword: "", status: "" });
 const materialFilter = reactive({ keyword: "", category: "", material_type: "", teacher_id: null as number | null, start_at: "", end_at: "" });
-const adminForm = reactive({ email: "", password: "Admin123456", nickname: "" });
+const adminForm = reactive({ email: "", password: "Admin123456", nickname: "", role: "teacher", student_no: "", employee_no: "" });
 const takeoverTeacher = ref<number | null>(null);
 const modelForm = reactive({ config_id: null as number | null, provider: "openai", model_name: "", purpose: "general", endpoint: "", api_key: "", is_default: true });
 const modelExtra = ref('{"temperature":0.2}');
 type ServiceKey = "oss" | "ocr" | "doc_parser" | "tts" | "email";
 const serviceDrafts = reactive({
-  oss: { config_id: null as number | null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", bucket: "" },
-  ocr: { config_id: null as number | null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou" },
-  doc_parser: { config_id: null as number | null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
-  tts: { config_id: null as number | null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", url: "", voice: "", speech_rate: 0, volume: 50 },
+  oss: { config_id: null as number | null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "" },
+  ocr: { config_id: null as number | null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou" },
+  doc_parser: { config_id: null as number | null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
+  tts: { config_id: null as number | null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", voice: "", speech_rate: 0, volume: 50 },
   email: { config_id: null as number | null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false }
 });
 const settingKey = ref("");
@@ -527,7 +530,27 @@ async function run<T>(task: () => Promise<T>, ok?: string) {
   }
 }
 async function loadUsers() { users.value = (await run(() => api.get<any[]>("/admin/users", userFilter))) || []; }
-async function createAdmin() { await run(() => api.post("/admin/users/admin", adminForm), "已创建"); await loadUsers(); }
+async function createAdmin() {
+  if (adminForm.role === "teacher" && !adminForm.employee_no.trim()) {
+    props.notice("warning", "工号不能为空");
+    return;
+  }
+  if (adminForm.role === "student" && !adminForm.student_no.trim()) {
+    props.notice("warning", "学号不能为空");
+    return;
+  }
+  const payload: Record<string, unknown> = {
+    email: adminForm.email,
+    password: adminForm.password,
+    nickname: adminForm.nickname,
+    role: adminForm.role,
+  };
+  if (adminForm.role === "teacher") payload.employee_no = adminForm.employee_no;
+  if (adminForm.role === "student") payload.student_no = adminForm.student_no;
+  await run(() => api.post("/admin/users/admin", payload), "已创建");
+  Object.assign(adminForm, { email: "", password: "Admin123456", nickname: "", role: "teacher", student_no: "", employee_no: "" });
+  await loadUsers();
+}
 async function setUser(id: number, status: string, role: string) { await run(() => api.patch(`/admin/users/${id}`, { status, role }), "已更新"); await loadUsers(); }
 async function resetUser(id: number) { await run(() => api.post(`/admin/users/${id}/reset-password`, { new_password: "Admin123456" }), "已重置"); }
 async function deleteUser(id: number) { await run(() => api.delete(`/admin/users/${id}`), "已删除"); await loadUsers(); }
@@ -604,18 +627,17 @@ function hydrateServiceDrafts() {
 function serviceConfigPayload(type: ServiceKey) {
   if (type === "oss") {
     const item = serviceDrafts.oss;
-    return { access_key_id: item.access_key_id, access_key_secret: item.access_key_secret, endpoint: item.endpoint, region: item.region, bucket: item.bucket };
+    return { access_key_id: item.access_key_id, access_key_secret: item.access_key_secret, region: item.region, bucket: item.bucket };
   }
   if (type === "ocr") {
     const item = serviceDrafts.ocr;
-    return { access_key_id: item.access_key_id, access_key_secret: item.access_key_secret, endpoint: item.endpoint, region: item.region };
+    return { access_key_id: item.access_key_id, access_key_secret: item.access_key_secret, region: item.region };
   }
   if (type === "doc_parser") {
     const item = serviceDrafts.doc_parser;
     return {
       access_key_id: item.access_key_id,
       access_key_secret: item.access_key_secret,
-      endpoint: item.endpoint,
       region: item.region,
       timeout_seconds: item.timeout_seconds,
       poll_interval_seconds: item.poll_interval_seconds,
@@ -629,7 +651,7 @@ function serviceConfigPayload(type: ServiceKey) {
   }
   if (type === "tts") {
     const item = serviceDrafts.tts;
-    return { appkey: item.appkey, token: item.token, url: item.url, voice: item.voice, speech_rate: item.speech_rate, volume: item.volume };
+    return { appkey: item.appkey, token: item.token, voice: item.voice, speech_rate: item.speech_rate, volume: item.volume };
   }
   const item = serviceDrafts.email;
   return { host: item.host, port: item.port, sender: item.sender, username: item.username, password: item.password, use_ssl: item.use_ssl, use_tls: item.use_tls };
@@ -676,10 +698,10 @@ async function deleteServiceType(type: ServiceKey) {
   await loadServices();
 }
 function resetServiceDraft(type: ServiceKey) {
-  if (type === "oss") Object.assign(serviceDrafts.oss, { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", bucket: "" });
-  if (type === "ocr") Object.assign(serviceDrafts.ocr, { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou" });
-  if (type === "doc_parser") Object.assign(serviceDrafts.doc_parser, { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false });
-  if (type === "tts") Object.assign(serviceDrafts.tts, { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", url: "", voice: "", speech_rate: 0, volume: 50 });
+  if (type === "oss") Object.assign(serviceDrafts.oss, { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "" });
+  if (type === "ocr") Object.assign(serviceDrafts.ocr, { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou" });
+  if (type === "doc_parser") Object.assign(serviceDrafts.doc_parser, { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false });
+  if (type === "tts") Object.assign(serviceDrafts.tts, { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, appkey: "", token: "", voice: "", speech_rate: 0, volume: 50 });
   if (type === "email") Object.assign(serviceDrafts.email, { config_id: null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false });
 }
 async function loadSettings() { settings.value = (await run(() => api.get<any[]>("/admin/system-settings"))) || []; }

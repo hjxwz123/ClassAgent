@@ -29,14 +29,8 @@ class TTSService:
         except wave.Error:
             return self._estimate_duration(fallback_text)
 
-    def _nls_url(self, config: dict) -> str:
-        url = str(config.get("url") or self.default_nls_url).strip()
-        if url.startswith("http://") or url.startswith("https://"):
-            scheme, rest = url.split("://", 1)
-            host = rest.split("/", 1)[0]
-            ws_scheme = "wss" if scheme == "https" else "ws"
-            return f"{ws_scheme}://{host}/ws/v1"
-        return url
+    def _nls_url(self) -> str:
+        return self.default_nls_url
 
     def _synthesize_mock(self, text: str, db: Session | None) -> tuple[str, float]:
         duration = max(2.0, min(30.0, round(max(len(text), 40) / 20, 2)))
@@ -76,7 +70,7 @@ class TTSService:
             errors.append(str(message))
 
         synthesizer = nls.NlsSpeechSynthesizer(
-            url=self._nls_url(config),
+            url=self._nls_url(),
             token=config["token"],
             appkey=config["appkey"],
             long_tts=bool(config.get("long_tts", False)),

@@ -10,24 +10,25 @@
 
 ```json
 {
-  "email": "teacher@example.com",
-  "password": "Teacher123",
-  "nickname": "张老师",
-  "role": "teacher",
-  "employee_no": "T2026001"
+  "email": "student@example.com",
+  "password": "Student123",
+  "nickname": "李同学",
+  "role": "student",
+  "student_no": "S2026001"
 }
 ```
 
 ### 说明
 
-- `role` 仅支持 `student`、`teacher`
+- 自助注册仅支持 `student`
 - 学生必须传 `student_no`
-- 教师必须传 `employee_no`
+- 教师账号由管理员在用户管理中创建，必须传 `employee_no`
 
 ## 2. 登录
 
 - 方法：`POST`
 - 路径：`/api/v1/auth/login`
+- 登录失败会返回具体原因，例如 `账号不存在`、`密码错误`、`账号已被禁用`
 
 ### 请求体
 

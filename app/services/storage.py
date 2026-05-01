@@ -13,9 +13,6 @@ class StorageService:
         self.settings = get_settings()
 
     def _oss_endpoint(self, config: dict) -> str:
-        endpoint = str(config.get("endpoint") or "").strip()
-        if endpoint:
-            return endpoint
         region = str(config.get("region") or "cn-hangzhou").strip()
         return f"https://oss-{region}.aliyuncs.com"
 

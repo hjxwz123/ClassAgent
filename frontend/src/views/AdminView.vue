@@ -266,7 +266,6 @@
                 <label>AccessKey ID<input v-model="serviceDrafts.oss.access_key_id" class="input" type="password" /></label>
                 <label>AccessKey Secret<input v-model="serviceDrafts.oss.access_key_secret" class="input" type="password" /></label>
                 <label>Bucket 名称<input v-model="serviceDrafts.oss.bucket" class="input" /></label>
-                <label>服务入口<input v-model="serviceDrafts.oss.endpoint" class="input" placeholder="按 Region 自动生成" /></label>
                 <label>Region<input v-model="serviceDrafts.oss.region" class="input" /></label>
                 <label>URL 过期<input v-model.number="serviceDrafts.oss.url_expire_hours" class="input" type="number" /></label>
               </div>
@@ -290,7 +289,6 @@
                 <label>配置名称<input v-model="serviceDrafts.ocr.name" class="input" /></label>
                 <label>AccessKey ID<input v-model="serviceDrafts.ocr.access_key_id" class="input" type="password" /></label>
                 <label>AccessKey Secret<input v-model="serviceDrafts.ocr.access_key_secret" class="input" type="password" /></label>
-                <label>服务入口<input v-model="serviceDrafts.ocr.endpoint" class="input" placeholder="默认官方地址" /></label>
                 <label>超时<input v-model.number="serviceDrafts.ocr.timeout" class="input" type="number" /></label>
                 <label>重试<input v-model.number="serviceDrafts.ocr.retries" class="input" type="number" /></label>
                 <label>精度<select v-model="serviceDrafts.ocr.accuracy" class="select"><option value="normal">普通</option><option value="high">高精度</option></select></label>
@@ -315,7 +313,6 @@
                 <label>配置名称<input v-model="serviceDrafts.doc_parser.name" class="input" /></label>
                 <label>AccessKey ID<input v-model="serviceDrafts.doc_parser.access_key_id" class="input" type="password" /></label>
                 <label>AccessKey Secret<input v-model="serviceDrafts.doc_parser.access_key_secret" class="input" type="password" /></label>
-                <label>服务入口<input v-model="serviceDrafts.doc_parser.endpoint" class="input" placeholder="默认官方地址" /></label>
                 <label>Region<input v-model="serviceDrafts.doc_parser.region" class="input" /></label>
                 <label>任务超时<input v-model.number="serviceDrafts.doc_parser.timeout_seconds" class="input" type="number" min="30" /></label>
                 <label>轮询间隔<input v-model.number="serviceDrafts.doc_parser.poll_interval_seconds" class="input" type="number" min="1" /></label>
@@ -347,7 +344,6 @@
                 <label>AccessKey Secret<input v-model="serviceDrafts.tts.access_key_secret" class="input" type="password" /></label>
                 <label>AppKey<input v-model="serviceDrafts.tts.appkey" class="input" /></label>
                 <label>Token<input v-model="serviceDrafts.tts.token" class="input" type="password" /></label>
-                <label>服务入口<input v-model="serviceDrafts.tts.url" class="input" placeholder="默认官方地址" /></label>
                 <label>音色<input v-model="serviceDrafts.tts.voice" class="input" /></label>
                 <label>语速<input v-model.number="serviceDrafts.tts.speech_rate" class="input" type="range" min="-500" max="500" /></label>
                 <label>音量<input v-model.number="serviceDrafts.tts.volume" class="input" type="range" min="0" max="100" /></label>
@@ -461,9 +457,9 @@
     <Transition name="modal-pop">
       <div v-if="adminModalOpen" class="modal-mask">
         <article class="modal">
-          <div class="modal-head"><Shield :size="20" /><h2>创建管理员账号</h2><button class="icon-action" @click="adminModalOpen = false"><X :size="16" /></button></div>
+          <div class="modal-head"><Shield :size="20" /><h2>创建用户账号</h2><button class="icon-action" @click="adminModalOpen = false"><X :size="16" /></button></div>
           <p v-if="adminFormError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ adminFormError }}</p>
-          <div class="form-grid"><label>用户名<input v-model="adminForm.nickname" class="input" :aria-invalid="adminFormError.includes('用户名')" /></label><label>邮箱<input v-model="adminForm.email" class="input" type="email" :aria-invalid="adminFormError.includes('邮箱')" /></label><label>初始密码<input v-model="adminForm.password" class="input" type="password" :aria-invalid="adminFormError.includes('密码')" /></label><label>确认密码<input v-model="adminForm.confirm" class="input" type="password" :aria-invalid="adminFormError.includes('密码') || adminFormError.includes('不一致')" /></label><label class="wide-field">备注<textarea v-model="adminForm.note" class="textarea"></textarea></label></div>
+          <div class="form-grid"><label>用户名<input v-model="adminForm.nickname" class="input" :aria-invalid="adminFormError.includes('用户名')" /></label><label>邮箱<input v-model="adminForm.email" class="input" type="email" :aria-invalid="adminFormError.includes('邮箱')" /></label><label>角色<select v-model="adminForm.role" class="select"><option value="teacher">教师</option><option value="admin">管理员</option><option value="student">学生</option></select></label><label v-if="adminForm.role === 'teacher'">工号<input v-model="adminForm.employee_no" class="input" :aria-invalid="adminFormError.includes('工号')" /></label><label v-if="adminForm.role === 'student'">学号<input v-model="adminForm.student_no" class="input" :aria-invalid="adminFormError.includes('学号')" /></label><label>初始密码<input v-model="adminForm.password" class="input" type="password" :aria-invalid="adminFormError.includes('密码')" /></label><label>确认密码<input v-model="adminForm.confirm" class="input" type="password" :aria-invalid="adminFormError.includes('密码') || adminFormError.includes('不一致')" /></label><label class="wide-field">备注<textarea v-model="adminForm.note" class="textarea"></textarea></label></div>
           <footer><button class="btn btn-secondary" @click="adminModalOpen = false">取消</button><button class="btn btn-primary" @click="createAdmin"><Plus :size="16" />创建</button></footer>
         </article>
       </div>
@@ -587,7 +583,7 @@ const userRoleOptions: Array<{ value: Role; label: string }> = [
 const courseFilter = reactive({ keyword: "", status: "" });
 const materialFilter = reactive({ keyword: "", category: "", material_type: "", teacher_id: null as number | null });
 const logFilter = reactive({ success: "", action: "", level: "", source: "", start_at: "", end_at: "" });
-const adminForm = reactive({ email: "", nickname: "", password: "", confirm: "", note: "" });
+const adminForm = reactive({ email: "", nickname: "", password: "", confirm: "", role: "teacher" as Role, student_no: "", employee_no: "", note: "" });
 const modelGlobal = reactive({ provider: "qwen", endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", api_key: "" });
 const modelDrafts = reactive<Record<string, any>>({});
 const embeddingDraft = reactive({ config_id: null as number | null, provider: "qwen", model_name: "text-embedding-v2", endpoint: "", api_key: "", dimensions: 1536 });
@@ -596,10 +592,10 @@ const originalSettings = ref<Record<string, any>>({});
 const backupPolicy = reactive({ enabled: false, frequency: "daily", time: "03:00", retention: 30 });
 const backupNotifyEmail = ref("");
 const serviceDrafts = reactive<Record<ServiceKey, any>>({
-  oss: { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", bucket: "", url_expire_hours: 24 },
-  ocr: { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", timeout: 10, retries: 3, accuracy: "normal" },
-  doc_parser: { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
-  tts: { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", token: "", url: "", voice: "xiaoyun", speech_rate: 0, volume: 50, sample_rate: 16000, format: "wav" },
+  oss: { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "", url_expire_hours: 24 },
+  ocr: { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout: 10, retries: 3, accuracy: "normal" },
+  doc_parser: { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
+  tts: { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", token: "", voice: "xiaoyun", speech_rate: 0, volume: 50, sample_rate: 16000, format: "wav" },
   email: { config_id: null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false }
 });
 
@@ -917,13 +913,18 @@ async function createAdmin() {
   adminFormError.value = "";
   if (!adminForm.nickname.trim()) return void (adminFormError.value = "用户名不能为空");
   if (!adminForm.email.trim()) return void (adminFormError.value = "邮箱不能为空");
+  if (adminForm.role === "teacher" && !adminForm.employee_no.trim()) return void (adminFormError.value = "工号不能为空");
+  if (adminForm.role === "student" && !adminForm.student_no.trim()) return void (adminFormError.value = "学号不能为空");
   if (adminForm.password.length < 8) return void (adminFormError.value = "密码至少8位");
   if (adminForm.password !== adminForm.confirm) return void (adminFormError.value = "两次密码不一致");
   try {
-    await api.post("/admin/users/admin", { email: adminForm.email, nickname: adminForm.nickname, password: adminForm.password });
+    const payload: Record<string, unknown> = { email: adminForm.email, nickname: adminForm.nickname, password: adminForm.password, role: adminForm.role };
+    if (adminForm.role === "teacher") payload.employee_no = adminForm.employee_no;
+    if (adminForm.role === "student") payload.student_no = adminForm.student_no;
+    await api.post("/admin/users/admin", payload);
     emit("notice", "success", "已创建");
     adminModalOpen.value = false;
-    Object.assign(adminForm, { email: "", nickname: "", password: "", confirm: "", note: "" });
+    Object.assign(adminForm, { email: "", nickname: "", password: "", confirm: "", role: "teacher", student_no: "", employee_no: "", note: "" });
     await loadUsers();
   } catch (error) {
     adminFormError.value = (error as Error).message;
@@ -1002,7 +1003,13 @@ async function saveAllModels() {
 }
 async function testDefaultModel() { const item = models.value.find((model) => model.purpose === "general") || models.value.find((model) => model.purpose !== "embedding"); if (!item) return emit("notice", "warning", "先保存"); const data = await run(() => api.post<any>(`/admin/model-configs/${item.id}/test`)); if (data) emit("notice", data.success ? "success" : "warning", data.message); }
 async function testEmbeddingModel() { const item = models.value.find((model) => model.purpose === "embedding"); if (!item) return emit("notice", "warning", "先保存"); const data = await run(() => api.post<any>(`/admin/model-configs/${item.id}/test`)); if (data) emit("notice", data.success ? "success" : "warning", data.message); }
-function serviceConfigPayload(type: ServiceKey) { const draft = serviceDrafts[type]; const { config_id, provider, name, is_enabled, ...config } = draft; return config; }
+function serviceConfigPayload(type: ServiceKey) {
+  const draft = serviceDrafts[type];
+  const { config_id, provider, name, is_enabled, ...config } = draft;
+  if (["oss", "ocr", "doc_parser"].includes(type)) delete config.endpoint;
+  if (type === "tts") delete config.url;
+  return config;
+}
 function serviceMissing(type: ServiceKey) {
   const draft = serviceDrafts[type];
   if (!draft.name || !draft.provider) return "服务必填";

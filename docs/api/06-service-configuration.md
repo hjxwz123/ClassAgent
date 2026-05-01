@@ -215,7 +215,7 @@ http://127.0.0.1:8000/docs
 
 - OSS 不是强制配置项
 - 不配置 OSS 时自动使用本地存储
-- `endpoint` 可不填，系统按 `region` 自动生成 `https://oss-{region}.aliyuncs.com`
+- 管理员页面不需要填写访问地址，系统按 `region` 自动生成 OSS 官方地址
 - 如果配置了 `public_base_url` 或 `cdn_domain`，返回文件地址时会优先使用该地址
 
 ### 5.2 OCR 配置示例
@@ -228,13 +228,13 @@ http://127.0.0.1:8000/docs
   "config": {
     "access_key_id": "xxx",
     "access_key_secret": "xxx",
-    "endpoint": "ocr-api.cn-hangzhou.aliyuncs.com"
+    "region": "cn-hangzhou"
   },
   "is_enabled": true
 }
 ```
 
-`endpoint` 可不填，系统默认使用官方 SDK 入口 `ocr-api.cn-hangzhou.aliyuncs.com`。
+OCR 使用阿里云官方 SDK，管理员页面不显示访问地址字段，后端使用官方默认入口。
 
 ### 5.3 文档解析配置示例
 
@@ -262,7 +262,7 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-`endpoint` 可不填，系统默认使用官方 SDK 入口 `docmind-api.cn-hangzhou.aliyuncs.com`。
+文档解析使用阿里云官方 SDK，管理员页面不显示访问地址字段，后端使用官方默认入口。
 
 处理流程：
 
@@ -290,7 +290,7 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-TTS 使用阿里云智能语音交互 Python SDK `nls.NlsSpeechSynthesizer`。`url` 可不填，系统默认使用官方 WebSocket 入口 `wss://nls-gateway.cn-shanghai.aliyuncs.com/ws/v1`；如果保留旧 REST URL，后端会自动转换为同域名的 `/ws/v1`。
+TTS 使用阿里云智能语音交互 Python SDK `nls.NlsSpeechSynthesizer`。管理员页面不显示访问地址字段，后端使用官方默认 WebSocket 入口。
 
 ### 5.5 邮件配置示例
 
