@@ -266,7 +266,7 @@
                 <label>AccessKey ID<input v-model="serviceDrafts.oss.access_key_id" class="input" type="password" /></label>
                 <label>AccessKey Secret<input v-model="serviceDrafts.oss.access_key_secret" class="input" type="password" /></label>
                 <label>Bucket 名称<input v-model="serviceDrafts.oss.bucket" class="input" /></label>
-                <label>Endpoint<input v-model="serviceDrafts.oss.endpoint" class="input" /></label>
+                <label>服务入口<input v-model="serviceDrafts.oss.endpoint" class="input" placeholder="按 Region 自动生成" /></label>
                 <label>Region<input v-model="serviceDrafts.oss.region" class="input" /></label>
                 <label>URL 过期<input v-model.number="serviceDrafts.oss.url_expire_hours" class="input" type="number" /></label>
               </div>
@@ -290,7 +290,7 @@
                 <label>配置名称<input v-model="serviceDrafts.ocr.name" class="input" /></label>
                 <label>AccessKey ID<input v-model="serviceDrafts.ocr.access_key_id" class="input" type="password" /></label>
                 <label>AccessKey Secret<input v-model="serviceDrafts.ocr.access_key_secret" class="input" type="password" /></label>
-                <label>Endpoint<input v-model="serviceDrafts.ocr.endpoint" class="input" /></label>
+                <label>服务入口<input v-model="serviceDrafts.ocr.endpoint" class="input" placeholder="默认官方地址" /></label>
                 <label>超时<input v-model.number="serviceDrafts.ocr.timeout" class="input" type="number" /></label>
                 <label>重试<input v-model.number="serviceDrafts.ocr.retries" class="input" type="number" /></label>
                 <label>精度<select v-model="serviceDrafts.ocr.accuracy" class="select"><option value="normal">普通</option><option value="high">高精度</option></select></label>
@@ -315,7 +315,7 @@
                 <label>配置名称<input v-model="serviceDrafts.doc_parser.name" class="input" /></label>
                 <label>AccessKey ID<input v-model="serviceDrafts.doc_parser.access_key_id" class="input" type="password" /></label>
                 <label>AccessKey Secret<input v-model="serviceDrafts.doc_parser.access_key_secret" class="input" type="password" /></label>
-                <label>Endpoint<input v-model="serviceDrafts.doc_parser.endpoint" class="input" /></label>
+                <label>服务入口<input v-model="serviceDrafts.doc_parser.endpoint" class="input" placeholder="默认官方地址" /></label>
                 <label>Region<input v-model="serviceDrafts.doc_parser.region" class="input" /></label>
                 <label>任务超时<input v-model.number="serviceDrafts.doc_parser.timeout_seconds" class="input" type="number" min="30" /></label>
                 <label>轮询间隔<input v-model.number="serviceDrafts.doc_parser.poll_interval_seconds" class="input" type="number" min="1" /></label>
@@ -347,7 +347,7 @@
                 <label>AccessKey Secret<input v-model="serviceDrafts.tts.access_key_secret" class="input" type="password" /></label>
                 <label>AppKey<input v-model="serviceDrafts.tts.appkey" class="input" /></label>
                 <label>Token<input v-model="serviceDrafts.tts.token" class="input" type="password" /></label>
-                <label>URL<input v-model="serviceDrafts.tts.url" class="input" /></label>
+                <label>服务入口<input v-model="serviceDrafts.tts.url" class="input" placeholder="默认官方地址" /></label>
                 <label>音色<input v-model="serviceDrafts.tts.voice" class="input" /></label>
                 <label>语速<input v-model.number="serviceDrafts.tts.speech_rate" class="input" type="range" min="-500" max="500" /></label>
                 <label>音量<input v-model.number="serviceDrafts.tts.volume" class="input" type="range" min="0" max="100" /></label>
@@ -596,9 +596,9 @@ const originalSettings = ref<Record<string, any>>({});
 const backupPolicy = reactive({ enabled: false, frequency: "daily", time: "03:00", retention: 30 });
 const backupNotifyEmail = ref("");
 const serviceDrafts = reactive<Record<ServiceKey, any>>({
-  oss: { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "", bucket: "", url_expire_hours: 24 },
-  ocr: { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "", timeout: 10, retries: 3, accuracy: "normal" },
-  doc_parser: { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "docmind-api.cn-hangzhou.aliyuncs.com", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
+  oss: { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", bucket: "", url_expire_hours: 24 },
+  ocr: { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", timeout: 10, retries: 3, accuracy: "normal" },
+  doc_parser: { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", endpoint: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
   tts: { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", token: "", url: "", voice: "xiaoyun", speech_rate: 0, volume: 50, sample_rate: 16000, format: "wav" },
   email: { config_id: null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false }
 });
@@ -1007,7 +1007,7 @@ function serviceMissing(type: ServiceKey) {
   const draft = serviceDrafts[type];
   if (!draft.name || !draft.provider) return "服务必填";
   if (["mock", "local"].includes(draft.provider)) return "";
-  const required: Record<ServiceKey, string[]> = { oss: ["access_key_id", "access_key_secret", "endpoint", "bucket"], ocr: ["access_key_id", "access_key_secret", "endpoint"], doc_parser: ["access_key_id", "access_key_secret", "endpoint"], tts: ["appkey", "token", "url", "voice"], email: ["host", "port", "sender"] };
+  const required: Record<ServiceKey, string[]> = { oss: ["access_key_id", "access_key_secret", "bucket"], ocr: ["access_key_id", "access_key_secret"], doc_parser: ["access_key_id", "access_key_secret"], tts: ["appkey", "token", "voice"], email: ["host", "port", "sender"] };
   const missing = required[type].filter((key) => !draft[key]);
   return missing.length ? `缺少 ${missing.join(",")}` : "";
 }

@@ -204,7 +204,6 @@ http://127.0.0.1:8000/docs
   "config": {
     "access_key_id": "xxx",
     "access_key_secret": "xxx",
-    "endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
     "region": "cn-hangzhou",
     "bucket": "examplebucket"
   },
@@ -216,6 +215,7 @@ http://127.0.0.1:8000/docs
 
 - OSS 不是强制配置项
 - 不配置 OSS 时自动使用本地存储
+- `endpoint` 可不填，系统按 `region` 自动生成 `https://oss-{region}.aliyuncs.com`
 - 如果配置了 `public_base_url` 或 `cdn_domain`，返回文件地址时会优先使用该地址
 
 ### 5.2 OCR 配置示例
@@ -228,12 +228,13 @@ http://127.0.0.1:8000/docs
   "config": {
     "access_key_id": "xxx",
     "access_key_secret": "xxx",
-    "endpoint": "green.cn-shanghai.aliyuncs.com",
-    "region": "cn-shanghai"
+    "endpoint": "ocr-api.cn-hangzhou.aliyuncs.com"
   },
   "is_enabled": true
 }
 ```
+
+`endpoint` 可不填，系统默认使用官方 SDK 入口 `ocr-api.cn-hangzhou.aliyuncs.com`。
 
 ### 5.3 文档解析配置示例
 
@@ -247,7 +248,6 @@ http://127.0.0.1:8000/docs
   "config": {
     "access_key_id": "xxx",
     "access_key_secret": "xxx",
-    "endpoint": "docmind-api.cn-hangzhou.aliyuncs.com",
     "region": "cn-hangzhou",
     "timeout_seconds": 600,
     "poll_interval_seconds": 5,
@@ -261,6 +261,8 @@ http://127.0.0.1:8000/docs
   "is_enabled": true
 }
 ```
+
+`endpoint` 可不填，系统默认使用官方 SDK 入口 `docmind-api.cn-hangzhou.aliyuncs.com`。
 
 处理流程：
 
@@ -278,8 +280,6 @@ http://127.0.0.1:8000/docs
   "config": {
     "appkey": "xxx",
     "token": "xxx",
-    "url": "https://nls-gateway-ap-southeast-1.aliyuncs.com/stream/v1/tts",
-    "method": "GET",
     "voice": "xiaoyun",
     "format": "wav",
     "sample_rate": 16000,
@@ -289,6 +289,8 @@ http://127.0.0.1:8000/docs
   "is_enabled": true
 }
 ```
+
+TTS 使用阿里云智能语音交互 Python SDK `nls.NlsSpeechSynthesizer`。`url` 可不填，系统默认使用官方 WebSocket 入口 `wss://nls-gateway.cn-shanghai.aliyuncs.com/ws/v1`；如果保留旧 REST URL，后端会自动转换为同域名的 `/ws/v1`。
 
 ### 5.5 邮件配置示例
 
@@ -329,7 +331,7 @@ http://127.0.0.1:8000/docs
 - OSS：阿里云 OSS SDK
 - OCR：阿里云 OCR SDK
 - 文档解析：阿里云 DocMind 文档解析（大模型版）SDK
-- TTS：阿里云 TTS REST 调用
+- TTS：阿里云智能语音交互 Python SDK
 - Email：SMTP
 - Embedding：OpenAI 兼容 `/embeddings`
 
@@ -346,4 +348,4 @@ http://127.0.0.1:8000/docs
 - 阿里云 OSS Python SDK 上传对象：<https://help.aliyun.com/zh/oss/developer-reference/upload-an-object>
 - 阿里云 OCR 通用文字识别 RecognizeGeneral：<https://help.aliyun.com/zh/ocr/developer-reference/api-ocr-api-2021-07-07-recognizegeneral>
 - 阿里云文档解析（大模型版）：<https://help.aliyun.com/zh/document-mind/developer-reference/api-overview>
-- 阿里云智能语音交互 RESTful TTS：<https://help.aliyun.com/zh/isi/developer-reference/restful-api-3>
+- 阿里云智能语音交互 Python SDK：<https://help.aliyun.com/zh/isi/developer-reference/sdk-for-python-1>

@@ -115,7 +115,6 @@
   "config": {
     "access_key_id": "xxx",
     "access_key_secret": "xxx",
-    "endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
     "region": "cn-hangzhou",
     "bucket": "examplebucket"
   },
@@ -132,9 +131,7 @@
   "name": "aliyun-ocr",
   "config": {
     "access_key_id": "xxx",
-    "access_key_secret": "xxx",
-    "endpoint": "green.cn-shanghai.aliyuncs.com",
-    "region": "cn-shanghai"
+    "access_key_secret": "xxx"
   },
   "is_enabled": true
 }
@@ -150,7 +147,6 @@
   "config": {
     "appkey": "xxx",
     "token": "xxx",
-    "url": "https://nls-gateway-ap-southeast-1.aliyuncs.com/stream/v1/tts",
     "voice": "xiaoyun",
     "speech_rate": 0,
     "volume": 50
@@ -169,7 +165,6 @@
   "config": {
     "access_key_id": "xxx",
     "access_key_secret": "xxx",
-    "endpoint": "docmind-api.cn-hangzhou.aliyuncs.com",
     "region": "cn-hangzhou",
     "timeout_seconds": 600,
     "poll_interval_seconds": 5,
@@ -307,8 +302,8 @@
   - https://www.alibabacloud.com/help/en/oss/initialization-2
 - OCR Python SDK 与 `RecognizeGeneral`：
   - https://help.aliyun.com/zh/ocr/developer-reference/api-ocr-api-2021-07-07-recognizegeneral
-- TTS RESTful API 与 `appkey/token/voice/speech_rate/volume`：
-  - https://www.alibabacloud.com/help/en/isi/developer-reference/restful-api-3
+- TTS Python SDK 与 `NlsSpeechSynthesizer`：
+  - https://help.aliyun.com/zh/isi/developer-reference/sdk-for-python-1
 
 ## 当前阶段验证结论
 

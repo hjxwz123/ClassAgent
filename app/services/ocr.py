@@ -51,6 +51,8 @@ def _extract_text(value: Any) -> str:
 
 
 class OCRService:
+    default_endpoint = "ocr-api.cn-hangzhou.aliyuncs.com"
+
     def __init__(self) -> None:
         self.settings = get_settings()
 
@@ -58,7 +60,7 @@ class OCRService:
         return f"未配置 OCR 服务，已接收图片 {upload.filename or 'unknown'}，请学生手动修正识别结果。"
 
     def _recognize_aliyun(self, content: bytes, config: dict) -> str:
-        required = ["access_key_id", "access_key_secret", "endpoint"]
+        required = ["access_key_id", "access_key_secret"]
         missing = [key for key in required if not config.get(key)]
         if missing:
             raise bad_request(f"OCR 配置缺少字段: {', '.join(missing)}")
@@ -74,7 +76,7 @@ class OCRService:
             openapi_models.Config(
                 access_key_id=config["access_key_id"],
                 access_key_secret=config["access_key_secret"],
-                endpoint=config["endpoint"],
+                endpoint=config.get("endpoint") or self.default_endpoint,
             )
         )
         request = ocr_models.RecognizeGeneralRequest(body=BytesIO(content))

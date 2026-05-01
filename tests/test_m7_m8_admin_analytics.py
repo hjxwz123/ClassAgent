@@ -276,7 +276,6 @@ def test_teacher_analytics_and_admin_operations(client):
             "config": {
                 "access_key_id": "test-ak",
                 "access_key_secret": "test-secret",
-                "endpoint": "docmind-api.cn-hangzhou.aliyuncs.com",
                 "region": "cn-hangzhou",
             },
             "is_enabled": True,
