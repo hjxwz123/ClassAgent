@@ -238,7 +238,7 @@
           </section>
         </section>
 
-        <section v-if="active === 'adminServices'" class="admin-page page-view">
+        <section v-if="active === 'adminServices'" class="admin-page page-view service-page">
           <div class="page-header">
             <div class="breadcrumb"><span>系统管理</span><ChevronRight :size="14" /><span>阿里云服务</span></div>
             <div class="header-actions">
@@ -979,20 +979,20 @@ const ServiceConfigCard = defineComponent({
   props: { title: { type: String, required: true }, icon: { type: Object, required: true }, type: { type: String, required: true }, draft: { type: Object, required: true }, status: { type: String, required: true } },
   emits: ["save", "test", "remove"],
   setup(p, { slots, emit: update }) {
-    return () => h("article", { class: "card service-config-card" }, [
-      h("div", { class: "card-header" }, [
-        h("div", { class: "card-title" }, [
-          h(p.icon as any, { size: 20 }),
-          p.title,
+    return () => h("article", { class: ["service-config-card", `service-${p.type}`] }, [
+      h("div", { class: "service-card-header" }, [
+        h("div", { class: "service-card-title" }, [
+          h("span", { class: "service-card-icon" }, [h(p.icon as any, { size: 20 })]),
+          h("h2", p.title),
           h("span", { class: ["tag", statusClass(p.status)] }, statusText(p.status))
         ]),
-        h("div", { class: "header-actions" }, [
-          h("button", { class: "btn btn-secondary btn-sm", onClick: () => update("test") }, "测试"),
-          h("button", { class: "btn btn-primary btn-sm", onClick: () => update("save") }, "保存"),
-          h("button", { class: "btn btn-ghost btn-sm", onClick: () => update("remove") }, "删除")
+        h("div", { class: "service-card-actions" }, [
+          h("button", { class: "btn btn-secondary btn-sm", onClick: () => update("test") }, [h(RefreshCw, { size: 14 }), "测试"]),
+          h("button", { class: "btn btn-primary btn-sm", onClick: () => update("save") }, [h(Save, { size: 14 }), "保存"]),
+          h("button", { class: "btn btn-ghost btn-sm service-delete", onClick: () => update("remove") }, [h(Trash2, { size: 14 }), "删除"])
         ])
       ]),
-      h("div", { class: "card-body grid-2" }, slots.default?.())
+      h("div", { class: "service-card-body" }, slots.default?.())
     ]);
   }
 });
@@ -1193,9 +1193,24 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .purpose-card { display: grid; gap: 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 14px; }
 .purpose-card div { display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); }
 .card-tools { display: flex; align-items: center; gap: 8px; }
-.service-config-stack { max-width: 900px; }
-.service-config-card { padding: 0; overflow: hidden; }
-.service-config-card .btn-sm { min-height: 32px; }
+.service-page { gap: 20px; }
+.service-page .page-header { width: 100%; max-width: 1080px; }
+.service-config-stack { width: 100%; max-width: 1080px; display: grid; gap: 22px; }
+.service-config-card { overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); box-shadow: var(--shadow-sm); padding: 0; transition: border-color 200ms var(--ease-out), box-shadow 200ms var(--ease-out), transform 200ms var(--ease-out); }
+.service-config-card:hover { border-color: var(--color-primary-200); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.service-card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 20px; min-height: 74px; border-bottom: 1px solid var(--color-border-subtle); background: linear-gradient(180deg, var(--color-bg-surface), var(--color-bg-muted)); padding: 16px 22px; }
+.service-card-title { min-width: 0; display: flex; align-items: center; gap: 12px; }
+.service-card-icon { display: inline-flex; width: 40px; height: 40px; flex: 0 0 40px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-600); }
+.service-card-title h2 { min-width: 0; margin: 0; overflow: hidden; color: var(--color-text-primary); font-size: 16px; font-weight: 600; line-height: 24px; text-overflow: ellipsis; white-space: nowrap; }
+.service-card-title .tag { margin-left: 4px; }
+.service-card-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.service-card-actions .btn-sm { min-height: 32px; padding: 0 12px; }
+.service-delete { color: var(--color-danger-700); }
+.service-delete:hover { background: var(--color-danger-50); color: var(--color-danger-700); }
+.service-card-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; padding: 24px 22px 26px; }
+.service-card-body .form-group { gap: 8px; }
+.service-card-body .form-control { height: 38px; border-color: var(--color-border-default); border-radius: var(--radius-md); background: white; }
+.service-card-body .form-control[type="range"] { height: 38px; background: transparent; }
 .settings-list { padding: 12px 32px; }
 .setting-row { display: grid; grid-template-columns: 200px minmax(260px, 1fr) 140px; align-items: center; gap: 16px; border-bottom: 1px dashed var(--color-border-default); padding: 20px 0; }
 .setting-row > div { display: grid; gap: 4px; }
