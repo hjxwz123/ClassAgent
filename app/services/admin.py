@@ -653,6 +653,12 @@ def save_service_config(
     record = db.get(ServiceConfig, config_id) if config_id else ServiceConfig()
     if record is None:
         raise not_found("服务配置不存在")
+    normalized_config: dict = {}
+    for key, value in config.items():
+        if isinstance(value, str):
+            value = value.strip()
+        normalized_config[key] = value
+    config = normalized_config
     if config_id and record.config_encrypted:
         existing = json.loads(decrypt_secret(record.config_encrypted))
         merged = dict(existing)
@@ -663,6 +669,12 @@ def save_service_config(
                 continue
             merged[key] = value
         config = merged
+    if service_type == "oss" and provider in {"local", "mock"}:
+        config = {
+            key: value
+            for key, value in config.items()
+            if key in {"url_expire_hours"}
+        }
     if provider == "aliyun":
         sdk_managed_keys = {
             "oss": {"endpoint"},
