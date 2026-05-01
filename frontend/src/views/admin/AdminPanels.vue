@@ -410,7 +410,7 @@ const modelForm = reactive({ config_id: null as number | null, provider: "openai
 const modelExtra = ref('{"temperature":0.2}');
 type ServiceKey = "oss" | "ocr" | "doc_parser" | "tts" | "email";
 const serviceDrafts = reactive({
-  oss: { config_id: null as number | null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "" },
+  oss: { config_id: null as number | null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "", url_expire_hours: 24 },
   ocr: { config_id: null as number | null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou" },
   doc_parser: { config_id: null as number | null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
   tts: { config_id: null as number | null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", voice: "", speech_rate: 0, volume: 50 },
@@ -628,6 +628,7 @@ function hydrateServiceDrafts() {
 function serviceConfigPayload(type: ServiceKey) {
   if (type === "oss") {
     const item = serviceDrafts.oss;
+    if (item.provider !== "aliyun") return { url_expire_hours: item.url_expire_hours };
     return { access_key_id: item.access_key_id, access_key_secret: item.access_key_secret, region: item.region, bucket: item.bucket };
   }
   if (type === "ocr") {
@@ -699,7 +700,7 @@ async function deleteServiceType(type: ServiceKey) {
   await loadServices();
 }
 function resetServiceDraft(type: ServiceKey) {
-  if (type === "oss") Object.assign(serviceDrafts.oss, { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "" });
+  if (type === "oss") Object.assign(serviceDrafts.oss, { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "", url_expire_hours: 24 });
   if (type === "ocr") Object.assign(serviceDrafts.ocr, { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou" });
   if (type === "doc_parser") Object.assign(serviceDrafts.doc_parser, { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false });
   if (type === "tts") Object.assign(serviceDrafts.tts, { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", voice: "", speech_rate: 0, volume: 50 });

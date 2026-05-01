@@ -425,7 +425,13 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
 def dispatch_material_processing(material_id: int) -> None:
     from app.tasks.materials import process_material_task
 
-    process_material_task.delay(material_id)
+    try:
+        process_material_task.delay(material_id)
+    except Exception:
+        # In eager mode the processing task runs inside the upload request. The
+        # pipeline records failed status itself, so upload should still return
+        # the created material instead of converting processing failure to 500.
+        return
 
 
 def reprocess_material(db: Session, *, material_id: int, user: User) -> CourseMaterial:

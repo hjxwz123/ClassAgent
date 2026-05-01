@@ -263,11 +263,13 @@
               <div class="aliyun-field-grid">
                 <label>供应商 / 类型<select v-model="serviceDrafts.oss.provider" class="select"><option value="aliyun">阿里云 OSS</option><option value="local">本地存储</option><option value="mock">Mock</option></select></label>
                 <label>配置名称<input v-model="serviceDrafts.oss.name" class="input" /></label>
-                <label>AccessKey ID<input v-model="serviceDrafts.oss.access_key_id" class="input" type="password" /></label>
-                <label>AccessKey Secret<input v-model="serviceDrafts.oss.access_key_secret" class="input" type="password" /></label>
-                <label>Bucket 名称<input v-model="serviceDrafts.oss.bucket" class="input" /></label>
-                <label>Region<input v-model="serviceDrafts.oss.region" class="input" /></label>
-                <label>URL 过期<input v-model.number="serviceDrafts.oss.url_expire_hours" class="input" type="number" /></label>
+                <template v-if="serviceDrafts.oss.provider === 'aliyun'">
+                  <label>AccessKey ID<input v-model="serviceDrafts.oss.access_key_id" class="input" type="password" /></label>
+                  <label>AccessKey Secret<input v-model="serviceDrafts.oss.access_key_secret" class="input" type="password" /></label>
+                  <label>Bucket 名称<input v-model="serviceDrafts.oss.bucket" class="input" /></label>
+                  <label>Region<input v-model="serviceDrafts.oss.region" class="input" /></label>
+                  <label>URL 过期<input v-model.number="serviceDrafts.oss.url_expire_hours" class="input" type="number" /></label>
+                </template>
               </div>
             </article>
 
@@ -1005,6 +1007,7 @@ async function testEmbeddingModel() { const item = models.value.find((model) => 
 function serviceConfigPayload(type: ServiceKey) {
   const draft = serviceDrafts[type];
   const { config_id, provider, name, is_enabled, ...config } = draft;
+  if (type === "oss" && provider !== "aliyun") return { url_expire_hours: serviceDrafts.oss.url_expire_hours };
   if (["oss", "ocr", "doc_parser"].includes(type)) delete config.endpoint;
   if (type === "tts") {
     delete config.token;

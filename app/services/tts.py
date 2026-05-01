@@ -38,7 +38,23 @@ class TTSService:
     def _nls_url(self) -> str:
         return self.default_nls_url
 
+    def _clean_config(self, config: dict) -> dict:
+        cleaned = dict(config)
+        for key in (
+            "access_key_id",
+            "access_key_secret",
+            "appkey",
+            "voice",
+            "format",
+            "url",
+            "token",
+        ):
+            if isinstance(cleaned.get(key), str):
+                cleaned[key] = cleaned[key].strip()
+        return cleaned
+
     def _create_token(self, config: dict) -> tuple[str, int]:
+        config = self._clean_config(config)
         try:
             from aliyunsdkcore.client import AcsClient
             from aliyunsdkcore.request import CommonRequest
@@ -61,6 +77,7 @@ class TTSService:
         return str(token), expire_time
 
     def _access_token(self, config: dict) -> str:
+        config = self._clean_config(config)
         cache_key = (str(config["access_key_id"]), str(config["access_key_secret"]))
         now = int(time.time())
         cached = self._token_cache.get(cache_key)
@@ -88,6 +105,7 @@ class TTSService:
         return storage_service.public_url(relative_path, db=db), duration
 
     def _synthesize_aliyun_bytes(self, text: str, config: dict) -> tuple[bytes, str]:
+        config = self._clean_config(config)
         required = ["access_key_id", "access_key_secret", "appkey", "voice"]
         missing = [key for key in required if not config.get(key)]
         if missing:
@@ -138,6 +156,7 @@ class TTSService:
         return content, audio_format
 
     def _synthesize_aliyun(self, text: str, db: Session, config: dict) -> tuple[str, float]:
+        config = self._clean_config(config)
         content, audio_format = self._synthesize_aliyun_bytes(text, config)
         relative_path = storage_service.save_bytes(
             content,
@@ -150,7 +169,7 @@ class TTSService:
 
     def test_config(self, config: dict) -> dict:
         try:
-            self._synthesize_aliyun_bytes("连接测试", config)
+            self._synthesize_aliyun_bytes("连接测试", self._clean_config(config))
         except Exception as exc:
             return {"success": False, "message": str(exc)}
         return {"success": True, "message": "TTS 配置可用"}
@@ -158,7 +177,11 @@ class TTSService:
     def synthesize(self, text: str, db: Session | None = None) -> tuple[str, float]:
         service = get_enabled_service_config(db, "tts")
         if service is not None:
-            return self._synthesize_aliyun(text, db, service.config)
+            if service.provider == "mock":
+                return self._synthesize_mock(text, db)
+            if service.provider == "aliyun":
+                return self._synthesize_aliyun(text, db, self._clean_config(service.config))
+            raise bad_request(f"暂不支持的 TTS 服务提供方: {service.provider}")
         if self.settings.app_env == "production":
             raise bad_request("TTS 服务未配置，请先在管理员服务配置中启用 tts")
         return self._synthesize_mock(text, db)
