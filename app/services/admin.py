@@ -668,7 +668,7 @@ def save_service_config(
             "oss": {"endpoint"},
             "ocr": {"endpoint"},
             "doc_parser": {"endpoint"},
-            "tts": {"url"},
+            "tts": {"token", "url"},
         }.get(service_type, set())
         for key in sdk_managed_keys:
             config.pop(key, None)
@@ -706,7 +706,7 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
         "oss": ["access_key_id", "access_key_secret", "bucket"],
         "ocr": ["access_key_id", "access_key_secret"],
         "doc_parser": ["access_key_id", "access_key_secret"],
-        "tts": ["appkey", "token", "voice"],
+        "tts": ["access_key_id", "access_key_secret", "appkey", "voice"],
         "email": ["host", "port", "sender"],
     }.get(record.service_type, [])
     missing = [key for key in required_keys if not config.get(key)]

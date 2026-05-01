@@ -343,7 +343,6 @@
                 <label>AccessKey ID<input v-model="serviceDrafts.tts.access_key_id" class="input" type="password" /></label>
                 <label>AccessKey Secret<input v-model="serviceDrafts.tts.access_key_secret" class="input" type="password" /></label>
                 <label>AppKey<input v-model="serviceDrafts.tts.appkey" class="input" /></label>
-                <label>Token<input v-model="serviceDrafts.tts.token" class="input" type="password" /></label>
                 <label>音色<input v-model="serviceDrafts.tts.voice" class="input" /></label>
                 <label>语速<input v-model.number="serviceDrafts.tts.speech_rate" class="input" type="range" min="-500" max="500" /></label>
                 <label>音量<input v-model.number="serviceDrafts.tts.volume" class="input" type="range" min="0" max="100" /></label>
@@ -595,7 +594,7 @@ const serviceDrafts = reactive<Record<ServiceKey, any>>({
   oss: { config_id: null, provider: "aliyun", name: "OSS", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", bucket: "", url_expire_hours: 24 },
   ocr: { config_id: null, provider: "aliyun", name: "OCR", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout: 10, retries: 3, accuracy: "normal" },
   doc_parser: { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
-  tts: { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", token: "", voice: "xiaoyun", speech_rate: 0, volume: 50, sample_rate: 16000, format: "wav" },
+  tts: { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", voice: "xiaoyun", speech_rate: 0, volume: 50, sample_rate: 16000, format: "wav" },
   email: { config_id: null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false }
 });
 
@@ -1007,14 +1006,17 @@ function serviceConfigPayload(type: ServiceKey) {
   const draft = serviceDrafts[type];
   const { config_id, provider, name, is_enabled, ...config } = draft;
   if (["oss", "ocr", "doc_parser"].includes(type)) delete config.endpoint;
-  if (type === "tts") delete config.url;
+  if (type === "tts") {
+    delete config.token;
+    delete config.url;
+  }
   return config;
 }
 function serviceMissing(type: ServiceKey) {
   const draft = serviceDrafts[type];
   if (!draft.name || !draft.provider) return "服务必填";
   if (["mock", "local"].includes(draft.provider)) return "";
-  const required: Record<ServiceKey, string[]> = { oss: ["access_key_id", "access_key_secret", "bucket"], ocr: ["access_key_id", "access_key_secret"], doc_parser: ["access_key_id", "access_key_secret"], tts: ["appkey", "token", "voice"], email: ["host", "port", "sender"] };
+  const required: Record<ServiceKey, string[]> = { oss: ["access_key_id", "access_key_secret", "bucket"], ocr: ["access_key_id", "access_key_secret"], doc_parser: ["access_key_id", "access_key_secret"], tts: ["access_key_id", "access_key_secret", "appkey", "voice"], email: ["host", "port", "sender"] };
   const missing = required[type].filter((key) => !draft[key]);
   return missing.length ? `缺少 ${missing.join(",")}` : "";
 }

@@ -149,8 +149,9 @@
   "provider": "aliyun",
   "name": "aliyun-tts",
   "config": {
+    "access_key_id": "xxx",
+    "access_key_secret": "xxx",
     "appkey": "xxx",
-    "token": "xxx",
     "voice": "xiaoyun",
     "speech_rate": 0,
     "volume": 50
