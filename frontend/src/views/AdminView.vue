@@ -36,8 +36,8 @@
           <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
             <span class="avatar">管</span><span>{{ user.nickname }}</span><ChevronDown :size="16" />
           </button>
-          <Transition name="popover">
-            <div v-if="userMenuOpen" class="dropdown">
+          <Transition name="top-popover" appear>
+            <div v-if="userMenuOpen" class="dropdown top-popover-panel">
               <button @click="go('profile')"><User :size="15" />资料</button>
               <button @click="$emit('logout')"><LogOut :size="15" />退出</button>
             </div>
