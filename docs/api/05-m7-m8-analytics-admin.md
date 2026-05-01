@@ -29,6 +29,7 @@
 说明：
 
 - `dashboard` 返回总览仪表盘所需的统计卡、趋势图、服务状态、最近操作、课程排行、最近注册、待处理事项。
+- `dashboard` 可选参数：`activity_days=7|30|90`，默认 `30`，用于活跃度趋势切换。
 - `service-health` 返回数据库、Redis、向量数据库、Celery、OSS、OCR、TTS、邮件、LLM 状态。
 
 ### 1. 用户管理

@@ -81,7 +81,12 @@
           <div class="content-row">
             <section class="left-col">
               <article class="panel-card">
-                <div class="panel-head"><div><h2>活跃度趋势</h2><span>过去 30 天</span></div><Segmented v-model="trendRange" :items="['7天','30天','90天']" /></div>
+                <div class="panel-head">
+                  <div><h2>活跃度趋势</h2><span>{{ trendSubtitle }}</span></div>
+                  <div class="segmented-control">
+                    <button v-for="item in trendOptions" :key="item" type="button" class="segment-btn" :class="{ active: trendRange === item }" @click="setTrendRange(item)">{{ item }}</button>
+                  </div>
+                </div>
                 <AdminChart type="line" :height="280" :labels="activityLabels" :series="activitySeries" />
               </article>
             </section>
@@ -218,7 +223,16 @@
               <div class="form-section"><h3>用途分配</h3><div class="purpose-config-grid"><article v-for="item in llmPurposes" :key="item.key" class="purpose-card"><div><component :is="item.icon" :size="16" /><strong>{{ item.label }}</strong></div><input v-model="modelDrafts[item.key].model_name" class="input" placeholder="qwen-max" /><label>Temperature <input v-model.number="modelDrafts[item.key].temperature" type="range" min="0" max="2" step="0.1" /> <b>{{ modelDrafts[item.key].temperature }}</b></label><label>最大 Token<input v-model.number="modelDrafts[item.key].max_tokens" class="input" type="number" /></label></article></div></div>
             </article>
             <article v-if="modelTab === 'embedding'" class="panel-card form-panel"><div class="panel-head"><div><h2><Layers :size="18" />Embedding 模型</h2><span>用于资料向量化</span></div><button class="btn btn-secondary" @click="testEmbeddingModel">测试</button></div><div class="form-grid"><label>供应商<select v-model="embeddingDraft.provider" class="select"><option value="qwen">通义千问</option><option value="openai">OpenAI</option><option value="mock">Mock</option></select></label><label>模型<input v-model="embeddingDraft.model_name" class="input" placeholder="text-embedding-v2" /></label><label>向量维度<input v-model.number="embeddingDraft.dimensions" class="input" type="number" /></label><label>API Key<input v-model="embeddingDraft.api_key" class="input" type="password" /></label><label class="wide-field">API Base<input v-model="embeddingDraft.endpoint" class="input" /></label></div></article>
-            <article v-if="modelTab === 'usage'" class="panel-card"><div class="panel-head"><div><h2>模型调用统计</h2><span>最近调用汇总</span></div><Segmented v-model="usageUnit" :items="['次数','Token','费用']" /></div><div class="metric-grid four compact"><MetricCard :icon="Sparkles" label="调用次数" :value="usageTotal.calls" trend="累计" /><MetricCard :icon="BarChart2" label="Token" :value="usageTotal.tokens" trend="输入/输出" /><MetricCard :icon="Database" label="费用" :value="`$${usageTotal.cost}`" trend="估算" /><MetricCard :icon="Clock" label="响应" value="-" trend="待接入" /></div><AdminChart type="hbar" :labels="usageLabels" :series="usageSeries" /></article>
+            <article v-if="modelTab === 'usage'" class="panel-card">
+              <div class="panel-head">
+                <div><h2>模型调用统计</h2><span>最近调用汇总</span></div>
+                <div class="segmented-control">
+                  <button v-for="item in usageOptions" :key="item" type="button" class="segment-btn" :class="{ active: usageUnit === item }" @click="usageUnit = item">{{ item }}</button>
+                </div>
+              </div>
+              <div class="metric-grid four compact"><MetricCard :icon="Sparkles" label="调用次数" :value="usageTotal.calls" trend="累计" /><MetricCard :icon="BarChart2" label="Token" :value="usageTotal.tokens" trend="输入/输出" /><MetricCard :icon="Database" label="费用" :value="`$${usageTotal.cost}`" trend="估算" /><MetricCard :icon="Clock" label="响应" value="-" trend="待接入" /></div>
+              <AdminChart type="hbar" :labels="usageLabels" :series="usageSeries" />
+            </article>
           </section>
         </section>
 
@@ -317,7 +331,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onBeforeUnmount, onMounted, reactive, ref, watch, type PropType } from "vue";
+import { computed, defineComponent, h, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   Activity, AlertCircle, AlertTriangle, Ban, BarChart2, Bell, BookOpen, CheckCircle, CheckSquare, ChevronDown,
@@ -353,7 +367,9 @@ const routeByKey: Record<string, string> = {
 const collapsed = ref(false);
 const userMenuOpen = ref(false);
 const active = ref(props.pageKey || "adminDashboard");
+const trendOptions = ["7天", "30天", "90天"];
 const trendRange = ref("30天");
+const usageOptions = ["次数", "Token", "费用"];
 const dashboard = ref<any>({});
 const health = ref<any>(null);
 const overview = ref<any>({});
@@ -467,6 +483,8 @@ const currentTitle = computed(() => navGroups.flatMap((group) => group.items).fi
 const todayText = computed(() => new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" }));
 const healthItems = computed(() => health.value?.items || dashboard.value.service_health?.items || []);
 const alertCount = computed(() => healthItems.value.filter((item: any) => ["down", "not_configured", "failed"].includes(item.status)).length);
+const trendDays = computed(() => Number.parseInt(trendRange.value, 10) || 30);
+const trendSubtitle = computed(() => `过去 ${trendDays.value} 天`);
 const activityLabels = computed(() => (dashboard.value.activity_trend || []).map((item: any) => item.date));
 const activitySeries = computed(() => [{ name: "活跃用户", data: (dashboard.value.activity_trend || []).map((item: any) => item.active_users), color: "#4F46E5" }, { name: "AI 调用", data: (dashboard.value.activity_trend || []).map((item: any) => item.ai_calls), color: "#06B6D4" }]);
 const filteredCourses = computed(() => courses.value.filter((item) => !courseTerm.value || String(item.term || "").includes(courseTerm.value)));
@@ -480,7 +498,12 @@ const usageTotal = computed(() => {
   return { calls, tokens, cost };
 });
 const usageLabels = computed(() => (usage.value.items || []).map((item: any) => item.provider));
-const usageSeries = computed(() => [{ name: "调用", data: (usage.value.items || []).map((item: any) => item.call_count || 0), color: "#8B5CF6" }]);
+const usageSeries = computed(() => {
+  const items = usage.value.items || [];
+  if (usageUnit.value === "Token") return [{ name: "Token", data: items.map((item: any) => Number(item.prompt_tokens || 0) + Number(item.completion_tokens || 0)), color: "#06B6D4" }];
+  if (usageUnit.value === "费用") return [{ name: "费用", data: items.map((item: any) => Number(item.estimated_cost || 0)), color: "#10B981" }];
+  return [{ name: "次数", data: items.map((item: any) => item.call_count || 0), color: "#8B5CF6" }];
+});
 const activeSettingRows = computed(() => settingRows.filter((item) => item.category === settingTab.value));
 const changedSettings = computed(() => Object.keys(settingDrafts).filter((key) => JSON.stringify(settingDrafts[key]) !== JSON.stringify(originalSettings.value[key])));
 const monitorLabels = computed(() => (monitorSeriesData.value.points || []).map((item: any) => item.time));
@@ -596,8 +619,13 @@ function settingControl(item: any) {
 }
 
 async function loadDashboard() {
-  dashboard.value = (await run(() => api.get("/admin/dashboard"))) || {};
+  dashboard.value = (await run(() => api.get("/admin/dashboard", { activity_days: trendDays.value }))) || {};
   health.value = dashboard.value.service_health || health.value;
+}
+async function setTrendRange(value: string) {
+  if (trendRange.value === value) return;
+  trendRange.value = value;
+  await loadDashboard();
 }
 async function loadHealth() {
   health.value = await run(() => api.get("/admin/service-health"));
@@ -812,13 +840,6 @@ const MetricCard = defineComponent({
 const TrendingUpIcon = defineComponent(() => () => h("span", { class: "trend-dot" }));
 const EmptyState = defineComponent({ props: { text: { type: String, required: true } }, setup(p) { return () => h("div", { class: "empty" }, [h(Inbox, { size: 28 }), h("span", p.text)]); } });
 const InfoRow = defineComponent({ props: { label: { type: String, required: true }, value: { type: String, required: true } }, setup(p) { return () => h("div", { class: "info-row" }, [h("span", p.label), h("strong", p.value)]); } });
-const Segmented = defineComponent({
-  props: { modelValue: { type: String, required: true }, items: { type: Array as PropType<string[]>, required: true } },
-  emits: ["update:modelValue"],
-  setup(p, { emit: update }) {
-    return () => h("div", { class: "segmented-control" }, p.items.map((item) => h("button", { type: "button", class: ["segment-btn", { active: p.modelValue === item }], onClick: () => update("update:modelValue", item) }, item)));
-  }
-});
 const ServiceConfigCard = defineComponent({
   props: { title: { type: String, required: true }, icon: { type: Object, required: true }, type: { type: String, required: true }, draft: { type: Object, required: true }, status: { type: String, required: true } },
   emits: ["save", "test", "remove"],

@@ -84,9 +84,10 @@ def get_dashboard_endpoint(
     request: Request,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    activity_days: Annotated[int, Query(description="活跃趋势天数，支持 7、30、90")] = 30,
 ):
     assert_admin(user)
-    return success_response(data=get_admin_dashboard(db), request_id=request.state.request_id)
+    return success_response(data=get_admin_dashboard(db, activity_days=int(activity_days)), request_id=request.state.request_id)
 
 
 @router.get("/service-health")

@@ -258,13 +258,13 @@
 
           <template v-else-if="active === 'studentKnowledge'">
             <PageTitle title="知识点精讲" sub="按需深入学习"><CourseSelect /></PageTitle>
-            <div class="knowledge-layout"><aside class="knowledge-tree"><div class="pretty-input"><Search :size="15" /><input v-model="knowledgeKeyword" placeholder="搜索知识点" /></div><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" @click="selectedChapterId = chapter.id; loadKnowledge()"><ChevronRight :size="14" />{{ chapter.title }}</button><div class="weak-tags"><strong><Zap :size="14" />薄弱知识点</strong><span v-for="item in weakPoints.slice(0, 3)" :key="item.knowledge_point" class="tag tag-danger">{{ item.knowledge_point }}</span></div></aside><section class="knowledge-content"><article class="knowledge-head"><h1>{{ selectedKnowledge?.name || '选择知识点' }}</h1><p>所属：{{ chapterName(selectedKnowledge?.chapter_id) }}</p><span class="tag" :class="knowledgeMasteryClass">{{ knowledgeMasteryText }}</span><progress :value="knowledgeMastery" max="100"></progress></article><Segmented v-model="knowledgeLevel" :items="levelItems" /><article class="knowledge-body"><KnowledgeBlock icon="Quote" title="定义" :content="knowledgeContent.definition" /><KnowledgeBlock icon="Layers" title="核心原理" :content="knowledgeContent.principle" ai /><KnowledgeBlock icon="Pencil" title="例题解析" :content="knowledgeContent.example" /><KnowledgeBlock icon="AlertTriangle" title="常见易错点" :content="knowledgeContent.common_mistake" warning /><div class="practice-cta"><Sparkles :size="16" />基于此知识点生成练习题<button @click="generateKnowledgeQuiz(5)">练习5题</button><button @click="generateKnowledgeQuiz(10)">练习10题</button></div></article></section></div>
+            <div class="knowledge-layout"><aside class="knowledge-tree"><div class="pretty-input"><Search :size="15" /><input v-model="knowledgeKeyword" placeholder="搜索知识点" /></div><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" @click="selectedChapterId = chapter.id; loadKnowledge()"><ChevronRight :size="14" />{{ chapter.title }}</button><div class="weak-tags"><strong><Zap :size="14" />薄弱知识点</strong><span v-for="item in weakPoints.slice(0, 3)" :key="item.knowledge_point" class="tag tag-danger">{{ item.knowledge_point }}</span></div></aside><section class="knowledge-content"><article class="knowledge-head"><h1>{{ selectedKnowledge?.name || '选择知识点' }}</h1><p>所属：{{ chapterName(selectedKnowledge?.chapter_id) }}</p><span class="tag" :class="knowledgeMasteryClass">{{ knowledgeMasteryText }}</span><progress :value="knowledgeMastery" max="100"></progress></article><div class="segmented"><button v-for="item in levelItems" :key="item.value" type="button" :class="{ active: knowledgeLevel === item.value }" @click="knowledgeLevel = String(item.value)">{{ item.label }}</button></div><article class="knowledge-body"><KnowledgeBlock icon="Quote" title="定义" :content="knowledgeContent.definition" /><KnowledgeBlock icon="Layers" title="核心原理" :content="knowledgeContent.principle" ai /><KnowledgeBlock icon="Pencil" title="例题解析" :content="knowledgeContent.example" /><KnowledgeBlock icon="AlertTriangle" title="常见易错点" :content="knowledgeContent.common_mistake" warning /><div class="practice-cta"><Sparkles :size="16" />基于此知识点生成练习题<button @click="generateKnowledgeQuiz(5)">练习5题</button><button @click="generateKnowledgeQuiz(10)">练习10题</button></div></article></section></div>
           </template>
 
           <template v-else-if="active === 'studentQuizzes'">
             <PageTitle title="练习与测验" sub="课程测验与章节练习"><CourseSelect /></PageTitle>
             <div v-if="answeringQuiz" class="answer-page"><QuizAnswerView :quiz="quizDetail" :answers="quizAnswers" :attempt="attempt" @answer="setQuizAnswer" @submit="submitQuiz" @exit="answeringQuiz = false" /></div>
-            <template v-else><div class="underline-tabs"><button :class="{ active: quizTab === 'course' }" @click="quizTab = 'course'"><ClipboardList :size="16" />课程测验</button><button :class="{ active: quizTab === 'practice' }" @click="quizTab = 'practice'"><Layers :size="16" />章节练习</button></div><section v-if="quizTab === 'course'" class="quiz-list"><QuizCard v-for="quiz in courseQuizzes" :key="quiz.id" :quiz="quiz" @open="startQuiz(quiz.id)" /><EmptyState v-if="!courseQuizzes.length" text="暂无测验" /></section><section v-else class="practice-maker"><article class="panel-card"><h2><Sparkles :size="18" />自选章节练习</h2><div class="chapter-checks"><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" :class="{ active: selectedPracticeChapters.includes(chapter.id) }" @click="togglePracticeChapter(chapter.id)">{{ chapter.title }}</button></div><Segmented v-model="quizQuestionCount" :items="['5题','10题','15题','20题']" /><label class="toggle-line"><input v-model="smartQuiz" type="checkbox" />优先薄弱点</label><button class="btn btn-ai full" @click="generateQuiz"><Sparkles :size="16" />生成练习</button></article><article class="panel-card"><h2>最近练习</h2><QuizCard v-for="quiz in practiceQuizzes" :key="quiz.id" :quiz="quiz" @open="startQuiz(quiz.id)" /></article></section></template>
+            <template v-else><div class="underline-tabs"><button :class="{ active: quizTab === 'course' }" @click="quizTab = 'course'"><ClipboardList :size="16" />课程测验</button><button :class="{ active: quizTab === 'practice' }" @click="quizTab = 'practice'"><Layers :size="16" />章节练习</button></div><section v-if="quizTab === 'course'" class="quiz-list"><QuizCard v-for="quiz in courseQuizzes" :key="quiz.id" :quiz="quiz" @open="startQuiz(quiz.id)" /><EmptyState v-if="!courseQuizzes.length" text="暂无测验" /></section><section v-else class="practice-maker"><article class="panel-card"><h2><Sparkles :size="18" />自选章节练习</h2><div class="chapter-checks"><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" :class="{ active: selectedPracticeChapters.includes(chapter.id) }" @click="togglePracticeChapter(chapter.id)">{{ chapter.title }}</button></div><div class="segmented"><button v-for="item in quizCountOptions" :key="item" type="button" :class="{ active: quizQuestionCount === item }" @click="quizQuestionCount = item">{{ item }}</button></div><label class="toggle-line"><input v-model="smartQuiz" type="checkbox" />优先薄弱点</label><button class="btn btn-ai full" @click="generateQuiz"><Sparkles :size="16" />生成练习</button></article><article class="panel-card"><h2>最近练习</h2><QuizCard v-for="quiz in practiceQuizzes" :key="quiz.id" :quiz="quiz" @open="startQuiz(quiz.id)" /></article></section></template>
           </template>
 
           <template v-else-if="active === 'studentWrongBook'">
@@ -466,6 +466,7 @@ const promptCards = [
   { text: "什么是流量控制？", icon: Wifi }
 ];
 const levelItems = [{ label: "入门", value: "beginner" }, { label: "标准", value: "standard" }, { label: "进阶", value: "advanced" }];
+const quizCountOptions = ["5题", "10题", "15题", "20题"];
 const wrongStatusOptions = [{ label: "全部状态", value: "" }, { label: "待重练", value: "todo" }, { label: "已掌握", value: "done" }];
 const courseMenuItems = [{ label: "课程详情", value: "detail" }, { label: "问答记录", value: "qa" }, { label: "分享课程码", value: "share" }, { label: "退出课程", value: "leave", danger: true }];
 
@@ -884,18 +885,6 @@ const HistoryStrip = defineComponent({
         h("small", relativeTime(item.created_at))
       ]))) : h(EmptyState, { text: "暂无记录" })
     ]);
-  }
-});
-
-const Segmented = defineComponent({
-  props: {
-    modelValue: { type: String, required: true },
-    items: { type: Array as PropType<Array<string | SelectOption>>, required: true }
-  },
-  emits: ["update:modelValue"],
-  setup(p, { emit: update }) {
-    const options = computed(() => normalizeItems(p.items));
-    return () => h("div", { class: "segmented" }, options.value.map((item) => h("button", { type: "button", key: item.value, class: { active: item.value === p.modelValue }, onClick: () => update("update:modelValue", item.value) }, item.label)));
   }
 });
 
