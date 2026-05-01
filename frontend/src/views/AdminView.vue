@@ -36,10 +36,12 @@
           <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
             <span class="avatar">管</span><span>{{ user.nickname }}</span><ChevronDown :size="16" />
           </button>
-          <div v-if="userMenuOpen" class="dropdown">
-            <button @click="go('profile')"><User :size="15" />资料</button>
-            <button @click="$emit('logout')"><LogOut :size="15" />退出</button>
-          </div>
+          <Transition name="popover">
+            <div v-if="userMenuOpen" class="dropdown">
+              <button @click="go('profile')"><User :size="15" />资料</button>
+              <button @click="$emit('logout')"><LogOut :size="15" />退出</button>
+            </div>
+          </Transition>
         </div>
       </div>
     </header>
@@ -123,19 +125,19 @@
             <button class="btn btn-ghost" @click="exportCurrent"><Download :size="16" />导出</button>
           </article>
           <article class="table-card">
-            <div v-if="selectedUsers.length" class="bulk-bar"><label><input type="checkbox" checked @change="selectedUsers = []" /> 已选 {{ selectedUsers.length }} 人</label><button @click="batchDisableUsers">禁用</button><button @click="batchResetUsers">重置</button><button @click="batchDeleteUsers">删除</button><button @click="selectedUsers = []">取消</button></div>
+            <div v-if="selectedUsers.length" class="bulk-bar"><label><input type="checkbox" checked @change="selectedUsers = []" /> 已选 {{ selectedUsers.length }} 人</label><button @click="batchDisableUsers">禁用</button><button @click="batchResetUsers">重置密码</button><button @click="batchDeleteUsers">删除</button><button @click="selectedUsers = []">取消</button></div>
             <table class="admin-table">
               <thead><tr><th class="check-col"><input type="checkbox" :checked="selectedUsers.length === users.length && users.length > 0" @change="toggleAllUsers" /></th><th>用户</th><th>角色</th><th>状态</th><th>所属课程</th><th>注册时间</th><th>最近登录</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="item in users" :key="item.id" :class="{ disabled: item.status === 'disabled', selected: selectedUsers.includes(item.id) }">
                   <td><input type="checkbox" :checked="selectedUsers.includes(item.id)" @change="toggleSelect(selectedUsers, item.id)" /></td>
                   <td><div class="identity"><span class="avatar small">{{ firstChar(item.nickname) }}</span><div><strong>{{ item.nickname }}</strong><span>{{ item.email }}</span></div></div></td>
-                  <td><span class="tag" :class="item.role === 'admin' ? 'tag-ai' : item.role === 'teacher' ? 'tag-primary' : ''">{{ roleText(item.role) }}</span></td>
+                  <td><select class="select role-select" :value="item.role" :disabled="isPending(`role:${item.id}`)" @change="selectUserRole(item, $event)"><option v-for="role in userRoleOptions" :key="role.value" :value="role.value">{{ role.label }}</option></select></td>
                   <td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
                   <td><BookOpen :size="14" /> {{ item.course_count || '-' }}</td>
                   <td>{{ shortDate(item.created_at) }}</td>
                   <td :class="{ stale: isStale(item.last_login_at) }">{{ relativeTime(item.last_login_at) }}</td>
-                  <td class="row-actions"><button class="text-action" @click="openUserDetail(item.id)"><Eye :size="14" />详情</button><button class="text-action" :data-loading="isPending(`role:${item.id}`)" :disabled="isPending(`role:${item.id}`)" @click="quickRole(item)"><UserCheck :size="14" />角色</button><button class="text-action" :data-loading="isPending(`reset:${item.id}`)" :disabled="isPending(`reset:${item.id}`)" @click="resetUser(item.id)"><KeyRound :size="14" />重置</button><button class="text-action danger" :data-loading="isPending(`delete:${item.id}`)" :disabled="isPending(`delete:${item.id}`)" @click="deleteUser(item.id)"><Trash2 :size="14" />删除</button></td>
+                  <td class="row-actions"><button class="text-action" @click="openUserDetail(item.id)"><Eye :size="14" />详情</button><button class="text-action" :data-loading="isPending(`reset:${item.id}`)" :disabled="isPending(`reset:${item.id}`)" @click="resetUser(item.id)"><KeyRound :size="14" />重置密码</button><button class="text-action danger" :data-loading="isPending(`delete:${item.id}`)" :disabled="isPending(`delete:${item.id}`)" @click="deleteUser(item.id)"><Trash2 :size="14" />删除</button></td>
                 </tr>
                 <tr v-if="!users.length"><td colspan="8"><EmptyState text="暂无用户" /></td></tr>
               </tbody>
@@ -337,8 +339,8 @@
 
     <aside v-if="userDrawer" class="drawer">
       <div class="drawer-head"><h2>{{ userDrawer.user.nickname }}</h2><span class="tag">{{ roleText(userDrawer.user.role) }}</span><button class="icon-action" @click="userDrawer = null"><X :size="16" /></button></div>
-      <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="邮箱" :value="userDrawer.user.email" /><InfoRow label="状态" :value="statusText(userDrawer.user.status)" /><InfoRow label="注册" :value="formatTime(userDrawer.user.created_at)" /></section><section><h3>已加入课程</h3><div v-for="item in userDrawer.courses" :key="item.id" class="row-card"><span>{{ item.name }}</span><span class="tag">{{ item.role }}</span></div></section><section><h3>操作日志</h3><div v-for="item in userDrawer.logs" :key="item.id" class="timeline-item"><i></i><strong>{{ item.action }}</strong><span>{{ formatTime(item.created_at) }}</span></div></section></div>
-      <div class="drawer-foot"><button class="btn btn-danger" :data-loading="isPending(`delete:${userDrawer.user.id}`)" :disabled="isPending(`delete:${userDrawer.user.id}`)" @click="deleteUser(userDrawer.user.id)">删除</button><button class="btn btn-secondary" :data-loading="isPending(`reset:${userDrawer.user.id}`)" :disabled="isPending(`reset:${userDrawer.user.id}`)" @click="resetUser(userDrawer.user.id)">重置</button><button class="btn btn-primary" :data-loading="isPending(`role:${userDrawer.user.id}`)" :disabled="isPending(`role:${userDrawer.user.id}`)" @click="quickRole(userDrawer.user)">编辑</button></div>
+      <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="邮箱" :value="userDrawer.user.email" /><InfoRow label="状态" :value="statusText(userDrawer.user.status)" /><InfoRow label="注册" :value="formatTime(userDrawer.user.created_at)" /></section><section><h3>账号权限</h3><label class="drawer-field">用户角色<select class="select" :value="userDrawer.user.role" :disabled="isPending(`role:${userDrawer.user.id}`)" @change="selectUserRole(userDrawer.user, $event)"><option v-for="role in userRoleOptions" :key="role.value" :value="role.value">{{ role.label }}</option></select></label></section><section><h3>已加入课程</h3><div v-for="item in userDrawer.courses" :key="item.id" class="row-card"><span>{{ item.name }}</span><span class="tag">{{ item.role }}</span></div></section><section><h3>操作日志</h3><div v-for="item in userDrawer.logs" :key="item.id" class="timeline-item"><i></i><strong>{{ item.action }}</strong><span>{{ formatTime(item.created_at) }}</span></div></section></div>
+      <div class="drawer-foot"><button class="btn btn-danger" :data-loading="isPending(`delete:${userDrawer.user.id}`)" :disabled="isPending(`delete:${userDrawer.user.id}`)" @click="deleteUser(userDrawer.user.id)">删除</button><button class="btn btn-secondary" :data-loading="isPending(`reset:${userDrawer.user.id}`)" :disabled="isPending(`reset:${userDrawer.user.id}`)" @click="resetUser(userDrawer.user.id)">重置密码</button></div>
     </aside>
 
     <aside v-if="courseDrawer" class="drawer wide">
@@ -353,6 +355,14 @@
         <p v-if="adminFormError" class="form-error"><AlertCircle :size="15" />{{ adminFormError }}</p>
         <div class="form-grid"><label>用户名<input v-model="adminForm.nickname" class="input" /></label><label>邮箱<input v-model="adminForm.email" class="input" type="email" /></label><label>初始密码<input v-model="adminForm.password" class="input" type="password" /></label><label>确认密码<input v-model="adminForm.confirm" class="input" type="password" /></label><label class="wide-field">备注<textarea v-model="adminForm.note" class="textarea"></textarea></label></div>
         <footer><button class="btn btn-secondary" @click="adminModalOpen = false">取消</button><button class="btn btn-primary" @click="createAdmin"><Plus :size="16" />创建</button></footer>
+      </article>
+    </div>
+
+    <div v-if="resetPasswordResult" class="modal-mask">
+      <article class="modal password-modal">
+        <div class="modal-head"><KeyRound :size="20" /><h2>新密码</h2><button class="icon-action" @click="resetPasswordResult = ''"><X :size="16" /></button></div>
+        <div class="password-box">{{ resetPasswordResult }}</div>
+        <footer><button class="btn btn-secondary" @click="copyPassword">复制</button><button class="btn btn-primary" @click="resetPasswordResult = ''">关闭</button></footer>
       </article>
     </div>
 
@@ -377,7 +387,7 @@ import {
   Users, Volume2, X, XCircle
 } from "lucide-vue-next";
 import { api } from "../api/client";
-import type { User as UserType } from "../types";
+import type { Role, User as UserType } from "../types";
 import AdminChart from "./admin/AdminChart.vue";
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
@@ -432,6 +442,7 @@ const previewItem = ref<any | null>(null);
 const logDetail = ref<any | null>(null);
 const adminModalOpen = ref(false);
 const adminFormError = ref("");
+const resetPasswordResult = ref("");
 const selectedUsers = ref<number[]>([]);
 const selectedCourses = ref<number[]>([]);
 const selectedMaterials = ref<number[]>([]);
@@ -451,6 +462,11 @@ let refreshTimer: number | undefined;
 let sidebarResizeObserver: ResizeObserver | undefined;
 
 const userFilter = reactive({ keyword: "", role: "", status: "" });
+const userRoleOptions: Array<{ value: Role; label: string }> = [
+  { value: "student", label: "学生" },
+  { value: "teacher", label: "教师" },
+  { value: "admin", label: "管理员" }
+];
 const courseFilter = reactive({ keyword: "", status: "" });
 const materialFilter = reactive({ keyword: "", category: "", material_type: "", teacher_id: null as number | null });
 const logFilter = reactive({ success: "", action: "", level: "", source: "", start_at: "", end_at: "" });
@@ -797,17 +813,52 @@ async function createAdmin() {
   }
 }
 async function openUserDetail(id: number) { userDrawer.value = await run(() => api.get(`/admin/users/${id}`)); }
-async function quickRole(item: any) {
-  const next = item.role === "student" ? "teacher" : item.role === "teacher" ? "admin" : "student";
+function generateTempPassword() {
+  const random = Math.random().toString(36).slice(2, 8);
+  return `Agent${random}9`;
+}
+async function updateUserRole(item: any, role: Role) {
+  if (!userRoleOptions.some((option) => option.value === role)) return emit("notice", "warning", "角色不合法");
+  if (item.role === role) return;
   await withPending(`role:${item.id}`, async () => {
-    await run(() => api.patch(`/admin/users/${item.id}`, { role: next }), "已更新");
+    const updated = await run<any>(() => api.patch(`/admin/users/${item.id}`, { role }), "已更新");
+    if (!updated) return;
+    item.role = updated.role;
+    if (userDrawer.value?.user?.id === item.id) userDrawer.value.user.role = updated.role;
     await loadUsers();
   });
 }
-async function resetUser(id: number) { await withPending(`reset:${id}`, async () => { await run(() => api.post(`/admin/users/${id}/reset-password`, { new_password: "Admin123456" }), "已重置"); }); }
+function selectUserRole(item: any, event: Event) {
+  void updateUserRole(item, (event.target as HTMLSelectElement).value as Role);
+}
+function copyPassword() {
+  if (!resetPasswordResult.value) return;
+  navigator.clipboard?.writeText(resetPasswordResult.value);
+  emit("notice", "success", "已复制");
+}
+async function resetUser(id: number, password = generateTempPassword(), ask = true, silent = false) {
+  if (ask && !window.confirm(`将用户密码重置为：${password}`)) return false;
+  const updated = await withPending(`reset:${id}`, async () => run(() => api.post(`/admin/users/${id}/reset-password`, { new_password: password })));
+  if (!updated) return false;
+  resetPasswordResult.value = password;
+  if (!silent) emit("notice", "success", `新密码：${password}`);
+  return true;
+}
 async function deleteUser(id: number) { await withPending(`delete:${id}`, async () => { await run(() => api.delete(`/admin/users/${id}`), "已删除"); userDrawer.value = null; await loadUsers(); }); }
 async function batchDisableUsers() { for (const id of selectedUsers.value) await run(() => api.patch(`/admin/users/${id}`, { status: "disabled" })); selectedUsers.value = []; await loadUsers(); }
-async function batchResetUsers() { for (const id of selectedUsers.value) await resetUser(id); selectedUsers.value = []; }
+async function batchResetUsers() {
+  if (!selectedUsers.value.length) return;
+  const password = generateTempPassword();
+  if (!window.confirm(`将 ${selectedUsers.value.length} 个用户密码重置为：${password}`)) return;
+  let successCount = 0;
+  for (const id of selectedUsers.value) {
+    if (await resetUser(id, password, false, true)) successCount += 1;
+  }
+  if (!successCount) return;
+  resetPasswordResult.value = password;
+  emit("notice", "success", `${successCount} 人新密码：${password}`);
+  selectedUsers.value = [];
+}
 async function batchDeleteUsers() { for (const id of selectedUsers.value) await run(() => api.delete(`/admin/users/${id}`)); selectedUsers.value = []; await loadUsers(); }
 function toggleAllUsers(event: Event) { selectedUsers.value = (event.target as HTMLInputElement).checked ? users.value.map((item) => item.id) : []; }
 function clearUserFilter() { Object.assign(userFilter, { keyword: "", role: "", status: "" }); loadUsers(); }
@@ -1066,6 +1117,7 @@ const ServiceConfigCard = defineComponent({
 .identity div { display: grid; }
 .identity strong { color: var(--color-text-primary); }
 .identity span { color: var(--color-text-muted); font-size: var(--text-caption); }
+.role-select { width: 96px; min-width: 96px; }
 .row-actions { display: flex; gap: 4px; white-space: nowrap; }
 .icon-action.danger { color: var(--color-danger-700); }
 .stale { color: var(--color-danger-700); }
@@ -1174,17 +1226,20 @@ pre { max-height: 420px; overflow: auto; border-radius: var(--radius-md); backgr
 .drawer-head h2 { flex: 1; margin: 0; color: var(--color-text-primary); font-size: var(--text-h3); }
 .drawer-body { overflow: auto; display: grid; align-content: start; gap: 18px; padding: 18px; }
 .drawer-body h3 { margin: 0 0 10px; color: var(--color-text-primary); font-size: var(--text-h4); }
+.drawer-field { display: grid; gap: 8px; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
 .drawer-foot { border-top: 1px solid var(--color-border-default); border-bottom: 0; justify-content: flex-end; }
 .row-card, .info-row { justify-content: space-between; border-bottom: 1px solid var(--color-border-subtle); padding: 8px 0; }
 .info-row span { color: var(--color-text-muted); }
 .info-row strong { color: var(--color-text-primary); }
 .modal-mask { position: fixed; inset: 0; z-index: var(--z-modal-bg); display: grid; place-items: center; background: rgba(15,23,42,0.35); backdrop-filter: blur(6px); }
 .modal { width: 640px; max-height: 90vh; overflow: auto; border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-xl); padding: 20px; }
+.modal.password-modal { width: 420px; }
 .modal.preview-modal { width: 800px; height: 90vh; display: grid; grid-template-rows: auto 1fr; }
 .preview-modal iframe { width: 100%; height: 100%; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
 .modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .modal-head h2 { flex: 1; margin: 0; color: var(--color-text-primary); font-size: var(--text-h3); }
 .modal footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.password-box { min-height: 46px; display: flex; align-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-muted); color: var(--color-text-primary); font-family: var(--font-family-mono); font-size: 18px; padding: 0 14px; user-select: all; }
 .empty { min-height: 90px; display: grid; place-items: center; gap: 8px; color: var(--color-text-muted); }
 @media (max-width: 1279px) { .admin-shell { min-width: 1280px; } }
 </style>
