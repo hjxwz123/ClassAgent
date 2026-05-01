@@ -1193,22 +1193,27 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .purpose-card { display: grid; gap: 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 14px; }
 .purpose-card div { display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); }
 .card-tools { display: flex; align-items: center; gap: 8px; }
-.service-page { gap: 20px; }
-.service-page .page-header { width: 100%; max-width: 1080px; }
-.service-config-stack { width: 100%; max-width: 1080px; display: grid; gap: 22px; }
+.service-page { gap: 24px; }
+.service-page .page-header { width: 100%; }
+.service-config-stack { width: 100%; max-width: none; display: grid; grid-template-columns: repeat(2, minmax(460px, 1fr)); align-items: start; gap: 24px; }
 .service-config-card { overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); box-shadow: var(--shadow-sm); padding: 0; transition: border-color 200ms var(--ease-out), box-shadow 200ms var(--ease-out), transform 200ms var(--ease-out); }
-.service-config-card:hover { border-color: var(--color-primary-200); box-shadow: var(--shadow-md); transform: translateY(-1px); }
-.service-card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 20px; min-height: 74px; border-bottom: 1px solid var(--color-border-subtle); background: linear-gradient(180deg, var(--color-bg-surface), var(--color-bg-muted)); padding: 16px 22px; }
-.service-card-title { min-width: 0; display: flex; align-items: center; gap: 12px; }
-.service-card-icon { display: inline-flex; width: 40px; height: 40px; flex: 0 0 40px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-600); }
+.service-config-card:hover { border-color: var(--color-primary-200); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.service-card-header { display: flex; align-items: center; gap: 18px; min-height: 76px; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 16px 18px; }
+.service-card-title { min-width: 0; flex: 1; display: flex; align-items: center; gap: 12px; }
+.service-card-icon { display: inline-flex; width: 42px; height: 42px; flex: 0 0 42px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-600); box-shadow: inset 0 0 0 1px rgba(37, 99, 235, .08); }
+.service-oss .service-card-icon { background: var(--color-info-50); color: var(--color-info-700); }
+.service-ocr .service-card-icon { background: var(--color-success-50); color: var(--color-success-700); }
+.service-tts .service-card-icon { background: var(--color-ai-light); color: #6D28D9; }
+.service-email .service-card-icon { background: var(--color-warning-50); color: var(--color-warning-700); }
 .service-card-title h2 { min-width: 0; margin: 0; overflow: hidden; color: var(--color-text-primary); font-size: 16px; font-weight: 600; line-height: 24px; text-overflow: ellipsis; white-space: nowrap; }
 .service-card-title .tag { margin-left: 4px; }
-.service-card-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.service-card-actions .btn-sm { min-height: 32px; padding: 0 12px; }
+.service-card-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; }
+.service-card-actions .btn-sm { min-height: 32px; padding: 0 11px; }
 .service-delete { color: var(--color-danger-700); }
 .service-delete:hover { background: var(--color-danger-50); color: var(--color-danger-700); }
-.service-card-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 22px; padding: 24px 22px 26px; }
-.service-card-body .form-group { gap: 8px; }
+.service-card-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; background: var(--color-bg-muted); padding: 18px; }
+.service-card-body .form-group { gap: 8px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-surface); padding: 12px; }
+.service-card-body .form-label { color: var(--color-text-secondary); font-size: 12px; }
 .service-card-body .form-control { height: 38px; border-color: var(--color-border-default); border-radius: var(--radius-md); background: white; }
 .service-card-body .form-control[type="range"] { height: 38px; background: transparent; }
 .settings-list { padding: 12px 32px; }
