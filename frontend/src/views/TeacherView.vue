@@ -471,7 +471,7 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .avatar.mini { width: 24px; height: 24px; font-size: 12px; }
 .avatar.large { position: relative; width: 80px; height: 80px; font-size: 26px; }
 .avatar.large svg { position: absolute; right: 0; bottom: 0; border-radius: 50%; background: var(--color-primary-600); padding: 4px; }
-.teacher-sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; border-right: 1px solid var(--color-border-default); background: white; padding: 18px 12px; }
+.teacher-sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; border-right: 1px solid var(--color-border-default); background: white; padding: 18px 12px; }
 .nav-group { display: grid; gap: 2px; padding: 12px 0; border-bottom: 1px solid var(--color-border-subtle); }
 .nav-group > span { padding: 0 12px 8px; color: var(--color-text-muted); font-size: var(--text-overline); font-weight: 600; }
 .course-title { display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-style: normal; }

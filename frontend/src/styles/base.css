@@ -127,9 +127,78 @@ svg { display: block; flex-shrink: 0; }
 }
 .alert-warning { background: var(--color-warning-50); color: var(--color-warning-700); }
 
+.route-page-enter-active,
+.route-page-leave-active {
+  transition: opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out), filter var(--duration-base) var(--ease-out);
+}
+.route-page-enter-from,
+.route-page-leave-to {
+  opacity: 0;
+  filter: blur(2px);
+  transform: translateY(8px);
+}
+
+.dropdown,
+.course-popover,
+.user-popover,
+.select-popover,
+.menu-popover,
+.notice-popover,
+.popover-card {
+  transform-origin: top right;
+  animation: popover-in var(--duration-base) var(--ease-out) both;
+  will-change: opacity, transform;
+}
+.modal-mask { animation: overlay-fade var(--duration-base) var(--ease-out) both; }
+.modal,
+.join-modal,
+.complete-modal,
+.confirm-card {
+  animation: modal-pop-in var(--duration-base) var(--ease-spring) both;
+  will-change: opacity, transform;
+}
+.drawer,
+.history-drawer {
+  animation: drawer-slide-in var(--duration-base) var(--ease-out) both;
+  will-change: opacity, transform;
+}
+.tag {
+  transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+.tag:hover { transform: translateY(-1px); }
+button[data-loading="true"] {
+  position: relative;
+  pointer-events: none;
+}
+button[data-loading="true"]::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+
 @keyframes fade-slide-up {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+@keyframes overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-pop-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes popover-in {
+  from { opacity: 0; transform: translateY(-6px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes drawer-slide-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes ai-breathing {

@@ -1113,6 +1113,10 @@ onBeforeUnmount(() => {
   border-right: 1px solid var(--color-border-default);
   background: var(--color-bg-surface);
   padding: var(--space-6);
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 .nav-item {
   width: 100%;

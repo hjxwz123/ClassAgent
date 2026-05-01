@@ -1,5 +1,5 @@
 <template>
-  <section class="admin-shell" :class="{ collapsed }">
+  <section class="admin-shell" :class="{ collapsed, 'sidebar-scrollable': sidebarScrollable }">
     <aside class="admin-sidebar">
       <div class="sidebar-header">
         <button class="menu-btn" aria-label="折叠" @click="collapsed = !collapsed"><Menu :size="20" /></button>
@@ -7,7 +7,7 @@
         <strong v-if="!collapsed" class="logo-text">系统管理后台</strong>
       </div>
 
-      <nav class="sidebar-nav">
+      <nav ref="sidebarNavRef" class="sidebar-nav">
         <div v-for="group in navGroups" :key="group.title" class="nav-group">
           <span v-if="!collapsed" class="nav-title">{{ group.title }}</span>
           <button v-for="item in group.items" :key="item.key" class="nav-link" :class="{ active: active === item.key }" @click="go(item.key)">
@@ -135,7 +135,7 @@
                   <td><BookOpen :size="14" /> {{ item.course_count || '-' }}</td>
                   <td>{{ shortDate(item.created_at) }}</td>
                   <td :class="{ stale: isStale(item.last_login_at) }">{{ relativeTime(item.last_login_at) }}</td>
-                  <td class="row-actions"><button class="text-action" @click="openUserDetail(item.id)"><Eye :size="14" />详情</button><button class="text-action" @click="quickRole(item)"><UserCheck :size="14" />角色</button><button class="text-action" @click="resetUser(item.id)"><KeyRound :size="14" />重置</button><button class="text-action danger" @click="deleteUser(item.id)"><Trash2 :size="14" />删除</button></td>
+                  <td class="row-actions"><button class="text-action" @click="openUserDetail(item.id)"><Eye :size="14" />详情</button><button class="text-action" :data-loading="isPending(`role:${item.id}`)" :disabled="isPending(`role:${item.id}`)" @click="quickRole(item)"><UserCheck :size="14" />角色</button><button class="text-action" :data-loading="isPending(`reset:${item.id}`)" :disabled="isPending(`reset:${item.id}`)" @click="resetUser(item.id)"><KeyRound :size="14" />重置</button><button class="text-action danger" :data-loading="isPending(`delete:${item.id}`)" :disabled="isPending(`delete:${item.id}`)" @click="deleteUser(item.id)"><Trash2 :size="14" />删除</button></td>
                 </tr>
                 <tr v-if="!users.length"><td colspan="8"><EmptyState text="暂无用户" /></td></tr>
               </tbody>
@@ -302,7 +302,7 @@
     <aside v-if="userDrawer" class="drawer">
       <div class="drawer-head"><h2>{{ userDrawer.user.nickname }}</h2><span class="tag">{{ roleText(userDrawer.user.role) }}</span><button class="icon-action" @click="userDrawer = null"><X :size="16" /></button></div>
       <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="邮箱" :value="userDrawer.user.email" /><InfoRow label="状态" :value="statusText(userDrawer.user.status)" /><InfoRow label="注册" :value="formatTime(userDrawer.user.created_at)" /></section><section><h3>已加入课程</h3><div v-for="item in userDrawer.courses" :key="item.id" class="row-card"><span>{{ item.name }}</span><span class="tag">{{ item.role }}</span></div></section><section><h3>操作日志</h3><div v-for="item in userDrawer.logs" :key="item.id" class="timeline-item"><i></i><strong>{{ item.action }}</strong><span>{{ formatTime(item.created_at) }}</span></div></section></div>
-      <div class="drawer-foot"><button class="btn btn-danger" @click="deleteUser(userDrawer.user.id)">删除</button><button class="btn btn-secondary" @click="resetUser(userDrawer.user.id)">重置</button><button class="btn btn-primary" @click="quickRole(userDrawer.user)">编辑</button></div>
+      <div class="drawer-foot"><button class="btn btn-danger" :data-loading="isPending(`delete:${userDrawer.user.id}`)" :disabled="isPending(`delete:${userDrawer.user.id}`)" @click="deleteUser(userDrawer.user.id)">删除</button><button class="btn btn-secondary" :data-loading="isPending(`reset:${userDrawer.user.id}`)" :disabled="isPending(`reset:${userDrawer.user.id}`)" @click="resetUser(userDrawer.user.id)">重置</button><button class="btn btn-primary" :data-loading="isPending(`role:${userDrawer.user.id}`)" :disabled="isPending(`role:${userDrawer.user.id}`)" @click="quickRole(userDrawer.user)">编辑</button></div>
     </aside>
 
     <aside v-if="courseDrawer" class="drawer wide">
@@ -331,7 +331,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   Activity, AlertCircle, AlertTriangle, Ban, BarChart2, Bell, BookOpen, CheckCircle, CheckSquare, ChevronDown,
@@ -366,6 +366,9 @@ const routeByKey: Record<string, string> = {
 
 const collapsed = ref(false);
 const userMenuOpen = ref(false);
+const sidebarNavRef = ref<HTMLElement | null>(null);
+const sidebarScrollable = ref(false);
+const pendingAction = ref("");
 const active = ref(props.pageKey || "adminDashboard");
 const trendOptions = ["7天", "30天", "90天"];
 const trendRange = ref("30天");
@@ -409,6 +412,7 @@ const takeoverTeacherId = ref<number | null>(null);
 const restoreBackupId = ref(0);
 const restoreConfirm = ref("");
 let refreshTimer: number | undefined;
+let sidebarResizeObserver: ResizeObserver | undefined;
 
 const userFilter = reactive({ keyword: "", role: "", status: "" });
 const courseFilter = reactive({ keyword: "", status: "" });
@@ -522,6 +526,25 @@ async function run<T>(task: () => Promise<T>, ok?: string) {
     emit("notice", "error", (error as Error).message);
     return null;
   }
+}
+function isPending(key: string) {
+  return pendingAction.value === key;
+}
+async function withPending<T>(key: string, task: () => Promise<T>) {
+  if (pendingAction.value) return null;
+  pendingAction.value = key;
+  try {
+    return await task();
+  } finally {
+    pendingAction.value = "";
+  }
+}
+function updateSidebarOverflow() {
+  nextTick(() => {
+    const nav = sidebarNavRef.value;
+    if (!nav) return;
+    sidebarScrollable.value = nav.scrollHeight > nav.clientHeight + 1;
+  });
 }
 async function go(key: string) {
   await router.push(routeByKey[key] || "/admin");
@@ -740,11 +763,13 @@ async function createAdmin() {
 async function openUserDetail(id: number) { userDrawer.value = await run(() => api.get(`/admin/users/${id}`)); }
 async function quickRole(item: any) {
   const next = item.role === "student" ? "teacher" : item.role === "teacher" ? "admin" : "student";
-  await run(() => api.patch(`/admin/users/${item.id}`, { role: next }), "已更新");
-  await loadUsers();
+  await withPending(`role:${item.id}`, async () => {
+    await run(() => api.patch(`/admin/users/${item.id}`, { role: next }), "已更新");
+    await loadUsers();
+  });
 }
-async function resetUser(id: number) { await run(() => api.post(`/admin/users/${id}/reset-password`, { new_password: "Admin123456" }), "已重置"); }
-async function deleteUser(id: number) { await run(() => api.delete(`/admin/users/${id}`), "已删除"); userDrawer.value = null; await loadUsers(); }
+async function resetUser(id: number) { await withPending(`reset:${id}`, async () => { await run(() => api.post(`/admin/users/${id}/reset-password`, { new_password: "Admin123456" }), "已重置"); }); }
+async function deleteUser(id: number) { await withPending(`delete:${id}`, async () => { await run(() => api.delete(`/admin/users/${id}`), "已删除"); userDrawer.value = null; await loadUsers(); }); }
 async function batchDisableUsers() { for (const id of selectedUsers.value) await run(() => api.patch(`/admin/users/${id}`, { status: "disabled" })); selectedUsers.value = []; await loadUsers(); }
 async function batchResetUsers() { for (const id of selectedUsers.value) await resetUser(id); selectedUsers.value = []; }
 async function batchDeleteUsers() { for (const id of selectedUsers.value) await run(() => api.delete(`/admin/users/${id}`)); selectedUsers.value = []; await loadUsers(); }
@@ -815,7 +840,8 @@ async function downloadBackup(item: any) { await run(() => api.download(`/admin/
 async function deleteBackup(id: number) { await run(() => api.delete(`/admin/backups/${id}`), "已删除"); await loadBackups(); }
 async function restoreBackupAction() { if (restoreConfirm.value !== "CONFIRM" || !restoreBackupId.value) return; await run(() => api.post(`/admin/backups/${restoreBackupId.value}/restore`), "已恢复"); restoreConfirm.value = ""; }
 
-watch(() => props.pageKey, (key) => { active.value = key || "adminDashboard"; loadActive(); });
+watch(() => props.pageKey, (key) => { active.value = key || "adminDashboard"; loadActive(); updateSidebarOverflow(); });
+watch(collapsed, updateSidebarOverflow);
 watch(logType, loadLogs);
 watch(adminModalOpen, (open) => { if (open) adminFormError.value = ""; });
 watch(autoRefresh, (enabled) => {
@@ -825,10 +851,16 @@ watch(autoRefresh, (enabled) => {
 onMounted(async () => {
   await loadHealth();
   await loadActive();
+  updateSidebarOverflow();
+  sidebarResizeObserver = new ResizeObserver(updateSidebarOverflow);
+  if (sidebarNavRef.value) sidebarResizeObserver.observe(sidebarNavRef.value);
+  window.addEventListener("resize", updateSidebarOverflow);
   refreshTimer = window.setInterval(() => autoRefresh.value && active.value === "adminMonitor" && loadMonitor(), 30000);
 });
 onBeforeUnmount(() => {
   if (refreshTimer) window.clearInterval(refreshTimer);
+  sidebarResizeObserver?.disconnect();
+  window.removeEventListener("resize", updateSidebarOverflow);
 });
 
 const MetricCard = defineComponent({
@@ -885,7 +917,8 @@ const ServiceConfigCard = defineComponent({
 .menu-btn { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); transition: background 200ms var(--ease-out), color 200ms var(--ease-out); }
 .menu-btn:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .collapsed .menu-btn { display: none; }
-.sidebar-nav { flex: 1; overflow-y: auto; padding: 16px 12px; }
+.sidebar-nav { flex: 1 1 auto; min-height: 0; overflow: visible; overscroll-behavior: contain; padding: 16px 12px; }
+.sidebar-scrollable .sidebar-nav { overflow-y: auto; overflow-x: hidden; }
 .nav-group { margin-bottom: 24px; padding: 0; border-bottom: 0; }
 .nav-title { display: block; padding: 0 12px 8px; color: var(--color-text-muted); font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
 .nav-link { position: relative; display: flex; width: 100%; height: 40px; align-items: center; gap: 12px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); padding: 0 12px; text-align: left; font-size: 14px; transition: all 200ms var(--ease-out); margin-bottom: 4px; }
@@ -893,9 +926,9 @@ const ServiceConfigCard = defineComponent({
 .nav-link.active svg { color: var(--color-primary-600); }
 .nav-link.active::before { display: none; }
 .nav-link:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
-.nav-link em { display: none; position: absolute; left: 44px; z-index: var(--z-tooltip); white-space: nowrap; border-radius: 6px; background: var(--color-text-primary); color: white; padding: 4px 8px; font-style: normal; font-size: var(--text-caption); }
+.nav-link em { position: absolute; left: 44px; z-index: var(--z-tooltip); visibility: hidden; opacity: 0; pointer-events: none; white-space: nowrap; border-radius: 6px; background: var(--color-text-primary); color: white; padding: 4px 8px; font-style: normal; font-size: var(--text-caption); box-shadow: var(--shadow-lg); transform: translateX(-4px) scale(.96); transform-origin: left center; transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out), visibility 180ms; }
 .collapsed .nav-link { justify-content: center; padding: 0; }
-.collapsed .nav-link:hover em { display: block; }
+.collapsed .nav-link:hover em { visibility: visible; opacity: 1; transform: translateX(0) scale(1); }
 .sidebar-footer { flex-shrink: 0; border-top: 1px solid var(--color-border-default); padding: 16px 12px; }
 .side-user { display: flex; align-items: center; gap: 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-page); padding: 12px; }
 .collapsed .side-user { justify-content: center; padding: 8px; }
@@ -996,17 +1029,21 @@ const ServiceConfigCard = defineComponent({
 .course-admin-card p { color: var(--color-text-secondary); }
 .mini-metrics span { display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-secondary); }
 .file-pptx, .file-ppt { color: #F97316; }.file-pdf { color: var(--color-danger-500); }.file-docx, .file-doc { color: var(--color-info-500); }
-.model-layout { grid-template-columns: 180px minmax(0, 1fr); align-items: start; }
-.vertical-tabs { display: grid; gap: 6px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 10px; }
-.vertical-tabs button { min-height: 38px; border: 0; border-radius: var(--radius-md); background: transparent; text-align: left; padding: 0 12px; color: var(--color-text-secondary); }
+.model-layout { display: flex; align-items: flex-start; gap: 32px; }
+.vertical-tabs { position: sticky; top: 0; width: 180px; flex-shrink: 0; display: grid; gap: 2px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 8px; }
+.vertical-tabs button { min-height: 38px; border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; padding: 0 16px; color: var(--color-text-secondary); transition: background 200ms var(--ease-out), color 200ms var(--ease-out), transform 200ms var(--ease-out); }
+.vertical-tabs button:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .vertical-tabs button.active { background: var(--color-primary-50); color: var(--color-primary-700); font-weight: 600; }
-.model-content { display: grid; gap: 16px; }
+.model-content { flex: 1; max-width: 900px; display: grid; gap: 24px; min-width: 0; }
 .alert { display: flex; align-items: center; gap: 10px; border-radius: var(--radius-md); padding: 12px 14px; }
 .alert-danger { background: var(--color-danger-50); color: var(--color-danger-700); }
 .alert-info { background: var(--color-info-50); color: var(--color-info-700); }
-.form-panel { max-width: 900px; }
-.form-section { border-top: 1px solid var(--color-border-subtle); padding-top: 14px; margin-top: 14px; }
-.form-section h3 { margin: 0 0 12px; color: var(--color-text-primary); font-size: var(--text-body); }
+.form-panel { max-width: 900px; padding: 0; overflow: hidden; }
+.form-panel > .panel-head { border-bottom: 1px solid var(--color-border-default); margin: 0; padding: 16px 24px; }
+.form-panel > .form-grid { padding: 24px; }
+.form-section { border-top: 1px dashed var(--color-border-default); padding: 24px; margin: 0; }
+.form-panel > .panel-head + .form-section { border-top: 0; }
+.form-section h3 { margin: 0 0 16px; color: var(--color-text-primary); font-size: var(--text-body); }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .form-grid label, .policy-form label { display: grid; gap: 6px; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
 .wide-field { grid-column: 1 / -1; }
@@ -1014,8 +1051,13 @@ const ServiceConfigCard = defineComponent({
 .purpose-card { display: grid; gap: 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); padding: 14px; }
 .purpose-card div { display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); }
 .card-tools { display: flex; align-items: center; gap: 8px; }
+.service-config-stack { max-width: 900px; }
+.service-config-card { padding: 0; overflow: hidden; }
+.service-config-card > .panel-head { border-bottom: 1px solid var(--color-border-default); margin: 0; padding: 16px 24px; }
+.service-config-card > .form-grid { padding: 24px; }
 .service-config-card h2 { display: flex; align-items: center; gap: 8px; }
-.setting-row { display: grid; grid-template-columns: 260px minmax(260px, 1fr) 180px; align-items: center; gap: 18px; border-bottom: 1px solid var(--color-border-subtle); padding: 14px 0; }
+.settings-list { padding: 12px 32px; }
+.setting-row { display: grid; grid-template-columns: 200px minmax(260px, 1fr) 140px; align-items: center; gap: 16px; border-bottom: 1px dashed var(--color-border-default); padding: 20px 0; }
 .setting-row > div { display: grid; gap: 4px; }
 .setting-row strong { color: var(--color-text-primary); }
 .setting-row span, .setting-row small { color: var(--color-text-muted); font-size: var(--text-caption); }

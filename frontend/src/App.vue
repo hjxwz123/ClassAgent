@@ -1,13 +1,16 @@
 <template>
-  <RouterView v-slot="{ Component }">
-    <component
-      :is="Component"
-      v-if="ready"
-      :user="session.user"
-      @authed="onAuthed"
-      @logout="logout"
-      @notice="session.pushToast"
-    />
+  <RouterView v-slot="{ Component, route }">
+    <Transition name="route-page" mode="out-in">
+      <component
+        :is="Component"
+        v-if="ready"
+        :key="route.fullPath"
+        :user="session.user"
+        @authed="onAuthed"
+        @logout="logout"
+        @notice="session.pushToast"
+      />
+    </Transition>
   </RouterView>
   <ToastHost :items="session.toasts" @close="session.closeToast" />
 </template>
