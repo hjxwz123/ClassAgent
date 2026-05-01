@@ -56,9 +56,9 @@
           <button v-if="active === 'adminCourses'" class="btn btn-danger" :disabled="!selectedCourses.length" @click="batchDeactivateCourses">下架</button>
           <button v-if="active === 'adminMaterials'" class="btn btn-danger" :disabled="!selectedMaterials.length" @click="batchDeleteMaterials">删除</button>
           <button v-if="active === 'adminModels'" class="btn btn-primary" @click="saveAllModels"><Save :size="16" />保存</button>
+          <button v-if="active === 'adminServices'" class="btn btn-secondary" @click="testAllServices"><RefreshCw :size="16" />测试</button>
           <button v-if="active === 'adminServices'" class="btn btn-primary" @click="saveAllServices"><Save :size="16" />保存</button>
-          <button v-if="active === 'adminServices'" class="btn btn-ai" @click="testAllServices"><RefreshCw :size="16" />测试</button>
-          <button v-if="active === 'adminSystem'" class="btn btn-ghost" @click="restoreSettings">默认</button>
+          <button v-if="active === 'adminSystem'" class="btn btn-secondary" @click="restoreSettings">默认</button>
           <button v-if="active === 'adminSystem'" class="btn btn-primary" @click="saveSettings"><Save :size="16" />保存</button>
           <button v-if="active === 'adminMonitor'" class="btn btn-secondary" @click="loadMonitor"><RefreshCw :size="16" />刷新</button>
           <button v-if="active === 'adminLogs'" class="btn btn-ghost" @click="exportCurrent">导出</button>
@@ -237,32 +237,68 @@
         </section>
 
         <section v-if="active === 'adminServices'" class="admin-page">
-          <div class="alert alert-info"><Shield :size="16" />密钥加密存储，界面自动掩码。</div>
-          <div class="service-config-stack">
+          <div class="config-content service-config-stack">
             <ServiceConfigCard title="阿里云 OSS" :icon="Cloud" type="oss" :draft="serviceDrafts.oss" :status="serviceStatus('oss')" @save="saveServiceType('oss')" @test="testServiceType('oss')" @remove="deleteServiceType('oss')">
-              <div class="form-grid"><label>供应商<select v-model="serviceDrafts.oss.provider" class="select"><option value="aliyun">阿里云</option><option value="local">本地</option><option value="mock">Mock</option></select></label><label>名称<input v-model="serviceDrafts.oss.name" class="input" /></label><label>AccessKey ID<input v-model="serviceDrafts.oss.access_key_id" class="input" type="password" /></label><label>AccessKey Secret<input v-model="serviceDrafts.oss.access_key_secret" class="input" type="password" /></label><label>Bucket<input v-model="serviceDrafts.oss.bucket" class="input" /></label><label>Endpoint<input v-model="serviceDrafts.oss.endpoint" class="input" /></label><label>Region<input v-model="serviceDrafts.oss.region" class="input" /></label><label>URL 过期<input v-model.number="serviceDrafts.oss.url_expire_hours" class="input" type="number" /></label></div>
+              <div class="form-group"><label class="form-label">供应商 / 类型</label><select v-model="serviceDrafts.oss.provider" class="form-control select"><option value="aliyun">阿里云 OSS</option><option value="local">本地存储</option><option value="mock">Mock</option></select></div>
+              <div class="form-group"><label class="form-label">配置名称</label><input v-model="serviceDrafts.oss.name" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">AccessKey ID</label><input v-model="serviceDrafts.oss.access_key_id" class="form-control input" type="password" /></div>
+              <div class="form-group"><label class="form-label">AccessKey Secret</label><input v-model="serviceDrafts.oss.access_key_secret" class="form-control input" type="password" /></div>
+              <div class="form-group"><label class="form-label">Bucket 名称</label><input v-model="serviceDrafts.oss.bucket" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">Endpoint</label><input v-model="serviceDrafts.oss.endpoint" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">Region</label><input v-model="serviceDrafts.oss.region" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">URL 过期</label><input v-model.number="serviceDrafts.oss.url_expire_hours" class="form-control input" type="number" /></div>
             </ServiceConfigCard>
             <ServiceConfigCard title="阿里云 OCR" :icon="Scan" type="ocr" :draft="serviceDrafts.ocr" :status="serviceStatus('ocr')" @save="saveServiceType('ocr')" @test="testServiceType('ocr')" @remove="deleteServiceType('ocr')">
-              <div class="form-grid"><label>供应商<select v-model="serviceDrafts.ocr.provider" class="select"><option value="aliyun">阿里云</option><option value="mock">Mock</option></select></label><label>名称<input v-model="serviceDrafts.ocr.name" class="input" /></label><label>AccessKey ID<input v-model="serviceDrafts.ocr.access_key_id" class="input" type="password" /></label><label>AccessKey Secret<input v-model="serviceDrafts.ocr.access_key_secret" class="input" type="password" /></label><label>Endpoint<input v-model="serviceDrafts.ocr.endpoint" class="input" /></label><label>超时<input v-model.number="serviceDrafts.ocr.timeout" class="input" type="number" /></label><label>重试<input v-model.number="serviceDrafts.ocr.retries" class="input" type="number" /></label><label>精度<select v-model="serviceDrafts.ocr.accuracy" class="select"><option value="normal">普通</option><option value="high">高精度</option></select></label></div>
+              <div class="form-group"><label class="form-label">供应商 / 类型</label><select v-model="serviceDrafts.ocr.provider" class="form-control select"><option value="aliyun">阿里云 OCR</option><option value="mock">Mock</option></select></div>
+              <div class="form-group"><label class="form-label">配置名称</label><input v-model="serviceDrafts.ocr.name" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">AccessKey ID</label><input v-model="serviceDrafts.ocr.access_key_id" class="form-control input" type="password" /></div>
+              <div class="form-group"><label class="form-label">AccessKey Secret</label><input v-model="serviceDrafts.ocr.access_key_secret" class="form-control input" type="password" /></div>
+              <div class="form-group"><label class="form-label">Endpoint</label><input v-model="serviceDrafts.ocr.endpoint" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">超时</label><input v-model.number="serviceDrafts.ocr.timeout" class="form-control input" type="number" /></div>
+              <div class="form-group"><label class="form-label">重试</label><input v-model.number="serviceDrafts.ocr.retries" class="form-control input" type="number" /></div>
+              <div class="form-group"><label class="form-label">精度</label><select v-model="serviceDrafts.ocr.accuracy" class="form-control select"><option value="normal">普通</option><option value="high">高精度</option></select></div>
             </ServiceConfigCard>
             <ServiceConfigCard title="阿里云 TTS" :icon="Volume2" type="tts" :draft="serviceDrafts.tts" :status="serviceStatus('tts')" @save="saveServiceType('tts')" @test="testServiceType('tts')" @remove="deleteServiceType('tts')">
-              <div class="form-grid"><label>供应商<select v-model="serviceDrafts.tts.provider" class="select"><option value="aliyun">阿里云</option><option value="mock">Mock</option></select></label><label>名称<input v-model="serviceDrafts.tts.name" class="input" /></label><label>AccessKey ID<input v-model="serviceDrafts.tts.access_key_id" class="input" type="password" /></label><label>AccessKey Secret<input v-model="serviceDrafts.tts.access_key_secret" class="input" type="password" /></label><label>AppKey<input v-model="serviceDrafts.tts.appkey" class="input" /></label><label>Token<input v-model="serviceDrafts.tts.token" class="input" type="password" /></label><label>URL<input v-model="serviceDrafts.tts.url" class="input" /></label><label>音色<input v-model="serviceDrafts.tts.voice" class="input" /></label><label>语速<input v-model.number="serviceDrafts.tts.speech_rate" class="input" type="range" min="-500" max="500" /></label><label>音量<input v-model.number="serviceDrafts.tts.volume" class="input" type="range" min="0" max="100" /></label></div>
+              <div class="form-group"><label class="form-label">供应商 / 类型</label><select v-model="serviceDrafts.tts.provider" class="form-control select"><option value="aliyun">阿里云 TTS</option><option value="mock">Mock</option></select></div>
+              <div class="form-group"><label class="form-label">配置名称</label><input v-model="serviceDrafts.tts.name" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">AccessKey ID</label><input v-model="serviceDrafts.tts.access_key_id" class="form-control input" type="password" /></div>
+              <div class="form-group"><label class="form-label">AccessKey Secret</label><input v-model="serviceDrafts.tts.access_key_secret" class="form-control input" type="password" /></div>
+              <div class="form-group"><label class="form-label">AppKey</label><input v-model="serviceDrafts.tts.appkey" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">Token</label><input v-model="serviceDrafts.tts.token" class="form-control input" type="password" /></div>
+              <div class="form-group"><label class="form-label">URL</label><input v-model="serviceDrafts.tts.url" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">音色</label><input v-model="serviceDrafts.tts.voice" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">语速</label><input v-model.number="serviceDrafts.tts.speech_rate" class="form-control input" type="range" min="-500" max="500" /></div>
+              <div class="form-group"><label class="form-label">音量</label><input v-model.number="serviceDrafts.tts.volume" class="form-control input" type="range" min="0" max="100" /></div>
             </ServiceConfigCard>
             <ServiceConfigCard title="邮件服务" :icon="FileText" type="email" :draft="serviceDrafts.email" :status="serviceStatus('email')" @save="saveServiceType('email')" @test="testServiceType('email')" @remove="deleteServiceType('email')">
-              <div class="form-grid"><label>供应商<select v-model="serviceDrafts.email.provider" class="select"><option value="smtp">SMTP</option><option value="mock">Mock</option></select></label><label>名称<input v-model="serviceDrafts.email.name" class="input" /></label><label>Host<input v-model="serviceDrafts.email.host" class="input" /></label><label>Port<input v-model.number="serviceDrafts.email.port" class="input" type="number" /></label><label>发件人<input v-model="serviceDrafts.email.sender" class="input" /></label><label>用户名<input v-model="serviceDrafts.email.username" class="input" /></label><label>密码<input v-model="serviceDrafts.email.password" class="input" type="password" /></label><label class="switch-line"><input v-model="serviceDrafts.email.use_ssl" type="checkbox" />SSL</label></div>
+              <div class="form-group"><label class="form-label">供应商 / 类型</label><select v-model="serviceDrafts.email.provider" class="form-control select"><option value="smtp">SMTP</option><option value="mock">Mock</option></select></div>
+              <div class="form-group"><label class="form-label">配置名称</label><input v-model="serviceDrafts.email.name" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">Host</label><input v-model="serviceDrafts.email.host" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">Port</label><input v-model.number="serviceDrafts.email.port" class="form-control input" type="number" /></div>
+              <div class="form-group"><label class="form-label">发件人</label><input v-model="serviceDrafts.email.sender" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">用户名</label><input v-model="serviceDrafts.email.username" class="form-control input" /></div>
+              <div class="form-group"><label class="form-label">密码</label><input v-model="serviceDrafts.email.password" class="form-control input" type="password" /></div>
+              <div class="form-group"><label class="form-label">SSL</label><label class="checkbox-label inline"><input v-model="serviceDrafts.email.use_ssl" type="checkbox" />启用</label></div>
             </ServiceConfigCard>
           </div>
         </section>
 
-        <section v-if="active === 'adminSystem'" class="admin-page model-layout">
-          <aside class="vertical-tabs"><button v-for="item in settingCategories" :key="item.key" :class="{ active: settingTab === item.key }" @click="settingTab = item.key">{{ item.label }}</button></aside>
-          <section class="model-content">
+        <section v-if="active === 'adminSystem'" class="admin-page config-layout">
+          <aside class="config-nav"><button v-for="item in settingCategories" :key="item.key" class="config-nav-item" :class="{ active: settingTab === item.key }" @click="settingTab = item.key">{{ item.label }}</button></aside>
+          <section class="config-content">
             <div v-if="changedSettings.length" class="alert alert-warning"><AlertTriangle :size="16" />{{ changedSettings.length }} 处未保存<button class="link-btn" @click="saveSettings">保存</button><button class="link-btn" @click="loadSettings">放弃</button></div>
-            <article class="panel-card settings-list">
-              <div v-for="item in activeSettingRows" :key="item.key" class="setting-row">
-                <div><strong>{{ item.label }}</strong><span>{{ item.desc }}</span></div>
-                <component :is="settingControl(item)" :item="item" :drafts="settingDrafts" />
-                <small>当前：{{ formatSettingValue(settingDrafts[item.key]) }}</small>
+            <article class="config-card settings-card">
+              <div class="card-body">
+                <div v-for="item in activeSettingRows" :key="item.key" class="param-row">
+                  <div class="param-info">
+                    <div class="param-title">{{ item.label }}</div>
+                    <div class="param-desc">{{ item.desc }}</div>
+                  </div>
+                  <div class="param-control">
+                    <component :is="settingControl(item)" :item="item" :drafts="settingDrafts" />
+                  </div>
+                  <div class="param-current">当前值：{{ formatSettingValue(settingDrafts[item.key]) }}</div>
+                </div>
               </div>
             </article>
           </section>
@@ -625,17 +661,17 @@ function settingControl(item: any) {
       return () => {
         const key = innerProps.item.key;
         const update = (event: Event) => { innerProps.drafts[key] = (event.target as HTMLInputElement).value; };
-        if (innerProps.item.type === "number") return h("input", { class: "input", type: "number", value: innerProps.drafts[key], onInput: (event: Event) => { innerProps.drafts[key] = Number((event.target as HTMLInputElement).value); } });
-        if (innerProps.item.type === "range") return h("input", { class: "input", type: "range", min: innerProps.item.min, max: innerProps.item.max, value: innerProps.drafts[key], onInput: (event: Event) => { innerProps.drafts[key] = Number((event.target as HTMLInputElement).value); } });
-        if (innerProps.item.type === "toggle") return h("input", { type: "checkbox", checked: !!innerProps.drafts[key], onChange: (event: Event) => { innerProps.drafts[key] = (event.target as HTMLInputElement).checked; } });
-        if (innerProps.item.type === "textarea") return h("textarea", { class: "textarea", value: innerProps.drafts[key], onInput: update });
-        if (innerProps.item.type === "select") return h("select", { class: "select", value: innerProps.drafts[key], onChange: update }, innerProps.item.options.map((option: string) => h("option", { value: option }, option)));
-        if (innerProps.item.type === "checks") return h("div", { class: "check-grid" }, innerProps.item.options.map((option: string) => h("label", [h("input", { type: "checkbox", checked: Array.isArray(innerProps.drafts[key]) && innerProps.drafts[key].includes(option), onChange: (event: Event) => {
+        if (innerProps.item.type === "number") return h("input", { class: "input form-control", type: "number", value: innerProps.drafts[key], onInput: (event: Event) => { innerProps.drafts[key] = Number((event.target as HTMLInputElement).value); } });
+        if (innerProps.item.type === "range") return h("input", { class: "input form-control", type: "range", min: innerProps.item.min, max: innerProps.item.max, value: innerProps.drafts[key], onInput: (event: Event) => { innerProps.drafts[key] = Number((event.target as HTMLInputElement).value); } });
+        if (innerProps.item.type === "toggle") return h("label", { class: "checkbox-label inline" }, [h("input", { type: "checkbox", checked: !!innerProps.drafts[key], onChange: (event: Event) => { innerProps.drafts[key] = (event.target as HTMLInputElement).checked; } }), "启用"]);
+        if (innerProps.item.type === "textarea") return h("textarea", { class: "textarea form-control", value: innerProps.drafts[key], onInput: update });
+        if (innerProps.item.type === "select") return h("select", { class: "select form-control", value: innerProps.drafts[key], onChange: update }, innerProps.item.options.map((option: string) => h("option", { value: option }, option)));
+        if (innerProps.item.type === "checks") return h("div", { class: "checkbox-group" }, innerProps.item.options.map((option: string) => h("label", { class: "checkbox-label" }, [h("input", { type: "checkbox", checked: Array.isArray(innerProps.drafts[key]) && innerProps.drafts[key].includes(option), onChange: (event: Event) => {
           const current = Array.isArray(innerProps.drafts[key]) ? [...innerProps.drafts[key]] : [];
           innerProps.drafts[key] = (event.target as HTMLInputElement).checked ? [...new Set([...current, option])] : current.filter((value) => value !== option);
         } }), option])));
-        if (innerProps.item.type === "json") return h("textarea", { class: "textarea", value: JSON.stringify(innerProps.drafts[key] || {}, null, 2), onInput: (event: Event) => { try { innerProps.drafts[key] = JSON.parse((event.target as HTMLTextAreaElement).value || "{}"); } catch { innerProps.drafts[key] = (event.target as HTMLTextAreaElement).value; } } });
-        return h("input", { class: "input", value: innerProps.drafts[key], onInput: update });
+        if (innerProps.item.type === "json") return h("textarea", { class: "textarea form-control", value: JSON.stringify(innerProps.drafts[key] || {}, null, 2), onInput: (event: Event) => { try { innerProps.drafts[key] = JSON.parse((event.target as HTMLTextAreaElement).value || "{}"); } catch { innerProps.drafts[key] = (event.target as HTMLTextAreaElement).value; } } });
+        return h("input", { class: "input form-control", value: innerProps.drafts[key], onInput: update });
       };
     }
   });
@@ -876,7 +912,21 @@ const ServiceConfigCard = defineComponent({
   props: { title: { type: String, required: true }, icon: { type: Object, required: true }, type: { type: String, required: true }, draft: { type: Object, required: true }, status: { type: String, required: true } },
   emits: ["save", "test", "remove"],
   setup(p, { slots, emit: update }) {
-    return () => h("article", { class: "service-config-card" }, [h("div", { class: "panel-head" }, [h("h2", [h(p.icon as any, { size: 18 }), p.title]), h("div", { class: "card-tools" }, [h("span", { class: ["tag", statusClass(p.status)] }, statusText(p.status)), h("button", { class: "btn btn-secondary btn-sm", onClick: () => update("test") }, "测试"), h("button", { class: "btn btn-primary btn-sm", onClick: () => update("save") }, "保存"), h("button", { class: "btn btn-ghost btn-sm", onClick: () => update("remove") }, "删除")])]), slots.default?.()]);
+    return () => h("article", { class: "config-card service-config-card" }, [
+      h("div", { class: "card-header" }, [
+        h("div", { class: "card-title" }, [
+          h(p.icon as any, { size: 20 }),
+          p.title,
+          h("span", { class: ["tag", statusClass(p.status)] }, statusText(p.status))
+        ]),
+        h("div", { class: "header-actions" }, [
+          h("button", { class: "btn btn-secondary btn-sm", onClick: () => update("test") }, "测试"),
+          h("button", { class: "btn btn-primary btn-sm", onClick: () => update("save") }, "保存"),
+          h("button", { class: "btn btn-ghost btn-sm", onClick: () => update("remove") }, "删除")
+        ])
+      ]),
+      h("div", { class: "card-body grid-2" }, slots.default?.())
+    ]);
   }
 });
 </script>
@@ -1035,6 +1085,26 @@ const ServiceConfigCard = defineComponent({
 .vertical-tabs button:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .vertical-tabs button.active { background: var(--color-primary-50); color: var(--color-primary-700); font-weight: 600; }
 .model-content { flex: 1; max-width: 900px; display: grid; gap: 24px; min-width: 0; }
+.config-layout { display: flex; align-items: flex-start; gap: 32px; }
+.config-nav { position: sticky; top: 0; width: 180px; flex-shrink: 0; display: grid; gap: 2px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-surface); box-shadow: var(--shadow-sm); padding: 8px; }
+.config-nav-item { min-height: 38px; border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; padding: 0 16px; color: var(--color-text-secondary); transition: background 200ms var(--ease-out), color 200ms var(--ease-out); }
+.config-nav-item:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
+.config-nav-item.active { background: var(--color-primary-50); color: var(--color-primary-700); font-weight: 600; }
+.config-content { flex: 1; max-width: 900px; min-width: 0; display: grid; gap: 24px; }
+.config-card { background: var(--color-bg-surface); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; }
+.card-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--color-border-default); padding: 16px 24px; }
+.card-title { display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); font-size: 16px; font-weight: 600; line-height: 24px; }
+.card-title svg { color: var(--color-primary-600); }
+.card-title .tag { margin-left: 12px; font-weight: 500; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+.card-body { padding: 24px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.form-group { display: grid; gap: 6px; margin: 0; }
+.form-label { color: var(--color-text-body); font-size: 13px; font-weight: 500; }
+.form-control { width: 100%; height: 36px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-text-primary); padding: 0 12px; }
+.form-control:focus { outline: none; border-color: var(--color-primary-600); box-shadow: var(--shadow-focus); }
+textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: vertical; }
+.form-control[type="range"] { border: 0; background: transparent; box-shadow: none; padding: 0; }
 .alert { display: flex; align-items: center; gap: 10px; border-radius: var(--radius-md); padding: 12px 14px; }
 .alert-danger { background: var(--color-danger-50); color: var(--color-danger-700); }
 .alert-info { background: var(--color-info-50); color: var(--color-info-700); }
@@ -1053,14 +1123,23 @@ const ServiceConfigCard = defineComponent({
 .card-tools { display: flex; align-items: center; gap: 8px; }
 .service-config-stack { max-width: 900px; }
 .service-config-card { padding: 0; overflow: hidden; }
-.service-config-card > .panel-head { border-bottom: 1px solid var(--color-border-default); margin: 0; padding: 16px 24px; }
-.service-config-card > .form-grid { padding: 24px; }
-.service-config-card h2 { display: flex; align-items: center; gap: 8px; }
+.service-config-card .btn-sm { min-height: 32px; }
 .settings-list { padding: 12px 32px; }
 .setting-row { display: grid; grid-template-columns: 200px minmax(260px, 1fr) 140px; align-items: center; gap: 16px; border-bottom: 1px dashed var(--color-border-default); padding: 20px 0; }
 .setting-row > div { display: grid; gap: 4px; }
 .setting-row strong { color: var(--color-text-primary); }
 .setting-row span, .setting-row small { color: var(--color-text-muted); font-size: var(--text-caption); }
+.settings-card .card-body { padding: 12px 32px; }
+.param-row { display: grid; grid-template-columns: 200px minmax(260px, 1fr) 140px; align-items: center; gap: 16px; border-bottom: 1px dashed var(--color-border-default); padding: 20px 0; }
+.param-row:last-child { border-bottom: 0; }
+.param-info { display: grid; gap: 4px; }
+.param-title { color: var(--color-text-primary); font-weight: 600; }
+.param-desc, .param-current { color: var(--color-text-muted); font-size: var(--text-caption); }
+.param-control { min-width: 0; }
+.param-current { line-height: 18px; word-break: break-all; }
+.checkbox-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.checkbox-label { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-body); font-size: var(--text-body-sm); line-height: 20px; }
+.checkbox-label.inline { min-height: 36px; }
 .check-grid { display: flex; flex-wrap: wrap; gap: 10px; }
 .monitor-top { justify-content: flex-end; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
 .spin { animation: spin 1s linear infinite; }
