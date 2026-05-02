@@ -94,6 +94,60 @@ async function download(path: string, filename?: string, query?: Record<string, 
   URL.revokeObjectURL(url);
 }
 
+type StreamHandler = (event: string, data: any) => void;
+
+async function streamPost(path: string, body: unknown, onEvent: StreamHandler, query?: Record<string, unknown>) {
+  const headers = new Headers();
+  headers.set("Content-Type", "application/json");
+  headers.set("Accept", "text/event-stream");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(buildUrl(path, query), {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body ?? {}),
+  });
+  if (!response.ok || !response.body) {
+    const payload = (await response.json().catch(() => null)) as ApiResponse<unknown> | null;
+    throw new Error(errorMessage(payload));
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  const yieldToRenderer = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+
+  const consume = async (block: string) => {
+    const lines = block.split(/\r?\n/);
+    let event = "message";
+    const dataLines: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith("event:")) event = line.slice(6).trim() || "message";
+      if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+    }
+    if (!dataLines.length) return;
+    const raw = dataLines.join("\n");
+    const data = raw ? JSON.parse(raw) : null;
+    if (event === "error") throw new Error(data?.message || "请求失败");
+    onEvent(event, data);
+    await yieldToRenderer();
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    let separator = buffer.search(/\r?\n\r?\n/);
+    while (separator >= 0) {
+      const block = buffer.slice(0, separator);
+      const match = buffer.slice(separator).match(/^\r?\n\r?\n/);
+      buffer = buffer.slice(separator + (match?.[0].length || 2));
+      await consume(block);
+      separator = buffer.search(/\r?\n\r?\n/);
+    }
+    if (done) break;
+  }
+  if (buffer.trim()) await consume(buffer);
+}
+
 export const api = {
   get: <T>(path: string, query?: Record<string, unknown>) => request<T>(path, {}, query),
   post: <T>(path: string, body?: unknown, query?: Record<string, unknown>) =>
@@ -101,5 +155,6 @@ export const api = {
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(body ?? {}) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
-  download
+  download,
+  streamPost
 };

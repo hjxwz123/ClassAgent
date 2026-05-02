@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from fastapi import UploadFile
@@ -31,6 +32,34 @@ class StorageService:
 
     def _relative_to_storage(self, path: Path) -> str:
         return path.relative_to(STORAGE_DIR).as_posix()
+
+    def _static_url(self, relative_path: str) -> str:
+        return f"/static/{relative_path.lstrip('/')}"
+
+    def _is_loopback_url(self, value: str) -> bool:
+        try:
+            parsed = urlsplit(value)
+        except ValueError:
+            return False
+        return parsed.hostname in {"127.0.0.1", "localhost", "0.0.0.0", "::1"}
+
+    def _local_public_url(self, relative_path: str) -> str:
+        base_url = str(self.settings.public_base_url or "").rstrip("/")
+        if not base_url or self._is_loopback_url(base_url):
+            return self._static_url(relative_path)
+        return f"{base_url}/static/{relative_path.lstrip('/')}"
+
+    def normalize_public_url(self, value: str | None) -> str | None:
+        if not value:
+            return value
+        if value.startswith("/static/"):
+            return value
+        if not self._is_loopback_url(value):
+            return value
+        parsed = urlsplit(value)
+        if not parsed.path.startswith("/static/"):
+            return value
+        return urlunsplit(("", "", parsed.path, parsed.query, parsed.fragment))
 
     def _clean_oss_config(self, config: dict) -> dict:
         cleaned = dict(config)
@@ -98,7 +127,7 @@ class StorageService:
             return f"{str(config['cdn_domain']).rstrip('/')}/{relative_path}"
         bucket = str(config.get("bucket", "")).strip()
         if not bucket:
-            return f"{self.settings.public_base_url}/static/{relative_path}"
+            return self._local_public_url(relative_path)
         endpoint = self._oss_endpoint(config)
         endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip("/")
         return f"https://{bucket}.{endpoint}/{relative_path}"
@@ -136,7 +165,7 @@ class StorageService:
         oss_config = self._resolve_oss_config(db)
         if oss_config is not None:
             return self._oss_public_url(relative_path, oss_config)
-        return f"{self.settings.public_base_url}/static/{relative_path}"
+        return self._local_public_url(relative_path)
 
 
 storage_service = StorageService()

@@ -168,7 +168,7 @@ http://127.0.0.1:8000/docs
 | `general` | 通用兜底模型 |
 | `qa` | 课程问答 |
 | `script` | 讲解脚本生成 |
-| `summary` | 课堂摘要 |
+| `summary` | 课时摘要 |
 | `knowledge` | 知识点抽取与讲解 |
 | `quiz` | 测验生成与主观题评分 |
 | `tutoring` | 题目辅导 |
@@ -268,7 +268,7 @@ OCR 使用阿里云官方 SDK，管理员页面不显示访问地址字段，后
 
 1. `SubmitDocParserJobAdvance` 上传本地文件流并提交异步任务。
 2. `QueryDocParserStatus` 按 `poll_interval_seconds` 轮询，直到 `success` 或 `Fail`。
-3. `GetDocParserResult` 按 `layout_step_size` 分段读取 layouts，并生成课堂页面原文。
+3. `GetDocParserResult` 按 `layout_step_size` 分段读取 layouts，并生成课时页面原文。
 
 ### 5.4 TTS 配置示例
 

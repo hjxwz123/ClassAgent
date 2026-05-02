@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from threading import Thread
 from typing import Any
 
 from fastapi import UploadFile
@@ -22,6 +23,7 @@ from app.services.ai import ai_service
 from app.services.audit import log_operation
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.parser import parse_material
+from app.services.runtime_config import get_enabled_service_config
 from app.services.storage import storage_service
 from app.services.tts import tts_service
 from app.services.usage import log_ai_usage
@@ -80,6 +82,71 @@ def _detect_material_type(filename: str) -> str:
     if material_type is None:
         raise bad_request("仅支持 .pptx、.pdf、.docx、.txt")
     return material_type
+
+
+def _lesson_pages(db: Session, lesson_id: int) -> list[LessonPage]:
+    return list(db.scalars(select(LessonPage).where(LessonPage.lesson_id == lesson_id).order_by(LessonPage.page_number)))
+
+
+def _select_material_lesson_with_pages(db: Session, material_id: int) -> tuple[Lesson | None, list[LessonPage]]:
+    lessons = list(
+        db.scalars(
+            select(Lesson)
+            .where(Lesson.material_id == material_id)
+            .order_by(Lesson.updated_at.desc(), Lesson.id.desc())
+        )
+    )
+    fallback: tuple[Lesson | None, list[LessonPage]] = (lessons[0], []) if lessons else (None, [])
+    for lesson in lessons:
+        pages = _lesson_pages(db, lesson.id)
+        if pages:
+            return lesson, pages
+    return fallback
+
+
+def _restore_material_from_existing_pages(
+    db: Session,
+    *,
+    material: CourseMaterial,
+    lesson: Lesson | None,
+    pages: list[LessonPage],
+) -> bool:
+    if lesson is None or not pages:
+        return False
+
+    changed = False
+    if material.parse_status != ProcessStatus.READY.value:
+        material.parse_status = ProcessStatus.READY.value
+        changed = True
+    if not material.extracted_text:
+        material.extracted_text = "\n\n".join(page.page_text for page in pages if page.page_text)
+        changed = True
+    if lesson.page_count != len(pages):
+        lesson.page_count = len(pages)
+        changed = True
+    if lesson.status not in {LessonStatus.READY.value, LessonStatus.PUBLISHED.value}:
+        lesson.status = LessonStatus.READY.value
+        changed = True
+    if changed:
+        db.add_all([material, lesson])
+    return changed
+
+
+def repair_materials_with_existing_pages(db: Session, materials: list[CourseMaterial]) -> None:
+    changed = False
+    for material in materials:
+        lesson, pages = _select_material_lesson_with_pages(db, material.id)
+        changed = _restore_material_from_existing_pages(db, material=material, lesson=lesson, pages=pages) or changed
+    if changed:
+        db.commit()
+
+
+def _synthesize_or_none(script_text: str, db: Session) -> tuple[str | None, float | None, str | None]:
+    try:
+        audio_url, duration = tts_service.synthesize(script_text, db=db)
+        return audio_url, duration, None
+    except Exception as exc:
+        return None, None, str(exc)
 
 
 def create_material(
@@ -158,7 +225,9 @@ def list_materials(
         statement = statement.join(CourseMembership, CourseMembership.course_id == CourseMaterial.course_id).where(
             CourseMembership.user_id == user.id
         )
-    return list(db.scalars(statement.order_by(CourseMaterial.created_at.desc())).unique())
+    materials = list(db.scalars(statement.order_by(CourseMaterial.created_at.desc())).unique())
+    repair_materials_with_existing_pages(db, materials)
+    return materials
 
 
 def get_material_detail(db: Session, material_id: int, user: User) -> tuple[CourseMaterial, Lesson | None, list[LessonPage]]:
@@ -166,10 +235,12 @@ def get_material_detail(db: Session, material_id: int, user: User) -> tuple[Cour
     if material is None:
         raise not_found("资料不存在")
     _assert_material_access(db, material, user)
-    lesson = db.scalar(select(Lesson).where(Lesson.material_id == material.id))
-    pages: list[LessonPage] = []
-    if lesson is not None:
-        pages = list(db.scalars(select(LessonPage).where(LessonPage.lesson_id == lesson.id).order_by(LessonPage.page_number)))
+    lesson, pages = _select_material_lesson_with_pages(db, material.id)
+    if _restore_material_from_existing_pages(db, material=material, lesson=lesson, pages=pages):
+        db.commit()
+        db.refresh(material)
+        if lesson is not None:
+            db.refresh(lesson)
     return material, lesson, pages
 
 
@@ -249,12 +320,12 @@ def update_page_script(db: Session, *, page_id: int, user: User, script_text: st
         raise not_found("页面不存在")
     lesson = db.get(Lesson, page.lesson_id)
     if lesson is None or lesson.material_id is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     material = db.get(CourseMaterial, lesson.material_id)
     if material is None:
         raise not_found("资料不存在")
     _assert_material_owner(db, material, user)
-    audio_url, duration = tts_service.synthesize(script_text, db=db)
+    audio_url, duration, error_message = _synthesize_or_none(script_text, db)
     page.script_text = script_text
     page.subtitle_text = script_text
     page.script_status = ProcessStatus.READY.value
@@ -267,6 +338,7 @@ def update_page_script(db: Session, *, page_id: int, user: User, script_text: st
         action="material.page.script.update",
         target_type="lesson_page",
         target_id=page.id,
+        detail={"tts_warning": error_message} if error_message else None,
     )
     db.commit()
     db.refresh(page)
@@ -279,13 +351,13 @@ def regenerate_page_script(db: Session, *, page_id: int, user: User) -> LessonPa
         raise not_found("页面不存在")
     lesson = db.get(Lesson, page.lesson_id)
     if lesson is None or lesson.material_id is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     material = db.get(CourseMaterial, lesson.material_id)
     if material is None:
         raise not_found("资料不存在")
     _assert_material_owner(db, material, user)
     script_text = ai_service.generate_page_script(title=page.page_title, content=page.page_text, db=db)
-    audio_url, duration = tts_service.synthesize(script_text, db=db)
+    audio_url, duration, error_message = _synthesize_or_none(script_text, db)
     page.script_text = script_text
     page.subtitle_text = script_text
     page.script_status = ProcessStatus.READY.value
@@ -298,6 +370,7 @@ def regenerate_page_script(db: Session, *, page_id: int, user: User) -> LessonPa
         action="material.page.script.regenerate",
         target_type="lesson_page",
         target_id=page.id,
+        detail={"tts_warning": error_message} if error_message else None,
     )
     db.commit()
     db.refresh(page)
@@ -319,6 +392,7 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
     db.add(material)
     db.commit()
     try:
+        warnings: list[str] = []
         pages = parse_material(
             storage_service.absolute_path(material.storage_path),
             material.material_type,
@@ -350,7 +424,9 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         created_pages: list[LessonPage] = []
         for page_data in pages:
             script_text = ai_service.generate_page_script(title=page_data.get("page_title"), content=page_data["page_text"], db=db)
-            audio_url, duration = tts_service.synthesize(script_text, db=db)
+            audio_url, duration, error_message = _synthesize_or_none(script_text, db)
+            if error_message:
+                warnings.append(f"第{page_data['page_number']}页语音合成失败: {error_message}")
             page = LessonPage(
                 lesson_id=lesson.id,
                 page_number=page_data["page_number"],
@@ -388,9 +464,13 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
             db.add(chunk)
             created_chunks.append(chunk)
         db.flush()
-        vector_store.upsert_chunks(db, chunks=created_chunks)
+        try:
+            vector_store.upsert_chunks(db, chunks=created_chunks)
+            material.vector_status = ProcessStatus.READY.value
+        except Exception as exc:
+            material.vector_status = ProcessStatus.FAILED.value
+            warnings.append(f"向量索引写入失败: {exc}")
         material.parse_status = ProcessStatus.READY.value
-        material.vector_status = ProcessStatus.READY.value
         db.add(material)
         log_ai_usage(
             db,
@@ -399,9 +479,11 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
             course_id=material.course_id,
             prompt_chars=len(material.extracted_text or ""),
             completion_chars=sum(len(page.script_text or "") for page in created_pages),
+            success=not warnings,
+            error_message="；".join(warnings)[:500] if warnings else None,
         )
         task.status = ProcessStatus.READY.value
-        task.detail = {"page_count": len(created_pages)}
+        task.detail = {"page_count": len(created_pages), "warnings": warnings}
         db.add(task)
         db.commit()
     except Exception as exc:
@@ -425,6 +507,16 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
 def dispatch_material_processing(material_id: int) -> None:
     from app.tasks.materials import process_material_task
 
+    settings = get_settings()
+    if settings.celery_task_always_eager:
+        from app.db import session as db_session
+
+        with db_session.SessionLocal() as db:
+            parser_config = get_enabled_service_config(db, "doc_parser")
+        if parser_config is not None and parser_config.provider != "mock":
+            Thread(target=_process_material_in_background, args=(material_id,), daemon=True).start()
+            return
+
     try:
         process_material_task.delay(material_id)
     except Exception:
@@ -432,6 +524,16 @@ def dispatch_material_processing(material_id: int) -> None:
         # pipeline records failed status itself, so upload should still return
         # the created material instead of converting processing failure to 500.
         return
+
+
+def _process_material_in_background(material_id: int) -> None:
+    from app.db import session as db_session
+
+    with db_session.SessionLocal() as db:
+        try:
+            process_material_pipeline(db, material_id)
+        except Exception:
+            return
 
 
 def reprocess_material(db: Session, *, material_id: int, user: User) -> CourseMaterial:

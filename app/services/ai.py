@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 import math
 import re
-from collections.abc import Sequence
+from dataclasses import dataclass
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 from hashlib import blake2b
 from typing import Any
@@ -39,6 +40,37 @@ def _parse_json_payload(value: str) -> Any:
         return json.loads(text[start : end + 1])
 
 
+_GENERIC_QUIZ_LABELS = {
+    "章节练习",
+    "薄弱点章节练习",
+    "错题重练",
+    "章节自练",
+    "课程测验",
+    "练习",
+    "测验",
+}
+
+
+def _is_generic_quiz_label(value: str) -> bool:
+    text = _clean_text(value)
+    return not text or text in _GENERIC_QUIZ_LABELS or any(label in text for label in ("章节练习", "薄弱点章节练习", "错题重练"))
+
+
+def _quiz_source_sentences(source_text: str, *, limit: int = 8) -> list[str]:
+    clean = _clean_text(source_text)
+    sentences = [item.strip(" ：:，,") for item in re.split(r"[。！？!?；;\n]+", clean) if item.strip()]
+    return [item[:90] for item in sentences if len(item) >= 6][:limit]
+
+
+def _invalid_quiz_stem(stem: str) -> bool:
+    text = _clean_text(stem)
+    if not text:
+        return True
+    if "课程资料的是哪一项" in text:
+        return True
+    return bool(re.search(r"关于[“\"']?(章节练习|薄弱点章节练习|错题重练|章节自练)[”\"']?", text))
+
+
 RAG_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
@@ -51,6 +83,18 @@ RAG_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
         ),
     ]
 )
+
+
+@dataclass
+class ChatResult:
+    content: str
+    reasoning: str | None = None
+
+
+@dataclass
+class ChatDelta:
+    kind: str
+    text: str
 
 
 class AIService:
@@ -83,6 +127,58 @@ class AIService:
         user_prompt: str,
         json_mode: bool = False,
     ) -> str | None:
+        result = self._call_chat_with_meta(
+            db,
+            purpose=purpose,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            json_mode=json_mode,
+        )
+        return result.content if result else None
+
+    def _split_thinking_from_content(self, content: str) -> ChatResult:
+        match = re.search(r"<think(?:ing)?>(.*?)</think(?:ing)?>", content, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            return ChatResult(content=content)
+        reasoning = match.group(1).strip()
+        answer = (content[: match.start()] + content[match.end() :]).strip()
+        return ChatResult(content=answer or content.strip(), reasoning=reasoning or None)
+
+    def _reasoning_from_message(self, message: dict[str, Any]) -> str | None:
+        for key in ("reasoning_content", "reasoning", "thinking", "thought", "thoughts"):
+            value = message.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+            if isinstance(value, list):
+                text = "\n".join(str(item).strip() for item in value if str(item).strip())
+                if text:
+                    return text
+        return None
+
+    def _text_from_content_part(self, value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            pieces: list[str] = []
+            for item in value:
+                if isinstance(item, str):
+                    pieces.append(item)
+                elif isinstance(item, dict):
+                    pieces.append(str(item.get("text") or item.get("content") or ""))
+            return "".join(pieces)
+        return str(value)
+
+    def _call_chat_with_meta(
+        self,
+        db: Session | None,
+        *,
+        purpose: str,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool = False,
+    ) -> ChatResult | None:
         config = get_default_model_config(db, purpose)
         if config is None or config.provider == "mock":
             if self._fallback_allowed():
@@ -121,15 +217,113 @@ class AIService:
                 message = choices[0].get("message") or {}
                 content = message.get("content")
                 if content:
-                    return str(content)
+                    result = self._split_thinking_from_content(str(content))
+                    result.reasoning = self._reasoning_from_message(message) or result.reasoning
+                    return result
             if body.get("output"):
                 output = body["output"]
                 if isinstance(output, dict):
-                    return str(output.get("text") or output.get("content") or "")
+                    content = str(output.get("text") or output.get("content") or "")
+                    result = self._split_thinking_from_content(content)
+                    result.reasoning = self._reasoning_from_message(output) or result.reasoning
+                    return result
             raise bad_request("模型响应格式不符合 OpenAI 兼容规范")
         except Exception:
             if self._fallback_allowed():
                 return None
+            raise
+
+    def _stream_chat_with_meta(
+        self,
+        db: Session | None,
+        *,
+        purpose: str,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool = False,
+    ) -> Iterator[ChatDelta]:
+        config = get_default_model_config(db, purpose)
+        if config is None or config.provider == "mock":
+            if self._fallback_allowed():
+                return
+            raise bad_request(f"缺少 {purpose} 模型配置，请先在管理员模型配置中启用模型")
+        if not config.endpoint:
+            if self._fallback_allowed():
+                return
+            raise bad_request(f"{purpose} 模型配置缺少 endpoint")
+
+        headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
+        if config.api_key:
+            headers["Authorization"] = f"Bearer {config.api_key}"
+        headers.update(config.extra_config.get("headers") or {})
+        payload: dict[str, Any] = {
+            "model": config.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": config.extra_config.get("temperature", 0.2),
+            "stream": True,
+        }
+        if config.extra_config.get("max_tokens"):
+            payload["max_tokens"] = config.extra_config["max_tokens"]
+        if json_mode and config.extra_config.get("enable_response_format", True):
+            payload["response_format"] = {"type": "json_object"}
+
+        try:
+            with httpx.Client(timeout=self.settings.external_service_timeout_seconds) as client:
+                with client.stream("POST", self._chat_endpoint(config.endpoint), headers=headers, json=payload) as response:
+                    if response.status_code >= 400:
+                        error_text = response.read().decode("utf-8", errors="ignore")
+                        raise bad_request(f"模型调用失败: HTTP {response.status_code} {error_text[:300]}")
+                    content_type = response.headers.get("content-type", "")
+                    if "text/event-stream" not in content_type:
+                        body = response.read()
+                        payload_text = body.decode("utf-8", errors="ignore")
+                        parsed = _parse_json_payload(payload_text)
+                        choices = parsed.get("choices") if isinstance(parsed, dict) else []
+                        message = choices[0].get("message") if choices else None
+                        if isinstance(message, dict):
+                            content = self._text_from_content_part(message.get("content"))
+                            result = self._split_thinking_from_content(content)
+                            reasoning = self._reasoning_from_message(message) or result.reasoning
+                            if reasoning:
+                                yield ChatDelta("reasoning", reasoning)
+                            if result.content:
+                                yield ChatDelta("content", result.content)
+                        return
+                    for line in response.iter_lines():
+                        text = line.strip()
+                        if not text or not text.startswith("data:"):
+                            continue
+                        data = text[5:].strip()
+                        if data == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        choices = chunk.get("choices") if isinstance(chunk, dict) else None
+                        if choices:
+                            delta = choices[0].get("delta") or {}
+                            reasoning = self._reasoning_from_message(delta)
+                            if reasoning:
+                                yield ChatDelta("reasoning", reasoning)
+                            content = self._text_from_content_part(delta.get("content"))
+                            if content:
+                                yield ChatDelta("content", content)
+                            continue
+                        output = chunk.get("output") if isinstance(chunk, dict) else None
+                        if isinstance(output, dict):
+                            reasoning = self._reasoning_from_message(output)
+                            if reasoning:
+                                yield ChatDelta("reasoning", reasoning)
+                            content = self._text_from_content_part(output.get("text") or output.get("content"))
+                            if content:
+                                yield ChatDelta("content", content)
+        except Exception:
+            if self._fallback_allowed():
+                return
             raise
 
     def _local_embedding(self, text: str, *, dimension: int) -> list[float]:
@@ -223,7 +417,7 @@ class AIService:
         result = self._call_chat(
             db,
             purpose="script",
-            system_prompt="你是高校课程 AI 讲解助手。根据单页课件内容生成自然、准确、适合课堂播放的中文讲解稿。",
+            system_prompt="你是高校课程 AI 讲解助手。根据单页课件内容生成自然、准确、适合课时讲解和语音播放的中文讲解稿。",
             user_prompt=f"页面标题：{title or '本页内容'}\n页面内容：{content}\n请输出讲解稿正文，不要输出额外说明。",
         )
         if result:
@@ -243,13 +437,13 @@ class AIService:
         result = self._call_chat(
             db,
             purpose="summary",
-            system_prompt="你是课程内容摘要助手，请根据课件页面内容生成简洁准确的课堂摘要。",
-            user_prompt=f"课堂标题：{title}\n页面内容：{merged[:6000]}\n请输出 100 字以内中文摘要。",
+            system_prompt="你是课程内容摘要助手，请根据课件页面内容生成简洁准确的课时摘要。",
+            user_prompt=f"课时标题：{title}\n页面内容：{merged[:6000]}\n请输出 100 字以内中文摘要。",
         )
         if result:
             return result.strip()
         merged = merged[:200] if len(merged) > 200 else merged
-        return f"{title}：{merged or '该资料已生成课堂页面，可继续补充讲解脚本。'}"
+        return f"{title}：{merged or '该资料已生成课时页面，可继续补充讲解脚本。'}"
 
     def answer_question(
         self,
@@ -258,11 +452,12 @@ class AIService:
         contexts: Sequence[str],
         history: Sequence[str] | None = None,
         db: Session | None = None,
-    ) -> tuple[str, bool]:
+    ) -> tuple[str, bool, str | None]:
         if not contexts:
             return (
                 "当前课程资料中没有检索到足以支持回答的内容。请换一种问法，或确认该问题是否属于本课程范围。",
                 True,
+                None,
             )
         context = "\n\n".join(_clean_text(item) for item in contexts if item)
         history_text = "\n".join(history or [])
@@ -271,14 +466,14 @@ class AIService:
             history=history_text[:1000],
             question=question,
         )
-        result = self._call_chat(
+        result = self._call_chat_with_meta(
             db,
             purpose="qa",
             system_prompt=str(messages[0].content),
             user_prompt=str(messages[1].content),
         )
         if result:
-            return result.strip(), False
+            return result.content.strip(), False, result.reasoning
         context = context[:320]
         history_hint = ""
         if history:
@@ -289,7 +484,48 @@ class AIService:
             "如果你要继续追问，建议从定义、适用条件、典型例题三个角度继续展开。"
             f"{history_hint}"
         )
-        return answer, False
+        return answer, False, "本次使用本地降级逻辑：根据检索到的课程片段生成回答，未收到上游模型思考过程。"
+
+    def stream_answer_question(
+        self,
+        *,
+        question: str,
+        contexts: Sequence[str],
+        history: Sequence[str] | None = None,
+        db: Session | None = None,
+    ) -> Iterator[ChatDelta]:
+        if not contexts:
+            yield ChatDelta("content", "当前课程资料中没有检索到足以支持回答的内容。请换一种问法，或确认该问题是否属于本课程范围。")
+            return
+        context = "\n\n".join(_clean_text(item) for item in contexts if item)
+        history_text = "\n".join(history or [])
+        messages = RAG_ANSWER_PROMPT.format_messages(
+            context=context[:6000],
+            history=history_text[:1000],
+            question=question,
+        )
+        emitted = False
+        for delta in self._stream_chat_with_meta(
+            db,
+            purpose="qa",
+            system_prompt=str(messages[0].content),
+            user_prompt=str(messages[1].content),
+        ):
+            emitted = True
+            yield delta
+        if emitted:
+            return
+        context_excerpt = context[:320]
+        history_hint = ""
+        if history:
+            history_hint = f"\n结合你前面的问题（{'；'.join(history[-2:])}），可以把本题和前序概念一起对照。"
+        yield ChatDelta(
+            "content",
+            "根据已检索到的课程资料，可以这样理解："
+            f"{context_excerpt}"
+            "\n\n如果你要继续追问，建议从定义、适用条件、典型例题三个角度继续展开。"
+            f"{history_hint}",
+        )
 
     def extract_knowledge_points(self, text: str, db: Session | None = None) -> list[str]:
         payload = self._call_json(
@@ -399,12 +635,16 @@ class AIService:
         }
 
     def generate_quiz_questions(self, *, topic: str, source_text: str, count: int, db: Session | None = None) -> list[dict]:
+        clean_source = _clean_text(source_text)
         payload = self._call_json(
             db,
             purpose="quiz",
             system_prompt="你是课程测验题生成助手。请只返回 JSON，不要输出解释文字。",
             user_prompt=(
-                f"主题：{topic}\n资料：{source_text[:8000]}\n题目数量：{count}\n"
+                f"考查主题：{topic}\n课程资料：{clean_source[:8000]}\n题目数量：{count}\n"
+                "要求：只能依据课程资料出题；题干必须包含资料中的具体概念、定义、公式、案例或事实；"
+                "禁止把“章节练习、薄弱点章节练习、错题重练、测验”等练习名称当作考点；"
+                "如果资料不足以出题，返回 {\"items\":[]}。\n"
                 "返回格式：{\"items\":[{\"question_type\":\"single_choice|judge|short_answer\","
                 "\"stem\":\"\",\"options\":[\"\"],\"reference_answer\":{},\"explanation\":\"\",\"score\":10,\"difficulty\":\"standard\"}]}"
             ),
@@ -413,10 +653,13 @@ class AIService:
             questions = [item for item in payload["items"] if isinstance(item, dict)]
             normalized: list[dict] = []
             for item in questions[:count]:
+                stem = str(item.get("stem") or "")
+                if _invalid_quiz_stem(stem):
+                    continue
                 normalized.append(
                     {
                         "question_type": item.get("question_type") or "short_answer",
-                        "stem": str(item.get("stem") or ""),
+                        "stem": stem,
                         "options": item.get("options"),
                         "reference_answer": item.get("reference_answer") or {},
                         "explanation": str(item.get("explanation") or ""),
@@ -426,39 +669,61 @@ class AIService:
                 )
             if len(normalized) >= count:
                 return normalized
-        snippet = _clean_text(source_text)[:120] or topic
-        templates = [
-            {
-                "question_type": "single_choice",
-                "stem": f"关于“{topic}”，下列说法最符合课程资料的是哪一项？",
-                "options": ["只看结论即可", f"需要结合资料中的条件与定义：{snippet[:24]}", "与课程内容无关", "完全依赖记忆即可"],
-                "reference_answer": {"value": 1},
-                "explanation": f"课程资料强调要结合定义和条件理解：{snippet}",
-                "score": 10,
-                "difficulty": "standard",
-            },
-            {
-                "question_type": "judge",
-                "stem": f"判断：{topic} 在任何条件下都可以直接套用固定公式。",
-                "options": ["正确", "错误"],
-                "reference_answer": {"value": 1},
-                "explanation": "课程学习中应先判断适用条件，再决定是否直接套用。",
-                "score": 10,
-                "difficulty": "standard",
-            },
-            {
-                "question_type": "short_answer",
-                "stem": f"请简述学习“{topic}”时最关键的两个步骤。",
-                "options": None,
-                "reference_answer": {"keywords": self.extract_keywords(source_text, limit=3)},
-                "explanation": "先整理条件，再结合定义或定理推导。",
-                "score": 20,
-                "difficulty": "advanced",
-            },
-        ]
+        sentences = _quiz_source_sentences(clean_source)
+        if not sentences:
+            raise bad_request("课程资料不足，无法生成有效题目")
+        keywords = [item for item in self.extract_keywords(clean_source, limit=12) if not _is_generic_quiz_label(item)]
+        if not keywords and not _is_generic_quiz_label(topic):
+            keywords = [topic]
+        if not keywords:
+            keywords = [sentences[0][:18]]
         questions: list[dict] = []
         while len(questions) < count:
-            questions.append(templates[len(questions) % len(templates)].copy())
+            index = len(questions)
+            concept = keywords[index % len(keywords)]
+            evidence = sentences[index % len(sentences)]
+            mode = index % 3
+            if mode == 0:
+                questions.append(
+                    {
+                        "question_type": "single_choice",
+                        "stem": f"根据课程资料，“{concept}”更接近下列哪种表述？",
+                        "options": [
+                            evidence[:64],
+                            "只需要记住结论，不需要理解条件",
+                            "与本课程资料中的核心内容无关",
+                            "在任何场景下都可以直接套用固定答案",
+                        ],
+                        "reference_answer": {"value": 0},
+                        "explanation": f"资料中的依据是：{evidence}",
+                        "score": 10,
+                        "difficulty": "standard",
+                    }
+                )
+            elif mode == 1:
+                questions.append(
+                    {
+                        "question_type": "judge",
+                        "stem": f"判断：理解“{concept}”时应结合课程资料中的具体条件或语境。",
+                        "options": ["正确", "错误"],
+                        "reference_answer": {"value": 0},
+                        "explanation": f"课程资料相关表述：{evidence}",
+                        "score": 10,
+                        "difficulty": "standard",
+                    }
+                )
+            else:
+                questions.append(
+                    {
+                        "question_type": "short_answer",
+                        "stem": f"请结合课程资料，简述“{concept}”的含义或作用。",
+                        "options": None,
+                        "reference_answer": {"keywords": self.extract_keywords(evidence, limit=3)},
+                        "explanation": f"答题时应围绕资料中的关键依据展开：{evidence}",
+                        "score": 20,
+                        "difficulty": "advanced",
+                    }
+                )
         return questions
 
     def score_subjective_answer(
@@ -564,6 +829,40 @@ class AIService:
             f"本课程近期高频问题数为 {high_frequency_questions}。"
             f"建议优先回讲 {weak}，并针对 {inactive_students} 名低活跃学生安排提醒或补学任务。"
         )
+
+    def generate_student_recommendation(
+        self,
+        *,
+        course_count: int,
+        pending_tasks: int,
+        recent_lesson_title: str | None,
+        weak_points: Sequence[str],
+        study_hours: float,
+        completion_rate: float,
+        accuracy: float,
+        db: Session | None = None,
+    ) -> str:
+        weak = list(weak_points[:3])
+        result = self._call_chat(
+            db,
+            purpose="analysis",
+            system_prompt="你是学生学习助手，请根据学生个人学习数据生成一条简短、可执行的今日学习建议。",
+            user_prompt=(
+                f"已加入课程数：{course_count}\n今日待完成任务数：{pending_tasks}\n"
+                f"最近学习课时：{recent_lesson_title or '暂无'}\n薄弱知识点：{weak}\n"
+                f"本周学习小时：{study_hours}\n课时完成率：{completion_rate}%\n练习正确率：{accuracy}%\n"
+                "请输出 1 句话中文建议，面向学生本人，不要提到教师管理。"
+            ),
+        )
+        if result:
+            return result.strip()
+        if pending_tasks > 0:
+            return f"今天先完成 {pending_tasks} 个学习任务，再用 10 分钟复盘最近课时。"
+        if weak:
+            return f"建议今天优先复盘 {weak[0]}，并完成 3 到 5 道相关练习。"
+        if recent_lesson_title:
+            return f"建议从《{recent_lesson_title}》继续学习，并在课后整理 3 个关键概念。"
+        return "建议选择一门课程完成一个课时，并用练习检查掌握情况。"
 
 
 ai_service = AIService()

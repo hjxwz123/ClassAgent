@@ -31,6 +31,27 @@ def auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_student_dashboard_without_courses_has_no_ai_recommendation(client):
+    register_user(
+        client,
+        email="student-empty-dashboard@example.com",
+        password="Student123",
+        nickname="空课程学生",
+        role="student",
+        student_no="S2026999",
+    )
+    student_headers = auth_headers(login_user(client, email="student-empty-dashboard@example.com", password="Student123")["access_token"])
+
+    response = client.get("/api/v1/student/dashboard", headers=student_headers)
+    assert response.status_code == 200, response.text
+    dashboard = response.json()["data"]
+    assert dashboard["courses"] == []
+    assert dashboard["continue_learning"] is None
+    assert dashboard["recommendation"]["status"] == "no_courses"
+    assert dashboard["recommendation"]["text"] == ""
+    assert dashboard["recommendation"]["based_on"]["courses"] == 0
+
+
 def prepare_student_workspace(client):
     teacher = register_user(
         client,
@@ -202,6 +223,50 @@ def test_student_console_endpoints_and_multiple_courses(client):
     assert len(result["answers"]) == 2
     assert result["answers"][0]["correct_answer"] == 1
     assert result["answers"][1]["feedback"] == "本题未作答。"
+
+    with db_session.SessionLocal() as db:
+        existing_quiz = db.get(Quiz, quiz_id)
+        alias_quiz = Quiz(
+            course_id=first_course["id"],
+            chapter_id=None,
+            creator_id=existing_quiz.creator_id,
+            title="答案兼容测验",
+            description="验证不同模型答案结构",
+            quiz_type=QuizType.COURSE.value,
+            status=QuizStatus.PUBLISHED.value,
+            total_score=5,
+        )
+        db.add(alias_quiz)
+        db.commit()
+        db.refresh(alias_quiz)
+        alias_question = QuizQuestion(
+            quiz_id=alias_quiz.id,
+            course_id=first_course["id"],
+            chapter_id=None,
+            question_type=QuestionType.SINGLE_CHOICE.value,
+            stem="TCP 的主要特性是？",
+            options=["无连接", "可靠传输"],
+            reference_answer={"correct_answer": "可靠传输"},
+            explanation="标准答案可能来自模型的 correct_answer 字段。",
+            score=5,
+            difficulty="standard",
+        )
+        db.add(alias_question)
+        db.commit()
+        db.refresh(alias_quiz)
+        db.refresh(alias_question)
+        alias_quiz_id = alias_quiz.id
+        alias_question_id = alias_question.id
+
+    alias_submit_response = client.post(
+        f"/api/v1/learning/quizzes/{alias_quiz_id}/submit",
+        json={"answers": [{"question_id": alias_question_id, "answer": 1}]},
+        headers=student_headers,
+    )
+    assert alias_submit_response.status_code == 200, alias_submit_response.text
+    alias_result = alias_submit_response.json()["data"]
+    assert alias_result["score"] == 5
+    assert alias_result["answers"][0]["correct_answer"] == "可靠传输"
 
     profile_response = client.patch(
         "/api/v1/student/profile",

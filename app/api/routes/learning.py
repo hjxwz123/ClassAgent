@@ -27,6 +27,7 @@ from app.schemas.learning import (
 from app.services.learning import (
     checkin_task,
     create_study_plan,
+    extract_reference_answer_value,
     generate_quiz,
     generate_wrong_book_practice,
     get_knowledge_points,
@@ -46,9 +47,7 @@ router = APIRouter()
 
 
 def _reference_answer(question: QuizQuestion):
-    if isinstance(question.reference_answer, dict) and "value" in question.reference_answer:
-        return question.reference_answer["value"]
-    return question.reference_answer
+    return extract_reference_answer_value(question.reference_answer)
 
 
 def _attempt_detail(db: Session, attempt) -> dict:
@@ -178,6 +177,8 @@ def get_wrong_questions_endpoint(
                 wrong_count=wrong.wrong_count,
                 knowledge_point_id=wrong.knowledge_point_id,
                 knowledge_point_name=point.name if point else None,
+                created_at=wrong.created_at,
+                updated_at=wrong.updated_at,
             ).model_dump(mode="json")
         )
     return success_response(data=items, request_id=request.state.request_id)

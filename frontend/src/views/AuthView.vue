@@ -19,7 +19,7 @@
           <label class="label">邮箱</label>
           <input v-model="loginForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
           <label class="label">密码</label>
-          <input v-model="loginForm.password" class="input" type="password" required :aria-invalid="formError.includes('密码')" />
+          <PasswordField v-model="loginForm.password" required :aria-invalid="formError.includes('密码')" />
           <button class="btn btn-primary wide" :data-loading="loading" :disabled="loading"><LogIn :size="16" />登录</button>
         </form>
 
@@ -31,7 +31,7 @@
           <label class="label">学号</label>
           <input v-model="studentNo" class="input" required :aria-invalid="formError.includes('学号')" />
           <label class="label">密码</label>
-          <input v-model="registerForm.password" class="input" type="password" required :aria-invalid="formError.includes('密码')" />
+          <PasswordField v-model="registerForm.password" required :aria-invalid="formError.includes('密码')" />
           <button class="btn btn-primary wide" :data-loading="loading" :disabled="loading"><UserPlus :size="16" />注册</button>
         </form>
 
@@ -43,7 +43,7 @@
             <button type="button" class="btn btn-secondary" :data-loading="loading" :disabled="loading" @click="sendCode">发送</button>
           </div>
           <label class="label">新密码</label>
-          <input v-model="resetForm.new_password" class="input" type="password" required :aria-invalid="formError.includes('密码')" />
+          <PasswordField v-model="resetForm.new_password" required :aria-invalid="formError.includes('密码')" />
           <button class="btn btn-primary wide" :data-loading="loading" :disabled="loading"><KeyRound :size="16" />重置</button>
         </form>
       </Transition>
@@ -56,6 +56,7 @@ import { reactive, ref } from "vue";
 import { AlertCircle, Bot, KeyRound, LogIn, UserPlus } from "lucide-vue-next";
 import { api } from "../api/client";
 import { useSessionStore } from "../stores/session";
+import PasswordField from "../components/PasswordField.vue";
 import type { User } from "../types";
 
 const emit = defineEmits<{ authed: [user: User]; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();

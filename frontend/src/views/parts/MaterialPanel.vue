@@ -8,12 +8,7 @@
     </div>
     <div v-if="editable" class="form-row edit-row">
       <input v-model="edit.title" class="input" placeholder="标题" />
-      <select v-model="edit.category" class="select">
-        <option value="courseware">课件</option>
-        <option value="handout">讲义</option>
-        <option value="exercise">练习</option>
-        <option value="reference">参考</option>
-      </select>
+      <AppSelect v-model="edit.category" :options="categoryOptions" />
       <button class="btn btn-secondary" @click="$emit('update', detail.material.id, edit)">更新</button>
     </div>
     <section class="pages">
@@ -25,7 +20,9 @@
         <p class="source">{{ page.page_text }}</p>
         <textarea v-if="editable" v-model="page.script_text" class="textarea"></textarea>
         <p v-else>{{ page.script_text }}</p>
-        <audio v-if="page.audio_url" :src="page.audio_url" controls></audio>
+        <button v-if="page.audio_url" class="audio-chip" :class="{ playing: playingPageId === page.id }" @click="toggleAudio(page.id, page.audio_url)">
+          <Volume2 :size="15" />{{ playingPageId === page.id ? "暂停音频" : "播放音频" }}
+        </button>
         <div v-if="editable" class="toolbar">
           <button class="btn btn-secondary btn-sm" @click="$emit('save', page.id, page.script_text || '')">保存</button>
           <button class="btn btn-ai btn-sm" @click="$emit('regen', page.id)">生成</button>
@@ -36,7 +33,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, watch } from "vue";
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import { Volume2 } from "lucide-vue-next";
+import AppSelect from "../../components/AppSelect.vue";
 import ModalPanel from "../../components/ModalPanel.vue";
 import type { MaterialDetail } from "../../types";
 
@@ -49,11 +48,28 @@ defineEmits<{
 }>();
 const localPages = computed(() => props.detail.pages);
 const edit = reactive({ title: props.detail.material.title, category: props.detail.material.category });
+const categoryOptions = [{ label: "课件", value: "courseware" }, { label: "讲义", value: "handout" }, { label: "练习", value: "exercise" }, { label: "参考", value: "reference" }];
+const playingPageId = ref<number | null>(null);
+let audio: HTMLAudioElement | null = null;
+
+function toggleAudio(pageId: number, url: string) {
+  if (playingPageId.value === pageId && audio) {
+    audio.pause();
+    playingPageId.value = null;
+    return;
+  }
+  audio?.pause();
+  audio = new Audio(url);
+  playingPageId.value = pageId;
+  audio.addEventListener("ended", () => { playingPageId.value = null; }, { once: true });
+  void audio.play();
+}
 watch(
   () => props.detail.material,
   (material) => Object.assign(edit, { title: material.title, category: material.category }),
   { deep: true }
 );
+onBeforeUnmount(() => audio?.pause());
 </script>
 
 <style scoped>
@@ -68,5 +84,20 @@ watch(
   color: var(--color-text-secondary);
   font-size: var(--text-body-sm);
 }
-audio { width: 100%; height: 34px; margin-top: var(--space-3); }
+.audio-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  min-height: 30px;
+  border: 1px solid var(--color-primary-200);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+  padding: 0 12px;
+  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.audio-chip:hover { box-shadow: var(--shadow-sm); }
+.audio-chip:active { transform: scale(.97); }
+.audio-chip.playing { background: var(--color-ai-light); color: #6D28D9; }
 </style>

@@ -35,12 +35,12 @@
 上传成功后会自动触发：
 
 1. 阿里云文档解析（大模型版）异步任务
-2. 课堂页面生成
+2. 课时页面生成
 3. 每页脚本生成
 4. 音频生成
 5. 向量化入库
 
-文档解析流程为 `SubmitDocParserJobAdvance` 提交本地文件流、`QueryDocParserStatus` 轮询任务状态、`GetDocParserResult` 分段读取版面结果，并使用返回的 Markdown/文本内容生成课堂页面。后端不再使用 `pymupdf`、`python-docx`、`python-pptx` 等本地 Python 文档解析库处理资料内容。
+文档解析流程为 `SubmitDocParserJobAdvance` 提交本地文件流、`QueryDocParserStatus` 轮询任务状态、`GetDocParserResult` 分段读取版面结果，并使用返回的 Markdown/文本内容生成课时页面。后端不再使用 `pymupdf`、`python-docx`、`python-pptx` 等本地 Python 文档解析库处理资料内容。
 
 向量化使用 Chroma 持久化向量库。生产环境需先配置 `purpose=embedding` 的模型；开发环境仅用于本地验证时会生成确定性本地 embedding。
 
@@ -73,8 +73,8 @@
 ### 返回结构
 
 - `material`：资料基础信息
-- `lesson_id`：自动生成的课堂 ID
-- `lesson_status`：课堂状态
+- `lesson_id`：自动生成的课时 ID
+- `lesson_status`：课时状态
 - `lesson_page_count`：总页数
 - `pages`：每页原文、脚本、音频地址、字幕
 
@@ -115,7 +115,7 @@
 用途：
 
 - 重新解析文档
-- 重建课堂页
+- 重建课时页
 - 重建脚本和音频
 - 重建知识块索引
 

@@ -23,9 +23,9 @@
 - `GET /courses/{course_id}/home`
 - `DELETE /courses/{course_id}`
 
-`GET /courses` 返回教师名下课程及学生数、资料数、课堂数、发布率。
+`GET /courses` 返回教师名下课程及学生数、资料数、课时数、发布率。
 
-`GET /courses/{course_id}/home` 返回课程主页聚合数据：课程信息、章节、快捷统计、课堂列表、资料状态、近期活动、学生进度、AI 队列。
+`GET /courses/{course_id}/home` 返回课程主页聚合数据：课程信息、章节、快捷统计、课时列表、资料状态、近期活动、学生进度、AI 队列。
 
 ## 资料管理
 
@@ -58,7 +58,7 @@
 }
 ```
 
-## 课堂管理
+## 课时管理
 
 - `PATCH /lessons/{lesson_id}`
 - `POST /lessons/{lesson_id}/duplicate`
@@ -80,7 +80,7 @@
 - `POST /courses/{course_id}/students/{student_id}/remind`
 - `DELETE /courses/{course_id}/students/{student_id}`
 
-`students` 返回统计概览和学生列表。学生详情返回基本信息、课堂进度、问答记录、薄弱点。
+`students` 返回统计概览和学生列表。学生详情返回基本信息、课时进度、问答记录、薄弱点。
 
 ## 教学分析
 
@@ -90,7 +90,7 @@
 返回：
 
 - `metrics`：活跃率、完成率、问答总量、平均分、薄弱点数量
-- `lesson_completion`：各课堂完成率
+- `lesson_completion`：各课时完成率
 - `high_frequency_questions`：高频问题
 - `weak_points`：薄弱点
 - `score_distribution`：成绩分布

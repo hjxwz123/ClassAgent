@@ -1,8 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 from app.schemas.common import ORMModel
+from app.services.storage import storage_service
 
 
 class MaterialUpdateRequest(BaseModel):
@@ -29,6 +30,10 @@ class LessonPageResponse(ORMModel):
     created_at: datetime
     updated_at: datetime
 
+    @field_serializer("audio_url")
+    def serialize_audio_url(self, value: str | None):
+        return storage_service.normalize_public_url(value)
+
 
 class MaterialResponse(ORMModel):
     id: int
@@ -47,6 +52,10 @@ class MaterialResponse(ORMModel):
     vector_status: str
     created_at: datetime
     updated_at: datetime
+
+    @field_serializer("preview_url")
+    def serialize_preview_url(self, value: str | None):
+        return storage_service.normalize_public_url(value)
 
 
 class MaterialDetailResponse(BaseModel):

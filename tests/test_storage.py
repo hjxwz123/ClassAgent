@@ -14,6 +14,7 @@ from app.services.admin import save_service_config
 from app.services.materials import dispatch_material_processing
 from app.services.storage import storage_service
 from app.services.tts import tts_service
+from app.services.vector_store import vector_store
 
 
 def _add_service_config(*, provider: str, config: dict) -> None:
@@ -53,7 +54,11 @@ def test_storage_ignores_local_oss_provider(client, monkeypatch):
 
     assert size == 5
     assert storage_service.absolute_path(relative_path).exists()
-    assert public_url.endswith(f"/static/{relative_path}")
+    assert public_url == f"/static/{relative_path}"
+    assert (
+        storage_service.normalize_public_url(f"http://127.0.0.1:8000/static/{relative_path}?download=1")
+        == f"/static/{relative_path}?download=1"
+    )
 
 
 def test_aliyun_oss_upload_failure_returns_bad_request(client, monkeypatch):
@@ -112,6 +117,17 @@ def test_local_oss_service_config_drops_oss_credentials(client):
         raw = json.loads(decrypt_secret(record.config_encrypted))
 
     assert raw == {"url_expire_hours": 24}
+
+
+def test_vector_delete_is_best_effort(client, monkeypatch):
+    monkeypatch.setattr(
+        vector_store._client,
+        "get_collection",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("readonly vector database")),
+    )
+
+    with db_session.SessionLocal() as db:
+        vector_store.delete_material(db, course_id=123, material_id=456)
 
 
 def test_aliyun_oss_service_config_trims_and_removes_endpoint(client):

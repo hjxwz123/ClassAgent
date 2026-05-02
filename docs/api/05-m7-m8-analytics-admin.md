@@ -218,7 +218,7 @@
 
 - `upload.max_size_mb`：单文件上传上限，单位 MB
 - `course.material.max_count`：单课程资料数量上限
-- `lesson.script.max_length`：课堂讲解脚本最大长度
+- `lesson.script.max_length`：课时讲解脚本最大长度
 - `qa.context.turn_limit`：问答多轮上下文轮数
 - `quiz.default_question_count`：默认测验题量
 - `tutoring.default_release_level`：题目辅导默认开放级别

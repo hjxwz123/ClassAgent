@@ -7,7 +7,7 @@ from app.core.deps import get_current_user
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
-from app.schemas.material import MaterialDetailResponse, MaterialResponse, MaterialUpdateRequest, ScriptUpdateRequest
+from app.schemas.material import LessonPageResponse, MaterialResponse, MaterialUpdateRequest, ScriptUpdateRequest
 from app.services.materials import (
     create_material,
     delete_material,
@@ -19,9 +19,22 @@ from app.services.materials import (
     update_material,
     update_page_script,
 )
+from app.services.storage import storage_service
 
 
 router = APIRouter()
+
+
+def serialize_material(material) -> dict:
+    payload = MaterialResponse.model_validate(material).model_dump(mode="json")
+    payload["preview_url"] = storage_service.normalize_public_url(payload.get("preview_url"))
+    return payload
+
+
+def serialize_page(page) -> dict:
+    payload = LessonPageResponse.model_validate(page).model_dump(mode="json")
+    payload["audio_url"] = storage_service.normalize_public_url(payload.get("audio_url"))
+    return payload
 
 
 @router.get("")
@@ -35,7 +48,7 @@ def list_materials_endpoint(
     category: str | None = Query(default=None),
 ):
     items = [
-        MaterialResponse.model_validate(item).model_dump(mode="json")
+        serialize_material(item)
         for item in list_materials(
             db,
             user=user,
@@ -70,7 +83,7 @@ def upload_material_endpoint(
     )
     dispatch_material_processing(material.id)
     db.refresh(material)
-    return success_response(data=MaterialResponse.model_validate(material).model_dump(mode="json"), request_id=request.state.request_id)
+    return success_response(data=serialize_material(material), request_id=request.state.request_id)
 
 
 @router.get("/{material_id}")
@@ -81,14 +94,14 @@ def get_material_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     material, lesson, pages = get_material_detail(db, material_id, user)
-    payload = MaterialDetailResponse(
-        material=MaterialResponse.model_validate(material),
-        lesson_id=lesson.id if lesson else None,
-        lesson_status=lesson.status if lesson else None,
-        lesson_page_count=lesson.page_count if lesson else 0,
-        pages=[page for page in pages],
-    )
-    return success_response(data=payload.model_dump(mode="json"), request_id=request.state.request_id)
+    payload = {
+        "material": serialize_material(material),
+        "lesson_id": lesson.id if lesson else None,
+        "lesson_status": lesson.status if lesson else None,
+        "lesson_page_count": lesson.page_count if lesson else 0,
+        "pages": [serialize_page(page) for page in pages],
+    }
+    return success_response(data=payload, request_id=request.state.request_id)
 
 
 @router.patch("/{material_id}")
@@ -108,7 +121,7 @@ def update_material_endpoint(
         chapter_id=payload.chapter_id,
         chapter_id_provided="chapter_id" in payload.model_fields_set,
     )
-    return success_response(data=MaterialResponse.model_validate(material).model_dump(mode="json"), request_id=request.state.request_id)
+    return success_response(data=serialize_material(material), request_id=request.state.request_id)
 
 
 @router.delete("/{material_id}")
@@ -130,7 +143,7 @@ def reprocess_material_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     material = reprocess_material(db, material_id=material_id, user=user)
-    return success_response(data=MaterialResponse.model_validate(material).model_dump(mode="json"), request_id=request.state.request_id)
+    return success_response(data=serialize_material(material), request_id=request.state.request_id)
 
 
 @router.patch("/pages/{page_id}/script")
@@ -157,6 +170,4 @@ def regenerate_page_script_endpoint(
 
 
 def page_to_dict(page):
-    from app.schemas.material import LessonPageResponse
-
-    return LessonPageResponse.model_validate(page).model_dump(mode="json")
+    return serialize_page(page)

@@ -11,13 +11,16 @@
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
     "echarts": "^6.0.0",
+    "katex": "^0.16.45",
     "lucide-vue-next": "^0.562.0",
+    "markdown-it": "^14.1.1",
     "pinia": "^3.0.4",
     "vite": "^7.3.0",
     "vue": "^3.5.25",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "typescript": "^5.9.3",
     "vue-tsc": "^3.1.8"
   }

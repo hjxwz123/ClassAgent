@@ -14,7 +14,7 @@ from sqlalchemy import distinct, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import BACKUP_DIR, VECTOR_DIR, get_settings
-from app.core.enums import BackupStatus, ConfigScope, CourseStatus, UserRole, UserStatus
+from app.core.enums import BackupStatus, ConfigScope, CourseStatus, LessonStatus, UserRole, UserStatus
 from app.core.errors import bad_request, forbidden, not_found
 from app.core.security import decrypt_secret, encrypt_secret, hash_password, mask_secret
 from app.db.models import (
@@ -52,6 +52,10 @@ def assert_admin(user: User) -> None:
 def _model_dict(item) -> dict:
     data = dict(item.__dict__)
     data.pop("_sa_instance_state", None)
+    if "preview_url" in data:
+        data["preview_url"] = storage_service.normalize_public_url(data["preview_url"])
+    if "audio_url" in data:
+        data["audio_url"] = storage_service.normalize_public_url(data["audio_url"])
     return data
 
 
@@ -102,6 +106,120 @@ def list_users(db: Session, *, role: str | None, status: str | None, keyword: st
     return list(db.scalars(statement.order_by(User.created_at.desc())))
 
 
+def _course_progress_for_user(db: Session, *, course_id: int, user_id: int) -> float:
+    progress_rows = list(
+        db.scalars(
+            select(LearningProgress)
+            .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+            .where(LearningProgress.user_id == user_id, Lesson.course_id == course_id)
+        )
+    )
+    lesson_total = int(
+        db.scalar(select(func.count(Lesson.id)).where(Lesson.course_id == course_id, Lesson.status == LessonStatus.PUBLISHED.value)) or 0
+    )
+    return round(sum(item.progress_percent for item in progress_rows) / max(lesson_total, 1), 2) if lesson_total else 0
+
+
+def _course_student_count(db: Session, course_id: int) -> int:
+    return int(
+        db.scalar(
+            select(func.count(CourseMembership.id)).where(
+                CourseMembership.course_id == course_id,
+                CourseMembership.role == UserRole.STUDENT.value,
+            )
+        )
+        or 0
+    )
+
+
+def _course_relation_entry(
+    db: Session,
+    *,
+    course: Course,
+    user: User,
+    relation: str,
+    role_label: str,
+    joined_at: datetime | None = None,
+) -> dict:
+    return {
+        "id": course.id,
+        "name": course.name,
+        "course_code": course.course_code,
+        "term": course.term,
+        "status": course.status,
+        "teacher_id": course.teacher_id,
+        "relation": relation,
+        "role": role_label,
+        "joined_at": joined_at,
+        "student_count": _course_student_count(db, course.id),
+        "progress_percent": _course_progress_for_user(db, course_id=course.id, user_id=user.id)
+        if relation == "student"
+        else None,
+    }
+
+
+def _user_related_courses(db: Session, user: User) -> list[dict]:
+    entries: list[dict] = []
+    seen: set[tuple[int, str]] = set()
+    if user.role == UserRole.TEACHER.value:
+        for course in db.scalars(
+            select(Course)
+            .where(Course.teacher_id == user.id, Course.deleted_at.is_(None))
+            .order_by(Course.created_at.desc())
+        ):
+            entries.append(
+                _course_relation_entry(
+                    db,
+                    course=course,
+                    user=user,
+                    relation="teacher",
+                    role_label="授课教师",
+                    joined_at=course.created_at,
+                )
+            )
+            seen.add((course.id, "teacher"))
+    memberships = list(
+        db.scalars(
+            select(CourseMembership)
+            .where(CourseMembership.user_id == user.id)
+            .order_by(CourseMembership.joined_at.desc(), CourseMembership.created_at.desc())
+        )
+    )
+    for membership in memberships:
+        relation = "student" if membership.role == UserRole.STUDENT.value else membership.role
+        key = (membership.course_id, relation)
+        if key in seen:
+            continue
+        course = db.get(Course, membership.course_id)
+        if course is None or course.deleted_at is not None:
+            continue
+        role_label = "学生" if membership.role == UserRole.STUDENT.value else membership.role
+        entries.append(
+            _course_relation_entry(
+                db,
+                course=course,
+                user=user,
+                relation=relation,
+                role_label=role_label,
+                joined_at=membership.joined_at,
+            )
+        )
+        seen.add(key)
+    return sorted(entries, key=lambda item: (item.get("joined_at").timestamp() if item.get("joined_at") else 0), reverse=True)
+
+
+def user_summary_admin(db: Session, user: User) -> dict:
+    data = _model_dict(user)
+    courses = _user_related_courses(db, user)
+    data["course_count"] = len(courses)
+    data["courses"] = courses[:3]
+    return data
+
+
+def list_user_summaries_admin(db: Session, *, role: str | None, status: str | None, keyword: str | None) -> list[dict]:
+    return [user_summary_admin(db, user) for user in list_users(db, role=role, status=status, keyword=keyword)]
+
+
 def get_user_stats(db: Session) -> dict:
     week_start = _week_start()
     counts = {
@@ -125,31 +243,10 @@ def get_user_detail_admin(db: Session, *, user_id: int) -> dict:
     user = db.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise not_found("用户不存在")
-    memberships = list(db.scalars(select(CourseMembership).where(CourseMembership.user_id == user_id).order_by(CourseMembership.created_at.desc())))
-    course_ids = [item.course_id for item in memberships]
-    courses = {item.id: item for item in db.scalars(select(Course).where(Course.id.in_(course_ids)))} if course_ids else {}
-    progress_rows = {
-        lesson_id: progress
-        for lesson_id, progress in db.execute(
-            select(Lesson.id, LearningProgress).join(LearningProgress, LearningProgress.lesson_id == Lesson.id).where(
-                LearningProgress.user_id == user_id,
-                Lesson.course_id.in_(course_ids) if course_ids else False,
-            )
-        )
-    } if course_ids else {}
     recent_logs = list(db.scalars(select(OperationLog).where(OperationLog.user_id == user_id).order_by(OperationLog.created_at.desc()).limit(5)))
     return {
         "user": _model_dict(user),
-        "courses": [
-            {
-                "id": membership.course_id,
-                "name": courses.get(membership.course_id).name if membership.course_id in courses else "-",
-                "role": membership.role,
-                "joined_at": membership.joined_at,
-                "progress_percent": max([item.progress_percent for item in progress_rows.values()], default=0),
-            }
-            for membership in memberships[:10]
-        ],
+        "courses": _user_related_courses(db, user),
         "logs": [_model_dict(item) for item in recent_logs],
     }
 
