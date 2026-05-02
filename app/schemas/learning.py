@@ -19,9 +19,11 @@ class KnowledgePointResponse(ORMModel):
 class QuizGenerateRequest(BaseModel):
     course_id: int
     chapter_id: int | None = None
+    chapter_ids: list[int] | None = None
     title: str = Field(min_length=2, max_length=255)
     quiz_type: str = "course"
     question_count: int = Field(default=5, ge=1, le=20)
+    prefer_weak_points: bool = False
 
 
 class QuizQuestionPayload(ORMModel):
@@ -124,6 +126,8 @@ class WrongQuestionResponse(BaseModel):
     wrong_count: int
     knowledge_point_id: int | None = None
     knowledge_point_name: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class WeakPointResponse(BaseModel):

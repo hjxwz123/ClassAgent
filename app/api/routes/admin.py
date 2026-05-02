@@ -48,9 +48,9 @@ from app.services.admin import (
     list_materials_admin,
     list_model_configs,
     list_operation_logs,
+    list_user_summaries_admin,
     list_service_configs,
     list_system_settings,
-    list_users,
     material_summary_admin,
     mark_error_log_resolved,
     remove_material_admin,
@@ -130,8 +130,7 @@ def list_users_endpoint(
     keyword: str | None = Query(default=None),
 ):
     assert_admin(user)
-    items = [UserSummary.model_validate(item).model_dump(mode="json") for item in list_users(db, role=role, status=status, keyword=keyword)]
-    return success_response(data=items, request_id=request.state.request_id)
+    return success_response(data=list_user_summaries_admin(db, role=role, status=status, keyword=keyword), request_id=request.state.request_id)
 
 
 @router.post("/users/admin")

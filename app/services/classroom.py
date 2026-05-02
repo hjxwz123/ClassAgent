@@ -14,7 +14,7 @@ def _assert_student_in_course(db: Session, *, course_id: int, user: User) -> Non
         select(CourseMembership.id).where(CourseMembership.course_id == course_id, CourseMembership.user_id == user.id)
     )
     if membership is None:
-        raise forbidden("仅可访问已加入课程的课堂")
+        raise forbidden("仅可访问已加入课程的课时")
 
 
 def list_lessons(db: Session, *, course_id: int, user: User) -> list[Lesson]:
@@ -31,11 +31,11 @@ def list_lessons(db: Session, *, course_id: int, user: User) -> list[Lesson]:
 def get_lesson_detail(db: Session, *, lesson_id: int, user: User) -> tuple[Lesson, list[LessonPage]]:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     if user.role == UserRole.STUDENT.value:
         _assert_student_in_course(db, course_id=lesson.course_id, user=user)
         if lesson.status != LessonStatus.PUBLISHED.value:
-            raise forbidden("课堂尚未发布")
+            raise forbidden("课时尚未发布")
     elif user.role == UserRole.TEACHER.value:
         course = _get_course_or_404(db, lesson.course_id)
         _assert_course_owner(course, user)
@@ -46,7 +46,7 @@ def get_lesson_detail(db: Session, *, lesson_id: int, user: User) -> tuple[Lesso
 def publish_lesson(db: Session, *, lesson_id: int, user: User, status: str) -> Lesson:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     course = _get_course_or_404(db, lesson.course_id)
     _assert_course_owner(course, user)
     lesson.status = status
@@ -69,7 +69,7 @@ def update_learning_progress(
 ) -> LearningProgress:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     _assert_student_in_course(db, course_id=lesson.course_id, user=user)
     progress = db.scalar(
         select(LearningProgress).where(LearningProgress.lesson_id == lesson_id, LearningProgress.user_id == user.id)
@@ -97,6 +97,6 @@ def update_learning_progress(
 def get_learning_progress(db: Session, *, lesson_id: int, user: User) -> LearningProgress | None:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     _assert_student_in_course(db, course_id=lesson.course_id, user=user)
     return db.scalar(select(LearningProgress).where(LearningProgress.lesson_id == lesson_id, LearningProgress.user_id == user.id))

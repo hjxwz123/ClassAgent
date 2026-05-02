@@ -19,7 +19,7 @@ def default_system_settings() -> dict[str, tuple[object, str, str]]:
         "qa.max_answer_tokens": (2048, "问答回答最大 Token 数", "ai"),
         "qa.source_limit": (3, "问答引用来源最多条数", "ai"),
         "tutoring.default_release_level": (settings.tutoring_default_release_level, "题目辅导默认开放级别", "ai"),
-        "lesson.script.max_length": (settings.script_max_length, "课堂讲解脚本最大长度", "classroom"),
+        "lesson.script.max_length": (settings.script_max_length, "课时讲解脚本最大长度", "classroom"),
         "tts.default_voice": (settings.default_tts_voice, "默认 TTS 音色", "classroom"),
         "tts.default_rate": (settings.default_tts_rate, "默认 TTS 语速", "classroom"),
         "tts.default_volume": (settings.default_tts_volume, "默认 TTS 音量", "classroom"),

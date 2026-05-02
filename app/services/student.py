@@ -32,13 +32,14 @@ from app.db.models import (
 )
 from app.services.ai import ai_service
 from app.services.courses import _get_course_or_404
+from app.services.storage import storage_service
 
 
 STUDENT_PROFILE_KEY = "student.profile"
 STUDENT_NOTICE_KEY = "student.notifications"
 
 DEFAULT_STUDENT_NOTICES = [
-    {"key": "lesson", "label": "新课堂发布", "enabled": True},
+    {"key": "lesson", "label": "新课时发布", "enabled": True},
     {"key": "quiz", "label": "测验发布提醒", "enabled": True},
     {"key": "qa", "label": "AI 问答完成", "enabled": True},
     {"key": "plan", "label": "学习计划提醒", "enabled": True, "time": "20:00"},
@@ -48,6 +49,10 @@ DEFAULT_STUDENT_NOTICES = [
 def _as_dict(item) -> dict:
     data = dict(item.__dict__)
     data.pop("_sa_instance_state", None)
+    if "preview_url" in data:
+        data["preview_url"] = storage_service.normalize_public_url(data["preview_url"])
+    if "audio_url" in data:
+        data["audio_url"] = storage_service.normalize_public_url(data["audio_url"])
     return data
 
 
@@ -301,22 +306,36 @@ def get_student_dashboard(db: Session, user: User) -> dict:
                 point = db.get(KnowledgePoint, question.knowledge_point_id)
                 counter[point.name if point else "未命名"] += wrong.wrong_count
         weak = [{"name": name, "count": count} for name, count in counter.most_common(5)]
-    recommendation_text = ai_service.generate_teaching_suggestion(
-        high_frequency_questions=stats["qa_count"],
-        weak_points=[item["name"] for item in weak],
-        inactive_students=0,
-        db=db,
-    )
+    recent_lesson = _recent_lesson(db, course_ids=course_ids, user=user)
+    recommendation = {
+        "text": "",
+        "lesson": recent_lesson,
+        "weak_points": weak,
+        "status": "no_courses" if not course_ids else "ready",
+        "based_on": {
+            "courses": len(course_ids),
+            "today_tasks": len(tasks),
+            "weak_points": len(weak),
+            "stats": bool(course_ids),
+        },
+    }
+    if course_ids:
+        recommendation["text"] = ai_service.generate_student_recommendation(
+            course_count=len(course_ids),
+            pending_tasks=len([task for task in tasks if task.get("status") != "done"]),
+            recent_lesson_title=recent_lesson["lesson"]["title"] if recent_lesson else None,
+            weak_points=[item["name"] for item in weak],
+            study_hours=stats["study_hours"],
+            completion_rate=stats["completion_rate"],
+            accuracy=stats["accuracy"],
+            db=db,
+        )
     return {
         "courses": courses,
         "today_tasks": tasks,
-        "continue_learning": _recent_lesson(db, course_ids=course_ids, user=user),
+        "continue_learning": recent_lesson,
         "stats": stats,
-        "recommendation": {
-            "text": recommendation_text,
-            "lesson": _recent_lesson(db, course_ids=course_ids, user=user),
-            "weak_points": weak,
-        },
+        "recommendation": recommendation,
         "activities": _activities(db, user=user, course_ids=course_ids, limit=8),
         "notifications": get_student_notifications(db, user),
     }
@@ -372,8 +391,22 @@ def get_student_course_home(db: Session, *, course_id: int, user: User) -> dict:
         "recent_qa": recent_qa,
         "stats": stats,
         "student_count": _course_student_total(db, course_id),
-        "quick_questions": ["这节课重点是什么？", "帮我举个例子", "出一道练习题", "总结本章知识点"],
+        "quick_questions": _course_quick_questions(course=course, chapters=chapters, lessons=lessons, materials=materials),
     }
+
+
+def _course_quick_questions(*, course: Course, chapters: list[Chapter], lessons: list[dict], materials: list[dict]) -> list[str]:
+    lesson_title = next((item.get("title") for item in lessons if item.get("title")), "")
+    chapter_title = next((item.title for item in chapters if item.title), "")
+    material_title = next((item.get("title") for item in materials if item.get("title")), "")
+    base = lesson_title or chapter_title or material_title or course.name
+    questions = [
+        f"{base} 的重点是什么？",
+        f"请用例子解释 {chapter_title or base}",
+        f"根据 {lesson_title or base} 出一道练习题",
+        f"帮我总结 {material_title or chapter_title or base} 的复习提纲",
+    ]
+    return list(dict.fromkeys(questions))
 
 
 def get_page_note(db: Session, *, page_id: int, user: User) -> dict:
@@ -382,7 +415,7 @@ def get_page_note(db: Session, *, page_id: int, user: User) -> dict:
         raise not_found("页面不存在")
     lesson = db.get(Lesson, page.lesson_id)
     if lesson is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     _assert_joined(db, course_id=lesson.course_id, user=user)
     note = db.scalar(select(PageNote).where(PageNote.user_id == user.id, PageNote.lesson_page_id == page_id))
     if note is None:
@@ -398,7 +431,7 @@ def save_page_note(db: Session, *, page_id: int, user: User, content: str) -> di
         raise not_found("页面不存在")
     lesson = db.get(Lesson, page.lesson_id)
     if lesson is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     _assert_joined(db, course_id=lesson.course_id, user=user)
     note = db.scalar(select(PageNote).where(PageNote.user_id == user.id, PageNote.lesson_page_id == page_id))
     if note is None:
@@ -419,7 +452,7 @@ def get_student_profile(db: Session, user: User) -> dict:
         {"key": "streak7", "name": "连续7天", "unlocked": stats["streak_days"] >= 7},
         {"key": "quiz", "name": "完成测验", "unlocked": stats["accuracy"] > 0},
         {"key": "qa", "name": "提问达人", "unlocked": stats["qa_count"] >= 10},
-        {"key": "finish", "name": "课堂完成", "unlocked": stats["completion_rate"] >= 80},
+        {"key": "finish", "name": "课时完成", "unlocked": stats["completion_rate"] >= 80},
         {"key": "streak30", "name": "连续30天", "unlocked": stats["streak_days"] >= 30},
     ]
     return {
@@ -493,7 +526,7 @@ def get_student_notifications(db: Session, user: User) -> list[dict]:
             .order_by(Lesson.published_at.desc().nullslast(), Lesson.created_at.desc())
             .limit(4)
         ):
-            notifications.append({"type": "lesson", "title": f"新课堂：{lesson.title}", "time": lesson.published_at or lesson.created_at, "unread": True})
+            notifications.append({"type": "lesson", "title": f"新课时：{lesson.title}", "time": lesson.published_at or lesson.created_at, "unread": True})
         failed_material = db.scalar(
             select(CourseMaterial)
             .where(CourseMaterial.course_id.in_(course_ids), CourseMaterial.parse_status == ProcessStatus.FAILED.value)

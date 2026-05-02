@@ -155,7 +155,19 @@ def test_teacher_analytics_and_admin_operations(client):
     assert users_resp.status_code == 200, users_resp.text
     assert len(users_resp.json()["data"]) >= 4
     target_student = next(item for item in users_resp.json()["data"] if item["email"] == "student4@example.com")
+    target_teacher = next(item for item in users_resp.json()["data"] if item["email"] == "teacher4@example.com")
     target_teacher2 = next(item for item in users_resp.json()["data"] if item["email"] == "teacher5@example.com")
+    assert target_student["last_login_at"]
+    assert target_student["course_count"] >= 1
+    assert target_student["courses"][0]["role"] == "学生"
+    assert target_teacher["course_count"] >= 1
+    assert target_teacher["courses"][0]["role"] == "授课教师"
+
+    student_detail_resp = client.get(f"/api/v1/admin/users/{target_student['id']}", headers=admin_headers)
+    assert student_detail_resp.status_code == 200, student_detail_resp.text
+    student_detail = student_detail_resp.json()["data"]
+    assert student_detail["user"]["last_login_at"]
+    assert any(item["name"] == "高阶线代" and item["role"] == "学生" for item in student_detail["courses"])
 
     create_admin_resp = client.post(
         "/api/v1/admin/users/admin",
@@ -194,6 +206,9 @@ def test_teacher_analytics_and_admin_operations(client):
     )
     assert takeover_resp.status_code == 200, takeover_resp.text
     assert takeover_resp.json()["data"]["teacher_id"] == target_teacher2["id"]
+    teacher2_detail_resp = client.get(f"/api/v1/admin/users/{target_teacher2['id']}", headers=admin_headers)
+    assert teacher2_detail_resp.status_code == 200, teacher2_detail_resp.text
+    assert any(item["name"] == "高阶线代" and item["role"] == "授课教师" for item in teacher2_detail_resp.json()["data"]["courses"])
 
     materials_resp = client.get("/api/v1/admin/materials", headers=admin_headers)
     assert materials_resp.status_code == 200, materials_resp.text

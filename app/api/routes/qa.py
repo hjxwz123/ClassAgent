@@ -1,6 +1,9 @@
+import json
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -8,10 +11,14 @@ from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.qa import QAAskRequest, QAFeedbackRequest, QAFavoriteRequest, QAHistoryItem, QAResponse
-from app.services.qa import ask_question, list_history, update_favorite, update_feedback
+from app.services.qa import ask_question, ask_question_stream, list_history, update_favorite, update_feedback, upload_qa_image
 
 
 router = APIRouter()
+
+
+def _sse(event: str, data) -> str:
+    return f"event: {event}\ndata: {json.dumps(jsonable_encoder(data), ensure_ascii=False)}\n\n"
 
 
 @router.post("/ask")
@@ -27,10 +34,46 @@ def ask_question_endpoint(
         record_id=record.id,
         question=record.question,
         answer=record.answer,
+        thinking_process=record.thinking_process,
         is_out_of_scope=record.is_out_of_scope,
         sources=record.sources or [],
+        attachments=record.attachments or [],
     )
     return success_response(data=response.model_dump(mode="json"), request_id=request.state.request_id)
+
+
+@router.post("/ask/stream")
+def ask_question_stream_endpoint(
+    payload: QAAskRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    def event_stream():
+        yield _sse("ready", {"request_id": request.state.request_id})
+        try:
+            for item in ask_question_stream(db, user=user, payload=payload):
+                yield _sse(item["event"], item["data"])
+        except Exception as exc:
+            yield _sse("error", {"message": str(exc)})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/attachments/image")
+def upload_qa_image_endpoint(
+    request: Request,
+    course_id: Annotated[int, Form(...)],
+    file: UploadFile = File(...),
+    user: Annotated[User, Depends(get_current_user)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
+):
+    attachment = upload_qa_image(db, user=user, course_id=course_id, upload=file)
+    return success_response(data=attachment, request_id=request.state.request_id)
 
 
 @router.get("/history")

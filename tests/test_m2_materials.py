@@ -9,7 +9,7 @@ from pptx import Presentation
 from sqlalchemy import select
 
 from app.db import session as db_session
-from app.db.models import KnowledgeChunk
+from app.db.models import AsyncTaskLog, CourseMaterial, KnowledgeChunk, Lesson, LessonPage
 from app.services.parser import doc_parser_service, parse_material
 from app.services.tts import tts_service
 from app.services.vector_store import vector_store
@@ -217,21 +217,35 @@ def test_material_management_flow(client):
     material = upload_resp.json()["data"]
     assert material["parse_status"] == "ready"
     assert material["vector_status"] == "ready"
-    assert material["preview_url"]
+    assert material["preview_url"].startswith("/static/")
 
     detail_resp = client.get(f"/api/v1/materials/{material['id']}", headers=teacher_headers)
     assert detail_resp.status_code == 200, detail_resp.text
     detail = detail_resp.json()["data"]
+    assert detail["material"]["preview_url"].startswith("/static/")
     assert detail["lesson_page_count"] == 2
     assert len(detail["pages"]) == 2
     assert detail["pages"][0]["script_text"]
+    assert detail["pages"][0]["audio_url"].startswith("/static/")
     assert detail["pages"][0]["audio_url"].endswith(".wav")
     with db_session.SessionLocal() as db:
+        stored_material = db.get(CourseMaterial, material["id"])
+        stored_page = db.get(LessonPage, detail["pages"][0]["id"])
+        stored_material.preview_url = "http://127.0.0.1:8000/static/uploads/legacy/demo.pptx"
+        stored_page.audio_url = "http://127.0.0.1:8000/static/generated/audio/legacy.wav"
+        db.add_all([stored_material, stored_page])
+        db.commit()
         chunks = list(db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.material_id == material["id"])))
         assert len(chunks) == 2
         assert all(isinstance(chunk.embedding, list) and chunk.embedding for chunk in chunks)
         vector_rows = vector_store.query_course(db, course_id=course["id"], query="函数变化趋势怎样理解", limit=2)
         assert vector_rows
+
+    legacy_detail_resp = client.get(f"/api/v1/materials/{material['id']}", headers=teacher_headers)
+    assert legacy_detail_resp.status_code == 200, legacy_detail_resp.text
+    legacy_detail = legacy_detail_resp.json()["data"]
+    assert legacy_detail["material"]["preview_url"] == "/static/uploads/legacy/demo.pptx"
+    assert legacy_detail["pages"][0]["audio_url"] == "/static/generated/audio/legacy.wav"
 
     page_id = detail["pages"][0]["id"]
     update_script_resp = client.patch(
@@ -273,3 +287,191 @@ def test_material_management_flow(client):
 
     delete_resp = client.delete(f"/api/v1/materials/{material['id']}", headers=teacher_headers)
     assert delete_resp.status_code == 200, delete_resp.text
+
+
+def test_material_pipeline_keeps_parse_ready_when_tts_fails(client, monkeypatch):
+    register_user(
+        client,
+        email="teacher-tts-fallback@example.com",
+        password="Teacher123",
+        nickname="语音降级老师",
+        role="teacher",
+        employee_no="TTS-FALLBACK",
+    )
+    teacher_login = login_user(client, email="teacher-tts-fallback@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "语音降级课程", "description": "测试", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+
+    monkeypatch.setattr(tts_service, "synthesize", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("tts down")))
+
+    upload_resp = client.post(
+        "/api/v1/materials",
+        data={"course_id": str(course["id"]), "title": "语音失败课件", "category": "courseware"},
+        files={"file": ("fallback.txt", build_txt_bytes(), "text/plain")},
+        headers=teacher_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    material = upload_resp.json()["data"]
+    assert material["parse_status"] == "ready"
+
+    detail_resp = client.get(f"/api/v1/materials/{material['id']}", headers=teacher_headers)
+    assert detail_resp.status_code == 200, detail_resp.text
+    detail = detail_resp.json()["data"]
+    assert detail["lesson_page_count"] == 2
+    assert detail["pages"][0]["script_text"]
+    assert detail["pages"][0]["audio_url"] is None
+    with db_session.SessionLocal() as db:
+        task = db.scalar(select(AsyncTaskLog).where(AsyncTaskLog.target_id == material["id"]).order_by(AsyncTaskLog.id.desc()))
+        assert task.status == "ready"
+        assert "语音合成失败" in "；".join(task.detail["warnings"])
+
+
+def test_material_pipeline_keeps_pages_when_vector_store_fails(client, monkeypatch):
+    register_user(
+        client,
+        email="teacher-vector-fallback@example.com",
+        password="Teacher123",
+        nickname="向量降级老师",
+        role="teacher",
+        employee_no="VECTOR-FALLBACK",
+    )
+    teacher_login = login_user(client, email="teacher-vector-fallback@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "向量降级课程", "description": "测试", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+
+    monkeypatch.setattr(vector_store, "upsert_chunks", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("readonly vector db")))
+
+    upload_resp = client.post(
+        "/api/v1/materials",
+        data={"course_id": str(course["id"]), "title": "向量失败课件", "category": "courseware"},
+        files={"file": ("vector.txt", build_txt_bytes(), "text/plain")},
+        headers=teacher_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    material = upload_resp.json()["data"]
+    assert material["parse_status"] == "ready"
+    assert material["vector_status"] == "failed"
+
+    detail_resp = client.get(f"/api/v1/materials/{material['id']}", headers=teacher_headers)
+    assert detail_resp.status_code == 200, detail_resp.text
+    detail = detail_resp.json()["data"]
+    assert detail["lesson_page_count"] == 2
+    assert detail["pages"][0]["script_text"]
+    assert detail["pages"][0]["audio_url"].startswith("/static/")
+
+
+def test_failed_material_with_existing_pages_is_recovered_for_teacher_views(client):
+    register_user(
+        client,
+        email="teacher-repair@example.com",
+        password="Teacher123",
+        nickname="恢复老师",
+        role="teacher",
+        employee_no="REPAIR-MATERIAL",
+    )
+    teacher_login = login_user(client, email="teacher-repair@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "资料恢复课程", "description": "测试", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+
+    upload_resp = client.post(
+        "/api/v1/materials",
+        data={"course_id": str(course["id"]), "title": "旧状态失败课件", "category": "courseware"},
+        files={"file": ("repair.txt", build_txt_bytes(), "text/plain")},
+        headers=teacher_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    material = upload_resp.json()["data"]
+
+    with db_session.SessionLocal() as db:
+        stored_material = db.get(CourseMaterial, material["id"])
+        lesson = db.scalar(select(Lesson).where(Lesson.material_id == material["id"]))
+        assert stored_material is not None
+        assert lesson is not None
+        stored_material.parse_status = "failed"
+        stored_material.vector_status = "failed"
+        stored_material.extracted_text = None
+        lesson.page_count = 0
+        lesson.status = "draft"
+        db.add_all([stored_material, lesson])
+        db.commit()
+
+    summary_resp = client.get(f"/api/v1/teacher/courses/{course['id']}/materials/summary", headers=teacher_headers)
+    assert summary_resp.status_code == 200, summary_resp.text
+    summary = summary_resp.json()["data"]
+    assert summary["ready"] == 1
+    assert summary["stats"]["by_status"]["ready"] == 1
+
+    list_resp = client.get("/api/v1/materials", params={"course_id": course["id"]}, headers=teacher_headers)
+    assert list_resp.status_code == 200, list_resp.text
+    listed_material = list_resp.json()["data"][0]
+    assert listed_material["parse_status"] == "ready"
+    assert listed_material["vector_status"] == "failed"
+    assert listed_material["extracted_text"]
+
+    detail_resp = client.get(f"/api/v1/materials/{material['id']}", headers=teacher_headers)
+    assert detail_resp.status_code == 200, detail_resp.text
+    detail = detail_resp.json()["data"]
+    assert detail["material"]["parse_status"] == "ready"
+    assert detail["lesson_page_count"] == 2
+
+
+def test_script_save_survives_tts_failure(client, monkeypatch):
+    register_user(
+        client,
+        email="teacher-script-tts@example.com",
+        password="Teacher123",
+        nickname="脚本老师",
+        role="teacher",
+        employee_no="SCRIPT-TTS",
+    )
+    teacher_login = login_user(client, email="teacher-script-tts@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "脚本保存课程", "description": "测试", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+
+    upload_resp = client.post(
+        "/api/v1/materials",
+        data={"course_id": str(course["id"]), "title": "脚本保存课件", "category": "courseware"},
+        files={"file": ("script.txt", build_txt_bytes(), "text/plain")},
+        headers=teacher_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    material = upload_resp.json()["data"]
+    detail_resp = client.get(f"/api/v1/materials/{material['id']}", headers=teacher_headers)
+    page_id = detail_resp.json()["data"]["pages"][0]["id"]
+
+    monkeypatch.setattr(tts_service, "synthesize", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("tts down")))
+
+    update_resp = client.patch(
+        f"/api/v1/materials/pages/{page_id}/script",
+        json={"script_text": "TTS 失败时也应该保存这段脚本。"},
+        headers=teacher_headers,
+    )
+    assert update_resp.status_code == 200, update_resp.text
+    page = update_resp.json()["data"]
+    assert page["script_text"] == "TTS 失败时也应该保存这段脚本。"
+    assert page["script_status"] == "ready"
+    assert page["audio_url"] is None

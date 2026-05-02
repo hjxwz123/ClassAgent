@@ -10,6 +10,27 @@ from app.services.ai import ai_service
 from app.services.vector_store import vector_store
 
 
+def _clean_excerpt(value: str, limit: int = 260) -> str:
+    return " ".join(value.split())[:limit]
+
+
+def _local_knowledge_explanation(*, name: str, difficulty: str, source_text: str) -> dict[str, str]:
+    source = _clean_excerpt(source_text)
+    tone = {
+        "beginner": "用最直观的方式先理解它是什么、为什么需要它。",
+        "standard": "从定义、原理、应用场景三个层面完整掌握。",
+        "advanced": "进一步关注限制条件、变形思路和综合题中的使用方式。",
+    }.get(difficulty, "从定义、原理、应用场景三个层面完整掌握。")
+    return {
+        "name": name,
+        "difficulty": difficulty,
+        "definition": f"{name}：{tone}",
+        "principle": f"相关原理材料摘要：{source or '可结合课程资料进一步补充。'}",
+        "example": f"例题建议：围绕 {name} 设计一道从条件识别到步骤推导的典型题。",
+        "common_mistake": f"常见错误：对 {name} 的适用范围理解不清。",
+    }
+
+
 def search_course_knowledge(
     db: Session,
     *,
@@ -75,15 +96,9 @@ def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | No
     created: list[KnowledgePoint] = []
     for keyword, _ in counter.most_common(8):
         content = {
-            "beginner": ai_service.generate_knowledge_explanation(
-                name=keyword, difficulty="beginner", source_text=source_text[keyword], db=db
-            ),
-            "standard": ai_service.generate_knowledge_explanation(
-                name=keyword, difficulty="standard", source_text=source_text[keyword], db=db
-            ),
-            "advanced": ai_service.generate_knowledge_explanation(
-                name=keyword, difficulty="advanced", source_text=source_text[keyword], db=db
-            ),
+            "beginner": _local_knowledge_explanation(name=keyword, difficulty="beginner", source_text=source_text[keyword]),
+            "standard": _local_knowledge_explanation(name=keyword, difficulty="standard", source_text=source_text[keyword]),
+            "advanced": _local_knowledge_explanation(name=keyword, difficulty="advanced", source_text=source_text[keyword]),
         }
         point = KnowledgePoint(
             course_id=course_id,

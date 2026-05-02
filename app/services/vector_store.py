@@ -39,8 +39,14 @@ class VectorStoreService:
         )
 
     def delete_material(self, db: Session, *, course_id: int, material_id: int) -> None:
-        collection = self._collection(db, course_id)
-        collection.delete(where={"material_id": int(material_id)})
+        try:
+            collection = self._client.get_collection(name=self._collection_name(db, course_id))
+            collection.delete(where={"material_id": int(material_id)})
+        except Exception:
+            # Vector cleanup is best-effort. The relational database remains the
+            # source of truth, so a stale or read-only vector store must not block
+            # material deletion.
+            return
 
     def upsert_chunks(self, db: Session, *, chunks: list[KnowledgeChunk]) -> None:
         if not chunks:

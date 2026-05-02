@@ -56,7 +56,7 @@
             <button class="round-btn primary" @click="toggleAudio"><component :is="audioPlaying ? Pause : Play" :size="20" /></button>
             <button class="round-btn ghost" @click="nextPage"><SkipForward :size="18" /></button>
             <span class="time">{{ audioTime }}</span>
-            <input v-model.number="audioProgress" class="range" min="0" max="100" type="range" @input="seekAudio" />
+            <AppSlider v-model="audioProgress" class="range" :min="0" :max="100" @input="seekAudio" />
             <span class="time">{{ audioDuration }}</span>
             <PopoverButton :items="speedItems" :label="`${playbackRate}x`" @select="setRate" />
             <button class="round-btn ghost" @click="thumbOpen = !thumbOpen"><Grid2X2 :size="18" /></button>
@@ -82,9 +82,18 @@
             <div class="context-bar"><Info :size="14" />第{{ currentPage }}页内容</div>
             <ChatList :messages="classMessages" :thinking="classThinking" @toggle-thought="toggleThought" @copy="copyText" />
             <div class="chat-disclaimer">AI 回答仅供学习参考</div>
+            <div v-if="classQaAttachments.length" class="qa-attachment-strip compact">
+              <div v-for="(item, index) in classQaAttachments" :key="`${item.url}-${index}`" class="qa-attachment-chip">
+                <img :src="item.url" alt="" />
+                <span>{{ item.filename || '图片' }}</span>
+                <button type="button" @click="removeQaAttachment('class', index)"><X :size="13" /></button>
+              </div>
+            </div>
             <form class="chat-input compact" @submit.prevent="askInClass">
+              <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
+              <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
               <textarea v-model="classQuestion" placeholder="问问 AI 这一页..." rows="1"></textarea>
-              <button :disabled="!classQuestion.trim() || classThinking" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
+              <button :disabled="(!classQuestion.trim() && !classQaAttachments.length) || classThinking || classQaImageUploading" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
             </form>
             <div class="quick-tags">
               <button v-for="item in quickPageQuestions" :key="item" @click="sendQuickClass(item)">{{ item }}</button>
@@ -108,7 +117,7 @@
           <p>{{ classroomLesson?.lesson.title }}</p>
           <div class="done-stats"><span>本次 {{ Math.max(1, Math.round(studySeconds / 60)) }} 分钟</span><span>{{ classroomLesson?.pages.length || 0 }} 页</span><span>{{ classMessages.filter((m) => m.role === 'user').length }} 次提问</span></div>
           <div class="ai-summary"><Sparkles :size="16" />{{ completionSummary }}</div>
-          <footer><button class="btn btn-primary" @click="nextLessonAfterComplete">下一课堂</button><button class="btn btn-secondary" @click="returnCourse">回课程</button><button class="btn btn-ghost" @click="go('studentQuizzes')">做练习</button></footer>
+          <footer><button class="btn btn-primary" @click="nextLessonAfterComplete">下一课时</button><button class="btn btn-secondary" @click="returnCourse">回课程</button><button class="btn btn-ghost" @click="go('studentQuizzes')">做练习</button></footer>
         </article>
       </div>
     </transition>
@@ -132,19 +141,35 @@
           <button @click="searchOpen = false"><X :size="18" /></button>
         </div>
       </transition>
-      <div class="top-actions">
-        <button class="top-icon" @click="openSearch"><Search :size="19" /></button>
-        <button class="top-icon" @click="noticeOpen = !noticeOpen"><Bell :size="19" /><em v-if="unreadCount">{{ unreadCount }}</em></button>
-        <button class="avatar-btn" @click="userMenuOpen = !userMenuOpen"><span>{{ firstChar(user.nickname) }}</span></button>
+      <nav class="student-nav-links" aria-label="学生端主导航">
+        <button
+          v-for="item in topNavTabs"
+          :key="item.key"
+          type="button"
+          class="student-nav-link"
+          :class="{ active: isStudentNavActive(item.key), ai: item.key === 'studentQa' }"
+          @click="go(item.key)"
+        >
+          <component :is="item.icon" :size="16" />
+          {{ item.label }}
+        </button>
+      </nav>
+      <div ref="topActionsRef" class="top-actions">
+        <button class="top-icon" title="全局搜索" aria-label="全局搜索" @click="openSearch"><Search :size="19" /></button>
+        <button class="top-icon" title="通知中心" aria-label="通知中心" @click="noticeOpen = !noticeOpen"><Bell :size="19" /><em v-if="unreadCount">{{ unreadCount }}</em></button>
+        <button class="avatar-btn" title="个人档案" aria-label="个人档案" @click="userMenuOpen = !userMenuOpen">
+          <img v-if="currentAvatarUrl" :src="currentAvatarUrl" alt="" />
+          <DefaultUserAvatar v-else />
+        </button>
       </div>
       <transition name="top-menu">
-        <div v-if="noticeOpen" class="notice-pop top-menu-panel">
+        <div v-if="noticeOpen" ref="noticePopRef" class="notice-pop top-menu-panel">
           <div v-for="item in notifications" :key="`${item.type}-${item.title}`" class="notice-item"><Bell :size="15" /><div><strong>{{ item.title }}</strong><small>{{ relativeTime(item.time) }}</small></div><i v-if="item.unread"></i></div>
           <EmptyState v-if="!notifications.length" text="暂无通知" />
         </div>
       </transition>
       <transition name="top-menu">
-        <div v-if="userMenuOpen" class="user-pop top-menu-panel">
+        <div v-if="userMenuOpen" ref="userPopRef" class="user-pop top-menu-panel">
           <div class="user-card"><strong>{{ user.nickname }}</strong><small>{{ user.email }}</small></div>
           <button @click="go('studentProfile')"><User :size="15" />个人中心</button>
           <button @click="go('studentProfile')"><BarChart2 :size="15" />学习档案</button>
@@ -165,7 +190,7 @@
               <button v-else class="white-pill" @click="go('studentPlans')"><Plus :size="14" />制定计划</button>
             </article>
             <article v-if="todayTasks.length" class="today-plan">
-              <CalendarCheck :size="20" /><div><strong>今日计划</strong><small>查看并打卡今天的学习任务</small></div><span>{{ doneTasks }}/{{ todayTasks.length }}</span><progress :value="todayDoneRate" max="100"></progress><button @click="go('studentPlans')">查看</button>
+              <CalendarCheck :size="20" /><div><strong>今日计划</strong><small>查看并打卡今天的学习任务</small></div><span>{{ doneTasks }}/{{ todayTasks.length }}</span><AppProgress :value="todayDoneRate" /><button @click="go('studentPlans')">查看</button>
             </article>
             <article class="continue-card">
               <div class="continue-cover" :style="{ background: courseGradient(continueLesson?.course?.id || 1) }"><Presentation :size="32" /><span>P{{ continueProgressPage }}</span></div>
@@ -173,7 +198,7 @@
                 <span class="tag tag-ai"><Sparkles :size="12" />接续上次</span>
                 <h2>{{ continueLesson.lesson.title }}</h2>
                 <p>第 {{ continueProgressPage }} 页 / 共 {{ continueLesson.lesson.page_count || 1 }} 页</p>
-                <progress :value="continueProgress" max="100"></progress>
+                <AppProgress :value="continueProgress" />
                 <small>{{ continueTime }}</small>
                 <button class="btn btn-primary" @click="openLesson(continueLesson.lesson.id)"><Play :size="16" />继续学习</button>
               </section>
@@ -184,22 +209,95 @@
                 <div class="section-head"><h2><BookOpen :size="18" />我的课程</h2><button @click="go('studentCourses')">查看全部</button></div>
                 <button v-for="course in courses.slice(0, 3)" :key="course.id" class="home-course" @click="openCourse(course.id)">
                   <span :style="{ background: courseGradient(course.id) }"><BookOpen :size="21" /></span>
-                  <div><strong>{{ course.name }}</strong><small>{{ course.teacher?.nickname || '教师' }} · {{ course.term }}</small><progress :value="course.progress_percent || 0" max="100"></progress><em>{{ course.progress_percent || 0 }}%</em></div>
+                  <div><strong>{{ course.name }}</strong><small>{{ course.teacher?.nickname || '教师' }} · {{ course.term }}</small><AppProgress :value="course.progress_percent || 0" /><em>{{ course.progress_percent || 0 }}%</em></div>
                 </button>
                 <button class="join-dashed" @click="joinOpen = true"><Plus :size="16" />加入新课程</button>
               </article>
               <article class="panel-card">
                 <div class="section-head"><h2><BarChart2 :size="18" />我的学习</h2><button @click="go('studentProfile')">学习报告</button></div>
-                <div class="rings"><RingBlock label="本周学习" :value="hourTargetRate" :text="`${stats.study_hours || 0}h`" sub="目标5h" /><RingBlock label="完成率" :value="stats.completion_rate || 0" :text="`${stats.completion_rate || 0}%`" sub="课堂" tone="success" /><RingBlock label="正确率" :value="stats.accuracy || 0" :text="`${stats.accuracy || 0}%`" sub="练习" tone="ai" /></div>
+                <div class="rings"><RingBlock label="本周学习" :value="hourTargetRate" :text="`${stats.study_hours || 0}h`" sub="目标5h" /><RingBlock label="完成率" :value="stats.completion_rate || 0" :text="`${stats.completion_rate || 0}%`" sub="课时" tone="success" /><RingBlock label="正确率" :value="stats.accuracy || 0" :text="`${stats.accuracy || 0}%`" sub="练习" tone="ai" /></div>
                 <div class="week-check"><span v-for="item in weekDays" :key="item.label" :class="{ done: item.done, today: item.today }">{{ item.label }}</span></div>
                 <div class="streak"><Flame :size="16" />连续 {{ stats.streak_days || 0 }} 天</div>
               </article>
             </div>
-            <article class="ai-reco">
-              <section><Sparkles :size="20" /><div><h2>AI 今日推荐</h2><p>{{ dashboard.recommendation?.text || '今天优先完成一节课堂，并复盘一道错题。' }}</p><span class="tag tag-ai">AI生成</span><button @click="loadDashboard"><RefreshCw :size="14" />刷新建议</button></div></section>
-              <aside><button @click="continueLesson && openLesson(continueLesson.lesson.id)"><BookOpen :size="16" />推荐课堂<span>前往学习</span></button><button @click="go('studentQuizzes')"><Pencil :size="16" />推荐练习<span>开始练习</span></button></aside>
+            <article class="home-ai-recommend-card" :class="{ 'is-empty': !hasJoinedCourses }">
+              <div class="home-ai-rec-left">
+                <div class="home-ai-rec-header">
+                  <div class="home-ai-icon-wrap">
+                    <Sparkles v-if="hasJoinedCourses" :size="24" />
+                    <BookOpen v-else :size="24" />
+                  </div>
+                  <h2>{{ hasJoinedCourses ? 'AI 今日推荐' : '加入课程后生成推荐' }}</h2>
+                </div>
+                <p class="home-ai-rec-content" v-if="hasJoinedCourses">
+                  {{ studentRecommendationText }}
+                </p>
+                <p class="home-ai-rec-content" v-else>
+                  AI 今日推荐会基于你加入的课程、学习进度、今日计划和错题薄弱点生成。当前账号还没有课程数据，所以不会生成课程学习建议。
+                </p>
+                <div class="home-ai-rec-footer">
+                  <div class="home-data-tag">
+                    <Sparkles :size="14" />{{ hasJoinedCourses ? '基于你的学习数据生成' : '等待课程数据' }}
+                  </div>
+                  <button class="home-refresh-btn" @click="hasJoinedCourses ? loadDashboard() : (joinOpen = true)">
+                    <RefreshCw v-if="hasJoinedCourses" :size="14" />
+                    <Plus v-else :size="14" />
+                    {{ hasJoinedCourses ? '刷新建议' : '加入课程' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="home-ai-rec-actions">
+                <button class="home-action-task-card" @click="openHomeRecommendedLesson">
+                  <div class="home-task-info">
+                    <span class="home-task-type"><BookOpen :size="14" />{{ hasJoinedCourses ? '推荐课时' : '课程入口' }}</span>
+                    <span class="home-task-title">{{ homeRecommendedLessonTitle }}</span>
+                  </div>
+                  <div class="home-task-arrow"><ArrowRight :size="16" /></div>
+                </button>
+                <button class="home-action-task-card" @click="openHomeRecommendedPractice">
+                  <div class="home-task-info">
+                    <span class="home-task-type"><Pencil :size="14" />{{ hasJoinedCourses ? '推荐练习' : '练习入口' }}</span>
+                    <span class="home-task-title">{{ homeRecommendedPracticeTitle }}</span>
+                  </div>
+                  <div class="home-task-arrow"><ArrowRight :size="16" /></div>
+                </button>
+              </div>
             </article>
-            <ActivityTimeline :items="activities" />
+
+            <article class="home-activity-card">
+              <div class="home-ac-header">
+                <div class="home-ac-title">
+                  <Clock :size="24" />
+                  学习动态
+                </div>
+                <button class="home-ac-view-all" @click="go('studentProfile')">查看全部记录 <ArrowRight :size="14" /></button>
+              </div>
+              <div v-if="homeActivityItems.length" class="home-activity-list">
+                <div v-for="item in homeActivityItems" :key="item.key" class="home-activity-item">
+                  <div class="home-ac-icon-wrapper" :class="item.tone">
+                    <component :is="item.icon" :size="20" />
+                  </div>
+                  <div class="home-ac-content-wrap">
+                    <div class="home-ac-meta">
+                      <span class="home-ac-action-name">{{ item.action }}</span>
+                      <span class="home-ac-time">{{ item.timeText }}</span>
+                    </div>
+                    <div class="home-ac-detail" :class="{ quote: item.quote }">{{ item.detail }}</div>
+                    <div v-if="item.progress !== null" class="home-mini-progress-bar">
+                      <div class="home-mp-track">
+                        <div class="home-mp-fill" :style="{ width: `${item.progress}%` }"></div>
+                      </div>
+                      <span class="home-mp-text">{{ item.progress }}%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="home-activity-empty">
+                <BookOpen :size="28" />
+                <span>{{ hasJoinedCourses ? '暂无学习动态' : '加入课程后开始记录学习动态' }}</span>
+              </div>
+            </article>
           </template>
 
           <template v-else-if="active === 'studentCourses'">
@@ -209,7 +307,7 @@
             <div class="student-course-grid">
               <article v-for="course in filteredCourses" :key="course.id" class="student-course-card">
                 <div class="course-art" :style="{ background: courseGradient(course.id) }"><BookOpen :size="56" /><span>{{ course.term }}</span><em><Check :size="12" />{{ course.progress_percent || 0 }}%</em><DropdownMenu :items="courseMenuItems" @select="handleCourseMenu($event, course)" /></div>
-                <section><h2>{{ course.name }}</h2><p><User :size="14" />{{ course.teacher?.nickname || '教师' }} · {{ course.teacher?.bio || '课程教师' }}</p><progress :value="course.progress_percent || 0" max="100"></progress><div class="course-meta"><span>已学 {{ course.studied_lessons || 0 }}/{{ course.lesson_total || 0 }}</span><span>{{ course.last_lesson ? relativeTime(course.last_progress?.updated_at) : '未开始' }}</span></div><div class="mini-data"><span><MessageCircle :size="14" />{{ course.qa_count || 0 }}</span><span><XCircle :size="14" />{{ course.wrong_count || 0 }}</span><span><Users :size="14" />{{ course.student_count || 0 }}</span></div><button class="btn btn-primary full" @click="openCourse(course.id)"><Play :size="16" />继续学习</button></section>
+                <section><h2>{{ course.name }}</h2><p><User :size="14" />{{ course.teacher?.nickname || '教师' }} · {{ course.teacher?.bio || '课程教师' }}</p><AppProgress :value="course.progress_percent || 0" /><div class="course-meta"><span>已学 {{ course.studied_lessons || 0 }}/{{ course.lesson_total || 0 }}</span><span>{{ course.last_lesson ? relativeTime(course.last_progress?.updated_at) : '未开始' }}</span></div><div class="mini-data"><span><MessageCircle :size="14" />{{ course.qa_count || 0 }}</span><span><XCircle :size="14" />{{ course.wrong_count || 0 }}</span><span><Users :size="14" />{{ course.student_count || 0 }}</span></div><button class="btn btn-primary full" @click="openCourse(course.id)"><Play :size="16" />继续学习</button></section>
               </article>
             </div>
             <EmptyState v-if="!filteredCourses.length" text="暂无课程" />
@@ -219,13 +317,13 @@
             <CourseRequired v-if="!courseHome.course" />
             <template v-else>
               <article class="course-hero-student" :style="{ background: courseGradient(courseHome.course.id) }">
-                <section><h1>{{ courseHome.course.name }}</h1><p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p><div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <progress :value="courseHome.stats?.completion_rate || 0" max="100"></progress><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div></section>
-                <aside><div class="slide-mini">{{ latestLesson?.title?.slice(0, 8) || '课堂' }}</div><button class="btn white-fill" @click="latestLesson && openLesson(Number(latestLesson.id))"><Play :size="16" />进课堂</button></aside>
+                <section><h1>{{ courseHome.course.name }}</h1><p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p><div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div></section>
+                <aside><div class="slide-mini">{{ latestLesson?.title?.slice(0, 8) || '课时' }}</div><button class="btn white-fill" @click="latestLesson && openLesson(Number(latestLesson.id))"><Play :size="16" />进入课时</button></aside>
               </article>
-              <div class="quick-row"><QuickTile :icon="Presentation" label="课堂学习" :sub="`${courseHome.lessons?.length || 0} 个课堂`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="go('studentQuizzes')" /></div>
+              <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="go('studentQuizzes')" /></div>
               <div class="course-layout">
                 <section>
-                  <article id="lesson-list" class="panel-card"><div class="section-head"><h2><Presentation :size="18" />课堂列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div><LessonItem v-for="(lesson, index) in courseHome.lessons || []" :key="lesson.id" :lesson="lesson" :index="Number(index)" @open="openLesson(Number(lesson.id))" /></article>
+                  <article id="lesson-list" class="panel-card"><div class="section-head"><h2><Presentation :size="18" />课时列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div><LessonItem v-for="(lesson, index) in courseHome.lessons || []" :key="lesson.id" :lesson="lesson" :index="Number(index)" @open="openLesson(Number(lesson.id))" /></article>
                   <article class="panel-card"><div class="section-head"><h2><FolderOpen :size="18" />课程资料</h2><button @click="materialsExpanded = !materialsExpanded">{{ materialsExpanded ? '收起' : '展开' }}</button></div><MaterialRow v-for="item in visibleCourseMaterials" :key="item.id" :item="item" /><button v-if="(courseHome.materials || []).length > 5" class="ghost-row" @click="materialsExpanded = !materialsExpanded"><ChevronDown :size="16" />{{ materialsExpanded ? '收起' : `展开更多` }}</button></article>
                 </section>
                 <aside>
@@ -238,12 +336,48 @@
           </template>
 
           <template v-else-if="active === 'studentQa'">
-            <section class="qa-page">
-              <div class="qa-top"><div><Sparkles :size="22" /><section><h1>课程知识问答</h1><p>与 AI 探讨课程问题</p></section></div><div class="qa-tools"><CourseSelect /><button class="top-icon" @click="historyOpen = true"><Clock :size="17" /></button><button class="top-icon" @click="showFavorites = !showFavorites"><BookMarked :size="17" /></button></div></div>
-              <div v-if="!globalMessages.length" class="qa-welcome"><Sparkles :size="48" /><h2>你好，我是 AI 学习助手</h2><p>基于课程资料为你解答疑问</p><div class="prompt-grid"><button v-for="item in promptCards" :key="item.text" @click="sendGlobalQuick(item.text)"><component :is="item.icon" :size="18" />{{ item.text }}</button></div></div>
-              <ChatList v-else :messages="globalMessages" :thinking="globalThinking" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
-              <form class="qa-fixed" @submit.prevent="askGlobal"><div><BookOpen :size="14" />正在基于《{{ activeCourse?.name || '课程' }}》</div><section><textarea v-model="globalQuestion" placeholder="有什么不明白的？可以随时问我..." rows="1"></textarea><button :disabled="!globalQuestion.trim() || globalThinking" :data-loading="globalThinking" class="send-btn"><Send :size="18" /></button></section><small>AI 回答仅供学习参考</small></form>
-              <transition name="drawer"><aside v-if="historyOpen" class="history-drawer"><div class="drawer-head"><h2>问答历史</h2><button @click="historyOpen = false"><X :size="16" /></button></div><div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索历史问答" @keyup.enter="loadQaHistory" /></div><label class="check-line"><input v-model="showFavorites" type="checkbox" />仅看收藏</label><button v-for="item in filteredQaHistory" :key="item.id" class="history-row" @click="reuseHistory(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}</small></button></aside></transition>
+            <section class="qa-modern-page" :class="{ empty: !globalMessages.length }">
+              <div class="qa-scroll-area">
+                <div class="chat-wrapper">
+                  <div class="qa-header">
+                    <div class="qa-title-group">
+                      <div class="qa-title-icon"><Sparkles :size="24" /></div>
+                      <section class="qa-title">
+                        <h1>课程知识问答</h1>
+                        <p>与 AI 探讨课程问题，解答学术疑惑</p>
+                      </section>
+                    </div>
+                    <div class="qa-header-actions">
+                      <CourseSelect />
+                      <button class="action-circle-btn" title="问答历史" aria-label="问答历史" @click="historyOpen = true"><Clock :size="18" /></button>
+                      <button class="action-circle-btn" title="收藏夹" aria-label="收藏夹" @click="showFavorites = !showFavorites"><BookMarked :size="18" /></button>
+                    </div>
+                  </div>
+                  <div v-if="!globalMessages.length" class="qa-welcome"><Sparkles :size="48" /><h2>你好，我是 AI 学习助手</h2><p>基于课程资料为你解答疑问</p></div>
+                  <ChatList v-else :messages="globalMessages" :thinking="globalThinking" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
+                  <div v-if="!globalMessages.length" class="prompt-grid"><button v-for="item in promptCards" :key="item.text" @click="sendGlobalQuick(item.text)"><component :is="item.icon" :size="18" />{{ item.text }}</button></div>
+                </div>
+              </div>
+              <form class="input-dock-container" @submit.prevent="askGlobal">
+                <div class="input-wrapper">
+                  <div class="context-badge"><BookOpen :size="14" />正在基于《{{ activeCourse?.name || '课程' }}》</div>
+                  <div v-if="globalQaAttachments.length" class="qa-attachment-strip">
+                    <div v-for="(item, index) in globalQaAttachments" :key="`${item.url}-${index}`" class="qa-attachment-chip">
+                      <img :src="item.url" alt="" />
+                      <span>{{ item.filename || '图片' }}</span>
+                      <button type="button" @click="removeQaAttachment('global', index)"><X :size="13" /></button>
+                    </div>
+                  </div>
+                  <section class="input-box">
+                    <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
+                    <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
+                    <textarea v-model="globalQuestion" placeholder="有什么不明白的？可以传图一起问我..." rows="1"></textarea>
+                    <button :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || globalThinking || globalQaImageUploading" :data-loading="globalThinking" class="send-btn"><Send :size="20" /></button>
+                  </section>
+                  <small class="disclaimer">AI 回答仅供学习参考</small>
+                </div>
+              </form>
+              <transition name="drawer"><aside v-if="historyOpen" class="history-drawer"><div class="drawer-head"><h2>问答历史</h2><button @click="historyOpen = false"><X :size="16" /></button></div><div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索历史问答" @keyup.enter="loadQaHistory" /></div><AppCheckbox v-model="showFavorites" label="仅看收藏" /><button v-for="item in filteredQaHistory" :key="item.id" class="history-row" @click="reuseHistory(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}</small></button></aside></transition>
             </section>
           </template>
 
@@ -258,28 +392,317 @@
 
           <template v-else-if="active === 'studentKnowledge'">
             <PageTitle title="知识点精讲" sub="按需深入学习"><CourseSelect /></PageTitle>
-            <div class="knowledge-layout"><aside class="knowledge-tree"><div class="pretty-input"><Search :size="15" /><input v-model="knowledgeKeyword" placeholder="搜索知识点" /></div><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" @click="selectedChapterId = chapter.id; loadKnowledge()"><ChevronRight :size="14" />{{ chapter.title }}</button><div class="weak-tags"><strong><Zap :size="14" />薄弱知识点</strong><span v-for="item in weakPoints.slice(0, 3)" :key="item.knowledge_point" class="tag tag-danger">{{ item.knowledge_point }}</span></div></aside><section class="knowledge-content"><article class="knowledge-head"><h1>{{ selectedKnowledge?.name || '选择知识点' }}</h1><p>所属：{{ chapterName(selectedKnowledge?.chapter_id) }}</p><span class="tag" :class="knowledgeMasteryClass">{{ knowledgeMasteryText }}</span><progress :value="knowledgeMastery" max="100"></progress></article><div class="segmented"><button v-for="item in levelItems" :key="item.value" type="button" :class="{ active: knowledgeLevel === item.value }" @click="knowledgeLevel = String(item.value)">{{ item.label }}</button></div><article class="knowledge-body"><KnowledgeBlock icon="Quote" title="定义" :content="knowledgeContent.definition" /><KnowledgeBlock icon="Layers" title="核心原理" :content="knowledgeContent.principle" ai /><KnowledgeBlock icon="Pencil" title="例题解析" :content="knowledgeContent.example" /><KnowledgeBlock icon="AlertTriangle" title="常见易错点" :content="knowledgeContent.common_mistake" warning /><div class="practice-cta"><Sparkles :size="16" />基于此知识点生成练习题<button @click="generateKnowledgeQuiz(5)">练习5题</button><button @click="generateKnowledgeQuiz(10)">练习10题</button></div></article></section></div>
+            <div class="knowledge-layout"><aside class="knowledge-tree"><div class="pretty-input"><Search :size="15" /><input v-model="knowledgeKeyword" placeholder="搜索知识点" /></div><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" @click="selectedChapterId = chapter.id; loadKnowledge()"><ChevronRight :size="14" />{{ chapter.title }}</button><div class="weak-tags"><strong><Zap :size="14" />薄弱知识点</strong><span v-for="item in weakPoints.slice(0, 3)" :key="item.knowledge_point" class="tag tag-danger">{{ item.knowledge_point }}</span></div></aside><section class="knowledge-content"><article class="knowledge-head"><h1>{{ selectedKnowledge?.name || '选择知识点' }}</h1><p>所属：{{ chapterName(selectedKnowledge?.chapter_id) }}</p><span class="tag" :class="knowledgeMasteryClass">{{ knowledgeMasteryText }}</span><AppProgress :value="knowledgeMastery" :tone="knowledgeMastery >= 70 ? 'success' : knowledgeMastery >= 35 ? 'warning' : 'danger'" /></article><div class="segmented"><button v-for="item in levelItems" :key="item.value" type="button" :class="{ active: knowledgeLevel === item.value }" @click="knowledgeLevel = String(item.value)">{{ item.label }}</button></div><article class="knowledge-body"><KnowledgeBlock icon="Quote" title="定义" :content="knowledgeContent.definition" /><KnowledgeBlock icon="Layers" title="核心原理" :content="knowledgeContent.principle" ai /><KnowledgeBlock icon="Pencil" title="例题解析" :content="knowledgeContent.example" /><KnowledgeBlock icon="AlertTriangle" title="常见易错点" :content="knowledgeContent.common_mistake" warning /><div class="practice-cta"><Sparkles :size="16" />基于此知识点生成练习题<button @click="generateKnowledgeQuiz(5)">练习5题</button><button @click="generateKnowledgeQuiz(10)">练习10题</button></div></article></section></div>
           </template>
 
           <template v-else-if="active === 'studentQuizzes'">
-            <PageTitle title="练习与测验" sub="课程测验与章节练习"><CourseSelect /></PageTitle>
-            <div v-if="answeringQuiz" class="answer-page"><QuizAnswerView :quiz="quizDetail" :answers="quizAnswers" :attempt="attempt" @answer="setQuizAnswer" @submit="submitQuiz" @exit="answeringQuiz = false" /></div>
-            <template v-else><div class="underline-tabs"><button :class="{ active: quizTab === 'course' }" @click="quizTab = 'course'"><ClipboardList :size="16" />课程测验</button><button :class="{ active: quizTab === 'practice' }" @click="quizTab = 'practice'"><Layers :size="16" />章节练习</button></div><section v-if="quizTab === 'course'" class="quiz-list"><QuizCard v-for="quiz in courseQuizzes" :key="quiz.id" :quiz="quiz" @open="startQuiz(quiz.id)" /><EmptyState v-if="!courseQuizzes.length" text="暂无测验" /></section><section v-else class="practice-maker"><article class="panel-card"><h2><Sparkles :size="18" />自选章节练习</h2><div class="chapter-checks"><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" :class="{ active: selectedPracticeChapters.includes(chapter.id) }" @click="togglePracticeChapter(chapter.id)">{{ chapter.title }}</button></div><div class="segmented"><button v-for="item in quizCountOptions" :key="item" type="button" :class="{ active: quizQuestionCount === item }" @click="quizQuestionCount = item">{{ item }}</button></div><label class="toggle-line"><input v-model="smartQuiz" type="checkbox" />优先薄弱点</label><button class="btn btn-ai full" @click="generateQuiz"><Sparkles :size="16" />生成练习</button></article><article class="panel-card"><h2>最近练习</h2><QuizCard v-for="quiz in practiceQuizzes" :key="quiz.id" :quiz="quiz" @open="startQuiz(quiz.id)" /></article></section></template>
+            <div v-if="answeringQuiz" class="exam-answer-page"><QuizAnswerView :quiz="quizDetail" :answers="quizAnswers" :attempt="attempt" :submitting="quizSubmitting" @answer="setQuizAnswer" @submit="submitQuiz" @exit="answeringQuiz = false" /></div>
+            <section v-else class="quiz-modern-page">
+              <div class="quiz-modern-header">
+                <div class="quiz-modern-title">
+                  <h1>练习与测验</h1>
+                  <p>课程配套测验与自定义章节练习</p>
+                </div>
+                <CourseSelect />
+              </div>
+
+              <div class="quiz-modern-tabs">
+                <button type="button" :class="{ active: quizTab === 'course' }" @click="quizTab = 'course'"><ClipboardList :size="18" />课程测验</button>
+                <button type="button" :class="{ active: quizTab === 'practice' }" @click="quizTab = 'practice'"><Layers :size="18" />章节练习</button>
+              </div>
+
+              <section v-if="quizTab === 'course'" class="quiz-list quiz-modern-list">
+                <QuizCard v-for="quiz in courseQuizzes" :key="quiz.id" :quiz="quiz" @open="startQuiz(quiz.id)" />
+                <EmptyState v-if="!courseQuizzes.length" text="暂无测验" />
+              </section>
+
+              <section v-else class="practice-modern-grid">
+                <article class="practice-modern-card">
+                  <div class="practice-card-header">
+                    <div class="practice-card-icon"><Sparkles :size="24" /></div>
+                    <h2>自选章节练习</h2>
+                  </div>
+
+                  <div class="practice-config-section">
+                    <span class="practice-config-label">请选择要练习的章节（可多选）</span>
+                    <div class="practice-chapter-chips">
+                      <button
+                        v-for="chapter in courseHome.chapters || []"
+                        :key="chapter.id"
+                        type="button"
+                        class="practice-chip"
+                        :class="{ active: selectedPracticeChapters.includes(chapter.id) }"
+                        @click="togglePracticeChapter(chapter.id)"
+                      >
+                        {{ chapter.title }}
+                      </button>
+                    </div>
+                    <EmptyState v-if="!(courseHome.chapters || []).length" text="暂无章节" />
+                  </div>
+
+                  <div class="practice-settings-row">
+                    <div class="practice-segmented-control">
+                      <button
+                        v-for="item in quizCountOptions"
+                        :key="item"
+                        type="button"
+                        :class="{ active: quizQuestionCount === item }"
+                        @click="quizQuestionCount = item"
+                      >
+                        {{ item }}
+                      </button>
+                    </div>
+                    <button type="button" class="practice-switch-wrapper" :class="{ active: smartQuiz }" @click="smartQuiz = !smartQuiz">
+                      <span class="practice-switch"></span>
+                      <strong>优先薄弱点</strong>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="practice-generate-btn"
+                    :data-loading="quizGenerating"
+                    :disabled="quizGenerating || !selectedCourseId"
+                    @click="generateQuiz"
+                  >
+                    <Sparkles :size="20" />智能生成练习
+                  </button>
+                  <p class="practice-generate-hint">AI 将根据您的错题记录和所选章节智能组卷</p>
+                </article>
+
+                <article class="practice-modern-card">
+                  <button
+                    type="button"
+                    class="practice-feature-card"
+                    :data-loading="wrongPracticeGenerating"
+                    :disabled="wrongPracticeGenerating || !wrongQuestions.length"
+                    @click="loadWrongPractice"
+                  >
+                    <div>
+                      <div class="practice-feature-icon"><BookMarked :size="24" /></div>
+                      <h2>错题重练</h2>
+                      <p>{{ wrongQuestions.length ? '基于历史错题自动生成，攻克薄弱环节' : '暂无错题，完成练习后会自动归集' }}</p>
+                    </div>
+                    <span><Play :size="16" />{{ wrongQuestions.length ? '开始' : '暂无' }}</span>
+                  </button>
+
+                  <div class="practice-history-title"><History :size="18" />最近练习记录</div>
+                  <div class="practice-history-list">
+                    <button v-for="quiz in practiceQuizzes.slice(0, 5)" :key="quiz.id" type="button" class="practice-history-item" @click="startQuiz(quiz.id)">
+                      <div class="practice-history-left">
+                        <span class="practice-history-icon"><Layers :size="20" /></span>
+                        <div>
+                          <strong>{{ quiz.title }}</strong>
+                          <small>{{ quizQuestionMeta(quiz) }} · {{ relativeTime(quiz.created_at) }}</small>
+                        </div>
+                      </div>
+                      <em>{{ quizScoreLabel(quiz) }}</em>
+                    </button>
+                    <EmptyState v-if="!practiceQuizzes.length" text="暂无练习记录" />
+                  </div>
+                </article>
+              </section>
+            </section>
           </template>
 
           <template v-else-if="active === 'studentWrongBook'">
-            <PageTitle title="我的错题本" :sub="`共 ${wrongQuestions.length} 道`"><button class="btn btn-primary" @click="loadWrongPractice"><RefreshCw :size="16" />开始重练</button></PageTitle>
+            <PageTitle title="我的错题本" :sub="`共 ${wrongQuestions.length} 道`"><button class="btn btn-primary" :data-loading="wrongPracticeGenerating" :disabled="wrongPracticeGenerating || !wrongQuestions.length" @click="loadWrongPractice"><RefreshCw :size="16" />开始重练</button></PageTitle>
             <article class="wrong-hero"><BookMarked :size="24" /><div><strong>{{ wrongQuestions.length }}</strong><span>错题总数</span></div><div><strong>{{ wrongQuestions.filter((w) => w.wrong_count > 1).length }}</strong><span>待重练</span></div><div><strong>{{ weeklyWrongCount }}</strong><span>本周新增</span></div></article>
             <div class="wrong-layout"><aside class="wrong-tree"><button class="active"><Layers :size="16" />全部错题({{ wrongQuestions.length }})</button><strong>按知识点</strong><button v-for="item in weakPoints" :key="item.knowledge_point">{{ item.knowledge_point }}({{ item.wrong_count }})</button></aside><section class="wrong-list"><div class="wrong-tools"><div class="pretty-input"><Search :size="15" /><input v-model="wrongKeyword" placeholder="搜索题目关键词" /></div><SelectMenu v-model="wrongStatus" :items="wrongStatusOptions" /></div><WrongCard v-for="item in filteredWrongQuestions" :key="item.wrong_question_id" :item="item" @practice="practiceWrong(item)" /><EmptyState v-if="!filteredWrongQuestions.length" text="暂无错题" /></section></div>
           </template>
 
           <template v-else-if="active === 'studentPlans'">
-            <article class="plan-hero"><CalendarCheck :size="28" /><h1>学习计划 & 打卡</h1><div><strong>{{ stats.streak_days || 0 }}</strong><span>连续打卡</span></div><div><strong>{{ monthlyCheckins }}</strong><span>本月打卡</span></div><div><Flame :size="18" /><strong>{{ Math.max(stats.streak_days || 0, 0) }}</strong><span>最长连续</span></div></article>
-            <div class="plans-grid"><CalendarCard :checkins="checkinDays" /><article class="panel-card today-tasks"><div class="section-head"><h2><ListChecks :size="18" />今日任务</h2><span>{{ doneTasks }}/{{ todayTasks.length }}</span></div><div v-if="todayTasks.length"><TaskRow v-for="task in todayTasks" :key="task.id" :task="task" @checkin="checkinTask(task.id)" /></div><div v-else class="plan-empty"><Sparkles :size="32" /><h2>今天还没有计划</h2><input v-model="planForm.goal" class="input" placeholder="输入学习目标" /><button class="btn btn-ai full" @click="planModalOpen = true">AI生成</button></div></article><article class="panel-card study-stat"><h2><BarChart2 :size="18" />本周学习</h2><div class="mini-bars"><i v-for="(value, index) in weeklyHours" :key="index" :style="{ height: `${20 + value * 12}px` }"></i></div><p>共 {{ stats.study_hours || 0 }} 小时</p><div class="badge-wall"><span v-for="item in profilePayload.achievements || []" :key="item.key" :class="{ locked: !item.unlocked }"><Award :size="17" />{{ item.unlocked ? item.name : '?' }}</span></div></article></div>
+            <section class="student-plan-page">
+              <div class="plan-banner">
+                <div class="banner-left">
+                  <div class="banner-icon"><CalendarCheck :size="32" /></div>
+                  <div class="banner-title">学习计划 & 打卡</div>
+                </div>
+
+                <div class="banner-stats">
+                  <div class="b-stat-item">
+                    <h2>{{ stats.streak_days || 0 }}</h2>
+                    <span>连续打卡</span>
+                  </div>
+                  <div class="b-stat-item">
+                    <h2>{{ monthlyCheckins }}</h2>
+                    <span>本月打卡</span>
+                  </div>
+                  <div class="b-stat-item">
+                    <h2><Flame :size="28" />{{ Math.max(stats.streak_days || 0, 0) }}</h2>
+                    <span>最长连续</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="plan-layout">
+                <div class="main-col">
+                  <article class="card">
+                    <div class="calendar-nav">
+                      <div class="cal-month">{{ planMonthLabel }}</div>
+                      <div class="cal-arrows">
+                        <button type="button" class="cal-arr-btn" @click="shiftPlanMonth(-1)"><ChevronLeft :size="18" /></button>
+                        <button type="button" class="cal-arr-btn" @click="shiftPlanMonth(1)"><ChevronRight :size="18" /></button>
+                      </div>
+                    </div>
+
+                    <div class="cal-weekdays">
+                      <div v-for="day in planWeekHeaders" :key="day" class="cal-header-day">{{ day }}</div>
+                    </div>
+
+                    <div class="cal-grid">
+                      <div v-for="cell in planCalendarCells" :key="cell.key" class="cal-day-wrapper">
+                        <button
+                          type="button"
+                          class="cal-day"
+                          :class="{ empty: cell.empty, checked: cell.checked, today: cell.today }"
+                          :disabled="cell.empty"
+                        >
+                          {{ cell.label }}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article class="card">
+                    <div class="card-header">
+                      <div class="card-title"><ListChecks :size="22" />今日任务</div>
+                      <div class="card-subtitle">{{ doneTasks }} / {{ todayTasks.length }} 已完成</div>
+                    </div>
+
+                    <div v-if="todayTasks.length" class="plan-task-list">
+                      <div v-for="task in todayTasks" :key="task.id" class="plan-task-row" :class="{ done: task.status === 'done' }">
+                        <button type="button" class="plan-task-check" @click="checkinTask(task.id)">
+                          <Check v-if="task.status === 'done'" :size="16" />
+                        </button>
+                        <div class="plan-task-body">
+                          <strong>{{ task.title }}</strong>
+                          <small>{{ task.estimated_minutes || 30 }} 分钟 · {{ task.task_type || '学习' }}</small>
+                        </div>
+                        <span class="plan-task-tag">{{ task.status === 'done' ? '已完成' : '待完成' }}</span>
+                      </div>
+                    </div>
+
+                    <div v-else class="empty-task-state">
+                      <div class="ai-sparkle-bg">
+                        <Sparkles :size="40" />
+                      </div>
+                      <h3>今天还没有计划</h3>
+                      <p>一句话描述你想学的内容，让 AI 为你量身定制任务清单</p>
+
+                      <div class="ai-prompt-bar">
+                        <input v-model="planForm.goal" type="text" placeholder="输入学习目标，如：复习第二章，重点看TCP协议..." @keyup.enter="createPlan" />
+                        <button type="button" class="btn-ai-gen" :data-loading="planCreating" :disabled="planCreating || !planForm.goal.trim()" @click="createPlan">
+                          <Sparkles :size="18" />AI 生成
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
+                <div class="side-col">
+                  <article class="card">
+                    <div class="card-header compact">
+                      <div class="card-title"><BarChart2 :size="22" />本周学习</div>
+                    </div>
+
+                    <div class="mini-chart">
+                      <div v-for="item in weeklyChart" :key="item.label" class="bar-col">
+                        <div class="bar-track"><div class="bar-fill" :style="{ height: `${item.percent}%` }"></div></div>
+                        <span class="bar-label">{{ item.label }}</span>
+                      </div>
+                    </div>
+                    <div class="total-hours">共 <span>{{ totalWeeklyHours }}</span> 小时</div>
+                  </article>
+
+                  <article class="card">
+                    <div class="card-header compact">
+                      <div class="card-title achievement-title"><Award :size="22" />我的成就</div>
+                    </div>
+
+                    <div class="badges-grid">
+                      <div v-for="item in planAchievementSlots" :key="item.key" class="badge-item" :class="{ unlocked: item.unlocked }">
+                        <div class="badge-icon"><Award :size="28" /></div>
+                        <span class="badge-name">{{ item.unlocked ? item.name : '?' }}</span>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </section>
           </template>
 
           <template v-else-if="active === 'studentProfile'">
-            <section class="profile-page"><article class="profile-hero"><span class="big-avatar">{{ firstChar(profileForm.nickname) }}<Camera :size="14" /></span><div><h1>{{ profileForm.nickname }}</h1><p><IdCard :size="14" />{{ user.student_no || '-' }}</p><p><Mail :size="14" />{{ user.email }}</p></div><aside><strong>{{ learningPoints }}</strong><span>学习积分</span></aside></article><div class="achievement-row"><MiniMetric :icon="Clock" label="总学习时长" :value="`${stats.study_hours || 0}h`" /><MiniMetric :icon="CheckCircle" label="课堂完成" :value="`${stats.completion_rate || 0}%`" tone="success" /><MiniMetric :icon="MessageCircle" label="知识问答" :value="stats.qa_count || 0" tone="ai" /><MiniMetric :icon="Star" label="平均得分" :value="`${stats.accuracy || 0}`" tone="warning" /></div><article class="panel-card badge-card"><div class="section-head"><h2><Award :size="18" />我的成就</h2></div><div class="badges"><span v-for="item in profilePayload.achievements || []" :key="item.key" :class="{ locked: !item.unlocked }"><Award :size="22" />{{ item.unlocked ? item.name : '?' }}</span></div></article><div class="profile-tabs"><button :class="{ active: profileTab === 'info' }" @click="profileTab = 'info'">我的资料</button><button :class="{ active: profileTab === 'records' }" @click="profileTab = 'records'">学习档案</button><button :class="{ active: profileTab === 'account' }" @click="profileTab = 'account'">账号设置</button></div><Transition name="fade-slide" mode="out-in"><article v-if="profileTab === 'info'" key="info" class="panel-card profile-form"><label>姓名<input v-model="profileForm.nickname" class="input" /></label><label>学校<input v-model="profileForm.school" class="input" /></label><label>简介<textarea v-model="profileForm.bio" class="textarea"></textarea></label><button class="btn btn-primary" @click="saveProfile">保存修改</button></article><article v-else-if="profileTab === 'records'" key="records" class="panel-card"><ActivityTimeline :items="profilePayload.activities || []" /></article><article v-else key="account" class="panel-card profile-form"><h2>账号安全</h2><input v-model="passwordForm.old_password" class="input" type="password" placeholder="当前密码" /><input v-model="passwordForm.new_password" class="input" type="password" placeholder="新密码" /><input v-model="passwordConfirm" class="input" type="password" placeholder="确认密码" /><button class="btn btn-primary" @click="changePassword">确认修改</button><h2>通知设置</h2><label v-for="item in noticeSettings" :key="item.key" class="toggle-line"><input v-model="item.enabled" type="checkbox" />{{ item.label }}<input v-if="item.key === 'plan'" v-model="item.time" class="time-input" type="time" /></label><button class="btn btn-secondary" @click="saveNotices">保存设置</button></article></Transition></section>
+            <section class="profile-page">
+              <div class="profile-pc-layout">
+                <aside class="profile-side">
+                  <article class="profile-identity-card">
+                    <div class="profile-cover">
+                      <span class="big-avatar">
+                        <img v-if="currentAvatarUrl" :src="currentAvatarUrl" alt="" />
+                        <DefaultUserAvatar v-else />
+                        <Camera :size="14" class="camera-badge" />
+                      </span>
+                    </div>
+                    <div class="profile-header-info">
+                      <section>
+                        <h1>{{ profileForm.nickname }}</h1>
+                        <p><IdCard :size="15" />{{ user.student_no || '-' }}</p>
+                        <p><Mail :size="15" />{{ user.email }}</p>
+                      </section>
+                      <aside>
+                        <strong>{{ learningPoints }}</strong>
+                        <span><Star :size="15" />学习积分</span>
+                      </aside>
+                    </div>
+                  </article>
+                  <article class="panel-card badge-card">
+                    <div class="section-head"><h2><Award :size="18" />我的成就</h2></div>
+                    <div class="badges"><span v-for="item in profilePayload.achievements || []" :key="item.key" :class="{ locked: !item.unlocked }"><Award :size="22" />{{ item.unlocked ? item.name : '?' }}</span></div>
+                    <EmptyState v-if="!(profilePayload.achievements || []).length" text="暂无成就" />
+                  </article>
+                </aside>
+
+                <section class="profile-main-card">
+                  <div class="achievement-row">
+                    <MiniMetric :icon="Clock" label="总学习时长" :value="`${stats.study_hours || 0}h`" />
+                    <MiniMetric :icon="CheckCircle" label="课时完成" :value="`${stats.completion_rate || 0}%`" tone="success" />
+                    <MiniMetric :icon="MessageCircle" label="知识问答" :value="stats.qa_count || 0" tone="ai" />
+                    <MiniMetric :icon="Star" label="平均得分" :value="`${stats.accuracy || 0}`" tone="warning" />
+                  </div>
+                  <div class="profile-tabs">
+                    <button :class="{ active: profileTab === 'info' }" @click="profileTab = 'info'">我的资料</button>
+                    <button :class="{ active: profileTab === 'records' }" @click="profileTab = 'records'">学习档案</button>
+                    <button :class="{ active: profileTab === 'account' }" @click="profileTab = 'account'">账号设置</button>
+                  </div>
+                  <Transition name="fade-slide" mode="out-in">
+                    <article v-if="profileTab === 'info'" key="info" class="panel-card profile-form">
+                      <div class="profile-form-grid">
+                        <label>姓名<input v-model="profileForm.nickname" class="input" /></label>
+                        <label>学校<input v-model="profileForm.school" class="input" /></label>
+                        <label class="wide">简介<textarea v-model="profileForm.bio" class="textarea"></textarea></label>
+                      </div>
+                      <footer><button class="btn btn-primary" @click="saveProfile">保存修改</button></footer>
+                    </article>
+                    <article v-else-if="profileTab === 'records'" key="records" class="panel-card profile-records"><ActivityTimeline :items="profilePayload.activities || []" /></article>
+                    <article v-else key="account" class="panel-card profile-form">
+                      <h2>账号安全</h2>
+                      <div class="profile-form-grid">
+                        <PasswordField v-model="passwordForm.old_password" placeholder="当前密码" />
+                        <PasswordField v-model="passwordForm.new_password" placeholder="新密码" />
+                        <PasswordField v-model="passwordConfirm" placeholder="确认密码" />
+                      </div>
+                      <footer><button class="btn btn-primary" @click="changePassword">确认修改</button></footer>
+                      <h2>通知设置</h2>
+                      <div class="notice-settings-grid">
+                        <div v-for="item in noticeSettings" :key="item.key" class="toggle-line"><AppCheckbox v-model="item.enabled" variant="switch" :label="item.label" /><input v-if="item.key === 'plan'" v-model="item.time" class="time-input" type="text" placeholder="09:00" /></div>
+                      </div>
+                      <footer><button class="btn btn-secondary" @click="saveNotices">保存设置</button></footer>
+                    </article>
+                  </Transition>
+                </section>
+              </div>
+            </section>
           </template>
 
           <template v-else-if="active === 'studentMaterials'">
@@ -291,7 +714,7 @@
     </main>
 
     <nav class="bottom-tabs">
-      <button v-for="item in bottomTabs" :key="item.key" :class="{ active: active === item.key, ai: item.key === 'studentQa' }" @click="go(item.key)">
+      <button v-for="item in bottomTabs" :key="item.key" :class="{ active: isStudentNavActive(item.key), ai: item.key === 'studentQa' }" @click="go(item.key)">
         <span><component :is="item.icon" :size="item.key === 'studentQa' ? 24 : 22" /></span>{{ item.label }}<i></i>
       </button>
     </nav>
@@ -325,20 +748,58 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, Transition, watch, type PropType } from "vue";
+import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, Transition, watch, type PropType, type Ref } from "vue";
 import { useRouter } from "vue-router";
+import MarkdownIt from "markdown-it";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import {
-  AlertTriangle, ArrowLeft, Award, BarChart2, Bell, BookMarked, BookOpen, CalendarCheck, Camera, Check,
-  CheckCircle, ChevronDown, ChevronRight, ClipboardList, Clock, Copy, Cpu, Download, FileText, Flame, FolderOpen, GitBranch, Grid2X2,
-  IdCard, Info, Layers, ListChecks, Loader2, LogOut, Mail, Maximize, MessageCircle, MoreHorizontal, PanelRight,
+  AlertTriangle, ArrowLeft, ArrowRight, Award, BarChart2, Bell, BookMarked, BookOpen, CalendarCheck, Camera, Check,
+  CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Cpu, Download, FileText, Flame, FolderOpen, GitBranch, Grid2X2,
+  History, IdCard, Info, Flag, Layers, ListChecks, Loader2, LogOut, Mail, Maximize, MessageCircle, MoreHorizontal, PanelRight,
   Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings, SkipBack,
   Shield, SkipForward, Sparkles, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
 } from "lucide-vue-next";
 import { api } from "../api/client";
 import { routeByPage } from "../router";
 import type { Lesson, LessonPage, Quiz, User as UserType } from "../types";
+import AppCheckbox from "../components/AppCheckbox.vue";
+import AppProgress from "../components/AppProgress.vue";
+import AppSlider from "../components/AppSlider.vue";
+import PasswordField from "../components/PasswordField.vue";
 
-type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: any[]; thought?: string; thoughtOpen?: boolean; record_id?: number; favorite?: boolean; outOfScope?: boolean };
+type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };
+type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: any[]; attachments?: QaAttachment[]; thought?: string; thoughtOpen?: boolean; record_id?: number; favorite?: boolean; outOfScope?: boolean; streaming?: boolean };
+const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
+
+function renderMath(source: string, displayMode: boolean) {
+  try {
+    return katex.renderToString(source, {
+      displayMode,
+      throwOnError: false,
+      strict: false,
+      output: "html",
+    });
+  } catch {
+    return source;
+  }
+}
+
+function renderRichText(value?: string | null) {
+  if (!value) return "";
+  const mathParts: string[] = [];
+  const stash = (html: string) => {
+    const token = `@@MATH_${mathParts.length}@@`;
+    mathParts.push(html);
+    return token;
+  };
+  const text = value
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, expr: string) => stash(renderMath(expr.trim(), true)))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, expr: string) => stash(renderMath(expr.trim(), true)))
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_, expr: string) => stash(renderMath(expr.trim(), false)))
+    .replace(/(^|[^\\])\$([^$\n]+?)\$/g, (_, prefix: string, expr: string) => `${prefix}${stash(renderMath(expr.trim(), false))}`);
+  return markdownRenderer.render(text).replace(/@@MATH_(\d+)@@/g, (_, index: string) => mathParts[Number(index)] || "");
+}
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
@@ -360,6 +821,9 @@ const globalSearch = ref("");
 const searchInput = ref<HTMLInputElement | null>(null);
 const noticeOpen = ref(false);
 const userMenuOpen = ref(false);
+const topActionsRef = ref<HTMLElement | null>(null);
+const noticePopRef = ref<HTMLElement | null>(null);
+const userPopRef = ref<HTMLElement | null>(null);
 const joinOpen = ref(false);
 const joinCode = ref("");
 const joinPreview = ref<any | null>(null);
@@ -381,6 +845,9 @@ const classMessages = ref<ChatMessage[]>([]);
 const classQuestion = ref("");
 const classThinking = ref(false);
 const classConversationId = ref<number | null>(null);
+const classQaImageInput = ref<HTMLInputElement | null>(null);
+const classQaAttachments = ref<QaAttachment[]>([]);
+const classQaImageUploading = ref(false);
 const aiPanelOpen = ref(true);
 const chromeVisible = ref(true);
 const thumbOpen = ref(false);
@@ -403,6 +870,9 @@ const globalMessages = ref<ChatMessage[]>([]);
 const globalQuestion = ref("");
 const globalThinking = ref(false);
 const globalConversationId = ref<number | null>(null);
+const globalQaImageInput = ref<HTMLInputElement | null>(null);
+const globalQaAttachments = ref<QaAttachment[]>([]);
+const globalQaImageUploading = ref(false);
 const qaHistory = ref<any[]>([]);
 const qaKeyword = ref("");
 const historyOpen = ref(false);
@@ -424,7 +894,7 @@ const knowledgeKeyword = ref("");
 const knowledgeLevel = ref("standard");
 const weakPoints = ref<any[]>([]);
 
-const quizTab = ref<"course" | "practice">("course");
+const quizTab = ref<"course" | "practice">("practice");
 const quizzes = ref<Quiz[]>([]);
 const quizDetail = ref<any | null>(null);
 const quizAnswers = reactive<Record<number, any>>({});
@@ -433,6 +903,9 @@ const answeringQuiz = ref(false);
 const selectedPracticeChapters = ref<number[]>([]);
 const quizQuestionCount = ref("10题");
 const smartQuiz = ref(true);
+const quizGenerating = ref(false);
+const wrongPracticeGenerating = ref(false);
+const quizSubmitting = ref(false);
 
 const wrongQuestions = ref<any[]>([]);
 const wrongKeyword = ref("");
@@ -442,6 +915,8 @@ const plans = ref<any[]>([]);
 const tasks = ref<any[]>([]);
 const planModalOpen = ref(false);
 const planForm = reactive({ title: "今日学习计划", goal: "", available_days: 7, daily_minutes: 60 });
+const planCreating = ref(false);
+const planCalendarDate = ref(new Date());
 const checkinDays = ref<string[]>([]);
 
 const profileTab = ref<"info" | "records" | "account">("info");
@@ -457,18 +932,16 @@ const bottomTabs = [
   { key: "studentWrongBook", label: "错题本", icon: BookMarked },
   { key: "studentProfile", label: "我的", icon: User }
 ];
-const speedItems = ["0.5", "0.75", "1", "1.25", "1.5", "2"].map((value) => ({ label: `${value}x`, value }));
-const promptCards = [
-  { text: "OSI七层模型是什么？", icon: Layers },
-  { text: "TCP和UDP有什么区别？", icon: Zap },
-  { text: "路由算法有哪几种？", icon: GitBranch },
-  { text: "HTTPS如何保证安全？", icon: Shield },
-  { text: "什么是ARP协议？", icon: Cpu },
-  { text: "什么是流量控制？", icon: Wifi }
+const topNavTabs = [
+  { key: "studentHome", label: "工作台", icon: BookOpen },
+  { key: "studentCourses", label: "我的课程", icon: Presentation },
+  { key: "studentQa", label: "AI 问答", icon: Sparkles },
+  { key: "studentWrongBook", label: "错题本", icon: BookMarked }
 ];
+const speedItems = ["0.5", "0.75", "1", "1.25", "1.5", "2"].map((value) => ({ label: `${value}x`, value }));
 const levelItems = [{ label: "入门", value: "beginner" }, { label: "标准", value: "standard" }, { label: "进阶", value: "advanced" }];
 const quizCountOptions = ["5题", "10题", "15题", "20题"];
-const wrongStatusOptions = [{ label: "全部状态", value: "" }, { label: "待重练", value: "todo" }, { label: "已掌握", value: "done" }];
+const wrongStatusOptions = [{ label: "全部状态", value: "" }, { label: "待重练", value: "todo" }, { label: "多次错误", value: "repeat" }];
 const courseMenuItems = [{ label: "课程详情", value: "detail" }, { label: "问答记录", value: "qa" }, { label: "分享课程码", value: "share" }, { label: "退出课程", value: "leave", danger: true }];
 
 const stats = computed(() => dashboard.value.stats || profilePayload.value.stats || {});
@@ -479,6 +952,8 @@ const continueLesson = computed(() => dashboard.value.continue_learning || null)
 const continueProgress = computed(() => continueLesson.value?.progress?.progress_percent || 0);
 const continueProgressPage = computed(() => continueLesson.value?.progress?.current_page || 1);
 const continueTime = computed(() => continueLesson.value?.progress?.updated_at ? `上次学习：${relativeTime(continueLesson.value.progress.updated_at)}` : "从第一节开始");
+const hasJoinedCourses = computed(() => courses.value.length > 0);
+const studentRecommendationText = computed(() => dashboard.value.recommendation?.text || "建议选择一门课程完成一个课时，并用练习检查掌握情况。");
 const hourTargetRate = computed(() => Math.min(100, Math.round((stats.value.study_hours || 0) / 5 * 100)));
 const unreadCount = computed(() => notifications.value.filter((item) => item.unread).length);
 const activities = computed(() => dashboard.value.activities || []);
@@ -486,6 +961,33 @@ const greeting = computed(() => { const hour = new Date().getHours(); if (hour <
 const todayText = computed(() => new Date().toLocaleDateString("zh-CN", { weekday: "long", month: "long", day: "numeric" }));
 const termLeftDays = computed(() => Math.max(1, Math.ceil((new Date(new Date().getFullYear(), 6, 15).getTime() - Date.now()) / 86400000)));
 const activeCourse = computed(() => courses.value.find((course) => course.id === selectedCourseId.value) || courses.value[0] || null);
+const currentAvatarUrl = computed(() => profileForm.avatar_url || props.user.avatar_url || "");
+const homeRecommendedLesson = computed(() => dashboard.value.recommendation?.lesson || continueLesson.value || null);
+const homeRecommendedLessonTitle = computed(() => {
+  if (!hasJoinedCourses.value) return "输入课程码加入课程";
+  return homeRecommendedLesson.value?.lesson?.title || activeCourse.value?.last_lesson?.title || "暂无推荐课时";
+});
+const homeRecommendedPracticeTitle = computed(() => {
+  if (!hasJoinedCourses.value) return "加入后查看推荐练习";
+  const weakPoint = dashboard.value.recommendation?.weak_points?.[0]?.name;
+  return weakPoint ? `${weakPoint}专项练习 (10题)` : "章节巩固练习 (10题)";
+});
+const homeActivityItems = computed(() => activities.value.map((item: any, index: number) => {
+  const type = item?.type || "activity";
+  const rawTitle = item?.title || "学习记录";
+  const meta = item?.meta || "";
+  const progress = type === "lesson" ? normalizePercent(meta) : null;
+  if (type === "qa") {
+    return { key: `${type}-${rawTitle}-${item?.time || index}`, icon: MessageCircle, tone: "ai", action: "向 AI 发起提问", detail: rawTitle, quote: true, progress: null, timeText: relativeTime(item?.time) };
+  }
+  if (type === "lesson") {
+    return { key: `${type}-${rawTitle}-${item?.time || index}`, icon: Play, tone: "learning", action: "学习课时", detail: rawTitle.replace(/^学习\s*/, ""), quote: false, progress, timeText: relativeTime(item?.time) };
+  }
+  if (type === "quiz") {
+    return { key: `${type}-${rawTitle}-${item?.time || index}`, icon: ClipboardList, tone: "learning", action: "提交练习", detail: `${rawTitle.replace(/^提交\s*/, "")}${meta ? ` · ${meta}` : ""}`, quote: false, progress: null, timeText: relativeTime(item?.time) };
+  }
+  return { key: `${type}-${rawTitle}-${item?.time || index}`, icon: Sparkles, tone: "ai", action: type === "tutoring" ? "AI 题目辅导" : "学习记录", detail: meta ? `${rawTitle} · ${meta}` : rawTitle, quote: false, progress: null, timeText: relativeTime(item?.time) };
+}));
 const termOptions = computed(() => [{ label: "全部学期", value: "" }, ...Array.from(new Set(courses.value.map((course) => course.term))).filter(Boolean).map((term: any) => ({ label: term, value: term }))]);
 const activeCourses = computed(() => courses.value.filter((course) => (course.progress_percent || 0) < 100));
 const doneCourses = computed(() => courses.value.filter((course) => (course.progress_percent || 0) >= 100));
@@ -495,11 +997,42 @@ const visibleCourseMaterials = computed(() => materialsExpanded.value ? courseHo
 const activePage = computed(() => classroomLesson.value?.pages.find((page) => page.page_number === currentPage.value) || classroomLesson.value?.pages[0] || null);
 const subtitleLead = computed(() => (activePage.value?.subtitle_text || "").slice(0, 8));
 const subtitleRest = computed(() => (activePage.value?.subtitle_text || "").slice(8));
-const quickPageQuestions = computed(() => ["这页重点？", "举个例子", "出道题", "总结一下"]);
+const promptContext = computed(() => {
+  const home = courseHome.value || {};
+  const courseName = home.course?.name || activeCourse.value?.name || "";
+  const lesson = (home.lessons || []).find((item: any) => item?.title)?.title || "";
+  const chapter = (home.chapters || []).find((item: any) => item?.title)?.title || "";
+  const material = (home.materials || []).find((item: any) => item?.title)?.title || "";
+  const weakPoint = weakPoints.value.find((item: any) => item?.knowledge_point || item?.name);
+  const point = knowledge.value.find((item: any) => item?.name)?.name || weakPoint?.knowledge_point || weakPoint?.name || "";
+  const base = lesson || chapter || material || courseName || "当前课程";
+  return { courseName, lesson, chapter, material, point, base };
+});
+const promptCards = computed(() => {
+  const ctx = promptContext.value;
+  const rows = [
+    { text: `${ctx.base} 的重点是什么？`, icon: Layers },
+    { text: ctx.point ? `请解释 ${ctx.point}` : `${ctx.base} 有哪些核心概念？`, icon: Zap },
+    { text: ctx.lesson ? `根据 ${ctx.lesson} 出一道练习题` : `根据 ${ctx.base} 出一道练习题`, icon: Pencil },
+    { text: ctx.chapter ? `帮我梳理 ${ctx.chapter} 的知识框架` : `帮我总结 ${ctx.base}`, icon: GitBranch },
+    { text: ctx.material ? `${ctx.material} 里容易混淆的点有哪些？` : `${ctx.base} 有哪些易错点？`, icon: Shield },
+    { text: ctx.courseName ? `我该如何复习《${ctx.courseName}》？` : "请先选择一门课程后提问", icon: BookOpen }
+  ];
+  const seen = new Set<string>();
+  return rows.filter((item) => {
+    if (seen.has(item.text)) return false;
+    seen.add(item.text);
+    return true;
+  });
+});
+const quickPageQuestions = computed(() => {
+  const title = activePage.value?.page_title || classroomLesson.value?.lesson?.title || "当前页面";
+  return [`${title} 的重点？`, `用例子解释 ${title}`, `根据 ${title} 出道题`, `总结 ${title}`];
+});
 const studyClock = computed(() => `${String(Math.floor(studySeconds.value / 60)).padStart(2, "0")}:${String(studySeconds.value % 60).padStart(2, "0")}`);
 const audioTime = computed(() => timeLabel(audioRef.value?.currentTime || 0));
 const audioDuration = computed(() => timeLabel(audioRef.value?.duration || activePage.value?.audio_duration_seconds || 0));
-const completionSummary = computed(() => "本次学习完成度良好，建议继续完成配套练习并整理课堂笔记。");
+const completionSummary = computed(() => "本次学习完成度良好，建议继续完成配套练习并整理课时笔记。");
 const filteredQaHistory = computed(() => qaHistory.value.filter((item) => (!showFavorites.value || item.is_favorite) && (!qaKeyword.value || item.question.includes(qaKeyword.value))));
 const selectedKnowledge = computed(() => knowledge.value.find((item) => item.id === selectedKnowledgeId.value) || knowledge.value[0] || null);
 const knowledgeMastery = computed(() => Math.max(35, 90 - (weakPoints.value.find((item) => item.knowledge_point === selectedKnowledge.value?.name)?.wrong_count || 0) * 12));
@@ -508,12 +1041,50 @@ const knowledgeMasteryClass = computed(() => knowledgeMastery.value > 75 ? "tag-
 const knowledgeContent = computed(() => selectedKnowledge.value?.content_by_level?.[knowledgeLevel.value] || {});
 const courseQuizzes = computed(() => quizzes.value.filter((quiz) => quiz.quiz_type === "course"));
 const practiceQuizzes = computed(() => quizzes.value.filter((quiz) => quiz.quiz_type !== "course"));
-const filteredWrongQuestions = computed(() => wrongQuestions.value.filter((item) => (!wrongKeyword.value || item.question.stem.includes(wrongKeyword.value)) && (!wrongStatus.value || (wrongStatus.value === "todo" ? item.wrong_count > 0 : item.wrong_count <= 0))));
-const weeklyWrongCount = computed(() => wrongQuestions.value.filter((item) => item.question?.updated_at && Date.now() - new Date(item.question.updated_at).getTime() < 7 * 86400000).length);
+const filteredWrongQuestions = computed(() => wrongQuestions.value.filter((item) => (!wrongKeyword.value || item.question.stem.includes(wrongKeyword.value)) && (!wrongStatus.value || (wrongStatus.value === "todo" ? item.wrong_count > 0 : item.wrong_count > 1))));
+const weeklyWrongCount = computed(() => wrongQuestions.value.filter((item) => (item.updated_at || item.created_at) && Date.now() - new Date(item.updated_at || item.created_at).getTime() < 7 * 86400000).length);
 const monthlyCheckins = computed(() => checkinDays.value.filter((day) => day.slice(0, 7) === new Date().toISOString().slice(0, 7)).length);
 const weeklyHours = computed(() => [0.8, 1.2, 1.6, 1.1, 2.2, 0.7, 1.4]);
+const totalWeeklyHours = computed(() => Number(weeklyHours.value.reduce((sum, value) => sum + Number(value || 0), 0).toFixed(1)));
+const weeklyChart = computed(() => {
+  const labels = ["一", "二", "三", "四", "五", "六", "日"];
+  const max = Math.max(1, ...weeklyHours.value.map((value) => Number(value || 0)));
+  return labels.map((label, index) => {
+    const value = Number(weeklyHours.value[index] || 0);
+    return { label, value, percent: value <= 0 ? 0 : Math.max(12, Math.round(value / max * 100)) };
+  });
+});
 const learningPoints = computed(() => Math.round((stats.value.study_hours || 0) * 10 + (stats.value.qa_count || 0) * 2 + (stats.value.completion_rate || 0)));
 const weekDays = computed(() => ["一", "二", "三", "四", "五", "六", "日"].map((label, index) => ({ label, done: index < Math.min(7, stats.value.streak_days || 0), today: index === new Date().getDay() - 1 })));
+const planWeekHeaders = ["一", "二", "三", "四", "五", "六", "日"];
+const planMonthLabel = computed(() => `${planCalendarDate.value.getFullYear()}年 ${planCalendarDate.value.getMonth() + 1}月`);
+const planCalendarCells = computed(() => {
+  const cursor = planCalendarDate.value;
+  const year = cursor.getFullYear();
+  const month = cursor.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const leading = (firstDay.getDay() + 6) % 7;
+  const days = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  const cells: Array<{ key: string; label: string; empty: boolean; checked: boolean; today: boolean }> = [];
+  for (let index = 0; index < leading; index += 1) cells.push({ key: `empty-${index}`, label: "", empty: true, checked: false, today: false });
+  for (let day = 1; day <= days; day += 1) {
+    const iso = localDateKey(new Date(year, month, day));
+    cells.push({
+      key: iso,
+      label: String(day),
+      empty: false,
+      checked: checkinDays.value.includes(iso),
+      today: year === today.getFullYear() && month === today.getMonth() && day === today.getDate()
+    });
+  }
+  return cells;
+});
+const planAchievementSlots = computed(() => {
+  const items = [...(profilePayload.value.achievements || [])].slice(0, 4);
+  while (items.length < 4) items.push({ key: `locked-${items.length}`, name: "?", unlocked: false });
+  return items;
+});
 
 watch(() => props.pageKey, async (key) => { active.value = key || "studentHome"; await loadActive(); });
 watch(selectedCourseId, (id) => { if (id) localStorage.setItem("student_current_course_id", String(id)); });
@@ -525,12 +1096,53 @@ async function loadCourses() { courses.value = (await run<any[]>(() => api.get("
 async function loadDashboard() { dashboard.value = (await run(() => api.get("/student/dashboard"))) || {}; notifications.value = dashboard.value.notifications || []; courses.value = dashboard.value.courses || courses.value; if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id; }
 async function loadCourseHome() { if (!selectedCourseId.value) return; courseHome.value = (await run(() => api.get(`/student/courses/${selectedCourseId.value}/home`))) || {}; lessons.value = courseHome.value.lessons || []; }
 async function loadProfile() { profilePayload.value = (await run(() => api.get("/student/profile"))) || {}; Object.assign(profileForm, { nickname: profilePayload.value.user?.nickname || props.user.nickname, avatar_url: profilePayload.value.user?.avatar_url || "", school: profilePayload.value.student_profile?.school || "", bio: profilePayload.value.user?.bio || "" }); noticeSettings.splice(0, noticeSettings.length, ...(profilePayload.value.notification_settings || [])); }
-async function loadActive() { if (active.value === "studentHome") await loadDashboard(); if (active.value === "studentCourses") await loadCourses(); if (["studentCourseHome", "studentMaterials"].includes(active.value)) await loadCourseHome(); if (active.value === "studentQa") await loadQaHistory(); if (active.value === "studentTutoring") await loadProblemHistory(); if (active.value === "studentKnowledge") await loadKnowledge(); if (active.value === "studentQuizzes") await loadQuizPage(); if (active.value === "studentWrongBook") await loadWrongBook(); if (active.value === "studentPlans") await loadPlans(); if (active.value === "studentProfile") await loadProfile(); }
+async function loadActive() {
+  if (active.value === "studentHome") await loadDashboard();
+  if (active.value === "studentCourses") await loadCourses();
+  if (["studentCourseHome", "studentMaterials"].includes(active.value)) await loadCourseHome();
+  if (active.value === "studentQa") {
+    if (!courses.value.length) await loadCourses();
+    await loadCourseHome();
+    await loadQaHistory();
+  }
+  if (active.value === "studentTutoring") await loadProblemHistory();
+  if (active.value === "studentKnowledge") await loadKnowledge();
+  if (active.value === "studentQuizzes") await loadQuizPage();
+  if (active.value === "studentWrongBook") await loadWrongBook();
+  if (active.value === "studentPlans") await loadPlans();
+  if (active.value === "studentProfile") await loadProfile();
+}
 async function openCourse(id: number) { selectedCourseId.value = id; await loadCourseHome(); await go("studentCourseHome"); }
+async function openHomeRecommendedLesson() {
+  if (!hasJoinedCourses.value) { joinOpen.value = true; return; }
+  const lessonId = homeRecommendedLesson.value?.lesson?.id || activeCourse.value?.last_lesson?.id;
+  if (lessonId) { await openLesson(Number(lessonId)); return; }
+  await go("studentCourses");
+}
+async function openHomeRecommendedPractice() {
+  if (!hasJoinedCourses.value) { joinOpen.value = true; return; }
+  await go("studentQuizzes");
+}
 function scrollToLessons() { document.getElementById("lesson-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
 async function openSearch() { searchOpen.value = true; await nextTick(); searchInput.value?.focus(); }
 function firstChar(value?: string) { return (value || "-").slice(0, 1); }
+function localDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function shiftPlanMonth(offset: number) {
+  const current = planCalendarDate.value;
+  planCalendarDate.value = new Date(current.getFullYear(), current.getMonth() + offset, 1);
+}
+function isStudentNavActive(key: string) {
+  const courseKeys = ["studentCourses", "studentCourseHome", "studentMaterials", "studentKnowledge", "studentQuizzes", "studentTutoring", "studentPlans"];
+  if (key === "studentCourses") return courseKeys.includes(active.value);
+  return active.value === key;
+}
 function courseGradient(id = 1) { const items = ["linear-gradient(135deg,#4F46E5,#06B6D4)", "linear-gradient(135deg,#10B981,#3B82F6)", "linear-gradient(135deg,#F59E0B,#EF4444)", "linear-gradient(135deg,#8B5CF6,#EC4899)"]; return items[id % items.length]; }
+function normalizePercent(value: unknown) { const percent = Number.parseFloat(String(value ?? "").replace("%", "")); return Number.isFinite(percent) ? Math.max(0, Math.min(100, Math.round(percent))) : null; }
 function relativeTime(value?: string | null) { if (!value) return "刚刚"; const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
 function formatTime(value?: string | null) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
 function timeLabel(value: number) { if (!Number.isFinite(value)) return "00:00"; return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(Math.floor(value % 60)).padStart(2, "0")}`; }
@@ -563,14 +1175,141 @@ function confettiStyle(n: number) { return { left: `${(n * 37) % 100}%`, backgro
 function nextLessonAfterComplete() { const index = (courseHome.value.lessons || []).findIndex((item: any) => item.id === classroomLesson.value?.lesson.id); const next = (courseHome.value.lessons || [])[index + 1]; if (next) openLesson(next.id); else returnCourse(); }
 function returnCourse() { completeOpen.value = false; closeClassroom(); }
 
-async function askInClass() { if (!classQuestion.value.trim() || !classroomLesson.value) return; const question = classQuestion.value; classQuestion.value = ""; classMessages.value.push({ id: Date.now(), role: "user", text: question }); classThinking.value = true; const data = await run<any>(() => api.post("/qa/ask", { course_id: classroomLesson.value!.lesson.course_id, conversation_id: classConversationId.value, lesson_page_id: activePage.value?.id, question })); classThinking.value = false; if (data) { classConversationId.value = data.conversation_id; classMessages.value.push({ id: Date.now() + 1, role: "ai", text: data.answer, sources: data.sources || [], thought: "已检索当前页、课程资料和历史上下文。", record_id: data.record_id, outOfScope: data.is_out_of_scope }); } }
+function patchChatMessage(messages: Ref<ChatMessage[]>, id: number, updater: (message: ChatMessage) => ChatMessage) {
+  const index = messages.value.findIndex((item) => item.id === id);
+  if (index < 0) return;
+  messages.value.splice(index, 1, updater({ ...messages.value[index] }));
+}
+
+function applyQaStreamEvent(messages: Ref<ChatMessage[]>, messageId: number, event: string, data: any) {
+  if (event === "delta") {
+    patchChatMessage(messages, messageId, (message) => data?.type === "thought"
+      ? { ...message, thought: `${message.thought || ""}${data.text || ""}`, thoughtOpen: true }
+      : { ...message, text: `${message.text || ""}${data?.text || ""}` });
+    return;
+  }
+  if (event === "final") {
+    patchChatMessage(messages, messageId, (message) => ({
+      ...message,
+      text: data.answer || message.text,
+      thought: data.thinking_process || message.thought || "",
+      sources: data.sources || [],
+      attachments: data.attachments || message.attachments || [],
+      record_id: data.record_id,
+      outOfScope: data.is_out_of_scope,
+    }));
+  }
+}
+
+function qaAttachmentsFor(scope: "class" | "global") {
+  return scope === "class" ? classQaAttachments.value : globalQaAttachments.value;
+}
+
+function removeQaAttachment(scope: "class" | "global", index: number) {
+  qaAttachmentsFor(scope).splice(index, 1);
+}
+
+async function handleQaImageChange(event: Event, scope: "class" | "global") {
+  const input = event.target as HTMLInputElement;
+  const file = (input.files || [])[0];
+  input.value = "";
+  if (!file) return;
+  const courseId = scope === "class" ? classroomLesson.value?.lesson.course_id : selectedCourseId.value;
+  if (!courseId) {
+    emit("notice", "warning", "请先选择课程");
+    return;
+  }
+  if (!file.type.startsWith("image/")) {
+    emit("notice", "warning", "请上传图片文件");
+    return;
+  }
+  const target = qaAttachmentsFor(scope);
+  if (target.length >= 3) {
+    emit("notice", "warning", "最多上传 3 张图片");
+    return;
+  }
+  const form = new FormData();
+  form.set("course_id", String(courseId));
+  form.set("file", file);
+  if (scope === "class") classQaImageUploading.value = true;
+  else globalQaImageUploading.value = true;
+  try {
+    const attachment = await run<QaAttachment>(() => api.post("/qa/attachments/image", form), "图片已上传");
+    if (attachment) target.push(attachment);
+  } finally {
+    if (scope === "class") classQaImageUploading.value = false;
+    else globalQaImageUploading.value = false;
+  }
+}
+
+async function askInClass() {
+  if ((!classQuestion.value.trim() && !classQaAttachments.value.length) || !classroomLesson.value || classThinking.value || classQaImageUploading.value) return;
+  const question = classQuestion.value.trim() || "请分析这张图片";
+  const attachments = classQaAttachments.value.map((item) => ({ ...item }));
+  classQuestion.value = "";
+  classQaAttachments.value = [];
+  classMessages.value.push({ id: Date.now(), role: "user", text: question, attachments });
+  const aiMessageId = Date.now() + 1;
+  const aiMessage: ChatMessage = { id: aiMessageId, role: "ai", text: "", thought: "", sources: [], streaming: true };
+  classMessages.value.push(aiMessage);
+  classThinking.value = true;
+  try {
+    await api.streamPost("/qa/ask/stream", {
+      course_id: classroomLesson.value.lesson.course_id,
+      conversation_id: classConversationId.value,
+      lesson_page_id: activePage.value?.id,
+      question,
+      attachments
+    }, (event, data) => {
+      applyQaStreamEvent(classMessages, aiMessageId, event, data);
+      if (event === "final") classConversationId.value = data.conversation_id;
+    });
+  } catch (error) {
+    const current = classMessages.value.find((message) => message.id === aiMessageId);
+    if (!current?.text) patchChatMessage(classMessages, aiMessageId, (message) => ({ ...message, text: "请求失败，请稍后重试。" }));
+    emit("notice", "error", (error as Error).message);
+  } finally {
+    patchChatMessage(classMessages, aiMessageId, (message) => ({ ...message, streaming: false }));
+    classThinking.value = false;
+  }
+}
 function sendQuickClass(text: string) { classQuestion.value = text; askInClass(); }
-async function askGlobal() { if (!globalQuestion.value.trim() || !selectedCourseId.value) return; const question = globalQuestion.value; globalQuestion.value = ""; globalMessages.value.push({ id: Date.now(), role: "user", text: question }); globalThinking.value = true; const data = await run<any>(() => api.post("/qa/ask", { course_id: selectedCourseId.value, conversation_id: globalConversationId.value, question })); globalThinking.value = false; if (data) { globalConversationId.value = data.conversation_id; globalMessages.value.push({ id: Date.now() + 1, role: "ai", text: data.answer, sources: data.sources || [], thought: "已检索课程知识库并整理答案结构。", record_id: data.record_id, outOfScope: data.is_out_of_scope }); await loadQaHistory(); } }
+async function askGlobal() {
+  if ((!globalQuestion.value.trim() && !globalQaAttachments.value.length) || !selectedCourseId.value || globalThinking.value || globalQaImageUploading.value) return;
+  const question = globalQuestion.value.trim() || "请分析这张图片";
+  const attachments = globalQaAttachments.value.map((item) => ({ ...item }));
+  globalQuestion.value = "";
+  globalQaAttachments.value = [];
+  globalMessages.value.push({ id: Date.now(), role: "user", text: question, attachments });
+  const aiMessageId = Date.now() + 1;
+  const aiMessage: ChatMessage = { id: aiMessageId, role: "ai", text: "", thought: "", sources: [], streaming: true };
+  globalMessages.value.push(aiMessage);
+  globalThinking.value = true;
+  try {
+    await api.streamPost("/qa/ask/stream", {
+      course_id: selectedCourseId.value,
+      conversation_id: globalConversationId.value,
+      question,
+      attachments
+    }, (event, data) => {
+      applyQaStreamEvent(globalMessages, aiMessageId, event, data);
+      if (event === "final") globalConversationId.value = data.conversation_id;
+    });
+    await loadQaHistory();
+  } catch (error) {
+    const current = globalMessages.value.find((message) => message.id === aiMessageId);
+    if (!current?.text) patchChatMessage(globalMessages, aiMessageId, (message) => ({ ...message, text: "请求失败，请稍后重试。" }));
+    emit("notice", "error", (error as Error).message);
+  } finally {
+    patchChatMessage(globalMessages, aiMessageId, (message) => ({ ...message, streaming: false }));
+    globalThinking.value = false;
+  }
+}
 function sendGlobalQuick(text: string) { globalQuestion.value = text; askGlobal(); }
 async function sendCourseQuick(text: string) { quickCourseQuestion.value = text; await askCourseQuick(); }
 async function askCourseQuick() { if (!quickCourseQuestion.value.trim()) return; globalQuestion.value = quickCourseQuestion.value; quickCourseQuestion.value = ""; await go("studentQa"); await askGlobal(); }
 async function loadQaHistory() { if (!selectedCourseId.value) return; qaHistory.value = (await run<any[]>(() => api.get("/qa/history", { course_id: selectedCourseId.value, keyword: qaKeyword.value }))) || []; }
-function reuseHistory(item: any) { historyOpen.value = false; globalMessages.value = [{ id: item.id * 2, role: "user", text: item.question }, { id: item.id * 2 + 1, role: "ai", text: item.answer, sources: item.sources || [], record_id: item.id, favorite: item.is_favorite }]; }
+function reuseHistory(item: any) { historyOpen.value = false; globalMessages.value = [{ id: item.id * 2, role: "user", text: item.question, attachments: item.attachments || [] }, { id: item.id * 2 + 1, role: "ai", text: item.answer, sources: item.sources || [], attachments: item.attachments || [], thought: item.thinking_process || item.reasoning_content || item.thought || "", record_id: item.id, favorite: item.is_favorite }]; }
 function toggleThought(message: ChatMessage) { message.thoughtOpen = !message.thoughtOpen; }
 async function favoriteQaMessage(message: ChatMessage) { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/favorite`, { is_favorite: !message.favorite }), "已收藏"); message.favorite = !message.favorite; }
 async function feedbackQaMessage(message: ChatMessage, feedback = "positive") { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/feedback`, { feedback }), "已评价"); }
@@ -600,19 +1339,75 @@ async function toggleGuide(level: number) { if (!guidance[level]) await loadGuid
 async function loadKnowledge() { if (!selectedCourseId.value) return; knowledge.value = (await run<any[]>(() => api.get("/learning/knowledge-points", { course_id: selectedCourseId.value, chapter_id: selectedChapterId.value || undefined }))) || []; if (!selectedKnowledgeId.value && knowledge.value[0]) selectedKnowledgeId.value = knowledge.value[0].id; weakPoints.value = (await run<any[]>(() => api.get("/learning/weak-points", { course_id: selectedCourseId.value }))) || []; if (!courseHome.value.course) await loadCourseHome(); }
 async function generateKnowledgeQuiz(count: number) { if (!selectedCourseId.value) return; await run(() => api.post("/learning/quizzes/generate", { course_id: selectedCourseId.value, chapter_id: selectedKnowledge.value?.chapter_id || undefined, title: `${selectedKnowledge.value?.name || '知识点'}练习`, quiz_type: "practice", question_count: count }), "已生成"); await go("studentQuizzes"); }
 
-async function loadQuizPage() { if (!selectedCourseId.value) return; quizzes.value = (await run<Quiz[]>(() => api.get("/learning/quizzes", { course_id: selectedCourseId.value }))) || []; if (!courseHome.value.course) await loadCourseHome(); }
-async function generateQuiz() { if (!selectedCourseId.value) return; const count = Number(quizQuestionCount.value.replace("题", "")); const chapter_id = selectedPracticeChapters.value[0] || selectedChapterId.value || undefined; await run(() => api.post("/learning/quizzes/generate", { course_id: selectedCourseId.value, chapter_id, title: "章节练习", quiz_type: "practice", question_count: count }), "已生成"); await loadQuizPage(); }
+async function loadQuizPage() { if (!selectedCourseId.value) return; quizzes.value = (await run<Quiz[]>(() => api.get("/learning/quizzes", { course_id: selectedCourseId.value }))) || []; if (!courseHome.value.course) await loadCourseHome(); await loadWrongBook(); }
+async function generateQuiz() {
+  if (!selectedCourseId.value || quizGenerating.value) return;
+  quizGenerating.value = true;
+  try {
+    const count = Number(quizQuestionCount.value.replace("题", ""));
+    const chapterIds = selectedPracticeChapters.value.length ? selectedPracticeChapters.value : (selectedChapterId.value ? [selectedChapterId.value] : []);
+    const quiz = await run<Quiz>(() => api.post("/learning/quizzes/generate", {
+      course_id: selectedCourseId.value,
+      chapter_id: chapterIds.length === 1 ? chapterIds[0] : undefined,
+      chapter_ids: chapterIds,
+      title: smartQuiz.value ? "薄弱点章节练习" : "章节练习",
+      quiz_type: "practice",
+      question_count: count,
+      prefer_weak_points: smartQuiz.value,
+    }), "已生成");
+    await loadQuizPage();
+    if (quiz) await startQuiz(quiz.id);
+  } finally {
+    quizGenerating.value = false;
+  }
+}
 async function startQuiz(id: number) { quizDetail.value = await run(() => api.get(`/learning/quizzes/${id}`)); Object.keys(quizAnswers).forEach((key) => delete quizAnswers[Number(key)]); attempt.value = null; answeringQuiz.value = true; }
 function setQuizAnswer(questionId: number, answer: any) { quizAnswers[questionId] = answer; }
-async function submitQuiz() { if (!quizDetail.value) return; const answers = Object.entries(quizAnswers).map(([question_id, answer]) => ({ question_id: Number(question_id), answer })); attempt.value = await run(() => api.post(`/learning/quizzes/${quizDetail.value.quiz.id}/submit`, { answers }), "已提交"); await loadWrongBook(); }
+async function submitQuiz() {
+  if (!quizDetail.value || quizSubmitting.value) return;
+  quizSubmitting.value = true;
+  try {
+    const answers = Object.entries(quizAnswers).map(([question_id, answer]) => ({ question_id: Number(question_id), answer }));
+    attempt.value = await run(() => api.post(`/learning/quizzes/${quizDetail.value.quiz.id}/submit`, { answers }), "已提交");
+    await loadWrongBook();
+  } finally {
+    quizSubmitting.value = false;
+  }
+}
 function togglePracticeChapter(id: number) { selectedPracticeChapters.value = selectedPracticeChapters.value.includes(id) ? selectedPracticeChapters.value.filter((item) => item !== id) : [...selectedPracticeChapters.value, id]; }
 
 async function loadWrongBook() { if (!selectedCourseId.value) return; wrongQuestions.value = (await run<any[]>(() => api.get("/learning/wrong-questions", { course_id: selectedCourseId.value }))) || []; weakPoints.value = (await run<any[]>(() => api.get("/learning/weak-points", { course_id: selectedCourseId.value }))) || []; }
-async function loadWrongPractice() { if (!selectedCourseId.value) return; const quiz = await run<Quiz>(() => api.post("/learning/wrong-questions/practice", undefined, { course_id: selectedCourseId.value }), "已生成"); if (quiz) { await loadQuizPage(); await startQuiz(quiz.id); await go("studentQuizzes"); } }
+async function loadWrongPractice() {
+  if (!selectedCourseId.value || wrongPracticeGenerating.value) return;
+  wrongPracticeGenerating.value = true;
+  try {
+    if (!wrongQuestions.value.length) await loadWrongBook();
+    if (!wrongQuestions.value.length) {
+      emit("notice", "info", "暂无错题可重练");
+      return;
+    }
+    const quiz = await run<Quiz>(() => api.post("/learning/wrong-questions/practice", undefined, { course_id: selectedCourseId.value }), "已生成");
+    if (quiz) { await loadQuizPage(); await startQuiz(quiz.id); await go("studentQuizzes"); }
+  } finally {
+    wrongPracticeGenerating.value = false;
+  }
+}
 function practiceWrong(_: any) { loadWrongPractice(); }
 
 async function loadPlans() { plans.value = (await run<any[]>(() => api.get("/learning/plans", { course_id: selectedCourseId.value || undefined }))) || []; if (plans.value[0]) tasks.value = (await run<any[]>(() => api.get(`/learning/plans/${plans.value[0].id}/tasks`))) || []; checkinDays.value = todayTasks.value.filter((task: any) => task.status === "done").map(() => new Date().toISOString().slice(0, 10)); await loadProfile(); }
-async function createPlan() { if (!selectedCourseId.value) return; const data = await run<any>(() => api.post("/learning/plans", { ...planForm, course_id: selectedCourseId.value }), "已生成"); if (data) { planModalOpen.value = false; tasks.value = data.tasks || []; await loadDashboard(); } }
+async function createPlan() {
+  if (planCreating.value) return;
+  if (!selectedCourseId.value) { emit("notice", "warning", "请先加入或选择课程"); return; }
+  if (!planForm.goal.trim()) { emit("notice", "warning", "请先输入学习目标"); return; }
+  planCreating.value = true;
+  const data = await run<any>(() => api.post("/learning/plans", { ...planForm, course_id: selectedCourseId.value }), "已生成");
+  planCreating.value = false;
+  if (data) {
+    planModalOpen.value = false;
+    tasks.value = data.tasks || [];
+    await loadDashboard();
+  }
+}
 async function checkinTask(id: number) { await run(() => api.post(`/learning/tasks/${id}/checkin`, { notes: "" }), "已打卡"); await loadDashboard(); await loadPlans(); }
 
 async function saveProfile() { const data = await run<any>(() => api.patch("/student/profile", { nickname: profileForm.nickname, avatar_url: profileForm.avatar_url, bio: profileForm.bio, school: profileForm.school }), "已保存"); if (data) profilePayload.value = data; }
@@ -623,13 +1418,33 @@ type SelectOption = { label: string; value: string | number; danger?: boolean };
 function normalizeItems(items: unknown[]): SelectOption[] {
   return items.map((item) => (typeof item === "string" ? { label: item, value: item } : item as SelectOption));
 }
-function optionText(value: unknown) {
+function optionText(value: unknown, question?: any) {
   if (value === null || value === undefined || value === "") return "-";
-  return typeof value === "number" ? String(value) : String(value);
+  const options = Array.isArray(question?.options) ? question.options : [];
+  const renderOne = (item: unknown) => {
+    const index = typeof item === "number" ? item : (typeof item === "string" && /^\d+$/.test(item) ? Number(item) : null);
+    if (index !== null && options[index] !== undefined) {
+      const raw = options[index];
+      const text = typeof raw === "object" ? raw.text || raw.label || JSON.stringify(raw) : String(raw);
+      return `${String.fromCharCode(65 + index)}. ${text}`;
+    }
+    return String(item);
+  };
+  return Array.isArray(value) ? value.map(renderOne).join("；") : renderOne(value);
 }
 function statusText(value: string) {
   const map: Record<string, string> = { published: "已发布", review: "待审核", draft: "草稿", active: "正常", done: "已完成", pending: "待处理" };
   return map[value] || value || "-";
+}
+function quizQuestionMeta(quiz: any) {
+  const count = quiz.question_count || quiz.questions_count || quiz.questions?.length || 0;
+  return count ? `${count}题` : `${quiz.total_score || 0}分`;
+}
+function quizScoreLabel(quiz: any) {
+  const attempt = quiz.latest_attempt || quiz.last_attempt || quiz.best_attempt;
+  if (attempt?.correct_count !== undefined && attempt?.total_count) return `${attempt.correct_count}/${attempt.total_count}`;
+  if (attempt?.score !== undefined) return `${Math.round(Number(attempt.score))}分`;
+  return statusText(quiz.status || "published");
 }
 
 const PageTitle = defineComponent({
@@ -638,6 +1453,18 @@ const PageTitle = defineComponent({
     return () => h("div", { class: "page-title-row" }, [
       h("div", [h("h1", p.title), p.sub ? h("p", p.sub) : null]),
       h("div", { class: "page-title-actions" }, slots.default?.())
+    ]);
+  }
+});
+
+const DefaultUserAvatar = defineComponent({
+  setup() {
+    return () => h("svg", { class: "default-user-avatar", viewBox: "0 0 64 64", role: "img", "aria-label": "默认头像" }, [
+      h("rect", { width: 64, height: 64, rx: 32, fill: "#EEF2FF" }),
+      h("circle", { cx: 32, cy: 25, r: 11, fill: "#6366F1", opacity: "0.95" }),
+      h("path", { d: "M16 53c2.8-10.2 9-15.4 16-15.4S45.2 42.8 48 53", fill: "#4F46E5", opacity: "0.92" }),
+      h("path", { d: "M48 12l1.8 4.4L54 18l-4.2 1.6L48 24l-1.8-4.4L42 18l4.2-1.6L48 12Z", fill: "#06B6D4" }),
+      h("path", { d: "M18 14l1.1 2.7L22 18l-2.9 1.3L18 22l-1.1-2.7L14 18l2.9-1.3L18 14Z", fill: "#8B5CF6" })
     ]);
   }
 });
@@ -688,10 +1515,10 @@ const RingBlock = defineComponent({
 const ActivityTimeline = defineComponent({
   props: { items: { type: Array as PropType<any[]>, default: () => [] } },
   setup(p) {
-    return () => h("article", { class: "panel-card activity-card" }, [
+    return () => h("article", { class: "profile-activity-card" }, [
       h("div", { class: "section-head" }, [h("h2", [h(Clock, { size: 18 }), "学习动态"])]),
       p.items.length
-        ? p.items.map((item) => h("div", { class: "timeline-item", key: `${item.type}-${item.title}-${item.time}` }, [
+        ? p.items.map((item) => h("div", { class: "profile-timeline-item", key: `${item.type}-${item.title}-${item.time}` }, [
           h("i"),
           h("strong", item.title || "学习记录"),
           h("time", relativeTime(item.time)),
@@ -717,9 +1544,21 @@ const SelectMenu = defineComponent({
   emits: ["update:modelValue"],
   setup(p, { emit: update }) {
     const open = ref(false);
+    const root = ref<HTMLElement | null>(null);
     const options = computed(() => normalizeItems(p.items));
     const current = computed(() => options.value.find((item) => item.value === p.modelValue)?.label || options.value[0]?.label || "请选择");
-    return () => h("div", { class: "select-menu" }, [
+    function close() { open.value = false; }
+    function onPointerDown(event: PointerEvent) { if (!root.value?.contains(event.target as Node)) close(); }
+    function onKeydown(event: KeyboardEvent) { if (event.key === "Escape") close(); }
+    onMounted(() => {
+      document.addEventListener("pointerdown", onPointerDown);
+      document.addEventListener("keydown", onKeydown);
+    });
+    onBeforeUnmount(() => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeydown);
+    });
+    return () => h("div", { ref: root, class: "select-menu" }, [
       h("button", { type: "button", onClick: () => { open.value = !open.value; } }, [h("span", current.value), h(ChevronDown, { size: 15 })]),
       h(Transition, { name: "popover" }, {
         default: () => open.value ? h("div", { class: "select-pop" }, options.value.map((item) =>
@@ -740,7 +1579,19 @@ const DropdownMenu = defineComponent({
   emits: ["select"],
   setup(p, { emit: update }) {
     const open = ref(false);
-    return () => h("div", { class: "dropdown-menu" }, [
+    const root = ref<HTMLElement | null>(null);
+    function close() { open.value = false; }
+    function onPointerDown(event: PointerEvent) { if (!root.value?.contains(event.target as Node)) close(); }
+    function onKeydown(event: KeyboardEvent) { if (event.key === "Escape") close(); }
+    onMounted(() => {
+      document.addEventListener("pointerdown", onPointerDown);
+      document.addEventListener("keydown", onKeydown);
+    });
+    onBeforeUnmount(() => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeydown);
+    });
+    return () => h("div", { ref: root, class: "dropdown-menu" }, [
       h("button", { type: "button", class: "dropdown-trigger", onClick: () => { open.value = !open.value; } }, [h(MoreHorizontal, { size: 16 })]),
       h(Transition, { name: "popover" }, {
         default: () => open.value ? h("div", { class: "dropdown-pop" }, p.items.map((item) =>
@@ -841,28 +1692,67 @@ const ChatList = defineComponent({
   },
   emits: ["toggle-thought", "copy", "favorite", "feedback"],
   setup(p, { emit: update }) {
+    function attachmentNodes(message: ChatMessage) {
+      if (!message.attachments?.length) return null;
+      return h("div", { class: "chat-attachments" }, message.attachments.map((item, index) => h("a", { key: `${item.url}-${index}`, href: item.url, target: "_blank", class: "chat-attachment" }, [
+        h("img", { src: item.url, alt: item.filename || "图片" }),
+        h("span", item.filename || `图片${index + 1}`)
+      ])));
+    }
     function bubble(message: ChatMessage) {
+      if (p.large && message.role === "user") {
+        return h("div", { class: "chat-bubble bubble-user" }, [h("p", message.text), attachmentNodes(message)]);
+      }
+      if (p.large && message.role === "ai") {
+        return h("div", { class: "chat-bubble bubble-ai" }, [
+          message.thought ? h("button", { type: "button", class: "thought-toggle thinking-process", onClick: () => update("toggle-thought", message) }, [h(Sparkles, { size: 13 }), "思考过程", h(ChevronDown, { size: 13, class: { rotate: message.thoughtOpen } })]) : null,
+          h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought markdown-body", innerHTML: renderRichText(message.thought) }) : null }),
+          h("div", { class: "ai-content-card" }, [
+            message.outOfScope ? h("span", { class: "tag tag-warning" }, "可能超纲") : null,
+            message.text
+              ? h("div", { class: "ai-text markdown-body", innerHTML: renderRichText(message.text) })
+              : h("div", { class: "ai-text streaming-placeholder" }, message.streaming ? "AI 正在生成..." : ""),
+            message.sources?.length ? h("div", { class: "source-tags references-area" }, [
+              h("span", { class: "source-label ref-label" }, [h(BookOpen, { size: 14 }), "引用来源："]),
+              ...message.sources.slice(0, 3).map((source, index) => h("span", { class: "tag ref-tag", key: index }, source.title || source.material_title || `来源${index + 1}`))
+            ]) : null,
+            h("div", { class: "msg-actions ai-action-bar" }, [
+              h("button", { type: "button", title: "复制", class: "ai-action-btn", disabled: !message.text, onClick: () => update("copy", message.text) }, [h(Copy, { size: 16 }), "复制"]),
+              !message.streaming && message.record_id ? h("button", { type: "button", title: message.favorite ? "已收藏" : "收藏", class: "ai-action-btn", onClick: () => update("favorite", message) }, [h(BookMarked, { size: 16 }), message.favorite ? "已收藏" : "收藏"]) : null,
+              !message.streaming && message.record_id ? h("button", { type: "button", title: "有用", class: "ai-action-btn success", onClick: () => update("feedback", message, "positive") }, [h(Check, { size: 16 }), "有用"]) : null
+            ])
+          ])
+        ]);
+      }
       const body = [
         message.thought ? h("button", { type: "button", class: "thought-toggle", onClick: () => update("toggle-thought", message) }, [h(Sparkles, { size: 13 }), "思考过程", h(ChevronDown, { size: 13, class: { rotate: message.thoughtOpen } })]) : null,
-        h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought" }, message.thought) : null }),
+        h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought markdown-body", innerHTML: renderRichText(message.thought) }) : null }),
         message.outOfScope ? h("span", { class: "tag tag-warning" }, "可能超纲") : null,
-        h("p", message.text),
-        message.sources?.length ? h("div", { class: "source-tags" }, message.sources.slice(0, 3).map((source, index) => h("span", { class: "tag", key: index }, source.title || source.material_title || `来源${index + 1}`))) : null,
+        message.role === "ai"
+          ? (message.text ? h("div", { class: "ai-text markdown-body", innerHTML: renderRichText(message.text) }) : h("div", { class: "ai-text streaming-placeholder" }, message.streaming ? "AI 正在生成..." : ""))
+          : [h("p", message.text), attachmentNodes(message)],
+        message.sources?.length ? h("div", { class: "source-tags" }, [
+          h("span", { class: "source-label" }, [h(BookOpen, { size: 14 }), "引用来源："]),
+          ...message.sources.slice(0, 3).map((source, index) => h("span", { class: "tag", key: index }, source.title || source.material_title || `来源${index + 1}`))
+        ]) : null,
         h("div", { class: "msg-actions" }, [
-          h("button", { type: "button", onClick: () => update("copy", message.text) }, [h(Copy, { size: 13 }), "复制"]),
-          message.role === "ai" ? h("button", { type: "button", onClick: () => update("favorite", message) }, [h(BookMarked, { size: 13 }), message.favorite ? "已藏" : "收藏"]) : null,
-          message.role === "ai" ? h("button", { type: "button", onClick: () => update("feedback", message, "positive") }, [h(Check, { size: 13 }), "有用"]) : null
+          h("button", { type: "button", title: "复制", disabled: !message.text, onClick: () => update("copy", message.text) }, [h(Copy, { size: 13 }), "复制"]),
+          message.role === "ai" && p.large && !message.streaming && message.record_id ? h("button", { type: "button", title: message.favorite ? "已收藏" : "收藏", onClick: () => update("favorite", message) }, [h(BookMarked, { size: 13 }), message.favorite ? "已收藏" : "收藏"]) : null,
+          message.role === "ai" && p.large && !message.streaming && message.record_id ? h("button", { type: "button", title: "有用", class: "success", onClick: () => update("feedback", message, "positive") }, [h(Check, { size: 13 }), "有用"]) : null
         ])
       ];
       return h("div", { class: "chat-bubble" }, body);
     }
     function avatar(message: ChatMessage) {
-      return h("span", { class: "chat-avatar" }, [message.role === "user" ? h(User, { size: 16 }) : h(Sparkles, { size: 16 })]);
+      return h("span", { class: ["chat-avatar", p.large ? (message.role === "user" ? "avatar-user" : "avatar-ai") : ""] }, [message.role === "user" ? h(User, { size: 16 }) : h(Sparkles, { size: 16 })]);
     }
-    return () => h("div", { class: ["chat-list", p.large ? "large" : ""] }, [
-      ...p.messages.map((message) => h("article", { key: message.id, class: ["chat-msg", message.role] }, message.role === "user" ? [bubble(message), avatar(message)] : [avatar(message), bubble(message)])),
-      p.thinking ? h("div", { class: "thinking ai-thinking-border" }, [h("i", { class: "dot-1" }), h("i", { class: "dot-2" }), h("i", { class: "dot-3" }), h("span", "AI 正在思考...")]) : null
+    return () => {
+      const hasStreamingMessage = p.messages.some((message) => message.streaming);
+      return h("div", { class: ["chat-list", p.large ? "large" : ""] }, [
+      ...p.messages.map((message) => h("article", { key: message.id, class: ["chat-msg", p.large ? "message-row" : "", message.role] }, message.role === "user" ? [bubble(message), avatar(message)] : [avatar(message), bubble(message)])),
+      p.thinking && !hasStreamingMessage ? h("div", { class: "thinking ai-thinking-border" }, [h("i", { class: "dot-1" }), h("i", { class: "dot-2" }), h("i", { class: "dot-3" }), h("span", "AI 正在思考...")]) : null
     ]);
+    };
   }
 });
 
@@ -930,7 +1820,8 @@ const QuizAnswerView = defineComponent({
   props: {
     quiz: { type: Object as PropType<any>, default: null },
     answers: { type: Object as PropType<Record<number, any>>, required: true },
-    attempt: { type: Object as PropType<any>, default: null }
+    attempt: { type: Object as PropType<any>, default: null },
+    submitting: { type: Boolean, default: false }
   },
   emits: ["answer", "submit", "exit"],
   setup(p, { emit: update }) {
@@ -938,17 +1829,24 @@ const QuizAnswerView = defineComponent({
     const marked = ref<number[]>([]);
     const confirming = ref(false);
     const elapsed = ref(0);
+    const analysisOpen = ref<Record<string, boolean>>({});
     let timer: number | undefined;
     onMounted(() => { timer = window.setInterval(() => { elapsed.value += 1; }, 1000); });
     onBeforeUnmount(() => { if (timer) window.clearInterval(timer); });
     const questions = computed(() => p.quiz?.questions || []);
     const quizMeta = computed(() => p.quiz?.quiz || {});
     const question = computed(() => questions.value[current.value] || null);
-    const answeredCount = computed(() => questions.value.filter((item: any) => p.answers[item.id] !== undefined && p.answers[item.id] !== "").length);
+    const answeredCount = computed(() => questions.value.filter((item: any) => hasAnswer(item)).length);
     const attemptData = computed(() => p.attempt?.attempt || p.attempt);
     const attemptAnswers = computed(() => p.attempt?.answers || []);
+    const unansweredCount = computed(() => Math.max(0, questions.value.length - answeredCount.value));
+    const progressPercent = computed(() => Math.round(((current.value + 1) / Math.max(questions.value.length, 1)) * 100));
     function answerValue(item: any) {
       return p.answers[item.id];
+    }
+    function hasAnswer(item: any) {
+      const value = p.answers[item.id];
+      return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== "";
     }
     function setAnswer(item: any, value: any) {
       if (item.question_type === "multiple_choice") {
@@ -961,7 +1859,27 @@ const QuizAnswerView = defineComponent({
     function optionLabel(index: number) {
       return String.fromCharCode(65 + index);
     }
+    function questionTypeLabel(type?: string) {
+      const map: Record<string, string> = {
+        single_choice: "单选题",
+        multiple_choice: "多选题",
+        judge: "判断题",
+        blank: "填空题",
+        short_answer: "简答题",
+      };
+      return map[String(type || "")] || "题目";
+    }
+    function difficultyLabel(value?: string) {
+      const map: Record<string, string> = {
+        easy: "基础难度",
+        standard: "标准难度",
+        medium: "标准难度",
+        hard: "进阶难度",
+      };
+      return map[String(value || "")] || String(value || "标准难度");
+    }
     function submit() {
+      if (p.submitting) return;
       confirming.value = false;
       update("submit");
     }
@@ -975,49 +1893,77 @@ const QuizAnswerView = defineComponent({
       if (!item) return null;
       const options = Array.isArray(item.options) ? item.options : [];
       if (["single_choice", "multiple_choice", "judge"].includes(item.question_type)) {
-        return h("div", { class: "option-list" }, options.map((option: any, index: number) => {
+        return h("div", { class: "exam-options-group" }, options.map((option: any, index: number) => {
           const value = index;
           const selected = item.question_type === "multiple_choice" ? (answerValue(item) || []).includes(value) : answerValue(item) === value;
-          return h("button", { type: "button", class: ["option-btn", selected ? "active" : ""], onClick: () => setAnswer(item, value) }, [
-            h("span", optionLabel(index)),
-            h("strong", typeof option === "object" ? option.text || option.label || JSON.stringify(option) : String(option))
+          return h("label", { class: "exam-opt-label" }, [
+            h("input", {
+              type: item.question_type === "multiple_choice" ? "checkbox" : "radio",
+              name: `question-${item.id}`,
+              class: "exam-opt-input",
+              checked: selected,
+              onChange: () => setAnswer(item, value)
+            }),
+            h("div", { class: "exam-opt-card" }, [
+              h("div", { class: "exam-opt-letter" }, optionLabel(index)),
+              h("div", { class: "exam-opt-text" }, typeof option === "object" ? option.text || option.label || JSON.stringify(option) : String(option))
+            ])
           ]);
         }));
       }
       if (item.question_type === "blank") {
-        return h("input", { class: "input answer-input", value: answerValue(item) || "", placeholder: "填写答案", onInput: (event: Event) => setAnswer(item, (event.target as HTMLInputElement).value) });
+        return h("input", { class: "exam-answer-input", value: answerValue(item) || "", placeholder: "填写答案", onInput: (event: Event) => setAnswer(item, (event.target as HTMLInputElement).value) });
       }
-      return h("div", [h("textarea", { class: "textarea answer-textarea", value: answerValue(item) || "", maxlength: 500, placeholder: "写下你的答案", onInput: (event: Event) => setAnswer(item, (event.target as HTMLTextAreaElement).value) }), h("small", `${String(answerValue(item) || "").length} / 500`)]);
+      return h("div", { class: "exam-text-answer" }, [
+        h("textarea", { class: "exam-answer-textarea", value: answerValue(item) || "", maxlength: 500, placeholder: "写下你的答案", onInput: (event: Event) => setAnswer(item, (event.target as HTMLTextAreaElement).value) }),
+        h("small", `${String(answerValue(item) || "").length} / 500`)
+      ]);
     }
     function renderResult() {
       const accuracy = Number(attemptData.value?.accuracy || 0);
-      return h("section", { class: "answer-shell result-shell" }, [
-        h("header", { class: "answer-head" }, [
-          h("button", { type: "button", class: "btn btn-secondary", onClick: () => update("exit") }, [h(ArrowLeft, { size: 16 }), "返回"]),
-          h("strong", quizMeta.value.title || "练习结果"),
-          h("span", timeLabel(elapsed.value))
+      const rowOpen = (row: any) => analysisOpen.value[String(row.question_id)] ?? !row.is_correct;
+      const toggleRow = (row: any) => {
+        const key = String(row.question_id);
+        analysisOpen.value = { ...analysisOpen.value, [key]: !rowOpen(row) };
+      };
+      return h("section", { class: "exam-shell exam-result-shell" }, [
+        h("header", { class: "exam-header" }, [
+          h("button", { type: "button", class: "exam-exit-btn", onClick: () => update("exit") }, [h(ArrowLeft, { size: 18 }), "返回练习"]),
+          h("div", { class: "exam-title" }, quizMeta.value.title || "练习结果"),
+          h("div", { class: "timer-widget" }, [h(Clock, { size: 16 }), h("span", { class: "timer-text" }, timeLabel(elapsed.value))])
         ]),
-        h("main", { class: "result-main" }, [
-          h("article", { class: "result-card" }, [
+        h("main", { class: "exam-result-main" }, [
+          h("article", { class: "exam-result-card" }, [
             accuracy >= 60 ? h(CheckCircle, { size: 48 }) : h(XCircle, { size: 48 }),
             h("strong", String(Math.round(Number(attemptData.value?.score || 0)))),
             h("span", `分 / ${Math.round(Number(attemptData.value?.total_score || quizMeta.value.total_score || 100))} 分`),
             h("em", scoreLevel(accuracy)),
             h("small", `用时 ${timeLabel(elapsed.value)} · 正确率 ${accuracy}%`)
           ]),
-          h("article", { class: "panel-card result-grid" }, [
-            h(RingBlock, { label: "正确率", value: accuracy, text: `${accuracy}%`, sub: "本次" }),
+          h("article", { class: "exam-result-summary" }, [
             h("div", [h("h2", [h(Sparkles, { size: 18 }), "AI 建议"]), h("p", attemptData.value?.ai_feedback || "复盘错题，并回看对应知识点。")])
           ]),
-          h("article", { class: "panel-card answer-analysis" }, [
-            h("div", { class: "section-head" }, [h("h2", "题目解析")]),
+          h("article", { class: "exam-analysis-card" }, [
+            h("div", { class: "exam-analysis-head" }, [h("h2", "题目解析")]),
             attemptAnswers.value.length
-              ? attemptAnswers.value.map((row: any, index: number) => h("details", { key: row.question_id, open: !row.is_correct }, [
-                h("summary", [row.is_correct ? h(CheckCircle, { size: 16 }) : h(XCircle, { size: 16 }), `题目 ${index + 1}`, h("span", row.is_correct ? "正确" : "错误")]),
-                h("p", row.question?.stem || ""),
-                h("small", `你的答案：${optionText(row.user_answer)} · 正确答案：${optionText(row.correct_answer)}`),
-                h("div", row.feedback || row.question?.explanation || "暂无解析")
-              ]))
+              ? attemptAnswers.value.map((row: any, index: number) => {
+                const open = rowOpen(row);
+                return h("div", { key: row.question_id, class: ["exam-analysis-item", open ? "open" : ""] }, [
+                  h("button", { type: "button", class: "exam-analysis-trigger", onClick: () => toggleRow(row) }, [
+                    row.is_correct ? h(CheckCircle, { size: 16 }) : h(XCircle, { size: 16 }),
+                    `题目 ${index + 1}`,
+                    h("span", row.is_correct ? "正确" : "错误"),
+                    h(ChevronDown, { size: 15 })
+                  ]),
+                  h(Transition, { name: "accordion" }, {
+                    default: () => open ? h("section", { class: "exam-analysis-body" }, [
+                      h("p", row.question?.stem || ""),
+                      h("small", `你的答案：${optionText(row.user_answer, row.question)} · 正确答案：${optionText(row.correct_answer, row.question)}`),
+                      h("div", row.feedback || row.question?.explanation || "暂无解析")
+                    ]) : null
+                  })
+                ]);
+              })
               : h("p", attemptData.value?.ai_feedback || "提交完成")
           ])
         ])
@@ -1026,47 +1972,67 @@ const QuizAnswerView = defineComponent({
     return () => {
       if (p.attempt) return renderResult();
       const item = question.value;
-      if (!item) return h("div", { class: "answer-shell" }, [h(EmptyState, { text: "暂无题目" })]);
-      const unanswered = questions.value.filter((entry: any) => p.answers[entry.id] === undefined || p.answers[entry.id] === "").map((entry: any, index: number) => index + 1);
-      return h("section", { class: "answer-shell" }, [
-        h("header", { class: "answer-head" }, [
-          h("button", { type: "button", class: "btn btn-secondary", onClick: () => update("exit") }, [h(ArrowLeft, { size: 16 }), "退出"]),
-          h("strong", quizMeta.value.title || "练习"),
-          h("span", [h(Clock, { size: 15 }), timeLabel(elapsed.value)])
+      if (!item) return h("div", { class: "exam-shell exam-empty-shell" }, [h(EmptyState, { text: "暂无题目" })]);
+      const unanswered = questions.value.filter((entry: any) => !hasAnswer(entry)).map((entry: any, index: number) => index + 1);
+      return h("section", { class: "exam-shell" }, [
+        h("header", { class: "exam-header" }, [
+          h("button", { type: "button", class: "exam-exit-btn", onClick: () => update("exit") }, [h(ArrowLeft, { size: 18 }), "退出练习"]),
+          h("div", { class: "exam-title" }, quizMeta.value.title || "章节练习"),
+          h("div", { class: "timer-widget" }, [h(Clock, { size: 16 }), h("span", { class: "timer-text" }, timeLabel(elapsed.value))])
         ]),
-        h("main", { class: "answer-body" }, [
-          h("aside", { class: "question-nav" }, [
-            h("div", { class: "answer-stat" }, [h("span", `已答 ${answeredCount.value}`), h("span", `标记 ${marked.value.length}`), h("span", `未答 ${Math.max(0, questions.value.length - answeredCount.value)}`)]),
-            h("div", { class: "q-grid" }, questions.value.map((entry: any, index: number) => h("button", {
+        h("main", { class: "exam-container" }, [
+          h("aside", { class: "exam-nav-sidebar" }, [
+            h("div", { class: "exam-nav-card" }, [
+              h("div", { class: "exam-nav-stats" }, [
+                h("div", { class: "exam-stat-item" }, [h("span", { class: "exam-stat-val" }, String(answeredCount.value)), h("span", { class: "exam-stat-label" }, [h("i", { class: "exam-dot exam-dot-answered" }), "已答"])]),
+                h("div", { class: "exam-stat-item" }, [h("span", { class: "exam-stat-val" }, String(marked.value.length)), h("span", { class: "exam-stat-label" }, [h("i", { class: "exam-dot exam-dot-marked" }), "标记"])]),
+                h("div", { class: "exam-stat-item" }, [h("span", { class: "exam-stat-val" }, String(unansweredCount.value)), h("span", { class: "exam-stat-label" }, [h("i", { class: "exam-dot exam-dot-unanswered" }), "未答"])])
+              ]),
+              h("div", { class: "exam-q-grid" }, questions.value.map((entry: any, index: number) => h("button", {
               type: "button",
-              class: { answered: p.answers[entry.id] !== undefined && p.answers[entry.id] !== "", current: index === current.value, marked: marked.value.includes(entry.id) },
+                class: ["exam-q-btn", hasAnswer(entry) ? "answered" : "", index === current.value ? "current" : "", marked.value.includes(entry.id) ? "marked" : ""],
               onClick: () => { current.value = index; }
-            }, String(index + 1))))
+              }, String(index + 1))))
+            ])
           ]),
-          h("article", { class: "question-card" }, [
-            h("div", { class: "question-meta" }, [
-              h("span", { class: "tag tag-primary" }, `题目 ${current.value + 1}`),
-              h("span", { class: "tag" }, item.question_type || "题目"),
-              h("span", { class: "tag tag-warning" }, item.difficulty || "standard"),
-              h("button", { type: "button", class: "link-btn", onClick: () => { marked.value = marked.value.includes(item.id) ? marked.value.filter((id) => id !== item.id) : [...marked.value, item.id]; } }, [h(BookMarked, { size: 14 }), marked.value.includes(item.id) ? "取消标记" : "标记"])
+          h("section", { class: "exam-question-area" }, [
+            h("article", { class: "exam-q-card" }, [
+              h("div", { class: "exam-q-meta-row" }, [
+                h("div", { class: "exam-q-tags" }, [
+                  h("span", { class: "exam-q-number" }, `题目 ${current.value + 1}`),
+                  h("span", { class: "exam-tag exam-tag-type" }, questionTypeLabel(item.question_type)),
+                  h("span", { class: "exam-tag exam-tag-diff" }, difficultyLabel(item.difficulty))
+                ]),
+                h("button", { type: "button", class: ["exam-mark-btn", marked.value.includes(item.id) ? "is-marked" : ""], onClick: () => { marked.value = marked.value.includes(item.id) ? marked.value.filter((id) => id !== item.id) : [...marked.value, item.id]; } }, [
+                  h(Flag, { size: 16 }),
+                  marked.value.includes(item.id) ? "已标记" : "标记稍后看"
+                ])
             ]),
-            h("h2", item.stem),
-            renderQuestionBody(item)
+              h("div", { class: "exam-q-stem" }, item.stem),
+              renderQuestionBody(item)
+            ])
           ])
         ]),
-        h("footer", { class: "answer-foot" }, [
-          h("button", { type: "button", class: "btn btn-secondary", disabled: current.value <= 0, onClick: () => { current.value = Math.max(0, current.value - 1); } }, [h(ArrowLeft, { size: 16 }), "上一题"]),
-          h("span", `第 ${current.value + 1} / ${questions.value.length} 题`),
-          h("button", { type: "button", class: "btn btn-secondary", disabled: current.value >= questions.value.length - 1, onClick: () => { current.value = Math.min(questions.value.length - 1, current.value + 1); } }, [h(ChevronRight, { size: 16 }), "下一题"]),
-          h("button", { type: "button", class: "btn btn-primary", onClick: () => { confirming.value = true; } }, [h(CheckCircle, { size: 16 }), "提交"])
+        h("footer", { class: "exam-action-footer" }, [
+          h("div", { class: "exam-footer-container" }, [
+            h("button", { type: "button", class: "exam-btn exam-btn-outline", disabled: current.value <= 0, onClick: () => { current.value = Math.max(0, current.value - 1); } }, [h(ArrowLeft, { size: 18 }), "上一题"]),
+            h("div", { class: "exam-footer-progress" }, [
+              h("span", { class: "exam-prog-text" }, `第 ${current.value + 1} / ${questions.value.length} 题`),
+              h("div", { class: "exam-prog-bar" }, [h("div", { class: "exam-prog-fill", style: { width: `${progressPercent.value}%` } })])
+            ]),
+            h("div", { class: "exam-footer-actions" }, [
+              h("button", { type: "button", class: "exam-btn exam-btn-outline", disabled: current.value >= questions.value.length - 1, onClick: () => { current.value = Math.min(questions.value.length - 1, current.value + 1); } }, ["下一题", h(ArrowRight, { size: 18 })]),
+              h("button", { type: "button", class: "exam-btn exam-btn-primary", disabled: p.submitting, "data-loading": p.submitting, onClick: () => { confirming.value = true; } }, [h(Check, { size: 16 }), "交卷"])
+            ])
+          ])
         ]),
         h(Transition, { name: "modal-pop" }, {
-          default: () => confirming.value ? h("div", { class: "modal-mask" }, [
-            h("article", { class: "join-modal confirm-card" }, [
-              h("div", { class: "modal-head" }, [h(AlertTriangle, { size: 22 }), h("h2", "确认提交"), h("button", { type: "button", onClick: () => { confirming.value = false; } }, [h(X, { size: 16 })])]),
+          default: () => confirming.value ? h("div", { class: "exam-modal-mask" }, [
+            h("article", { class: "exam-confirm-card" }, [
+              h("div", { class: "exam-modal-head" }, [h(AlertTriangle, { size: 22 }), h("h2", "确认交卷"), h("button", { type: "button", onClick: () => { confirming.value = false; } }, [h(X, { size: 16 })])]),
               h("p", unanswered.length ? `还有 ${unanswered.length} 道未答` : "所有题目已作答"),
               marked.value.length ? h("p", `已标记 ${marked.value.length} 道`) : null,
-              h("footer", [h("button", { type: "button", class: "btn btn-ghost", onClick: () => { confirming.value = false; } }, "继续作答"), h("button", { type: "button", class: "btn btn-primary", onClick: submit }, "确认提交")])
+              h("footer", [h("button", { type: "button", class: "exam-btn exam-btn-outline", disabled: p.submitting, onClick: () => { confirming.value = false; } }, "继续作答"), h("button", { type: "button", class: "exam-btn exam-btn-primary", disabled: p.submitting, "data-loading": p.submitting, onClick: submit }, "确认交卷")])
             ])
           ]) : null
         })
@@ -1100,36 +2066,6 @@ const WrongCard = defineComponent({
   }
 });
 
-const CalendarCard = defineComponent({
-  props: { checkins: { type: Array as PropType<string[]>, default: () => [] } },
-  setup(p) {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
-    const days = new Date(year, month + 1, 0).getDate();
-    return () => h("article", { class: "panel-card calendar-card" }, [
-      h("div", { class: "calendar-head" }, [h("strong", `${month + 1}月`), h("span", `${year}`)]),
-      h("div", { class: "calendar-grid" }, Array.from({ length: days }, (_, index) => {
-        const day = index + 1;
-        const iso = new Date(year, month, day).toISOString().slice(0, 10);
-        return h("span", { class: { done: p.checkins.includes(iso), today: day === today.getDate() } }, String(day));
-      }))
-    ]);
-  }
-});
-
-const TaskRow = defineComponent({
-  props: { task: { type: Object as PropType<any>, required: true } },
-  emits: ["checkin"],
-  setup(p, { emit: update }) {
-    return () => h("div", { class: ["task-row", p.task.status === "done" ? "done" : ""] }, [
-      h("button", { type: "button", onClick: () => update("checkin") }, [p.task.status === "done" ? h(Check, { size: 16 }) : null]),
-      h("div", [h("strong", p.task.title), h("small", `${p.task.estimated_minutes || 30} 分钟`)]),
-      h("span", { class: "tag" }, p.task.task_type || "学习")
-    ]);
-  }
-});
-
 const PopoverButton = defineComponent({
   props: {
     label: { type: String, required: true },
@@ -1138,7 +2074,19 @@ const PopoverButton = defineComponent({
   emits: ["select"],
   setup(p, { emit: update }) {
     const open = ref(false);
-    return () => h("div", { class: "popover-button select-menu" }, [
+    const root = ref<HTMLElement | null>(null);
+    function close() { open.value = false; }
+    function onPointerDown(event: PointerEvent) { if (!root.value?.contains(event.target as Node)) close(); }
+    function onKeydown(event: KeyboardEvent) { if (event.key === "Escape") close(); }
+    onMounted(() => {
+      document.addEventListener("pointerdown", onPointerDown);
+      document.addEventListener("keydown", onKeydown);
+    });
+    onBeforeUnmount(() => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeydown);
+    });
+    return () => h("div", { ref: root, class: "popover-button select-menu" }, [
       h("button", { type: "button", onClick: () => { open.value = !open.value; } }, [p.label, h(ChevronDown, { size: 14 })]),
       h(Transition, { name: "popover" }, {
         default: () => open.value ? h("div", { class: "select-pop" }, p.items.map((item) => h("button", { type: "button", key: item.value, onClick: () => { update("select", String(item.value)); open.value = false; } }, item.label))) : null
@@ -1147,8 +2095,33 @@ const PopoverButton = defineComponent({
   }
 });
 
-onMounted(async () => { await loadCourses(); await loadActive(); });
-onBeforeUnmount(() => { stopStudyClock(); if (chromeTimer) clearTimeout(chromeTimer); if (joinTimer) clearTimeout(joinTimer); if (noteTimer) clearTimeout(noteTimer); });
+function onStudentDocumentPointerDown(event: PointerEvent) {
+  const target = event.target as Node;
+  if (topActionsRef.value?.contains(target) || noticePopRef.value?.contains(target) || userPopRef.value?.contains(target)) return;
+  noticeOpen.value = false;
+  userMenuOpen.value = false;
+}
+function onStudentDocumentKeydown(event: KeyboardEvent) {
+  if (event.key !== "Escape") return;
+  noticeOpen.value = false;
+  userMenuOpen.value = false;
+  settingsOpen.value = false;
+}
+
+onMounted(async () => {
+  document.addEventListener("pointerdown", onStudentDocumentPointerDown);
+  document.addEventListener("keydown", onStudentDocumentKeydown);
+  await loadCourses();
+  await loadActive();
+});
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", onStudentDocumentPointerDown);
+  document.removeEventListener("keydown", onStudentDocumentKeydown);
+  stopStudyClock();
+  if (chromeTimer) clearTimeout(chromeTimer);
+  if (joinTimer) clearTimeout(joinTimer);
+  if (noteTimer) clearTimeout(noteTimer);
+});
 </script>
 
 <style scoped>
@@ -1160,11 +2133,11 @@ onBeforeUnmount(() => { stopStudyClock(); if (chromeTimer) clearTimeout(chromeTi
 .top-actions { display: flex; align-items: center; gap: 10px; }
 .top-icon, .avatar-btn, .modal-head button { position: relative; display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-full); background: white; color: var(--color-text-secondary); box-shadow: var(--shadow-sm); }
 .top-icon em { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 16px; }
-.avatar-btn span { width: 40px; height: 40px; border-radius: 50%; border: 2px solid white; background: var(--color-ai-gradient); color: white; font-weight: 700; }
+.avatar-btn img, .avatar-btn .default-user-avatar { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .global-search { position: fixed; inset: 0; z-index: var(--z-modal); height: 64px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; background: white; padding: 0 32px; }
 .global-search input { border: 0; outline: 0; font-size: 18px; }
 .global-search button { border: 0; background: transparent; color: var(--color-text-muted); }
-.notice-pop, .user-pop { position: fixed; top: 58px; right: 24px; z-index: var(--z-dropdown); width: 360px; border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-lg); padding: 10px; }
+.notice-pop, .user-pop { position: fixed; top: 58px; right: 24px; z-index: var(--z-popover); width: 360px; border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-lg); padding: 10px; }
 .user-pop { width: 220px; display: grid; gap: 4px; }
 .user-pop button, .notice-item { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-body); padding: 10px; text-align: left; }
 .user-card { border-bottom: 1px solid var(--color-border-subtle); padding: 10px; }
@@ -1188,8 +2161,8 @@ onBeforeUnmount(() => { stopStudyClock(); if (chromeTimer) clearTimeout(chromeTi
 .continue-card section { display: grid; align-content: center; gap: 8px; padding: 22px; }.continue-card h2 { margin: 0; color: var(--color-text-primary); font-size: 17px; }
 .continue-card p, .continue-card small { margin: 0; color: var(--color-text-muted); }
 .empty-continue { justify-items: start; }
-.home-grid, .course-layout, .tutoring-grid, .plans-grid { display: grid; grid-template-columns: 55fr 45fr; gap: 16px; }
-.panel-card, .ai-reco, .course-tools, .student-course-card, .knowledge-head, .knowledge-body, .wrong-hero, .plan-hero, .profile-hero, .badge-card { border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-sm); padding: 18px; }
+.home-grid, .course-layout, .tutoring-grid { display: grid; grid-template-columns: 55fr 45fr; gap: 16px; }
+.panel-card, .course-tools, .student-course-card, .knowledge-head, .knowledge-body, .wrong-hero, .profile-hero, .badge-card { border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-sm); padding: 18px; }
 .section-head, .page-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .section-head h2, .page-title-row h1 { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-text-primary); font-size: var(--text-h3); }
 .page-title-row p { margin: 4px 0 0; color: var(--color-text-muted); }
@@ -1205,16 +2178,18 @@ onBeforeUnmount(() => { stopStudyClock(); if (chromeTimer) clearTimeout(chromeTi
 .week-check span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px dashed var(--color-border-strong); color: var(--color-text-muted); }
 .week-check .done { border: 0; background: var(--color-primary-600); color: white; }.week-check .today { animation: pulse-ring var(--duration-slow) var(--ease-in-out) infinite; }
 .streak { display: flex; align-items: center; gap: 6px; margin-top: 12px; color: var(--color-warning-700); }
-.ai-reco { display: grid; grid-template-columns: 1fr 320px; gap: 16px; background: var(--color-ai-light); border-left: 4px solid #8B5CF6; }
-.ai-reco section { display: flex; gap: 12px; }.ai-reco h2 { margin: 0; color: var(--color-text-primary); }.ai-reco p { color: var(--color-text-body); line-height: 1.7; }
-.ai-reco aside { display: grid; gap: 10px; }.ai-reco aside button { display: grid; grid-template-columns: auto 1fr; gap: 8px; border: 1px solid var(--color-ai-border); border-radius: var(--radius-lg); background: white; padding: 12px; text-align: left; }.ai-reco aside span { grid-column: 2; color: var(--color-primary-700); }
-.activity-card { display: grid; gap: 12px; }.timeline-item { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; position: relative; }.timeline-item::before { content: ""; position: absolute; left: 8px; top: 18px; bottom: -14px; width: 1px; background: var(--color-border-default); }.timeline-item i { width: 9px; height: 9px; border-radius: 50%; background: var(--color-primary-600); margin-top: 6px; }.timeline-item strong { color: var(--color-text-primary); }.timeline-item p, .timeline-item time { margin: 0; color: var(--color-text-muted); font-size: 12px; }
+.profile-activity-card { display: grid; gap: 12px; }
+.profile-timeline-item { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; position: relative; }
+.profile-timeline-item::before { content: ""; position: absolute; left: 8px; top: 18px; bottom: -14px; width: 1px; background: var(--color-border-default); }
+.profile-timeline-item i { width: 9px; height: 9px; border-radius: 50%; background: var(--color-primary-600); margin-top: 6px; }
+.profile-timeline-item strong { color: var(--color-text-primary); }
+.profile-timeline-item p, .profile-timeline-item time { margin: 0; color: var(--color-text-muted); font-size: 12px; }
 .course-tools { display: grid; grid-template-columns: 220px 160px 1fr; align-items: center; gap: 12px; }
 .pretty-input { display: flex; align-items: center; gap: 8px; height: 38px; border: 1px solid var(--color-border-default); border-radius: var(--radius-full); background: white; padding: 0 12px; }
 .pretty-input input { width: 100%; border: 0; outline: 0; }
 .select-menu, .dropdown-menu { position: relative; }
 .select-menu > button, .dropdown-trigger { min-height: 38px; display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; border: 1px solid var(--color-border-default); border-radius: var(--radius-full); background: white; color: var(--color-text-body); padding: 0 12px; }
-.select-pop, .dropdown-pop { position: absolute; top: calc(100% + 6px); z-index: var(--z-dropdown); min-width: 180px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 6px; }
+.select-pop, .dropdown-pop { position: absolute; top: calc(100% + 6px); z-index: var(--z-popover); min-width: 180px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 6px; transform-origin: top center; animation: popover-in var(--duration-fast) var(--ease-out) both; will-change: opacity, transform; }
 .select-pop button, .dropdown-pop button { width: 100%; min-height: 34px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-body); padding: 0 10px; text-align: left; }.select-pop button.active, .select-pop button:hover, .dropdown-pop button:hover { background: var(--color-primary-50); color: var(--color-primary-700); }.dropdown-pop .danger { color: var(--color-danger-700); }
 .course-select { min-width: 180px; }.select-menu-empty { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; border: 1px solid var(--color-border-default); border-radius: var(--radius-full); background: white; color: var(--color-primary-700); padding: 0 12px; }
 .underline-tabs, .seg-tabs, .study-tabs, .profile-tabs { display: flex; gap: 14px; border-bottom: 1px solid var(--color-border-default); }
@@ -1224,11 +2199,11 @@ onBeforeUnmount(() => { stopStudyClock(); if (chromeTimer) clearTimeout(chromeTi
 .student-course-card { overflow: hidden; padding: 0; transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out); }
 .course-art { position: relative; aspect-ratio: 16/9; display: grid; place-items: center; color: white; }.course-art svg { transition: transform var(--duration-base) var(--ease-out); }.student-course-card:hover .course-art > svg { transform: scale(1.05); }
 .course-art span, .course-art em { position: absolute; bottom: 12px; border-radius: var(--radius-full); background: rgba(255,255,255,0.22); backdrop-filter: blur(8px); color: white; padding: 4px 8px; font-style: normal; }.course-art span { left: 12px; }.course-art em { right: 12px; display: flex; align-items: center; gap: 4px; }
-.course-art .dropdown-menu { position: absolute; top: 12px; right: 12px; width: 34px; }.course-art .dropdown-trigger { width: 34px; height: 34px; min-height: 34px; padding: 0; border: 0; background: rgba(255,255,255,0.2); color: white; }
+.course-art .dropdown-menu { position: absolute; top: 12px; right: 12px; width: auto; }.course-art .dropdown-trigger { width: 38px; height: 38px; min-height: 38px; justify-content: center; padding: 0; border: 1px solid rgba(255,255,255,0.56); border-radius: 50%; background: rgba(255,255,255,0.22); color: white; }
 .student-course-card section { padding: 18px; }.student-course-card h2 { margin: 0; color: var(--color-text-primary); font-size: 16px; }.student-course-card p, .course-meta { display: flex; align-items: center; gap: 6px; color: var(--color-text-muted); font-size: 13px; }.course-meta { justify-content: space-between; }
 .mini-data { display: flex; gap: 16px; color: var(--color-text-secondary); font-size: 13px; margin: 12px 0; }.mini-data span { display: flex; align-items: center; gap: 5px; }
 .full { width: 100%; }
-.course-hero-student { min-height: 180px; display: grid; grid-template-columns: 1fr 180px; align-items: center; gap: 24px; border-radius: 24px; color: white; padding: 32px; overflow: hidden; }.course-hero-student h1 { margin: 0; font-size: 26px; }.course-hero-student p, .course-hero-student div { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,0.78); }.course-hero-student progress { width: 100px; accent-color: var(--color-success-500); }.slide-mini { width: 120px; height: 90px; display: grid; place-items: center; border-radius: 12px; background: white; color: var(--color-text-primary); box-shadow: 0 8px 32px rgba(0,0,0,0.35); transform: rotate(-3deg); transition: transform var(--duration-base) var(--ease-out); }.slide-mini:hover { transform: rotate(0) scale(1.03); }
+.course-hero-student { min-height: 180px; display: grid; grid-template-columns: 1fr 180px; align-items: center; gap: 24px; border-radius: 24px; color: white; padding: 32px; overflow: hidden; }.course-hero-student h1 { margin: 0; font-size: 26px; }.course-hero-student p, .course-hero-student div { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,0.78); }.course-hero-student .hero-progress { width: 100px; background: rgba(255,255,255,0.28); }.slide-mini { width: 120px; height: 90px; display: grid; place-items: center; border-radius: 12px; background: white; color: var(--color-text-primary); box-shadow: 0 8px 32px rgba(0,0,0,0.35); transform: rotate(-3deg); transition: transform var(--duration-base) var(--ease-out); }.slide-mini:hover { transform: rotate(0) scale(1.03); }
 .quick-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }.quick-tile { min-height: 80px; display: grid; justify-items: start; gap: 4px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 14px; text-align: left; transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), border-color var(--duration-fast) var(--ease-out); }.quick-tile span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--color-primary-50); color: var(--color-primary-700); }.quick-tile strong { color: var(--color-text-primary); }
 .course-layout { grid-template-columns: 60fr 40fr; align-items: start; }.course-layout > section, .course-layout > aside { display: grid; gap: 16px; }
 .lesson-item { position: relative; display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 12px; width: 100%; min-height: 72px; border: 0; border-bottom: 1px solid var(--color-border-subtle); background: white; text-align: left; padding: 8px; }.lesson-item.current { background: var(--color-primary-50); box-shadow: inset 3px 0 0 var(--color-primary-600); }.lesson-item b { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px; background: var(--color-primary-50); color: var(--color-primary-700); }.lesson-item strong { color: var(--color-text-primary); }.lesson-item small { color: var(--color-text-muted); }
@@ -1236,24 +2211,33 @@ onBeforeUnmount(() => { stopStudyClock(); if (chromeTimer) clearTimeout(chromeTi
 .data-grid, .achievement-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }.mini-metric { min-height: 68px; display: grid; grid-template-columns: auto 1fr; gap: 6px; border-radius: 8px; background: var(--color-bg-muted); padding: 12px; }.mini-metric strong { color: var(--color-text-primary); font-size: 22px; }.mini-metric span { color: var(--color-text-muted); font-size: 11px; }.mini-metric.success svg { color: var(--color-success-500); }.mini-metric.ai svg { color: #8B5CF6; }.mini-metric.danger svg { color: var(--color-danger-500); }.mini-metric.warning svg { color: var(--color-warning-500); }
 .ask-card { display: grid; gap: 10px; border-radius: var(--radius-xl); background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(139,92,246,0.1)); border-left: 4px solid #8B5CF6; padding: 18px; }.ask-card h2 { margin: 0; color: var(--color-text-primary); }.ask-card form, .chat-input { display: grid; grid-template-columns: 1fr auto; gap: 8px; border: 1px solid var(--color-border-default); border-radius: var(--radius-full); background: white; padding: 6px; }.ask-card input, .chat-input textarea { border: 0; outline: 0; resize: none; padding: 6px 10px; }.ask-card button:not(.quick-tags button), .send-btn { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--color-primary-600); color: white; }
 .quick-tags { display: flex; gap: 8px; overflow-x: auto; }.quick-tags button { border: 1px solid var(--color-border-default); border-radius: var(--radius-full); background: white; color: var(--color-text-secondary); padding: 5px 10px; white-space: nowrap; transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out); }.quick-tags button:hover { background: var(--color-primary-50); color: var(--color-primary-700); transform: translateY(-1px); }
-.qa-page { min-height: calc(100vh - 152px); max-width: 860px; margin: 0 auto; padding-bottom: 160px; }.qa-top { display: flex; align-items: center; justify-content: space-between; }.qa-top > div:first-child { display: flex; gap: 10px; }.qa-top h1 { margin: 0; color: var(--color-text-primary); }.qa-top p { margin: 2px 0 0; color: var(--color-text-muted); }.qa-tools { display: flex; align-items: center; gap: 8px; }
-.qa-welcome { min-height: 520px; display: grid; align-content: center; justify-items: center; gap: 14px; text-align: center; }.qa-welcome > svg { color: #8B5CF6; animation: breathe var(--duration-slow) var(--ease-in-out) infinite; }.qa-welcome h2 { margin: 0; color: var(--color-text-primary); }.prompt-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 16px; }.prompt-grid button { display: flex; align-items: center; gap: 8px; min-height: 58px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 0 16px; }
-.chat-list { display: grid; gap: 18px; padding: 20px 0; }.chat-msg { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; align-items: start; max-width: 86%; animation: bubble-in var(--duration-base) var(--ease-out); }.chat-msg.user { grid-template-columns: minmax(0, 1fr) 36px; justify-self: end; }.chat-avatar { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--color-ai-gradient); color: white; box-shadow: var(--shadow-sm); }.chat-bubble { position: relative; border: 1px solid var(--color-border-default); border-radius: 4px 16px 16px 16px; background: white; padding: 12px 16px; }.chat-bubble::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px; background: var(--color-ai-gradient); }.chat-msg.user .chat-bubble { border: 0; border-radius: 16px 4px 16px 16px; background: var(--color-primary-600); color: white; }.chat-msg.user .chat-bubble::before { display: none; }.chat-bubble p { margin: 0; line-height: 1.7; }.source-tags { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--color-border-subtle); margin-top: 10px; padding-top: 10px; }.msg-actions { display: flex; gap: 8px; opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); }.chat-bubble:hover .msg-actions { opacity: 1; }.msg-actions button, .thought-toggle { border: 0; background: transparent; color: var(--color-text-muted); }.thought-toggle svg { transition: transform var(--duration-fast) var(--ease-out); }.rotate { transform: rotate(180deg); }.thought { overflow: hidden; border-radius: var(--radius-md); background: var(--color-ai-light); color: #6D28D9; margin-bottom: 10px; padding: 8px; font-size: 12px; }
-.thinking { display: inline-flex; align-items: center; gap: 7px; width: fit-content; border-radius: 16px; background: white; color: var(--color-text-muted); padding: 10px 14px; box-shadow: var(--shadow-sm); }.thinking i { width: 7px; height: 7px; border-radius: 50%; background: var(--color-ai-gradient); }
-.qa-fixed { position: fixed; left: 50%; bottom: 76px; z-index: var(--z-fixed); width: min(860px, calc(100vw - 48px)); transform: translateX(-50%); border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); background: rgba(248,250,252,0.96); backdrop-filter: blur(16px); padding: 10px 14px; box-shadow: var(--shadow-lg); }.qa-fixed > div { display: flex; align-items: center; gap: 6px; color: var(--color-primary-700); font-size: 12px; margin-bottom: 6px; }.qa-fixed section { display: grid; grid-template-columns: 1fr auto; gap: 8px; border-radius: var(--radius-lg); background: white; padding: 8px; }.qa-fixed textarea { border: 0; outline: 0; resize: none; }.qa-fixed small { display: block; text-align: center; color: var(--color-text-muted); margin-top: 5px; }
-.history-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: var(--z-modal); width: 320px; display: grid; align-content: start; gap: 10px; background: white; box-shadow: var(--shadow-xl); padding: 18px; }.drawer-head { display: flex; align-items: center; justify-content: space-between; }.drawer-head button { border: 0; background: transparent; }.history-row { display: grid; grid-template-columns: auto 1fr; gap: 8px; border: 0; border-bottom: 1px solid var(--color-border-subtle); background: white; color: var(--color-text-body); padding: 10px 0; text-align: left; }.history-row small { grid-column: 2; color: var(--color-text-muted); }
+.class-chat .chat-list { display: grid; gap: 18px; padding: 20px 0; }
+.class-chat .chat-msg { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; align-items: start; max-width: 86%; animation: bubble-in var(--duration-base) var(--ease-out); }
+.class-chat .chat-msg.user { grid-template-columns: minmax(0, 1fr) 36px; justify-self: end; }
+.class-chat .chat-avatar { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--color-ai-gradient); color: white; box-shadow: var(--shadow-sm); }
+.class-chat .chat-bubble { position: relative; border: 1px solid var(--color-border-default); border-radius: 4px 16px 16px 16px; background: white; padding: 12px 16px; }
+.class-chat .chat-bubble::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px; background: var(--color-ai-gradient); }
+.class-chat .chat-msg.user .chat-bubble { border: 0; border-radius: 16px 4px 16px 16px; background: var(--color-primary-600); color: white; }
+.class-chat .chat-msg.user .chat-bubble::before { display: none; }
+.class-chat .chat-bubble p { margin: 0; line-height: 1.7; }
+.class-chat .source-tags { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--color-border-subtle); margin-top: 10px; padding-top: 10px; }
+.class-chat .msg-actions { display: flex; gap: 8px; opacity: 0; transition: opacity var(--duration-fast) var(--ease-out); }
+.class-chat .chat-bubble:hover .msg-actions { opacity: 1; }
+.class-chat .msg-actions button,
+.class-chat .thought-toggle { border: 0; background: transparent; color: var(--color-text-muted); }
+.class-chat .thought-toggle svg { transition: transform var(--duration-fast) var(--ease-out); }
+.class-chat .rotate { transform: rotate(180deg); }
+.class-chat .thought { overflow: hidden; border-radius: var(--radius-md); background: var(--color-ai-light); color: #6D28D9; margin-bottom: 10px; padding: 8px; font-size: 12px; }
+.class-chat .thinking { display: inline-flex; align-items: center; gap: 7px; width: fit-content; border-radius: 16px; background: white; color: var(--color-text-muted); padding: 10px 14px; box-shadow: var(--shadow-sm); }
+.class-chat .thinking i { width: 7px; height: 7px; border-radius: 50%; background: var(--color-ai-gradient); }
 .tutoring-grid { grid-template-columns: 55fr 45fr; align-items: start; }.tutor-input, .guide-card { display: grid; gap: 14px; }.problem-text { min-height: 160px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); padding: 14px; resize: vertical; }.image-drop { min-height: 200px; display: grid; place-items: center; border: 2px dashed var(--color-border-strong); border-radius: var(--radius-lg); color: var(--color-text-muted); }.image-drop input { display: none; }.knowledge-box { display: flex; flex-wrap: wrap; gap: 8px; border-radius: var(--radius-lg); background: var(--color-ai-light); padding: 12px; }
 .empty-guide { display: grid; gap: 12px; justify-items: center; color: var(--color-text-muted); text-align: center; padding: 32px 0; }.guide-step { border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); overflow: hidden; }.guide-step > button { width: 100%; display: flex; align-items: center; gap: 10px; border: 0; background: white; color: var(--color-text-primary); padding: 14px; text-align: left; }.guide-step b { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--color-primary-600); color: white; }.guide-body { display: grid; gap: 10px; border-top: 1px solid var(--color-border-subtle); padding: 14px; line-height: 1.7; }.guide-body p { margin: 0; }
 .history-strip { display: grid; gap: 10px; }.history-strip div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }.history-strip button { min-height: 80px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; text-align: left; padding: 12px; }
 .knowledge-layout, .wrong-layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }.knowledge-tree, .wrong-tree { display: grid; gap: 8px; border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-sm); padding: 14px; }.knowledge-tree button, .wrong-tree button { display: flex; align-items: center; gap: 8px; min-height: 36px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-body); text-align: left; }.knowledge-tree button:hover, .wrong-tree button.active { background: var(--color-primary-50); color: var(--color-primary-700); }.weak-tags { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--color-border-subtle); padding-top: 10px; }
 .knowledge-content { display: grid; gap: 14px; }.knowledge-head h1 { margin: 0; color: var(--color-text-primary); font-size: 22px; }.knowledge-head p { color: var(--color-text-muted); }.knowledge-body { display: grid; gap: 16px; padding: 32px; }.knowledge-block h3 { display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); }.knowledge-block div { border-left: 4px solid var(--color-primary-600); border-radius: 14px; background: var(--color-primary-50); padding: 16px; line-height: 1.75; }.knowledge-block.ai div { border-left-color: #8B5CF6; background: var(--color-ai-light); }.knowledge-block.warning div { border-left-color: var(--color-warning-500); background: var(--color-warning-50); }.practice-cta { display: flex; align-items: center; gap: 10px; border-radius: var(--radius-lg); background: var(--color-ai-light); padding: 14px; }.practice-cta button { border: 0; border-radius: var(--radius-full); background: var(--color-primary-600); color: white; padding: 7px 12px; }
-.answer-page { position: fixed; inset: 0; z-index: var(--z-modal); background: var(--color-bg-page); }.answer-shell { min-height: 100vh; display: grid; grid-template-rows: 60px 1fr 64px; }.answer-head, .answer-foot { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: white; padding: 0 24px; }.answer-head span, .answer-stat { display: flex; align-items: center; gap: 8px; color: var(--color-text-muted); }.answer-foot { border-top: 1px solid var(--color-border-default); border-bottom: 0; }.answer-body { display: grid; grid-template-columns: 280px 1fr; gap: 24px; padding: 24px; }.question-nav { background: white; border-right: 1px solid var(--color-border-default); padding: 18px; }.answer-stat { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 14px; }.answer-stat span { border-radius: 8px; background: var(--color-bg-muted); padding: 8px; text-align: center; }.q-grid { display: grid; grid-template-columns: repeat(4, 40px); gap: 8px; }.q-grid button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--color-border-default); background: white; transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out); }.q-grid .answered { background: var(--color-success-50); border-color: var(--color-success-500); }.q-grid .current { box-shadow: 0 0 0 2px var(--color-primary-600); }.q-grid .marked { background: var(--color-warning-50); border-color: var(--color-warning-500); }.question-card { border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-sm); padding: 32px; }.question-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }.question-meta .link-btn { margin-left: auto; }.question-card h2 { color: var(--color-text-primary); line-height: 1.75; }.option-list { display: grid; gap: 10px; }.option-btn { width: 100%; min-height: 52px; display: flex; gap: 10px; align-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; margin-top: 0; padding: 0 14px; text-align: left; transition: transform var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out); }.option-btn:hover { transform: translateX(3px); border-color: var(--color-primary-300); }.option-btn span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--color-bg-muted); }.option-btn.active { background: var(--color-primary-50); border-color: var(--color-primary-600); color: var(--color-primary-700); }.answer-input { max-width: 360px; }.answer-textarea { min-height: 160px; resize: vertical; }.result-shell { grid-template-rows: 60px 1fr; }.result-main { display: grid; gap: 16px; max-width: 900px; width: 100%; margin: 0 auto; padding: 28px; animation: result-pop var(--duration-base) var(--ease-out); }.result-card { display: grid; justify-items: center; gap: 8px; border-radius: 24px; background: linear-gradient(135deg,#4F46E5,#06B6D4); color: white; padding: 40px; }.result-card strong { font-size: 56px; line-height: 1; }.result-card em { border-radius: var(--radius-full); background: rgba(255,255,255,.18); padding: 4px 12px; font-style: normal; }.result-grid { display: grid; grid-template-columns: 200px 1fr; gap: 18px; align-items: center; }.answer-analysis { display: grid; gap: 10px; }.answer-analysis details { border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; padding: 12px; }.answer-analysis summary { display: flex; align-items: center; gap: 8px; cursor: pointer; }.answer-analysis summary span { margin-left: auto; }.answer-analysis details[open] { background: var(--color-bg-muted); }.confirm-card p { color: var(--color-text-secondary); }
 .quiz-list, .wrong-list { display: grid; gap: 12px; }.quiz-card, .wrong-card { position: relative; display: grid; gap: 8px; border: 1px solid var(--color-border-default); border-left: 4px solid var(--color-success-500); border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-sm); padding: 16px; }.quiz-card h2, .wrong-card h2 { margin: 0; color: var(--color-text-primary); font-size: 17px; }.quiz-card p, .wrong-card p { color: var(--color-text-muted); }.quiz-card footer, .wrong-card footer { display: flex; gap: 8px; }
-.practice-maker { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }.chapter-checks { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }.chapter-checks button { border: 1px solid var(--color-border-default); border-radius: var(--radius-full); background: white; padding: 7px 12px; }.chapter-checks .active { background: var(--color-primary-600); color: white; }
-.wrong-hero, .plan-hero, .profile-hero { display: grid; grid-template-columns: auto repeat(3, 1fr) auto; align-items: center; gap: 20px; background: linear-gradient(135deg,#EF4444,#F59E0B); color: white; }.wrong-hero strong, .plan-hero strong { display: block; font-size: 28px; }.wrong-tools { display: grid; grid-template-columns: 1fr 140px auto; gap: 10px; margin-bottom: 12px; }
-.plans-grid { grid-template-columns: 45fr 30fr 25fr; }.calendar-card { display: grid; gap: 10px; }.calendar-head { display: flex; justify-content: space-between; align-items: center; }.calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }.calendar-grid span { display: grid; place-items: center; min-height: 44px; border-radius: 50%; color: var(--color-text-muted); }.calendar-grid .done { background: var(--color-primary-600); color: white; }.calendar-grid .today { border: 1px solid var(--color-primary-600); color: var(--color-primary-700); animation: pulse-ring var(--duration-slow) var(--ease-in-out) infinite; }
-.task-row { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center; min-height: 56px; border-bottom: 1px solid var(--color-border-subtle); }.task-row button:first-child { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--color-border-default); background: white; transition: transform var(--duration-fast) var(--ease-spring), background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out); }.task-row.done strong { text-decoration: line-through; color: var(--color-text-muted); }.task-row.done button:first-child { background: var(--color-success-500); color: white; animation: check-bounce var(--duration-slow) var(--ease-spring) both; }
-.mini-bars { height: 160px; display: flex; align-items: end; gap: 8px; }.mini-bars i { flex: 1; border-radius: 8px 8px 0 0; background: var(--color-primary-600); }.badge-wall, .badges { display: flex; flex-wrap: wrap; gap: 8px; }.badge-wall span, .badges span { display: grid; place-items: center; min-width: 64px; min-height: 64px; border: 1px solid #F59E0B; border-radius: 12px; color: var(--color-warning-700); }.badge-wall .locked, .badges .locked { filter: grayscale(1); opacity: .5; border-color: var(--color-border-default); }
+.wrong-hero, .profile-hero { display: grid; grid-template-columns: auto repeat(3, 1fr) auto; align-items: center; gap: 20px; background: linear-gradient(135deg,#EF4444,#F59E0B); color: white; }.wrong-hero strong { display: block; font-size: 28px; }.wrong-tools { display: grid; grid-template-columns: 1fr 140px auto; gap: 10px; margin-bottom: 12px; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; }.badges span { display: grid; place-items: center; min-width: 64px; min-height: 64px; border: 1px solid #F59E0B; border-radius: 12px; color: var(--color-warning-700); }.badges .locked { filter: grayscale(1); opacity: .5; border-color: var(--color-border-default); }
 .profile-page { max-width: 800px; margin: 0 auto; display: grid; gap: 16px; }.profile-hero { grid-template-columns: auto 1fr auto; min-height: 160px; background: linear-gradient(135deg,#4338CA,#8B5CF6); color: white; }.big-avatar { width: 80px; height: 80px; border-radius: 50%; border: 4px solid white; font-size: 26px; font-weight: 700; position: relative; }.big-avatar svg { position: absolute; right: 0; bottom: 0; border-radius: 50%; background: var(--color-primary-600); padding: 3px; }.profile-hero h1 { margin: 0; }.profile-hero p { display: flex; align-items: center; gap: 6px; margin: 4px 0; color: rgba(255,255,255,0.78); }.profile-hero aside strong { display: block; font-size: 36px; }
 .achievement-row { grid-template-columns: repeat(4, 1fr); }.profile-form { display: grid; gap: 12px; }.profile-form label { display: grid; gap: 6px; color: var(--color-text-secondary); }.toggle-line, .check-line { display: flex; align-items: center; gap: 10px; }.time-input { width: 120px; margin-left: auto; }
 .modal-mask { position: fixed; inset: 0; z-index: var(--z-modal-bg); display: grid; place-items: center; background: rgba(15,23,42,0.36); backdrop-filter: blur(8px); }.join-modal { width: 480px; max-width: calc(100vw - 32px); border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-xl); padding: 20px; }.modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }.modal-head h2 { flex: 1; margin: 0; color: var(--color-text-primary); }.code-input { display: grid; grid-template-columns: 1fr auto; align-items: center; height: 56px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); padding: 0 12px; }.code-input input { border: 0; outline: 0; text-align: center; letter-spacing: 8px; font: 20px var(--font-family-mono); text-transform: uppercase; }.code-input.ok { border-color: var(--color-success-500); }.code-input.error { border-color: var(--color-danger-500); }.field-error { color: var(--color-danger-700); }.preview-course { display: grid; grid-template-columns: 48px 1fr; gap: 10px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); margin-top: 14px; padding: 12px; }.preview-course span { display: grid; place-items: center; border-radius: 10px; color: white; }.preview-course small { color: var(--color-text-muted); }.hint-line { display: flex; align-items: center; gap: 6px; color: var(--color-warning-700); background: var(--color-warning-50); border-radius: var(--radius-md); margin-top: 12px; padding: 8px; }.join-modal footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
@@ -1263,7 +2247,7 @@ onBeforeUnmount(() => { stopStudyClock(); if (chromeTimer) clearTimeout(chromeTi
 .player-bar { position: absolute; left: 50%; bottom: 20px; width: min(880px, 75%); min-height: 56px; display: grid; grid-template-columns: auto auto auto auto 1fr auto auto auto auto; align-items: center; gap: 10px; transform: translateX(-50%); border-radius: var(--radius-full); background: rgba(255,255,255,0.96); color: var(--color-text-primary); padding: 6px 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); }.round-btn { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 50%; }.round-btn.primary { width: 44px; height: 44px; background: var(--color-primary-600); color: white; }.round-btn.ghost { background: transparent; color: var(--color-text-secondary); }.range { width: 100%; accent-color: var(--color-primary-600); }.time { font-family: var(--font-family-mono); color: var(--color-text-muted); font-size: 12px; }
 .lesson-ai { min-width: 0; overflow: hidden; background: white; color: var(--color-text-body); border-left: 1px solid var(--color-border-default); display: grid; grid-template-rows: auto 1fr; }.study-room.panelClosed .lesson-ai { border: 0; }.study-tabs { height: 56px; padding: 0 12px; }.script-view, .class-chat, .note-view { overflow: auto; padding: 16px; }.sticky-tools { position: sticky; top: 0; display: flex; justify-content: space-between; background: white; border-bottom: 1px solid var(--color-border-subtle); padding-bottom: 10px; }.sticky-tools button { display: flex; gap: 5px; border: 0; background: transparent; color: var(--color-primary-700); }.reading { border-left: 3px solid var(--color-primary-600); background: var(--color-primary-50); border-radius: 8px; padding: 14px; line-height: 1.75; }.context-bar { display: flex; gap: 6px; border-radius: var(--radius-lg); background: var(--color-primary-50); color: var(--color-primary-700); padding: 8px; font-size: 12px; }.chat-disclaimer { text-align: center; color: var(--color-text-muted); font-size: 11px; margin: 8px 0; }.chat-input.compact { border-radius: var(--radius-lg); }.note-tools { display: flex; gap: 8px; align-items: center; }.note-tools button { border: 1px solid var(--color-border-default); border-radius: 6px; background: white; }.note-tools span { margin-left: auto; color: var(--color-text-muted); }.note-view textarea { width: 100%; min-height: 520px; border: 0; outline: 0; resize: none; font-size: 14px; line-height: 1.75; padding: 16px 0; }.note-view footer { display: flex; align-items: center; gap: 10px; color: var(--color-text-muted); }
 .thumb-panel { position: fixed; z-index: var(--z-fixed); left: 0; top: 48px; bottom: 0; width: 200px; background: rgba(10,15,30,0.9); backdrop-filter: blur(12px); padding: 16px; }.thumb-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }.thumb-grid button { position: relative; height: 48px; border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; background: rgba(255,255,255,0.08); color: white; }.thumb-grid .active { border: 2px solid var(--color-primary-500); }.thumb-grid .learned svg { position: absolute; right: 4px; top: 4px; border-radius: 50%; background: var(--color-success-500); }
-.settings-pop { position: fixed; right: 18px; top: 54px; z-index: var(--z-dropdown); display: grid; gap: 4px; border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 8px; }.settings-pop button { border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-body); padding: 8px 12px; }.settings-pop .active { background: var(--color-primary-50); color: var(--color-primary-700); }
+.settings-pop { position: fixed; right: 18px; top: 54px; z-index: var(--z-popover); display: grid; gap: 4px; border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 8px; }.settings-pop button { border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-body); padding: 8px 12px; }.settings-pop .active { background: var(--color-primary-50); color: var(--color-primary-700); }
 .complete-modal { position: relative; overflow: hidden; width: 640px; border-radius: 24px; background: white; color: var(--color-text-body); text-align: center; box-shadow: var(--shadow-xl); padding: 40px; }.complete-modal > svg { color: #8B5CF6; }.complete-modal h2 { margin: 10px 0 0; color: var(--color-text-primary); }.done-stats { display: flex; justify-content: center; gap: 24px; border-top: 1px solid var(--color-border-subtle); border-bottom: 1px solid var(--color-border-subtle); margin: 20px 0; padding: 16px; }.ai-summary { display: flex; gap: 8px; border-radius: var(--radius-lg); background: var(--color-ai-light); color: #6D28D9; padding: 12px; text-align: left; }.complete-modal footer { display: flex; justify-content: center; gap: 10px; margin-top: 20px; }.confetti i { position: absolute; bottom: 120px; width: 8px; height: 12px; animation: confetti var(--duration-confetti) var(--ease-out) both; }
 .bottom-tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-fixed); height: 64px; display: grid; grid-template-columns: repeat(5, 1fr); border-top: 1px solid var(--color-border-default); background: rgba(255,255,255,0.9); backdrop-filter: blur(12px); }.bottom-tabs button { position: relative; display: grid; justify-items: center; align-content: center; gap: 2px; border: 0; background: transparent; color: var(--color-text-muted); font-size: 11px; }.bottom-tabs button span { display: grid; place-items: center; transition: transform var(--duration-fast) var(--ease-spring), color var(--duration-fast) var(--ease-out); }.bottom-tabs button.active span { transform: scale(1.15); color: var(--color-primary-600); }.bottom-tabs button.active { color: var(--color-primary-600); }.bottom-tabs button i { width: 6px; height: 6px; border-radius: 50%; background: transparent; }.bottom-tabs .active i { background: var(--color-primary-600); }.bottom-tabs .ai span { width: 52px; height: 52px; border-radius: 50%; background: var(--color-ai-gradient); color: white; box-shadow: 0 4px 12px rgba(99,102,241,0.4); transform: translateY(-12px); }.bottom-tabs .ai.active span { transform: translateY(-12px) scale(1.06); }.bottom-tabs .ai { color: var(--color-primary-700); }
 .tag { display: inline-flex; align-items: center; gap: 4px; min-height: 22px; border-radius: var(--radius-full); background: var(--color-bg-muted); color: var(--color-text-secondary); padding: 0 8px; font-size: 12px; }.tag-primary { background: var(--color-primary-50); color: var(--color-primary-700); }.tag-success { background: var(--color-success-50); color: var(--color-success-700); }.tag-warning { background: var(--color-warning-50); color: var(--color-warning-700); }.tag-danger { background: var(--color-danger-50); color: var(--color-danger-700); }.tag-ai { background: var(--color-ai-light); color: #6D28D9; border: 1px solid var(--color-ai-border); }
@@ -1291,9 +2275,6403 @@ onBeforeUnmount(() => { stopStudyClock(); if (chromeTimer) clearTimeout(chromeTi
 .search-expand-enter-active, .search-expand-leave-active { transition: all var(--duration-slow) var(--ease-out); }.search-expand-enter-from, .search-expand-leave-to { opacity: 0; transform: scaleX(.94); }
 .thumb-panel-enter-active, .thumb-panel-leave-active { transition: transform var(--duration-base) var(--ease-out), opacity var(--duration-base) var(--ease-out); }.thumb-panel-enter-from, .thumb-panel-leave-to { transform: translateX(-100%); opacity: 0; }
 @media (max-width: 900px) {
-  .home-grid, .course-layout, .tutoring-grid, .plans-grid, .knowledge-layout, .wrong-layout, .student-course-grid, .practice-maker { grid-template-columns: 1fr; }
+  .home-grid, .course-layout, .tutoring-grid, .knowledge-layout, .wrong-layout, .student-course-grid { grid-template-columns: 1fr; }
   .quick-row, .achievement-row { grid-template-columns: repeat(2, 1fr); }
   .study-main { grid-template-columns: 1fr; }
   .lesson-ai { position: fixed; right: 0; top: 48px; bottom: 0; width: min(380px, 92vw); z-index: var(--z-fixed); }
+}
+
+/* Student visual refresh: soft glass, poster cards and immersive learning hub. */
+.student-shell {
+  --s-primary-50: #EEF2FF;
+  --s-primary-100: #E0E7FF;
+  --s-primary-400: #818CF8;
+  --s-primary-500: #6366F1;
+  --s-primary-600: #5A67D8;
+  --s-ai-light: linear-gradient(135deg, #E0F2FE 0%, #EDE9FE 100%);
+  --s-ai-main: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+  --s-bg: #F4F6F9;
+  --s-card: #FFFFFF;
+  --s-glass: rgba(255, 255, 255, 0.76);
+  --s-text: #1E293B;
+  --s-muted: #64748B;
+  --s-hint: #94A3B8;
+  --s-border: rgba(226, 232, 240, 0.82);
+  --s-radius-sm: 8px;
+  --s-radius-md: 16px;
+  --s-radius-lg: 24px;
+  --s-radius-xl: 32px;
+  --s-pill: 999px;
+  --s-shadow-card: 0 10px 30px -5px rgba(15, 23, 42, 0.04);
+  --s-shadow-float: 0 20px 40px -10px rgba(15, 23, 42, 0.08);
+  --s-shadow-glass: 0 8px 32px rgba(30, 41, 59, 0.08);
+  min-height: 100vh;
+  padding-bottom: 40px;
+  background-color: var(--s-bg);
+  background-image:
+    radial-gradient(circle at 15% 50%, rgba(99, 102, 241, 0.045) 0%, transparent 44%),
+    radial-gradient(circle at 86% 28%, rgba(6, 182, 212, 0.04) 0%, transparent 46%);
+  background-attachment: fixed;
+  color: var(--s-text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.student-shell button,
+.student-shell a,
+.student-shell .student-course-card,
+.student-shell .panel-card,
+.student-shell .quick-tile,
+.student-shell .quiz-card,
+.student-shell .wrong-card,
+.student-shell .home-course,
+.student-shell .material-row,
+.student-shell .lesson-item {
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.student-shell input[type="number"] {
+  appearance: textfield;
+}
+
+.student-shell input[type="number"]::-webkit-outer-spin-button,
+.student-shell input[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.student-top {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
+  align-items: center;
+  height: 72px;
+  padding: 0 40px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.62);
+  background: var(--s-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: none;
+}
+
+.brand {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--s-text);
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.brand span {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--s-ai-main);
+  color: white;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.28);
+}
+
+.brand strong {
+  font-size: 18px;
+}
+
+.brand:hover {
+  transform: translateY(-1px);
+}
+
+.student-nav-links {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px;
+  border-radius: var(--s-pill);
+  background: rgba(241, 245, 249, 0.68);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.student-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 20px;
+  border-radius: var(--s-pill);
+  color: var(--s-muted);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.student-nav-link:hover {
+  color: var(--s-text);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.student-nav-link.active {
+  background: white;
+  color: var(--s-primary-600);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.student-nav-link.ai.active {
+  color: #6D28D9;
+}
+
+.top-actions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.top-icon,
+.avatar-btn,
+.modal-head button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  border-radius: 50%;
+  background: white;
+  color: var(--s-muted);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
+}
+
+.top-icon:hover,
+.avatar-btn:hover,
+.modal-head button:hover {
+  background: var(--s-primary-50);
+  color: var(--s-primary-600);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.12);
+}
+
+.avatar-btn {
+  overflow: hidden;
+  flex: 0 0 44px;
+}
+
+.avatar-btn img,
+.avatar-btn .default-user-avatar {
+  position: static;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 2px solid white;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--s-ai-light);
+  padding: 0;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.top-icon em {
+  top: 1px;
+  right: 1px;
+  min-width: 18px;
+  height: 18px;
+  border: 2px solid white;
+  border-radius: 10px;
+  background: #EF4444;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.global-search {
+  height: 72px;
+  padding: 0 max(32px, calc((100vw - 1140px) / 2));
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--s-shadow-glass);
+}
+
+.global-search input {
+  color: var(--s-text);
+}
+
+.notice-pop,
+.user-pop,
+.select-pop,
+.dropdown-pop,
+.settings-pop {
+  z-index: var(--z-popover);
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: var(--s-radius-lg);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--s-shadow-glass);
+  backdrop-filter: blur(18px);
+}
+
+.user-pop button,
+.notice-item {
+  border-radius: var(--s-radius-md);
+}
+
+.user-pop button:hover,
+.notice-item:hover {
+  background: var(--s-primary-50);
+  color: var(--s-primary-600);
+  transform: translateX(2px);
+}
+
+.student-main {
+  width: min(1140px, 100%);
+  max-width: 1140px;
+  padding: 40px 32px 80px;
+}
+
+.student-page {
+  display: grid;
+  gap: 32px;
+  animation: student-scale-fade 0.5s var(--ease-out);
+}
+
+.page-title-row {
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.page-title-row h1 {
+  color: var(--s-text);
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.page-title-row p {
+  margin-top: 8px;
+  color: var(--s-muted);
+  font-size: 16px;
+}
+
+.page-title-actions {
+  gap: 10px;
+}
+
+.btn,
+.white-pill,
+.white-fill,
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 24px;
+  border-radius: var(--s-pill);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.btn-primary {
+  border: 0;
+  background: var(--s-primary-600);
+  color: white;
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.24);
+}
+
+.btn-primary:hover {
+  background: var(--s-primary-500);
+  box-shadow: 0 8px 22px rgba(79, 70, 229, 0.30);
+  transform: translateY(-1px);
+}
+
+.btn-ai {
+  border: 0;
+  background: var(--s-ai-main);
+  color: white;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.26);
+}
+
+.btn-ai:hover {
+  filter: brightness(1.04);
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.34);
+  transform: translateY(-1px);
+}
+
+.btn-secondary,
+.btn-ghost {
+  background: var(--s-bg);
+  color: var(--s-text);
+  border: 1px solid transparent;
+}
+
+.btn-secondary:hover,
+.btn-ghost:hover {
+  background: #E2E8F0;
+  box-shadow: none;
+}
+
+.btn-sm {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: var(--s-pill);
+}
+
+.input,
+.textarea,
+.time-input,
+.problem-text,
+.answer-input,
+.answer-textarea,
+.pretty-input,
+.code-input,
+.select-menu > button,
+.dropdown-trigger,
+.ask-card form,
+.chat-input {
+  border: 1px solid transparent;
+  border-radius: var(--s-radius-md);
+  background: white;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+}
+
+.input,
+.time-input {
+  height: 48px;
+  padding: 0 16px;
+}
+
+.textarea,
+.problem-text,
+.answer-textarea {
+  padding: 14px 16px;
+}
+
+.pretty-input,
+.select-menu > button,
+.dropdown-trigger {
+  min-height: 44px;
+  padding: 0 16px;
+}
+
+.input:hover,
+.textarea:hover,
+.time-input:hover,
+.problem-text:hover,
+.answer-textarea:hover,
+.pretty-input:hover,
+.select-menu > button:hover,
+.dropdown-trigger:hover {
+  border-color: rgba(99, 102, 241, 0.24);
+}
+
+.input:focus,
+.textarea:focus,
+.time-input:focus,
+.problem-text:focus,
+.answer-textarea:focus,
+.pretty-input:focus-within,
+.code-input:focus-within,
+.ask-card form:focus-within,
+.chat-input:focus-within {
+  border-color: var(--s-primary-500);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14);
+}
+
+.hello-card {
+  min-height: 184px;
+  padding: 48px;
+  border-radius: var(--s-radius-xl);
+  background:
+    radial-gradient(circle at 12% 15%, rgba(255, 255, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 94% 90%, rgba(139, 92, 246, 0.34), transparent 42%),
+    var(--s-primary-600);
+  color: white;
+  box-shadow: 0 20px 40px -10px rgba(79, 70, 229, 0.30);
+}
+
+.hello-card::before,
+.hello-card::after {
+  display: none;
+}
+
+.hello-card > div:first-child {
+  gap: 16px;
+}
+
+.hello-card > div:first-child > svg {
+  width: 42px;
+  height: 42px;
+  padding: 10px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px);
+}
+
+.hello-card h1 {
+  font-size: 36px;
+  line-height: 1.18;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.hello-card p {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+}
+
+.white-pill,
+.white-fill {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.20);
+  color: white;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.10);
+  backdrop-filter: blur(10px);
+}
+
+.white-pill:hover,
+.white-fill:hover {
+  background: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.today-plan {
+  min-height: 78px;
+  grid-template-columns: auto 1fr auto minmax(120px, 180px) auto;
+  border: 0;
+  border-radius: var(--s-radius-lg);
+  background: white;
+  box-shadow: var(--s-shadow-card);
+  padding: 18px 22px;
+}
+
+.today-plan > svg {
+  width: 42px;
+  height: 42px;
+  padding: 10px;
+  border-radius: 16px;
+  background: var(--s-primary-50);
+  color: var(--s-primary-600);
+}
+
+.continue-card {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
+  min-height: 188px;
+  padding: 24px;
+  border-radius: var(--s-radius-xl);
+  background: white;
+  box-shadow: var(--s-shadow-card);
+}
+
+.continue-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--s-shadow-float);
+}
+
+.continue-cover {
+  min-height: 140px;
+  border-radius: var(--s-radius-md);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.continue-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.08);
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+.continue-card:hover .continue-cover::after {
+  opacity: 0;
+}
+
+.continue-cover svg {
+  width: 48px;
+  height: 48px;
+  z-index: 1;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.18));
+}
+
+.continue-cover span {
+  z-index: 1;
+  right: 16px;
+  bottom: 16px;
+  color: var(--s-primary-600);
+}
+
+.continue-card section {
+  padding: 0;
+  align-content: center;
+  gap: 12px;
+}
+
+.continue-card h2 {
+  color: var(--s-text);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.empty-continue {
+  justify-items: start;
+}
+
+.home-grid {
+  grid-template-columns: 2fr 1fr;
+  gap: 32px;
+}
+
+.panel-card,
+.course-tools,
+.student-course-card,
+.knowledge-head,
+.knowledge-body,
+.wrong-hero,
+.profile-hero,
+.badge-card {
+  border: 0;
+  border-radius: var(--s-radius-lg);
+  background: white;
+  box-shadow: var(--s-shadow-card);
+  padding: 28px;
+}
+
+.panel-card:hover,
+.student-course-card:hover,
+.quick-tile:hover,
+.quiz-card:hover,
+.wrong-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--s-shadow-float);
+}
+
+.section-head {
+  margin-bottom: 22px;
+}
+
+.section-head h2 {
+  color: var(--s-text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.section-head button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--s-pill);
+  background: var(--s-primary-50);
+  color: var(--s-primary-600);
+  padding: 0 14px;
+  font-weight: 700;
+}
+
+.section-head button:hover {
+  background: var(--s-primary-100);
+  transform: translateY(-1px);
+}
+
+.home-course {
+  min-height: 76px;
+  border-radius: var(--s-radius-md);
+  background: #FBFCFF;
+  padding: 14px;
+}
+
+.home-course:hover {
+  background: white;
+  transform: translateX(3px);
+}
+
+.home-course > span {
+  width: 50px;
+  height: 50px;
+  border-radius: 16px;
+}
+
+.join-dashed,
+.image-drop {
+  min-height: 72px;
+  border: 2px dashed rgba(148, 163, 184, 0.46);
+  border-radius: var(--s-radius-lg);
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--s-primary-600);
+  font-weight: 700;
+}
+
+.join-dashed:hover,
+.image-drop:hover {
+  border-color: var(--s-primary-400);
+  background: white;
+  transform: translateY(-2px);
+  box-shadow: var(--s-shadow-card);
+}
+
+.rings {
+  gap: 18px;
+  padding: 20px 0 26px;
+}
+
+.ring-wrap {
+  width: 82px;
+  height: 82px;
+}
+
+.ring-block span:not(.ring-wrap) {
+  color: var(--s-muted);
+  font-weight: 700;
+}
+
+.week-check {
+  border-top-color: rgba(226, 232, 240, 0.72);
+}
+
+.week-check span {
+  width: 32px;
+  height: 32px;
+  border-color: rgba(148, 163, 184, 0.42);
+}
+
+.streak {
+  width: fit-content;
+  border-radius: var(--s-pill);
+  background: #FFFBEB;
+  padding: 10px 14px;
+  color: #B45309;
+  font-weight: 800;
+}
+
+.home-ai-recommend-card {
+  background: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 24px;
+  padding: 32px 40px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04);
+  display: flex;
+  gap: 48px;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.home-ai-recommend-card::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -10%;
+  width: 50%;
+  height: 150%;
+  background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.home-ai-rec-left {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.home-ai-rec-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.home-ai-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 16px rgba(139, 92, 246, 0.15);
+  color: #8B5CF6;
+}
+
+.home-ai-recommend-card.is-empty .home-ai-icon-wrap {
+  color: #4F46E5;
+}
+
+.home-ai-rec-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #1E293B;
+  letter-spacing: 0;
+}
+
+.home-ai-rec-content {
+  margin: 0 0 24px;
+  font-size: 16px;
+  color: #64748B;
+  line-height: 1.7;
+}
+
+.home-ai-rec-content strong {
+  color: #1E293B;
+  font-weight: 600;
+}
+
+.home-ai-rec-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.home-data-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6D28D9;
+}
+
+.home-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748B;
+}
+
+.home-refresh-btn:hover {
+  background: rgba(255, 255, 255, 0.5);
+  color: #4F46E5;
+}
+
+.home-ai-rec-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 320px;
+  position: relative;
+  z-index: 1;
+}
+
+.home-action-task-card {
+  width: 100%;
+  background: white;
+  border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 16px;
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.home-action-task-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(79, 70, 229, 0.1);
+  border-color: #E0E7FF;
+}
+
+.home-task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.home-task-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+.home-task-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1E293B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-task-arrow {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #EEF2FF;
+  color: #4F46E5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.home-action-task-card:hover .home-task-arrow {
+  background: #4F46E5;
+  color: white;
+  transform: translateX(4px);
+}
+
+.home-activity-card {
+  background: white;
+  border-radius: 24px;
+  padding: 32px 40px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04);
+  border: 1px solid #E2E8F0;
+}
+
+.home-ac-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.home-ac-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #1E293B;
+}
+
+.home-ac-title svg {
+  color: #4F46E5;
+}
+
+.home-ac-view-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4F46E5;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.home-ac-view-all:hover {
+  opacity: 0.8;
+}
+
+.home-activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  position: relative;
+}
+
+.home-activity-list::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: #E2E8F0;
+  border-radius: 2px;
+  z-index: 0;
+}
+
+.home-activity-item {
+  display: flex;
+  gap: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.home-ac-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 4px solid white;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+  flex-shrink: 0;
+}
+
+.home-ac-icon-wrapper.ai {
+  background: #F5F3FF;
+  color: #8B5CF6;
+}
+
+.home-ac-icon-wrapper.learning {
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+.home-ac-content-wrap {
+  flex: 1;
+  background: #F4F6F9;
+  border-radius: 12px;
+  padding: 16px 20px;
+  border: 1px solid #E2E8F0;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  min-width: 0;
+}
+
+.home-ac-content-wrap:hover {
+  border-color: #E0E7FF;
+  background: white;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.home-ac-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.home-ac-action-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.home-ac-time {
+  font-size: 13px;
+  color: #94A3B8;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.home-ac-detail {
+  font-size: 14px;
+  color: #64748B;
+  word-break: break-word;
+}
+
+.home-ac-detail.quote {
+  position: relative;
+  padding-left: 12px;
+  font-style: italic;
+  border-left: 3px solid #E2E8F0;
+}
+
+.home-mini-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.home-mp-track {
+  flex: 1;
+  height: 6px;
+  background: #E2E8F0;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.home-mp-fill {
+  height: 100%;
+  background: #10B981;
+  border-radius: 9999px;
+}
+
+.home-mp-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1E293B;
+  width: 44px;
+  text-align: right;
+}
+
+.home-activity-empty {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  color: #94A3B8;
+  text-align: center;
+}
+
+.profile-activity-card {
+  gap: 16px;
+}
+
+.profile-timeline-item {
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  padding: 6px 0;
+}
+
+.profile-timeline-item i {
+  width: 11px;
+  height: 11px;
+  background: var(--s-ai-main);
+}
+
+.course-tools {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.course-tools .pretty-input {
+  width: min(320px, 100%);
+}
+
+.course-tools .select-menu {
+  width: 180px;
+}
+
+.underline-tabs,
+.seg-tabs,
+.profile-tabs,
+.study-tabs {
+  width: fit-content;
+  display: inline-flex;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--s-pill);
+  background: rgba(255, 255, 255, 0.70);
+  padding: 6px;
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.60);
+}
+
+.underline-tabs button,
+.seg-tabs button,
+.profile-tabs button,
+.study-tabs button,
+.segmented button {
+  min-height: 38px;
+  border: 0;
+  border-radius: var(--s-pill);
+  padding: 0 18px;
+  color: var(--s-muted);
+  font-weight: 700;
+}
+
+.underline-tabs .active,
+.seg-tabs .active,
+.profile-tabs .active,
+.study-tabs .active,
+.segmented .active {
+  background: white;
+  color: var(--s-primary-600);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.student-course-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.student-course-card {
+  overflow: visible;
+  padding: 0;
+  border-radius: var(--s-radius-xl);
+}
+
+.course-art {
+  overflow: visible;
+  height: 160px;
+  aspect-ratio: auto;
+  padding: 24px;
+  border-radius: var(--s-radius-xl) var(--s-radius-xl) 0 0;
+}
+
+.course-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 24% 20%, rgba(255, 255, 255, 0.22), transparent 34%);
+}
+
+.course-art > svg {
+  z-index: 1;
+  width: 64px;
+  height: 64px;
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(10px);
+}
+
+.student-course-card:hover .course-art > svg {
+  transform: scale(1.08) rotate(-2deg);
+}
+
+.course-art span,
+.course-art em {
+  z-index: 1;
+  bottom: auto;
+  top: 16px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--s-primary-600);
+  font-weight: 800;
+}
+
+.course-art span {
+  left: 16px;
+}
+
+.course-art em {
+  right: 64px;
+}
+
+.course-art .dropdown-menu {
+  z-index: var(--z-popover);
+  top: 16px;
+  right: 16px;
+  bottom: auto;
+  width: auto;
+}
+
+.course-art .dropdown-pop {
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  z-index: var(--z-popover);
+  min-width: 168px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.16);
+  padding: 8px;
+}
+
+.course-art .dropdown-trigger {
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(8px);
+  color: white;
+  padding: 0;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
+}
+
+.course-art .dropdown-trigger:hover {
+  background: white;
+  color: var(--s-primary-600);
+  transform: translateY(-1px);
+}
+
+.student-course-card section {
+  display: grid;
+  gap: 12px;
+  padding: 24px;
+}
+
+.student-course-card h2 {
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.mini-data {
+  justify-content: space-between;
+  gap: 10px;
+  margin: 4px 0 8px;
+}
+
+.mini-data span {
+  min-height: 30px;
+  border-radius: var(--s-pill);
+  background: var(--s-bg);
+  padding: 0 10px;
+}
+
+.course-hero-student {
+  min-height: 240px;
+  border-radius: var(--s-radius-xl);
+  padding: 42px 48px;
+  box-shadow: 0 20px 40px -10px rgba(79, 70, 229, 0.24);
+}
+
+.course-hero-student h1 {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.slide-mini {
+  width: 150px;
+  height: 110px;
+  border-radius: var(--s-radius-md);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.22);
+}
+
+.quick-row {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.quick-tile {
+  min-height: 104px;
+  border: 0;
+  border-radius: var(--s-radius-lg);
+  background: white;
+  box-shadow: var(--s-shadow-card);
+  padding: 20px;
+}
+
+.quick-tile span {
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  background: var(--s-primary-50);
+}
+
+.quick-tile:hover span {
+  background: var(--s-primary-600);
+  color: white;
+}
+
+.course-layout {
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.9fr);
+  gap: 32px;
+}
+
+.course-layout > section,
+.course-layout > aside {
+  gap: 24px;
+}
+
+.lesson-item {
+  min-height: 82px;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  border: 0;
+  border-radius: var(--s-radius-md);
+  background: #FBFCFF;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+}
+
+.lesson-item b {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  background: var(--s-primary-50);
+}
+
+.lesson-item:hover {
+  background: white;
+  transform: translateX(4px);
+  box-shadow: var(--s-shadow-card);
+}
+
+.lesson-item.current {
+  background: var(--s-primary-50);
+  box-shadow: inset 4px 0 0 var(--s-primary-600);
+}
+
+.lesson-item svg:last-child {
+  color: var(--s-primary-600);
+}
+
+.material-row {
+  min-height: 70px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  border: 0;
+  border-radius: var(--s-radius-md);
+  background: #FBFCFF;
+  margin-bottom: 10px;
+  padding: 12px 14px;
+}
+
+.material-row:hover {
+  background: white;
+  transform: translateX(4px);
+  box-shadow: var(--s-shadow-card);
+}
+
+.file-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  background: var(--s-ai-main);
+}
+
+.data-grid,
+.achievement-row {
+  gap: 14px;
+}
+
+.mini-metric {
+  min-height: 86px;
+  border-radius: var(--s-radius-md);
+  background: var(--s-bg);
+  padding: 16px;
+}
+
+.mini-metric strong {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.ask-card {
+  border: 0;
+  border-radius: var(--s-radius-lg);
+  background: var(--s-ai-light);
+  box-shadow: var(--s-shadow-card);
+  padding: 28px;
+}
+
+.ask-card > svg {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border-radius: 16px;
+  background: white;
+  color: #8B5CF6;
+}
+
+.ask-card button:not(.quick-tags button),
+.send-btn {
+  width: 42px;
+  height: 42px;
+  background: var(--s-primary-600);
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.22);
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--s-primary-500);
+  transform: scale(1.05);
+}
+
+.quick-tags {
+  gap: 12px;
+}
+
+.quick-tags button,
+.practice-cta button {
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: var(--s-pill);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--s-muted);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.035);
+  font-weight: 700;
+}
+
+.quick-tags button:hover,
+.practice-cta button:hover {
+  background: white;
+  color: var(--s-primary-600);
+  transform: translateY(-2px);
+  box-shadow: var(--s-shadow-card);
+}
+
+.tutoring-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 32px;
+}
+
+.tutor-input,
+.guide-card,
+.history-strip {
+  gap: 18px;
+}
+
+.image-drop {
+  min-height: 240px;
+}
+
+.knowledge-box {
+  border-radius: var(--s-radius-md);
+  background: var(--s-ai-light);
+}
+
+.guide-step {
+  border: 0;
+  border-radius: var(--s-radius-md);
+  background: #FBFCFF;
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.72);
+}
+
+.guide-step > button {
+  border-radius: var(--s-radius-md);
+  background: transparent;
+  padding: 16px;
+}
+
+.guide-step:hover {
+  box-shadow: var(--s-shadow-card);
+}
+
+.history-strip div {
+  gap: 14px;
+}
+
+.history-strip button {
+  min-height: 92px;
+  border: 0;
+  border-radius: var(--s-radius-md);
+  background: #FBFCFF;
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.72);
+}
+
+.history-strip button:hover {
+  background: white;
+  transform: translateY(-2px);
+  box-shadow: var(--s-shadow-card);
+}
+
+.knowledge-layout,
+.wrong-layout {
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 32px;
+}
+
+.knowledge-tree,
+.wrong-tree {
+  gap: 10px;
+  border: 0;
+  border-radius: var(--s-radius-lg);
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.knowledge-tree .pretty-input {
+  margin-bottom: 10px;
+}
+
+.knowledge-tree button,
+.wrong-tree button {
+  min-height: 44px;
+  border-radius: var(--s-pill);
+  color: var(--s-muted);
+  font-weight: 700;
+  padding: 0 16px;
+}
+
+.knowledge-tree button:hover,
+.wrong-tree button:hover,
+.wrong-tree button.active {
+  background: white;
+  color: var(--s-primary-600);
+  box-shadow: var(--s-shadow-card);
+  transform: translateX(2px);
+}
+
+.wrong-tree strong {
+  margin: 22px 16px 4px;
+  color: var(--s-hint);
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.knowledge-head {
+  display: grid;
+  gap: 14px;
+}
+
+.knowledge-head h1 {
+  font-size: 30px;
+  font-weight: 800;
+}
+
+.knowledge-body {
+  gap: 22px;
+}
+
+.knowledge-block h3 {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.knowledge-block div {
+  border-left: 0;
+  border-radius: var(--s-radius-md);
+  background: var(--s-primary-50);
+}
+
+.practice-cta {
+  border-radius: var(--s-radius-md);
+  background: var(--s-ai-light);
+}
+
+.quiz-list,
+.wrong-list {
+  gap: 16px;
+}
+
+.quiz-card,
+.wrong-card {
+  border: 0;
+  border-radius: var(--s-radius-lg);
+  background: white;
+  box-shadow: var(--s-shadow-card);
+  padding: 22px;
+}
+
+.quiz-card::before,
+.wrong-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 18px;
+  bottom: 18px;
+  width: 5px;
+  border-radius: 0 6px 6px 0;
+  background: var(--s-ai-main);
+}
+
+.quiz-card h2,
+.wrong-card h2 {
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.quiz-modern-page {
+  --quiz-primary-50: #EEF2FF;
+  --quiz-primary-100: #E0E7FF;
+  --quiz-primary-500: #6366F1;
+  --quiz-primary-600: #5A67D8;
+  --quiz-ai-main: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+  --quiz-ai-light: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+  --quiz-bg: #F4F6F9;
+  --quiz-surface: #FFFFFF;
+  --quiz-muted: #F8FAFC;
+  --quiz-border: #E2E8F0;
+  --quiz-text: #1E293B;
+  --quiz-secondary: #64748B;
+  --quiz-hint: #94A3B8;
+  --quiz-radius-md: 12px;
+  --quiz-radius-lg: 16px;
+  --quiz-radius-xl: 24px;
+  --quiz-pill: 9999px;
+  --quiz-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --quiz-shadow-card: 0 12px 32px rgba(15, 23, 42, 0.04);
+  --quiz-shadow-float: 0 20px 40px -10px rgba(79, 70, 229, 0.15);
+  --quiz-shadow-focus: 0 0 0 4px rgba(99, 102, 241, 0.15);
+  display: grid;
+  gap: 32px;
+}
+
+.quiz-modern-page button {
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    filter var(--duration-fast) var(--ease-out);
+}
+
+.quiz-modern-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.quiz-modern-title h1 {
+  margin: 0 0 8px;
+  color: var(--quiz-text);
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.quiz-modern-title p {
+  margin: 0;
+  color: var(--quiz-secondary);
+  font-size: 15px;
+}
+
+.quiz-modern-page .course-select .select-menu > button,
+.quiz-modern-page .select-menu-empty {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--quiz-border);
+  border-radius: var(--quiz-pill);
+  background: white;
+  color: var(--quiz-text);
+  box-shadow: var(--quiz-shadow-sm);
+  padding: 0 20px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.quiz-modern-page .course-select .select-menu > button:hover,
+.quiz-modern-page .select-menu-empty:hover {
+  border-color: var(--quiz-primary-500);
+  box-shadow: var(--quiz-shadow-focus);
+}
+
+.quiz-modern-tabs {
+  display: flex;
+  gap: 12px;
+}
+
+.quiz-modern-tabs button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--quiz-pill);
+  background: transparent;
+  color: var(--quiz-secondary);
+  padding: 0 24px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.quiz-modern-tabs button:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.quiz-modern-tabs button.active {
+  background: white;
+  color: var(--quiz-primary-600);
+  box-shadow: var(--quiz-shadow-sm);
+}
+
+.quiz-modern-list {
+  gap: 16px;
+}
+
+.practice-modern-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 32px;
+}
+
+.practice-modern-card {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--quiz-radius-xl);
+  background: white;
+  box-shadow: var(--quiz-shadow-card);
+  padding: 32px;
+}
+
+.practice-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.practice-card-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: var(--quiz-ai-light);
+  color: #8B5CF6;
+}
+
+.practice-card-header h2 {
+  margin: 0;
+  color: var(--quiz-text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.practice-config-section {
+  margin-bottom: 32px;
+}
+
+.practice-config-label {
+  display: block;
+  margin-bottom: 16px;
+  color: var(--quiz-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.practice-chapter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.practice-chip {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--quiz-pill);
+  background: var(--quiz-muted);
+  color: var(--quiz-secondary);
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.practice-chip:hover {
+  background: #E2E8F0;
+}
+
+.practice-chip.active {
+  border-color: var(--quiz-primary-500);
+  background: var(--quiz-primary-50);
+  color: var(--quiz-primary-600);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.10);
+}
+
+.practice-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: var(--quiz-pill);
+  background: var(--quiz-muted);
+  padding: 8px 16px 8px 8px;
+}
+
+.practice-segmented-control {
+  display: flex;
+  gap: 4px;
+}
+
+.practice-segmented-control button {
+  min-height: 36px;
+  border: 0;
+  border-radius: var(--quiz-pill);
+  background: transparent;
+  color: var(--quiz-secondary);
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.practice-segmented-control button.active {
+  background: white;
+  color: var(--quiz-primary-600);
+  box-shadow: var(--quiz-shadow-sm);
+}
+
+.practice-switch-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--quiz-text);
+}
+
+.practice-switch-wrapper strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.practice-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: var(--quiz-pill);
+  background: var(--quiz-border);
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+.practice-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: var(--quiz-shadow-sm);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.practice-switch-wrapper.active .practice-switch {
+  background: var(--quiz-primary-600);
+}
+
+.practice-switch-wrapper.active .practice-switch::after {
+  transform: translateX(20px);
+}
+
+.practice-generate-btn {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 40px;
+  border: 0;
+  border-radius: var(--quiz-pill);
+  background: var(--quiz-ai-main);
+  color: white;
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.30);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.practice-generate-btn:hover {
+  filter: brightness(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(139, 92, 246, 0.40);
+}
+
+.practice-generate-hint {
+  margin: 12px 0 0;
+  color: var(--quiz-hint);
+  text-align: center;
+  font-size: 13px;
+}
+
+.practice-feature-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 32px;
+  border: 1px solid #FEF08A;
+  border-radius: var(--quiz-radius-lg);
+  background: linear-gradient(to right, #FFF7ED, #FEFCE8);
+  padding: 24px;
+  text-align: left;
+}
+
+.practice-feature-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(245, 158, 11, 0.14);
+}
+
+.practice-feature-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: white;
+  color: #F59E0B;
+  box-shadow: var(--quiz-shadow-sm);
+}
+
+.practice-feature-card h2 {
+  margin: 0 0 4px;
+  color: #B45309;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.practice-feature-card p {
+  margin: 0;
+  color: #A16207;
+  font-size: 13px;
+}
+
+.practice-feature-card > span {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--quiz-pill);
+  background: #F59E0B;
+  color: white;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.20);
+  padding: 0 24px;
+  font-weight: 700;
+}
+
+.practice-history-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: var(--quiz-text);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.practice-history-title svg {
+  color: var(--quiz-primary-500);
+}
+
+.practice-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.practice-history-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--quiz-border);
+  border-radius: var(--quiz-radius-lg);
+  background: white;
+  padding: 16px;
+  text-align: left;
+}
+
+.practice-history-item:hover {
+  border-color: #CBD5E1;
+  background: var(--quiz-muted);
+  transform: translateY(-1px);
+}
+
+.practice-history-left {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.practice-history-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--quiz-primary-50);
+  color: var(--quiz-primary-600);
+}
+
+.practice-history-left strong {
+  display: block;
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--quiz-text);
+  font-size: 15px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.practice-history-left small {
+  color: var(--quiz-hint);
+  font-size: 12px;
+}
+
+.practice-history-item em {
+  flex: 0 0 auto;
+  color: #10B981;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.wrong-hero {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  color: var(--s-text);
+}
+
+.wrong-hero > svg {
+  display: none;
+}
+
+.wrong-hero div {
+  position: relative;
+  min-height: 132px;
+  overflow: hidden;
+  border-radius: var(--s-radius-lg);
+  background: white;
+  box-shadow: var(--s-shadow-card);
+  padding: 30px 32px;
+}
+
+.wrong-hero div::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  background: #EF4444;
+}
+
+.wrong-hero div:nth-of-type(2)::before {
+  background: #F59E0B;
+}
+
+.wrong-hero div:nth-of-type(3)::before {
+  background: #10B981;
+}
+
+.wrong-hero strong {
+  color: var(--s-text);
+  font-size: 48px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.wrong-hero span {
+  color: var(--s-muted);
+  font-weight: 700;
+}
+
+.wrong-tools {
+  grid-template-columns: minmax(0, 1fr) 160px;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.student-plan-page {
+  --plan-primary-50: #EEF2FF;
+  --plan-primary-100: #E0E7FF;
+  --plan-primary-500: #6366F1;
+  --plan-primary-600: #5A67D8;
+  --plan-ai-main: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+  --plan-ai-light: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+  --plan-success-50: #ECFDF5;
+  --plan-success-500: #10B981;
+  --plan-warning-500: #F59E0B;
+  --plan-bg: #F4F6F9;
+  --plan-card: #FFFFFF;
+  --plan-muted-bg: #F8FAFC;
+  --plan-border-light: #F1F5F9;
+  --plan-border: #E2E8F0;
+  --plan-text: #1E293B;
+  --plan-secondary: #64748B;
+  --plan-hint: #94A3B8;
+  --plan-radius-sm: 8px;
+  --plan-radius-md: 12px;
+  --plan-radius-lg: 16px;
+  --plan-radius-xl: 24px;
+  --plan-pill: 9999px;
+  --plan-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --plan-shadow-card: 0 12px 32px rgba(15, 23, 42, 0.04);
+  --plan-shadow-focus: 0 0 0 4px rgba(79, 70, 229, 0.15);
+  width: 100%;
+  color: var(--plan-text);
+}
+
+.student-plan-page button,
+.student-plan-page input {
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.student-plan-page .plan-banner {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  min-height: 164px;
+  margin-bottom: 32px;
+  border-radius: var(--plan-radius-xl);
+  background: linear-gradient(135deg, #4F46E5 0%, #8B5CF6 100%);
+  color: white;
+  box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.3);
+  padding: 40px 48px;
+}
+
+.student-plan-page .plan-banner::after {
+  content: "";
+  position: absolute;
+  right: -50px;
+  top: -100px;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.student-plan-page .banner-left {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.student-plan-page .banner-icon {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(10px);
+}
+
+.student-plan-page .banner-title {
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.student-plan-page .banner-stats {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 48px;
+}
+
+.student-plan-page .b-stat-item {
+  text-align: center;
+}
+
+.student-plan-page .b-stat-item h2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0 0 4px;
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.student-plan-page .b-stat-item h2 svg {
+  color: #FDE047;
+  fill: #FDE047;
+}
+
+.student-plan-page .b-stat-item span {
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.student-plan-page .plan-layout {
+  display: grid;
+  grid-template-columns: 1.8fr 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.student-plan-page .main-col,
+.student-plan-page .side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.student-plan-page .card {
+  border: 1px solid rgba(255,255,255,0.8);
+  border-radius: var(--plan-radius-xl);
+  background: var(--plan-card);
+  box-shadow: var(--plan-shadow-card);
+  padding: 36px;
+}
+
+.student-plan-page .card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.student-plan-page .card-header.compact {
+  margin-bottom: 24px;
+}
+
+.student-plan-page .card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--plan-text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.student-plan-page .card-title svg {
+  color: var(--plan-primary-600);
+}
+
+.student-plan-page .achievement-title svg {
+  color: var(--plan-warning-500);
+}
+
+.student-plan-page .card-subtitle {
+  color: var(--plan-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.student-plan-page .calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.student-plan-page .cal-month {
+  color: var(--plan-text);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.student-plan-page .cal-arrows {
+  display: flex;
+  gap: 8px;
+}
+
+.student-plan-page .cal-arr-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--plan-muted-bg);
+  color: var(--plan-secondary);
+}
+
+.student-plan-page .cal-arr-btn:hover {
+  background: var(--plan-border);
+  color: var(--plan-text);
+}
+
+.student-plan-page .cal-weekdays,
+.student-plan-page .cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+}
+
+.student-plan-page .cal-weekdays {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.student-plan-page .cal-grid {
+  grid-auto-rows: 44px;
+  gap: 12px 8px;
+}
+
+.student-plan-page .cal-header-day {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--plan-hint);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.student-plan-page .cal-day-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+}
+
+.student-plan-page .cal-day {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--plan-secondary);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.student-plan-page .cal-day:hover:not(:disabled) {
+  background: var(--plan-muted-bg);
+}
+
+.student-plan-page .cal-day.empty {
+  color: transparent;
+  pointer-events: none;
+}
+
+.student-plan-page .cal-day.checked {
+  background: var(--plan-success-50);
+  color: var(--plan-success-500);
+  font-weight: 700;
+}
+
+.student-plan-page .cal-day.today {
+  border: 2px solid var(--plan-primary-500);
+  color: var(--plan-primary-600);
+  font-weight: 700;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+}
+
+.student-plan-page .cal-day.today.checked {
+  border-color: var(--plan-primary-500);
+  background: var(--plan-primary-500);
+  color: white;
+}
+
+.student-plan-page .empty-task-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0 16px;
+  text-align: center;
+}
+
+.student-plan-page .ai-sparkle-bg {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20px;
+  background: var(--plan-ai-light);
+  color: #8B5CF6;
+  box-shadow: 0 12px 24px rgba(139, 92, 246, 0.15);
+  margin-bottom: 24px;
+}
+
+.student-plan-page .empty-task-state h3 {
+  margin: 0 0 8px;
+  color: var(--plan-text);
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.student-plan-page .empty-task-state p {
+  max-width: 520px;
+  margin: 0 0 32px;
+  color: var(--plan-secondary);
+  font-size: 15px;
+}
+
+.student-plan-page .ai-prompt-bar {
+  width: 100%;
+  max-width: 540px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--plan-border);
+  border-radius: var(--plan-pill);
+  background: var(--plan-card);
+  box-shadow: var(--plan-shadow-sm);
+  padding: 6px 6px 6px 20px;
+}
+
+.student-plan-page .ai-prompt-bar:focus-within {
+  border-color: var(--plan-primary-500);
+  box-shadow: 0 12px 32px rgba(79, 70, 229, 0.1), var(--plan-shadow-focus);
+  transform: translateY(-2px);
+}
+
+.student-plan-page .ai-prompt-bar input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--plan-text);
+  box-shadow: none;
+  padding: 0;
+  font-size: 15px;
+}
+
+.student-plan-page .ai-prompt-bar input::placeholder {
+  color: var(--plan-hint);
+}
+
+.student-plan-page .btn-ai-gen {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--plan-pill);
+  background: var(--plan-ai-main);
+  color: white;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  padding: 0 24px;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.student-plan-page .btn-ai-gen:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: scale(1.02);
+}
+
+.student-plan-page .plan-task-list {
+  display: grid;
+  gap: 14px;
+}
+
+.student-plan-page .plan-task-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 68px;
+  border: 1px solid var(--plan-border-light);
+  border-radius: var(--plan-radius-lg);
+  background: var(--plan-muted-bg);
+  padding: 12px 14px;
+}
+
+.student-plan-page .plan-task-row:hover {
+  border-color: var(--plan-primary-100);
+  background: white;
+  box-shadow: var(--plan-shadow-sm);
+  transform: translateY(-1px);
+}
+
+.student-plan-page .plan-task-check {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--plan-border);
+  border-radius: 50%;
+  background: white;
+  color: var(--plan-success-500);
+}
+
+.student-plan-page .plan-task-row.done .plan-task-check {
+  border-color: var(--plan-success-500);
+  background: var(--plan-success-500);
+  color: white;
+}
+
+.student-plan-page .plan-task-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.student-plan-page .plan-task-body strong {
+  overflow: hidden;
+  color: var(--plan-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-plan-page .plan-task-body small {
+  color: var(--plan-hint);
+}
+
+.student-plan-page .plan-task-row.done .plan-task-body strong {
+  color: var(--plan-hint);
+  text-decoration: line-through;
+}
+
+.student-plan-page .plan-task-tag {
+  border-radius: var(--plan-pill);
+  background: white;
+  color: var(--plan-secondary);
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.student-plan-page .plan-task-row.done .plan-task-tag {
+  background: var(--plan-success-50);
+  color: var(--plan-success-500);
+}
+
+.student-plan-page .mini-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 140px;
+  border-bottom: 1px solid var(--plan-border);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+}
+
+.student-plan-page .bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.student-plan-page .bar-track {
+  width: 100%;
+  max-width: 20px;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 6px;
+  background: var(--plan-muted-bg);
+}
+
+.student-plan-page .bar-fill {
+  width: 100%;
+  border-radius: 6px;
+  background: linear-gradient(to top, #818CF8, #4F46E5);
+  transition: height 0.5s ease;
+}
+
+.student-plan-page .bar-label {
+  color: var(--plan-hint);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.student-plan-page .total-hours {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--plan-text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.student-plan-page .total-hours span {
+  color: var(--plan-primary-600);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.student-plan-page .badges-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.student-plan-page .badge-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  border: 2px dashed var(--plan-border);
+  border-radius: var(--plan-radius-lg);
+  background: var(--plan-muted-bg);
+  color: var(--plan-hint);
+  padding: 24px 0;
+}
+
+.student-plan-page .badge-item.unlocked {
+  border: 1px solid #FDE68A;
+  border-style: solid;
+  background: linear-gradient(to bottom right, #FFFBEB, #FEF3C7);
+  color: #D97706;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.1);
+}
+
+.student-plan-page .badge-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.student-plan-page .badge-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.profile-page {
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.profile-pc-layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.profile-side,
+.profile-main-card {
+  display: grid;
+  gap: 24px;
+}
+
+.profile-identity-card,
+.profile-main-card {
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  border-radius: var(--s-radius-xl);
+  background: white;
+  box-shadow: var(--s-shadow-card);
+}
+
+.profile-main-card {
+  padding: 28px;
+}
+
+.profile-cover {
+  position: relative;
+  height: 180px;
+  margin-bottom: 82px;
+  border-radius: var(--s-radius-xl) var(--s-radius-xl) 0 0;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.28), transparent 30%),
+    linear-gradient(135deg, #EEF2FF 0%, #E0F2FE 46%, #EDE9FE 100%);
+  box-shadow: none;
+}
+
+.profile-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.08), rgba(99, 102, 241, 0));
+}
+
+.big-avatar {
+  position: absolute;
+  left: 50%;
+  bottom: -68px;
+  z-index: 1;
+  width: 136px;
+  height: 136px;
+  transform: translateX(-50%);
+  overflow: visible;
+  border: 6px solid white;
+  border-radius: 50%;
+  background: white;
+  color: var(--s-primary-600);
+  box-shadow: var(--s-shadow-float);
+}
+
+.big-avatar > img,
+.big-avatar > .default-user-avatar {
+  position: static;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: transparent;
+  padding: 0;
+}
+
+.big-avatar .camera-badge {
+  position: absolute;
+  right: 4px;
+  bottom: 8px;
+  width: 36px;
+  height: 36px;
+  border: 3px solid white;
+  border-radius: 50%;
+  background: var(--s-primary-600);
+  color: white;
+  padding: 8px;
+}
+
+.profile-header-info {
+  display: grid;
+  gap: 18px;
+  padding: 0 28px 28px;
+  text-align: center;
+}
+
+.profile-header-info h1 {
+  margin: 0 0 8px;
+  color: var(--s-text);
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.profile-header-info p {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 6px 0;
+  color: var(--s-muted);
+  word-break: break-all;
+}
+
+.profile-header-info aside {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  border-radius: 18px;
+  background: var(--s-bg);
+  padding: 18px;
+  text-align: center;
+}
+
+.profile-header-info aside strong {
+  display: block;
+  color: var(--s-primary-600);
+  font-size: 36px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.profile-header-info aside span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--s-muted);
+  font-weight: 800;
+}
+
+.profile-tabs {
+  width: fit-content;
+  align-self: center;
+  justify-self: center;
+  margin: 4px 0 2px;
+  border: 0;
+  border-radius: var(--s-pill);
+  background: var(--s-bg);
+  padding: 6px;
+}
+
+.profile-tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: var(--s-pill);
+  padding: 0 18px;
+}
+
+.profile-tabs .active {
+  background: white;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.badge-card {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+}
+
+.badge-card .badges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.badges span {
+  min-width: 0;
+  min-height: 92px;
+  border: 0;
+  border-radius: 18px;
+  background: #FFFBEB;
+  color: #B45309;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.20);
+  font-weight: 800;
+}
+
+.badges .locked {
+  background: var(--s-bg);
+}
+
+.profile-form {
+  display: grid;
+  gap: 20px;
+  border-color: rgba(226, 232, 240, 0.82);
+  box-shadow: none;
+  padding: 24px;
+}
+
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.profile-form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.profile-form footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.profile-form .password-field {
+  min-height: 48px;
+  border-radius: var(--s-radius-md);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+}
+
+.profile-form label {
+  gap: 8px;
+  color: var(--s-text);
+  font-weight: 800;
+}
+
+.profile-form .textarea {
+  min-height: 160px;
+}
+
+.profile-records {
+  box-shadow: none;
+}
+
+.notice-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.notice-settings-grid .toggle-line {
+  min-height: 52px;
+  border: 1px solid var(--s-border);
+  border-radius: 14px;
+  background: var(--s-bg);
+  padding: 0 14px;
+}
+
+.modal-mask {
+  background: rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(8px);
+}
+
+.join-modal,
+.complete-modal {
+  border-radius: var(--s-radius-lg);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+  padding: 28px;
+}
+
+.modal-head {
+  margin-bottom: 20px;
+}
+
+.code-input {
+  height: 58px;
+}
+
+.preview-course {
+  border: 0;
+  border-radius: var(--s-radius-md);
+  background: var(--s-bg);
+}
+
+.hint-line {
+  border-radius: var(--s-radius-md);
+}
+
+.bottom-tabs {
+  display: none;
+}
+
+.practice-chip:focus-visible,
+.practice-segmented-control button:focus-visible,
+.practice-switch-wrapper:focus-visible,
+.practice-generate-btn:focus-visible,
+.practice-feature-card:focus-visible,
+.practice-history-item:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+}
+
+.practice-segmented-control button:hover:not(.active):not(:disabled),
+.practice-switch-wrapper:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--quiz-primary-600);
+}
+
+.practice-generate-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(139, 92, 246, 0.40);
+}
+
+.practice-generate-btn:active:not(:disabled),
+.practice-feature-card:active:not(:disabled),
+.practice-history-item:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.practice-generate-btn:disabled,
+.practice-feature-card:disabled,
+.practice-chip:disabled,
+.practice-segmented-control button:disabled,
+.practice-switch-wrapper:disabled,
+.practice-history-item:disabled {
+  cursor: not-allowed;
+  transform: none;
+  filter: none;
+  box-shadow: none;
+}
+
+.practice-generate-btn:disabled,
+.practice-feature-card:disabled {
+  opacity: 0.64;
+}
+
+.practice-feature-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(245, 158, 11, 0.14);
+}
+
+.practice-feature-card:disabled > span {
+  background: #CBD5E1;
+  color: white;
+  box-shadow: none;
+}
+
+.practice-history-item:hover:not(:disabled) {
+  border-color: #CBD5E1;
+  background: var(--quiz-muted);
+  transform: translateY(-1px);
+}
+
+.exam-answer-page {
+  --exam-primary-50: #EEF2FF;
+  --exam-primary-100: #E0E7FF;
+  --exam-primary-400: #818CF8;
+  --exam-primary-500: #6366F1;
+  --exam-primary-600: #4F46E5;
+  --exam-success-50: #ECFDF5;
+  --exam-success-500: #10B981;
+  --exam-warning-50: #FFFBEB;
+  --exam-warning-500: #F59E0B;
+  --exam-warning-700: #B45309;
+  --exam-bg-page: #F4F6F9;
+  --exam-bg-card: #FFFFFF;
+  --exam-border-light: #F1F5F9;
+  --exam-border-default: #E2E8F0;
+  --exam-border-strong: #CBD5E1;
+  --exam-text-main: #1E293B;
+  --exam-text-sec: #64748B;
+  --exam-text-hint: #94A3B8;
+  --exam-radius-sm: 8px;
+  --exam-radius-md: 12px;
+  --exam-radius-lg: 16px;
+  --exam-radius-xl: 24px;
+  --exam-radius-pill: 9999px;
+  --exam-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --exam-shadow-card: 0 12px 32px rgba(15, 23, 42, 0.05);
+  --exam-shadow-focus: 0 0 0 4px rgba(79, 70, 229, 0.15);
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--exam-bg-page);
+  color: var(--exam-text-main);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.exam-answer-page *,
+.exam-answer-page *::before,
+.exam-answer-page *::after {
+  box-sizing: border-box;
+}
+
+.exam-answer-page svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.exam-answer-page button {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  outline: 0;
+  transition: all 0.2s ease;
+}
+
+.exam-answer-page button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+  box-shadow: none;
+}
+
+.exam-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--exam-bg-page);
+}
+
+.exam-header {
+  position: relative;
+  z-index: 10;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--exam-border-default);
+  background: var(--exam-bg-card);
+  box-shadow: var(--exam-shadow-sm);
+  padding: 0 32px;
+}
+
+.exam-exit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--exam-radius-pill);
+  color: var(--exam-text-sec);
+  padding: 8px 16px 8px 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.exam-exit-btn:hover {
+  background: var(--exam-bg-page);
+  color: var(--exam-text-main);
+}
+
+.exam-title {
+  position: absolute;
+  left: 50%;
+  max-width: min(560px, calc(100vw - 360px));
+  overflow: hidden;
+  transform: translateX(-50%);
+  color: var(--exam-text-main);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exam-answer-page .timer-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--exam-primary-100);
+  border-radius: var(--exam-radius-pill);
+  background: var(--exam-primary-50);
+  color: var(--exam-primary-600);
+  padding: 6px 16px;
+}
+
+.exam-answer-page .timer-text {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--exam-primary-600);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.exam-container {
+  flex: 1;
+  display: flex;
+  gap: 24px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  overflow-y: auto;
+  padding: 24px 32px 96px;
+}
+
+.exam-nav-sidebar {
+  width: 280px;
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.exam-nav-card {
+  border: 1px solid white;
+  border-radius: var(--exam-radius-xl);
+  background: var(--exam-bg-card);
+  box-shadow: var(--exam-shadow-card);
+  padding: 24px;
+}
+
+.exam-nav-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--exam-border-light);
+  padding-bottom: 16px;
+}
+
+.exam-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.exam-stat-val {
+  color: var(--exam-text-main);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.exam-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--exam-text-hint);
+  font-size: 12px;
+}
+
+.exam-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.exam-dot-answered {
+  background: var(--exam-primary-500);
+}
+
+.exam-dot-marked {
+  background: var(--exam-warning-500);
+}
+
+.exam-dot-unanswered {
+  border: 2px solid var(--exam-border-strong);
+}
+
+.exam-q-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.exam-q-btn {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-sm);
+  background: var(--exam-bg-page);
+  color: var(--exam-text-sec);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.exam-q-btn:hover {
+  border-color: var(--exam-primary-400);
+  color: var(--exam-primary-600);
+}
+
+.exam-q-btn.answered {
+  border-color: var(--exam-primary-100);
+  background: var(--exam-primary-50);
+  color: var(--exam-primary-600);
+}
+
+.exam-q-btn.current {
+  border: 2px solid var(--exam-primary-600);
+  background: white;
+  color: var(--exam-primary-600);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.20);
+}
+
+.exam-q-btn.marked::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--exam-warning-500);
+}
+
+.exam-question-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.exam-q-card {
+  flex: 1;
+  border: 1px solid white;
+  border-radius: var(--exam-radius-xl);
+  background: var(--exam-bg-card);
+  box-shadow: var(--exam-shadow-card);
+  padding: 40px;
+}
+
+.exam-q-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.exam-q-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exam-q-number {
+  margin-right: 8px;
+  color: var(--exam-text-main);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.exam-tag {
+  border-radius: var(--exam-radius-pill);
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.exam-tag-type {
+  background: var(--exam-primary-50);
+  color: var(--exam-primary-600);
+}
+
+.exam-tag-diff {
+  border: 1px solid var(--exam-border-default);
+  background: var(--exam-bg-page);
+  color: var(--exam-text-sec);
+}
+
+.exam-mark-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-pill);
+  background: white;
+  color: var(--exam-text-sec);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.exam-mark-btn:hover,
+.exam-mark-btn.is-marked {
+  border-color: #FDE68A;
+  background: var(--exam-warning-50);
+  color: var(--exam-warning-700);
+}
+
+.exam-mark-btn.is-marked svg {
+  fill: var(--exam-warning-500);
+  color: var(--exam-warning-500);
+}
+
+.exam-q-stem {
+  margin-bottom: 32px;
+  color: var(--exam-text-main);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.6;
+  letter-spacing: 0.3px;
+}
+
+.exam-options-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.exam-opt-label {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.exam-opt-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+
+.exam-opt-card {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-lg);
+  background: var(--exam-bg-card);
+  padding: 16px 20px;
+  transition: all 0.2s ease;
+}
+
+.exam-opt-label:hover .exam-opt-card {
+  border-color: var(--exam-primary-400);
+  background: var(--exam-bg-page);
+}
+
+.exam-opt-letter {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  margin-right: 16px;
+  border: 1px solid var(--exam-border-default);
+  border-radius: 50%;
+  background: var(--exam-bg-page);
+  color: var(--exam-text-sec);
+  font-size: 14px;
+  font-weight: 800;
+  transition: all 0.2s;
+}
+
+.exam-opt-text {
+  flex: 1;
+  color: var(--exam-text-main);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.exam-opt-input:focus-visible + .exam-opt-card,
+.exam-q-btn:focus-visible,
+.exam-mark-btn:focus-visible,
+.exam-btn:focus-visible,
+.exam-exit-btn:focus-visible,
+.exam-analysis-trigger:focus-visible {
+  outline: 0;
+  box-shadow: var(--exam-shadow-focus);
+}
+
+.exam-opt-input:checked + .exam-opt-card {
+  border-color: var(--exam-primary-500);
+  background: var(--exam-primary-50);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.10);
+}
+
+.exam-opt-input:checked + .exam-opt-card .exam-opt-letter {
+  border-color: var(--exam-primary-600);
+  background: var(--exam-primary-600);
+  color: white;
+}
+
+.exam-opt-input:checked + .exam-opt-card .exam-opt-text {
+  color: var(--exam-primary-600);
+  font-weight: 600;
+}
+
+.exam-answer-input,
+.exam-answer-textarea {
+  width: 100%;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-lg);
+  background: white;
+  color: var(--exam-text-main);
+  padding: 14px 16px;
+  font: inherit;
+  outline: 0;
+  transition: all 0.2s ease;
+}
+
+.exam-answer-input {
+  max-width: 420px;
+  height: 48px;
+}
+
+.exam-answer-textarea {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.exam-answer-input:focus,
+.exam-answer-textarea:focus {
+  border-color: var(--exam-primary-500);
+  box-shadow: var(--exam-shadow-focus);
+}
+
+.exam-text-answer {
+  display: grid;
+  gap: 8px;
+}
+
+.exam-text-answer small {
+  justify-self: end;
+  color: var(--exam-text-hint);
+  font-size: 12px;
+}
+
+.exam-action-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  height: 72px;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--exam-border-default);
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.03);
+}
+
+.exam-footer-container {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 32px;
+}
+
+.exam-footer-actions,
+.exam-footer-progress {
+  display: flex;
+  align-items: center;
+}
+
+.exam-footer-actions {
+  gap: 16px;
+}
+
+.exam-footer-progress {
+  gap: 16px;
+}
+
+.exam-btn {
+  min-width: 112px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--exam-radius-pill);
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.exam-btn-outline {
+  border: 1px solid var(--exam-border-strong) !important;
+  background: white !important;
+  color: var(--exam-text-main) !important;
+}
+
+.exam-btn-outline:hover:not(:disabled) {
+  border-color: var(--exam-primary-500) !important;
+  background: var(--exam-bg-page) !important;
+  color: var(--exam-primary-600) !important;
+}
+
+.exam-btn-primary {
+  background: var(--exam-primary-600) !important;
+  color: white !important;
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.30);
+}
+
+.exam-btn-primary:hover:not(:disabled) {
+  background: var(--exam-primary-500) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.40);
+}
+
+.exam-prog-text {
+  color: var(--exam-text-sec);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.exam-prog-bar {
+  width: 120px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--exam-border-default);
+}
+
+.exam-prog-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--exam-primary-500);
+  transition: width 0.25s ease;
+}
+
+.exam-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-bg);
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(8px);
+}
+
+.exam-confirm-card {
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  border-radius: var(--exam-radius-xl);
+  background: white;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  padding: 22px;
+}
+
+.exam-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.exam-modal-head h2 {
+  flex: 1;
+  margin: 0;
+  color: var(--exam-text-main);
+  font-size: 20px;
+}
+
+.exam-modal-head svg {
+  color: var(--exam-warning-500);
+}
+
+.exam-confirm-card p {
+  margin: 8px 0;
+  color: var(--exam-text-sec);
+}
+
+.exam-confirm-card footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.exam-result-main {
+  flex: 1;
+  display: grid;
+  gap: 20px;
+  width: min(900px, calc(100% - 48px));
+  margin: 0 auto;
+  overflow-y: auto;
+  padding: 32px 0 48px;
+}
+
+.exam-result-card,
+.exam-result-summary,
+.exam-analysis-card {
+  border: 1px solid white;
+  border-radius: var(--exam-radius-xl);
+  background: white;
+  box-shadow: var(--exam-shadow-card);
+  padding: 28px;
+}
+
+.exam-result-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #4F46E5, #06B6D4);
+  color: white;
+  padding: 40px;
+}
+
+.exam-result-card strong {
+  font-size: 56px;
+  line-height: 1;
+}
+
+.exam-result-card em {
+  border-radius: var(--exam-radius-pill);
+  background: rgba(255, 255, 255, 0.18);
+  padding: 4px 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.exam-result-summary h2,
+.exam-analysis-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--exam-text-main);
+  font-size: 20px;
+}
+
+.exam-result-summary p {
+  margin: 12px 0 0;
+  color: var(--exam-text-sec);
+}
+
+.exam-analysis-card {
+  display: grid;
+  gap: 12px;
+}
+
+.exam-analysis-item {
+  overflow: hidden;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-lg);
+  background: white;
+}
+
+.exam-analysis-item.open {
+  background: var(--exam-bg-page);
+}
+
+.exam-analysis-trigger {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--exam-text-main);
+  padding: 0 14px;
+  text-align: left;
+}
+
+.exam-analysis-trigger span {
+  margin-left: auto;
+}
+
+.exam-analysis-item.open .exam-analysis-trigger svg:last-child {
+  transform: rotate(180deg);
+}
+
+.exam-analysis-body {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--exam-border-default);
+  padding: 14px;
+}
+
+.exam-analysis-body p,
+.exam-analysis-body small {
+  margin: 0;
+  color: var(--exam-text-sec);
+}
+
+@media (max-width: 900px) {
+  .exam-header {
+    height: auto;
+    min-height: 64px;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .exam-title {
+    position: static;
+    max-width: none;
+    transform: none;
+    font-size: 16px;
+  }
+
+  .exam-answer-page .timer-widget {
+    padding: 5px 12px;
+  }
+
+  .exam-container {
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px 16px 104px;
+  }
+
+  .exam-nav-sidebar {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .exam-nav-card {
+    padding: 18px;
+  }
+
+  .exam-q-grid {
+    grid-template-columns: repeat(8, minmax(34px, 1fr));
+    gap: 8px;
+  }
+
+  .exam-q-card {
+    padding: 24px;
+  }
+
+  .exam-q-meta-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .exam-mark-btn {
+    align-self: flex-start;
+  }
+
+  .exam-footer-container {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .exam-footer-progress {
+    display: none;
+  }
+
+  .exam-footer-actions {
+    gap: 8px;
+  }
+
+  .exam-btn {
+    min-width: 0;
+    padding: 0 14px;
+  }
+}
+
+@media (max-width: 560px) {
+  .exam-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .exam-title {
+    order: -1;
+    width: 100%;
+  }
+
+  .exam-q-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .exam-opt-card {
+    align-items: flex-start;
+    padding: 14px;
+  }
+
+  .exam-action-footer {
+    height: 88px;
+  }
+
+  .exam-footer-container {
+    align-items: stretch;
+  }
+
+  .exam-footer-actions {
+    flex: 1;
+  }
+
+  .exam-footer-actions .exam-btn {
+    flex: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .student-plan-page .plan-banner {
+    padding: 24px;
+  }
+
+  .student-plan-page .banner-left {
+    align-items: flex-start;
+  }
+
+  .student-plan-page .banner-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+  }
+
+  .student-plan-page .banner-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .student-plan-page .b-stat-item h2 {
+    font-size: 26px;
+  }
+
+  .student-plan-page .card {
+    padding: 22px;
+  }
+
+  .student-plan-page .cal-grid {
+    grid-auto-rows: 36px;
+    gap: 10px 4px;
+  }
+
+  .student-plan-page .cal-day {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+
+  .student-plan-page .ai-prompt-bar {
+    align-items: stretch;
+    flex-direction: column;
+    border-radius: var(--plan-radius-lg);
+    padding: 12px;
+  }
+
+  .student-plan-page .btn-ai-gen {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .student-plan-page .badges-grid {
+    gap: 12px;
+  }
+}
+
+@keyframes student-scale-fade {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes float-orb {
+  0%, 100% { transform: translateY(0); box-shadow: 0 16px 40px rgba(139, 92, 246, 0.36); }
+  50% { transform: translateY(-12px); box-shadow: 0 24px 48px rgba(139, 92, 246, 0.46); }
+}
+
+@media (max-width: 1080px) {
+  .student-top {
+    grid-template-columns: 1fr auto;
+    padding: 0 24px;
+  }
+
+  .student-nav-links {
+    display: none;
+  }
+
+  .student-course-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .course-layout,
+  .tutoring-grid,
+  .student-plan-page .plan-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .student-shell {
+    padding-bottom: 88px;
+  }
+
+  .student-top {
+    height: 64px;
+  }
+
+  .brand strong {
+    font-size: 16px;
+  }
+
+  .top-actions {
+    gap: 10px;
+  }
+
+  .top-icon,
+  .avatar-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+
+  .student-main {
+    padding: 24px 16px 96px;
+  }
+
+  .student-page {
+    gap: 24px;
+  }
+
+  .hello-card {
+    min-height: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 30px;
+  }
+
+  .hello-card h1 {
+    font-size: 28px;
+  }
+
+  .continue-card {
+    grid-template-columns: 1fr;
+  }
+
+  .continue-cover {
+    min-height: 180px;
+  }
+
+  .home-grid,
+  .student-course-grid,
+  .quick-row,
+  .knowledge-layout,
+  .wrong-layout,
+  .achievement-row {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-card,
+  .knowledge-head,
+  .knowledge-body,
+  .badge-card {
+    padding: 22px;
+  }
+
+  .home-ai-recommend-card,
+  .home-activity-card {
+    padding: 24px;
+  }
+
+  .home-ai-recommend-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 24px;
+  }
+
+  .home-ai-rec-actions {
+    width: 100%;
+  }
+
+  .home-ac-header {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .home-activity-item {
+    gap: 16px;
+  }
+
+  .course-tools {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .course-tools .pretty-input,
+  .course-tools .select-menu {
+    width: 100%;
+  }
+
+  .page-title-row {
+    display: grid;
+    gap: 16px;
+  }
+
+  .page-title-row h1,
+  .course-hero-student h1,
+  .student-plan-page .banner-title,
+  .profile-header-info h1 {
+    font-size: 28px;
+  }
+
+  .course-hero-student {
+    grid-template-columns: 1fr;
+    padding: 30px;
+  }
+
+  .student-plan-page .plan-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 30px;
+  }
+
+  .student-plan-page .banner-stats {
+    width: 100%;
+    justify-content: space-between;
+    gap: 18px;
+  }
+
+  .student-plan-page .card {
+    padding: 28px;
+  }
+
+  .student-plan-page .ai-prompt-bar {
+    max-width: none;
+  }
+
+  .student-plan-page .plan-task-row {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .student-plan-page .plan-task-tag {
+    grid-column: 2;
+    width: fit-content;
+  }
+
+  .wrong-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .wrong-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .quiz-modern-header {
+    display: grid;
+    gap: 16px;
+  }
+
+  .quiz-modern-title h1 {
+    font-size: 28px;
+  }
+
+  .quiz-modern-page .course-select,
+  .quiz-modern-page .select-menu {
+    width: 100%;
+  }
+
+  .quiz-modern-tabs {
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .practice-modern-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-modern-card {
+    padding: 24px;
+  }
+
+  .practice-settings-row {
+    align-items: stretch;
+    flex-direction: column;
+    border-radius: var(--quiz-radius-lg);
+    padding: 8px;
+  }
+
+  .practice-segmented-control {
+    flex-wrap: wrap;
+  }
+
+  .practice-segmented-control button {
+    flex: 1 1 72px;
+  }
+
+  .practice-feature-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .profile-pc-layout,
+  .profile-form-grid,
+  .notice-settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-main-card {
+    padding: 22px;
+  }
+
+  .profile-cover {
+    height: 210px;
+    margin-bottom: 70px;
+  }
+
+  .big-avatar {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .profile-header-info {
+    display: grid;
+    justify-items: center;
+    padding: 0 8px;
+    text-align: center;
+  }
+
+  .profile-header-info p {
+    justify-content: center;
+  }
+
+  .profile-header-info aside {
+    text-align: center;
+  }
+
+  .bottom-tabs {
+    display: grid;
+    border-top: 1px solid rgba(226, 232, 240, 0.72);
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(16px);
+  }
+}
+
+/* Student AI Q&A page: single source of truth, rewritten from the provided reference. */
+.student-main:has(.qa-modern-page) {
+  width: 100%;
+  max-width: none;
+  background: var(--s-bg, #F4F6F9);
+  padding: 0 0 96px;
+}
+
+.student-page:has(.qa-modern-page) {
+  display: block;
+  min-height: calc(100vh - 72px);
+  background: var(--s-bg, #F4F6F9);
+}
+
+.qa-modern-page {
+  --qa-primary-50: #EEF2FF;
+  --qa-primary-100: #E0E7FF;
+  --qa-primary-400: #818CF8;
+  --qa-primary-500: #6366F1;
+  --qa-primary-600: #4F46E5;
+  --qa-ai-gradient: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+  --qa-ai-light: #F5F3FF;
+  --qa-bg: #F4F6F9;
+  --qa-surface: #FFFFFF;
+  --qa-muted-bg: #F8FAFC;
+  --qa-border: #E2E8F0;
+  --qa-text: #1E293B;
+  --qa-secondary: #64748B;
+  --qa-hint: #94A3B8;
+  --qa-radius-md: 12px;
+  --qa-radius-lg: 16px;
+  --qa-radius-xl: 24px;
+  --qa-pill: 9999px;
+  --qa-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --qa-shadow-float: 0 12px 32px rgba(15, 23, 42, 0.08);
+  --qa-shadow-focus: 0 0 0 4px rgba(79, 70, 229, 0.15);
+  position: relative;
+  width: 100%;
+  max-width: none;
+  min-height: calc(100vh - 152px);
+  margin: 0;
+  background: var(--s-bg, var(--qa-bg));
+  padding: 0 0 160px;
+  color: var(--qa-text);
+}
+
+.qa-modern-page,
+.qa-modern-page * {
+  box-sizing: border-box;
+}
+
+.qa-modern-page button {
+  font-family: inherit;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.qa-modern-page textarea {
+  font-family: inherit;
+}
+
+.qa-modern-page.empty {
+  display: block;
+  place-items: initial;
+  gap: 0;
+  color: var(--qa-text);
+  text-align: initial;
+}
+
+.qa-modern-page .qa-scroll-area {
+  width: 100%;
+}
+
+.qa-modern-page .chat-wrapper {
+  width: 100%;
+  max-width: 860px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+.qa-modern-page .qa-header {
+  position: static;
+  inset: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 16px;
+  padding-bottom: 32px;
+  border-bottom: 1px dashed var(--qa-border);
+}
+
+.qa-modern-page .qa-title-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.qa-modern-page.empty .qa-header > .qa-title-group {
+  display: flex;
+}
+
+.qa-modern-page .qa-title-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 16px;
+  background: var(--qa-ai-light);
+  color: #8B5CF6;
+  box-shadow: 0 8px 16px rgba(139, 92, 246, 0.10);
+}
+
+.qa-modern-page .qa-title h1 {
+  margin: 0 0 4px;
+  color: var(--qa-text);
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.qa-modern-page .qa-title p {
+  margin: 0;
+  color: var(--qa-hint);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.qa-modern-page .qa-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.qa-modern-page .course-select {
+  min-width: 0;
+}
+
+.qa-modern-page .course-select .select-menu > button,
+.qa-modern-page .select-menu-empty {
+  min-height: 40px;
+  border: 1px solid var(--qa-border);
+  border-radius: var(--qa-pill);
+  background: var(--qa-surface);
+  color: var(--qa-text);
+  box-shadow: var(--qa-shadow-sm);
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.qa-modern-page .course-select .select-menu > button:hover,
+.qa-modern-page .select-menu-empty:hover {
+  border-color: var(--qa-primary-500);
+  color: var(--qa-primary-600);
+  transform: translateY(-2px);
+}
+
+.qa-modern-page .action-circle-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--qa-border);
+  border-radius: 50%;
+  background: var(--qa-surface);
+  color: var(--qa-secondary);
+  box-shadow: var(--qa-shadow-sm);
+}
+
+.qa-modern-page .action-circle-btn:hover {
+  background: var(--qa-muted-bg);
+  color: var(--qa-primary-600);
+  transform: translateY(-2px);
+}
+
+.qa-modern-page .history-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-modal);
+  width: 360px;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 24px 0 0 24px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+  padding: 24px;
+}
+
+.qa-modern-page .drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.qa-modern-page .drawer-head h2 {
+  margin: 0;
+  color: var(--qa-text);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.qa-modern-page .drawer-head button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--qa-muted-bg);
+  color: var(--qa-secondary);
+}
+
+.qa-modern-page .drawer-head button:hover {
+  background: var(--qa-primary-50);
+  color: var(--qa-primary-600);
+  transform: translateY(-1px);
+}
+
+.qa-modern-page .history-row {
+  min-height: 56px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  border: 0;
+  border-radius: var(--qa-radius-md);
+  background: transparent;
+  color: var(--qa-text);
+  padding: 10px;
+  text-align: left;
+}
+
+.qa-modern-page .history-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-modern-page .history-row small {
+  grid-column: 2;
+  color: var(--qa-hint);
+}
+
+.qa-modern-page .history-row:hover {
+  background: var(--qa-primary-50);
+  color: var(--qa-primary-600);
+  transform: translateX(2px);
+}
+
+.qa-modern-page .qa-welcome {
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 0 8px;
+  text-align: center;
+}
+
+.qa-modern-page .qa-welcome > svg {
+  width: 84px;
+  height: 84px;
+  padding: 20px;
+  border: 4px solid white;
+  border-radius: 50%;
+  background: var(--qa-ai-gradient);
+  color: white;
+  box-shadow: 0 16px 40px rgba(139, 92, 246, 0.36);
+}
+
+.qa-modern-page .qa-welcome h2 {
+  margin: 12px 0 0;
+  color: var(--qa-text);
+  font-size: 30px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.qa-modern-page .qa-welcome p {
+  margin: 0;
+  color: var(--qa-secondary);
+  font-size: 16px;
+}
+
+.qa-modern-page .prompt-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+}
+
+.qa-modern-page .prompt-grid button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  border-radius: var(--qa-pill);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--qa-secondary);
+  box-shadow: var(--qa-shadow-sm);
+  padding: 0 18px;
+  font-weight: 700;
+}
+
+.qa-modern-page .prompt-grid button:hover {
+  background: white;
+  color: var(--qa-primary-600);
+  transform: translateY(-2px);
+  box-shadow: var(--qa-shadow-float);
+}
+
+/* AI Q&A chat bubbles: rebuilt from the provided reference. */
+.qa-modern-page :deep(.chat-list.large) {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 0;
+}
+
+.qa-modern-page :deep(.message-row) {
+  width: 100%;
+  display: flex;
+  gap: 16px;
+  animation: qa-message-in 300ms ease-out both;
+}
+
+.qa-modern-page :deep(.message-row.user) {
+  flex-direction: row-reverse;
+}
+
+.qa-modern-page :deep(.message-row.ai) {
+  align-items: flex-start;
+}
+
+.qa-modern-page :deep(.avatar-user) {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--qa-border);
+  border-radius: 50%;
+  background: var(--qa-muted-bg);
+  color: var(--qa-secondary);
+  box-shadow: none;
+}
+
+.qa-modern-page :deep(.avatar-ai) {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-top: 4px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--qa-ai-gradient);
+  color: white;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.30);
+}
+
+.qa-modern-page :deep(.chat-bubble) {
+  position: relative;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.qa-modern-page :deep(.chat-bubble::before) {
+  display: none;
+}
+
+.qa-modern-page :deep(.bubble-user) {
+  max-width: 75%;
+  border-radius: 20px 20px 4px 20px;
+  background: var(--qa-primary-600);
+  color: white;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.20);
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.qa-modern-page :deep(.bubble-user p) {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.qa-modern-page :deep(.chat-attachments),
+.class-chat :deep(.chat-attachments) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.qa-modern-page :deep(.chat-attachment),
+.class-chat :deep(.chat-attachment) {
+  max-width: 220px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: inherit;
+  padding: 6px 9px 6px 6px;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.class-chat :deep(.chat-msg:not(.user) .chat-attachment),
+.qa-modern-page :deep(.bubble-ai .chat-attachment) {
+  border: 1px solid var(--qa-border, var(--color-border-default));
+  background: var(--qa-muted-bg, var(--color-bg-muted));
+  color: var(--qa-secondary, var(--color-text-secondary));
+}
+
+.qa-modern-page :deep(.chat-attachment img),
+.class-chat :deep(.chat-attachment img) {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  object-fit: cover;
+}
+
+.qa-modern-page :deep(.chat-attachment span),
+.class-chat :deep(.chat-attachment span) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-modern-page :deep(.bubble-ai) {
+  flex: 1;
+  max-width: 85%;
+}
+
+.qa-modern-page :deep(.thinking-process),
+.qa-modern-page :deep(.thought-toggle) {
+  width: fit-content;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  border: 1px solid var(--qa-border);
+  border-radius: var(--qa-pill);
+  background: white;
+  color: var(--qa-secondary);
+  box-shadow: var(--qa-shadow-sm);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.qa-modern-page :deep(.thinking-process:hover),
+.qa-modern-page :deep(.thought-toggle:hover) {
+  background: var(--qa-muted-bg);
+  color: var(--qa-text);
+  transform: translateY(-1px);
+}
+
+.qa-modern-page :deep(.thought-toggle svg) {
+  color: var(--qa-hint);
+}
+
+.qa-modern-page :deep(.thought-toggle svg:last-child) {
+  transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.qa-modern-page :deep(.thought-toggle .rotate) {
+  transform: rotate(180deg);
+}
+
+.qa-modern-page :deep(.thought) {
+  overflow: hidden;
+  max-width: 100%;
+  border: 1px solid rgba(221, 214, 254, 0.86);
+  border-radius: 18px;
+  background: var(--qa-ai-light);
+  color: #6D28D9;
+  box-shadow: var(--qa-shadow-sm);
+  margin: -4px 0 16px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.qa-modern-page :deep(.ai-content-card) {
+  border: 1px solid rgba(226, 232, 240, 0.60);
+  border-radius: 8px 24px 24px 24px;
+  background: white;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+  padding: 20px 24px;
+}
+
+.qa-modern-page :deep(.ai-text) {
+  margin: 0 0 24px;
+  color: var(--qa-text);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.qa-modern-page :deep(.markdown-body p),
+.class-chat :deep(.markdown-body p) {
+  margin: 0 0 12px;
+}
+
+.qa-modern-page :deep(.markdown-body p:last-child),
+.class-chat :deep(.markdown-body p:last-child) {
+  margin-bottom: 0;
+}
+
+.qa-modern-page :deep(.markdown-body ul),
+.qa-modern-page :deep(.markdown-body ol),
+.class-chat :deep(.markdown-body ul),
+.class-chat :deep(.markdown-body ol) {
+  margin: 8px 0 12px;
+  padding-left: 22px;
+}
+
+.qa-modern-page :deep(.markdown-body li + li),
+.class-chat :deep(.markdown-body li + li) {
+  margin-top: 4px;
+}
+
+.qa-modern-page :deep(.markdown-body code),
+.class-chat :deep(.markdown-body code) {
+  border-radius: 6px;
+  background: var(--qa-primary-50, var(--color-primary-50));
+  color: #6D28D9;
+  padding: 2px 6px;
+  font-family: var(--font-family-mono);
+  font-size: 0.92em;
+}
+
+.qa-modern-page :deep(.markdown-body pre),
+.class-chat :deep(.markdown-body pre) {
+  overflow: auto;
+  border-radius: 12px;
+  background: #0F172A;
+  color: #E2E8F0;
+  margin: 12px 0;
+  padding: 14px;
+}
+
+.qa-modern-page :deep(.markdown-body pre code),
+.class-chat :deep(.markdown-body pre code) {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.qa-modern-page :deep(.markdown-body blockquote),
+.class-chat :deep(.markdown-body blockquote) {
+  border-left: 3px solid #8B5CF6;
+  background: var(--qa-ai-light, var(--color-ai-light));
+  margin: 12px 0;
+  padding: 10px 12px;
+}
+
+.qa-modern-page :deep(.markdown-body table),
+.class-chat :deep(.markdown-body table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.qa-modern-page :deep(.markdown-body th),
+.qa-modern-page :deep(.markdown-body td),
+.class-chat :deep(.markdown-body th),
+.class-chat :deep(.markdown-body td) {
+  border: 1px solid var(--qa-border, var(--color-border-default));
+  padding: 8px 10px;
+}
+
+.qa-modern-page :deep(.markdown-body th),
+.class-chat :deep(.markdown-body th) {
+  background: var(--qa-muted-bg, var(--color-bg-muted));
+  font-weight: 800;
+}
+
+.qa-modern-page :deep(.markdown-body .katex-display),
+.class-chat :deep(.markdown-body .katex-display) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
+
+.qa-modern-page :deep(.references-area),
+.qa-modern-page :deep(.source-tags) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--qa-border);
+}
+
+.qa-modern-page :deep(.ref-label),
+.qa-modern-page :deep(.source-label) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--qa-hint);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.qa-modern-page :deep(.ref-tag),
+.qa-modern-page :deep(.source-tags .tag) {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-radius: var(--qa-pill);
+  background: var(--qa-primary-50);
+  color: var(--qa-primary-600);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.qa-modern-page :deep(.ref-tag:hover),
+.qa-modern-page :deep(.source-tags .tag:hover) {
+  background: var(--qa-primary-100);
+}
+
+.qa-modern-page :deep(.ai-action-bar),
+.qa-modern-page :deep(.msg-actions) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  opacity: 1;
+}
+
+.qa-modern-page :deep(.ai-action-btn),
+.qa-modern-page :deep(.msg-actions button) {
+  width: auto;
+  min-width: 0;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: visible;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--qa-hint);
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.qa-modern-page :deep(.ai-action-btn:disabled),
+.qa-modern-page :deep(.msg-actions button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.qa-modern-page :deep(.ai-action-btn svg),
+.qa-modern-page :deep(.msg-actions button svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.qa-modern-page :deep(.ai-action-btn:hover),
+.qa-modern-page :deep(.msg-actions button:hover) {
+  background: var(--qa-muted-bg);
+  color: var(--qa-text);
+  transform: translateY(-1px);
+}
+
+.qa-modern-page :deep(.ai-action-btn.success:hover),
+.qa-modern-page :deep(.msg-actions button.success:hover) {
+  background: #ECFDF5;
+  color: #10B981;
+}
+
+.qa-modern-page :deep(.streaming-placeholder) {
+  color: var(--qa-hint);
+  font-weight: 600;
+}
+
+.qa-modern-page :deep(.thinking) {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(221, 214, 254, 0.90);
+  border-radius: var(--qa-pill);
+  background: white;
+  color: var(--qa-secondary);
+  box-shadow: var(--qa-shadow-sm);
+  padding: 10px 14px;
+}
+
+.qa-modern-page :deep(.thinking i) {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--qa-ai-gradient);
+  animation: thinking var(--duration-slow) var(--ease-in-out) infinite;
+}
+
+.qa-modern-page :deep(.thinking .dot-2) {
+  animation-delay: 120ms;
+}
+
+.qa-modern-page :deep(.thinking .dot-3) {
+  animation-delay: 240ms;
+}
+
+.qa-modern-page .input-dock-container {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-fixed);
+  width: auto;
+  display: flex;
+  justify-content: center;
+  transform: none;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(to bottom, rgba(244, 246, 249, 0), rgba(244, 246, 249, 1) 40%);
+  box-shadow: none;
+  padding: 40px 24px 32px;
+  pointer-events: none;
+}
+
+.qa-modern-page .input-wrapper {
+  width: 100%;
+  max-width: 820px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.qa-modern-page .context-badge {
+  align-self: flex-start;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 24px;
+  border: 1px solid var(--qa-primary-100);
+  border-radius: var(--qa-pill);
+  background: var(--qa-surface);
+  color: var(--qa-primary-600);
+  box-shadow: var(--qa-shadow-sm);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 800;
+  animation: qa-float-up 500ms var(--ease-out);
+}
+
+.qa-modern-page .input-box {
+  min-height: 70px;
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.84);
+  border-radius: var(--qa-radius-xl);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  box-shadow: var(--qa-shadow-float);
+  padding: 12px 16px 12px 24px;
+}
+
+.qa-modern-page .input-box:focus-within {
+  border-color: var(--qa-primary-400);
+  box-shadow: 0 20px 40px rgba(79, 70, 229, 0.10), var(--qa-shadow-focus);
+}
+
+.qa-image-input {
+  display: none;
+}
+
+.qa-attachment-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 18px -2px;
+}
+
+.qa-attachment-strip.compact {
+  margin: 0 0 8px;
+}
+
+.qa-attachment-chip {
+  min-width: 0;
+  max-width: 220px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--qa-border, var(--color-border-default));
+  border-radius: 12px;
+  background: white;
+  box-shadow: var(--qa-shadow-sm, var(--shadow-sm));
+  padding: 5px 7px 5px 5px;
+  color: var(--qa-secondary, var(--color-text-secondary));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.qa-attachment-chip img {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.qa-attachment-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qa-attachment-chip button {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: var(--qa-muted-bg, var(--color-bg-muted));
+  color: var(--qa-hint, var(--color-text-muted));
+}
+
+.qa-attachment-chip button:hover {
+  background: #FEE2E2;
+  color: #EF4444;
+}
+
+.qa-modern-page .input-box textarea {
+  flex: 1;
+  align-self: center;
+  min-height: 40px;
+  max-height: 120px;
+  border: 0;
+  background: transparent;
+  color: var(--qa-text);
+  resize: none;
+  outline: none;
+  overflow: auto;
+  padding: 8px 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.qa-modern-page .input-box textarea::placeholder {
+  color: var(--qa-hint);
+}
+
+.qa-modern-page .attach-btn,
+.class-chat .attach-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--qa-border, var(--color-border-default));
+  border-radius: 14px;
+  background: var(--qa-muted-bg, var(--color-bg-muted));
+  color: var(--qa-secondary, var(--color-text-secondary));
+  margin-bottom: 2px;
+}
+
+.qa-modern-page .attach-btn:hover:not(:disabled),
+.class-chat .attach-btn:hover:not(:disabled) {
+  border-color: var(--qa-primary-100, var(--color-primary-100));
+  background: var(--qa-primary-50, var(--color-primary-50));
+  color: var(--qa-primary-600, var(--color-primary-600));
+  transform: translateY(-1px);
+}
+
+.qa-modern-page .attach-btn:disabled,
+.class-chat .attach-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.class-chat .chat-input.compact {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  border-radius: var(--radius-lg);
+}
+
+.class-chat .chat-input.compact textarea {
+  align-self: center;
+  min-height: 40px;
+}
+
+.qa-modern-page .send-btn {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  background: var(--qa-primary-600);
+  color: white;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.30);
+  margin-bottom: 2px;
+}
+
+.qa-modern-page .send-btn:hover:not(:disabled) {
+  background: var(--qa-primary-500);
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.40);
+}
+
+.qa-modern-page .send-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.qa-modern-page .disclaimer {
+  display: block;
+  margin-top: 8px;
+  color: var(--qa-hint);
+  text-align: center;
+  font-size: 12px;
+}
+
+.qa-modern-page .thought-roll-enter-active,
+.qa-modern-page .thought-roll-leave-active {
+  overflow: hidden;
+  transition:
+    max-height var(--duration-slow) var(--ease-out),
+    opacity var(--duration-base) var(--ease-out),
+    padding-top var(--duration-base) var(--ease-out),
+    padding-bottom var(--duration-base) var(--ease-out),
+    margin var(--duration-base) var(--ease-out);
+}
+
+.qa-modern-page .thought-roll-enter-from,
+.qa-modern-page .thought-roll-leave-to {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.qa-modern-page .thought-roll-enter-to,
+.qa-modern-page .thought-roll-leave-from {
+  max-height: 320px;
+  opacity: 1;
+}
+
+@keyframes qa-message-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes qa-float-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 900px) {
+  .qa-modern-page {
+    padding-bottom: 178px;
+  }
+
+  .qa-modern-page .chat-wrapper {
+    padding: 0 0 32px;
+  }
+
+  .qa-modern-page .qa-header {
+    display: grid;
+    gap: 18px;
+    padding-bottom: 24px;
+  }
+
+  .qa-modern-page .qa-header-actions {
+    flex-wrap: wrap;
+  }
+
+  .qa-modern-page .course-select {
+    flex: 1;
+  }
+
+  .qa-modern-page .chat-msg.user .chat-bubble,
+  .qa-modern-page .bubble-ai {
+    max-width: calc(100% - 48px);
+  }
+
+  .qa-modern-page .input-dock-container {
+    padding: 34px 12px 76px;
+  }
+
+  .qa-modern-page .history-drawer {
+    width: min(360px, 92vw);
+  }
+}
+</style>
+
+<style>
+/* /quizzes must be global because QuizAnswerView and quiz cards are render-function child components. */
+.empty {
+  min-height: 132px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  border: 1px dashed #CBD5E1;
+  border-radius: 16px;
+  background: #FFFFFF;
+  color: #94A3B8;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.035);
+  padding: 28px;
+  text-align: center;
+}
+
+.empty svg {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: #F8FAFC;
+  color: #94A3B8;
+  padding: 8px;
+}
+
+.empty span {
+  color: #64748B;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.quiz-modern-page .empty {
+  min-height: 180px;
+  border-color: rgba(99, 102, 241, 0.18);
+  background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+}
+
+.quiz-modern-page {
+  --quiz-primary-50: #EEF2FF;
+  --quiz-primary-100: #E0E7FF;
+  --quiz-primary-500: #6366F1;
+  --quiz-primary-600: #5A67D8;
+  --quiz-ai-main: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+  --quiz-ai-light: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+  --quiz-bg: #F4F6F9;
+  --quiz-surface: #FFFFFF;
+  --quiz-muted: #F8FAFC;
+  --quiz-border: #E2E8F0;
+  --quiz-text: #1E293B;
+  --quiz-secondary: #64748B;
+  --quiz-hint: #94A3B8;
+  --quiz-radius-lg: 16px;
+  --quiz-radius-xl: 24px;
+  --quiz-pill: 9999px;
+  --quiz-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --quiz-shadow-card: 0 12px 32px rgba(15, 23, 42, 0.04);
+  display: grid;
+  gap: 32px;
+}
+
+.quiz-modern-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.quiz-modern-title h1 {
+  margin: 0 0 8px;
+  color: var(--quiz-text);
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.quiz-modern-title p {
+  margin: 0;
+  color: var(--quiz-secondary);
+  font-size: 15px;
+}
+
+.quiz-modern-tabs {
+  display: flex;
+  gap: 12px;
+}
+
+.quiz-modern-tabs button,
+.practice-segmented-control button,
+.practice-chip,
+.practice-switch-wrapper,
+.practice-generate-btn,
+.practice-feature-card,
+.practice-history-item,
+.quiz-card {
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+.quiz-modern-tabs button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--quiz-pill);
+  background: transparent;
+  color: var(--quiz-secondary);
+  padding: 0 24px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.quiz-modern-tabs button:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.quiz-modern-tabs button.active {
+  background: white;
+  color: var(--quiz-primary-600);
+  box-shadow: var(--quiz-shadow-sm);
+}
+
+.practice-modern-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 32px;
+}
+
+.practice-modern-card {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: var(--quiz-radius-xl);
+  background: white;
+  box-shadow: var(--quiz-shadow-card);
+  padding: 32px;
+}
+
+.practice-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.practice-card-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--quiz-ai-light);
+  color: #8B5CF6;
+}
+
+.practice-card-header h2,
+.practice-history-title {
+  margin: 0;
+  color: var(--quiz-text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.practice-config-section {
+  margin-bottom: 32px;
+}
+
+.practice-config-label {
+  display: block;
+  margin-bottom: 16px;
+  color: var(--quiz-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.practice-chapter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.practice-chip {
+  min-height: 40px;
+  border: 1px solid transparent;
+  border-radius: var(--quiz-pill);
+  background: var(--quiz-muted);
+  color: var(--quiz-secondary);
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.practice-chip:hover {
+  background: #E2E8F0;
+}
+
+.practice-chip.active {
+  border-color: var(--quiz-primary-500);
+  background: var(--quiz-primary-50);
+  color: var(--quiz-primary-600);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.10);
+}
+
+.practice-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: var(--quiz-pill);
+  background: var(--quiz-muted);
+  padding: 8px 16px 8px 8px;
+}
+
+.practice-segmented-control {
+  display: flex;
+  gap: 4px;
+}
+
+.practice-segmented-control button {
+  min-height: 36px;
+  border: 0;
+  border-radius: var(--quiz-pill);
+  background: transparent;
+  color: var(--quiz-secondary);
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.practice-segmented-control button.active {
+  background: white;
+  color: var(--quiz-primary-600);
+  box-shadow: var(--quiz-shadow-sm);
+}
+
+.practice-switch-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--quiz-text);
+  font-weight: 700;
+}
+
+.practice-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: var(--quiz-pill);
+  background: var(--quiz-border);
+}
+
+.practice-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: var(--quiz-shadow-sm);
+  transition: transform 0.2s ease;
+}
+
+.practice-switch-wrapper.active .practice-switch {
+  background: var(--quiz-primary-600);
+}
+
+.practice-switch-wrapper.active .practice-switch::after {
+  transform: translateX(20px);
+}
+
+.practice-generate-btn {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 40px;
+  border: 0;
+  border-radius: var(--quiz-pill);
+  background: var(--quiz-ai-main);
+  color: white;
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.30);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.practice-generate-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(139, 92, 246, 0.40);
+}
+
+.practice-generate-hint {
+  margin: 12px 0 0;
+  color: var(--quiz-hint);
+  text-align: center;
+  font-size: 13px;
+}
+
+.practice-feature-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 32px;
+  border: 1px solid #FEF08A;
+  border-radius: var(--quiz-radius-lg);
+  background: linear-gradient(to right, #FFF7ED, #FEFCE8);
+  padding: 24px;
+  text-align: left;
+}
+
+.practice-feature-card:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(245, 158, 11, 0.14);
+}
+
+.practice-feature-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: white;
+  color: #F59E0B;
+  box-shadow: var(--quiz-shadow-sm);
+}
+
+.practice-feature-card h2 {
+  margin: 0 0 4px;
+  color: #B45309;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.practice-feature-card p {
+  margin: 0;
+  color: #A16207;
+  font-size: 13px;
+}
+
+.practice-feature-card > span {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--quiz-pill);
+  background: #F59E0B;
+  color: white;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.20);
+  padding: 0 24px;
+  font-weight: 800;
+}
+
+.practice-history-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 15px;
+}
+
+.practice-history-title svg {
+  color: var(--quiz-primary-500);
+}
+
+.practice-history-list,
+.quiz-modern-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.practice-history-item,
+.quiz-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--quiz-border);
+  border-radius: var(--quiz-radius-lg);
+  background: white;
+  box-shadow: var(--quiz-shadow-sm);
+  padding: 16px;
+  text-align: left;
+}
+
+.practice-history-item:hover,
+.quiz-card:hover {
+  border-color: #CBD5E1;
+  background: var(--quiz-muted);
+  transform: translateY(-1px);
+}
+
+.practice-history-left {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.practice-history-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--quiz-primary-50);
+  color: var(--quiz-primary-600);
+}
+
+.practice-history-left strong,
+.quiz-card h2 {
+  display: block;
+  margin: 0;
+  overflow: hidden;
+  color: var(--quiz-text);
+  font-size: 15px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.practice-history-left small,
+.quiz-card p {
+  margin: 0;
+  color: var(--quiz-hint);
+  font-size: 12px;
+}
+
+.practice-history-item em {
+  flex: 0 0 auto;
+  color: var(--quiz-primary-600);
+  font-style: normal;
+  font-weight: 900;
+}
+
+.exam-answer-page {
+  --exam-primary-50: #EEF2FF;
+  --exam-primary-100: #E0E7FF;
+  --exam-primary-400: #818CF8;
+  --exam-primary-500: #6366F1;
+  --exam-primary-600: #4F46E5;
+  --exam-bg-page: #F4F6F9;
+  --exam-bg-card: #FFFFFF;
+  --exam-border-light: #F1F5F9;
+  --exam-border-default: #E2E8F0;
+  --exam-border-strong: #CBD5E1;
+  --exam-text-main: #1E293B;
+  --exam-text-sec: #64748B;
+  --exam-text-hint: #94A3B8;
+  --exam-radius-sm: 8px;
+  --exam-radius-lg: 16px;
+  --exam-radius-xl: 24px;
+  --exam-radius-pill: 9999px;
+  --exam-shadow-sm: 0 2px 8px rgba(15, 23, 42, 0.04);
+  --exam-shadow-card: 0 12px 32px rgba(15, 23, 42, 0.05);
+  --exam-shadow-focus: 0 0 0 4px rgba(79, 70, 229, 0.15);
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--exam-bg-page);
+  color: var(--exam-text-main);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+}
+
+.exam-answer-page *,
+.exam-answer-page *::before,
+.exam-answer-page *::after {
+  box-sizing: border-box;
+}
+
+.exam-answer-page button {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  outline: 0;
+  transition: all 0.2s ease;
+}
+
+.exam-shell {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--exam-bg-page);
+}
+
+.exam-empty-shell {
+  display: grid;
+  place-items: center;
+  padding: 32px;
+}
+
+.exam-empty-shell .empty {
+  width: min(420px, calc(100vw - 48px));
+  min-height: 260px;
+  border: 1px solid white;
+  border-radius: var(--exam-radius-xl);
+  background: white;
+  box-shadow: var(--exam-shadow-card);
+}
+
+.exam-empty-shell .empty svg {
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
+  background: var(--exam-primary-50);
+  color: var(--exam-primary-600);
+  padding: 12px;
+}
+
+.exam-empty-shell .empty span {
+  color: var(--exam-text-main);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.exam-header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--exam-border-default);
+  background: var(--exam-bg-card);
+  box-shadow: var(--exam-shadow-sm);
+  padding: 0 32px;
+}
+
+.exam-exit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--exam-radius-pill);
+  color: var(--exam-text-sec);
+  padding: 8px 16px 8px 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.exam-exit-btn:hover {
+  background: var(--exam-bg-page);
+  color: var(--exam-text-main);
+}
+
+.exam-title {
+  position: absolute;
+  left: 50%;
+  max-width: min(560px, calc(100vw - 360px));
+  overflow: hidden;
+  transform: translateX(-50%);
+  color: var(--exam-text-main);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exam-answer-page .timer-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--exam-primary-100);
+  border-radius: var(--exam-radius-pill);
+  background: var(--exam-primary-50);
+  color: var(--exam-primary-600);
+  padding: 6px 16px;
+}
+
+.exam-answer-page .timer-text {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--exam-primary-600);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.exam-container {
+  flex: 1;
+  display: flex;
+  gap: 24px;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  overflow-y: auto;
+  padding: 24px 32px 96px;
+}
+
+.exam-nav-sidebar {
+  width: 280px;
+  flex: 0 0 280px;
+}
+
+.exam-nav-card,
+.exam-q-card,
+.exam-result-card,
+.exam-result-summary,
+.exam-analysis-card {
+  border: 1px solid white;
+  border-radius: var(--exam-radius-xl);
+  background: var(--exam-bg-card);
+  box-shadow: var(--exam-shadow-card);
+  padding: 24px;
+}
+
+.exam-q-card {
+  flex: 1;
+  padding: 40px;
+}
+
+.exam-nav-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--exam-border-light);
+  padding-bottom: 16px;
+}
+
+.exam-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.exam-stat-val {
+  color: var(--exam-text-main);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.exam-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--exam-text-hint);
+  font-size: 12px;
+}
+
+.exam-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.exam-dot-answered {
+  background: var(--exam-primary-500);
+}
+
+.exam-dot-marked {
+  background: #F59E0B;
+}
+
+.exam-dot-unanswered {
+  border: 2px solid var(--exam-border-strong);
+}
+
+.exam-q-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.exam-q-btn {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-sm);
+  background: var(--exam-bg-page);
+  color: var(--exam-text-sec);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.exam-q-btn:hover {
+  border-color: var(--exam-primary-400);
+  color: var(--exam-primary-600);
+}
+
+.exam-q-btn.answered {
+  border-color: var(--exam-primary-100);
+  background: var(--exam-primary-50);
+  color: var(--exam-primary-600);
+}
+
+.exam-q-btn.current {
+  border: 2px solid var(--exam-primary-600);
+  background: white;
+  color: var(--exam-primary-600);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.20);
+}
+
+.exam-q-btn.marked::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #F59E0B;
+}
+
+.exam-question-area {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+}
+
+.exam-q-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.exam-q-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exam-q-number {
+  margin-right: 8px;
+  color: var(--exam-text-main);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.exam-tag {
+  border-radius: var(--exam-radius-pill);
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.exam-tag-type {
+  background: var(--exam-primary-50);
+  color: var(--exam-primary-600);
+}
+
+.exam-tag-diff {
+  border: 1px solid var(--exam-border-default);
+  background: var(--exam-bg-page);
+  color: var(--exam-text-sec);
+}
+
+.exam-mark-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-pill);
+  background: white;
+  color: var(--exam-text-sec);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.exam-mark-btn:hover,
+.exam-mark-btn.is-marked {
+  border-color: #FDE68A;
+  background: #FFFBEB;
+  color: #B45309;
+}
+
+.exam-mark-btn.is-marked svg {
+  fill: #F59E0B;
+  color: #F59E0B;
+}
+
+.exam-q-stem {
+  margin-bottom: 32px;
+  color: var(--exam-text-main);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.exam-options-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.exam-opt-label {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.exam-opt-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+
+.exam-opt-card {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-lg);
+  background: var(--exam-bg-card);
+  padding: 16px 20px;
+  transition: all 0.2s ease;
+}
+
+.exam-opt-label:hover .exam-opt-card {
+  border-color: var(--exam-primary-400);
+  background: var(--exam-bg-page);
+}
+
+.exam-opt-letter {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  margin-right: 16px;
+  border: 1px solid var(--exam-border-default);
+  border-radius: 50%;
+  background: var(--exam-bg-page);
+  color: var(--exam-text-sec);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.exam-opt-text {
+  flex: 1;
+  color: var(--exam-text-main);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.exam-opt-input:checked + .exam-opt-card {
+  border-color: var(--exam-primary-500);
+  background: var(--exam-primary-50);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.10);
+}
+
+.exam-opt-input:checked + .exam-opt-card .exam-opt-letter {
+  border-color: var(--exam-primary-600);
+  background: var(--exam-primary-600);
+  color: white;
+}
+
+.exam-opt-input:checked + .exam-opt-card .exam-opt-text {
+  color: var(--exam-primary-600);
+  font-weight: 600;
+}
+
+.exam-answer-input,
+.exam-answer-textarea {
+  width: 100%;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-lg);
+  background: white;
+  color: var(--exam-text-main);
+  padding: 14px 16px;
+  font: inherit;
+  outline: 0;
+}
+
+.exam-answer-input:focus,
+.exam-answer-textarea:focus,
+.exam-opt-input:focus-visible + .exam-opt-card,
+.exam-q-btn:focus-visible,
+.exam-mark-btn:focus-visible,
+.exam-btn:focus-visible,
+.exam-exit-btn:focus-visible,
+.exam-analysis-trigger:focus-visible {
+  outline: 0;
+  border-color: var(--exam-primary-500);
+  box-shadow: var(--exam-shadow-focus);
+}
+
+.exam-answer-textarea {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.exam-text-answer {
+  display: grid;
+  gap: 8px;
+}
+
+.exam-text-answer small {
+  justify-self: end;
+  color: var(--exam-text-hint);
+  font-size: 12px;
+}
+
+.exam-action-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  height: 72px;
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--exam-border-default);
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.03);
+}
+
+.exam-footer-container {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 32px;
+}
+
+.exam-footer-actions,
+.exam-footer-progress {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.exam-btn {
+  min-width: 112px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--exam-radius-pill);
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.exam-btn-outline {
+  border: 1px solid var(--exam-border-strong) !important;
+  background: white !important;
+  color: var(--exam-text-main) !important;
+}
+
+.exam-btn-outline:hover:not(:disabled) {
+  border-color: var(--exam-primary-500) !important;
+  background: var(--exam-bg-page) !important;
+  color: var(--exam-primary-600) !important;
+}
+
+.exam-btn-primary {
+  background: var(--exam-primary-600) !important;
+  color: white !important;
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.30);
+}
+
+.exam-btn-primary:hover:not(:disabled) {
+  background: var(--exam-primary-500) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.40);
+}
+
+.exam-prog-text {
+  color: var(--exam-text-sec);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.exam-prog-bar {
+  width: 120px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--exam-border-default);
+}
+
+.exam-prog-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--exam-primary-500);
+  transition: width 0.25s ease;
+}
+
+.exam-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal-bg);
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(8px);
+}
+
+.exam-confirm-card {
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  border-radius: var(--exam-radius-xl);
+  background: white;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  padding: 22px;
+}
+
+.exam-modal-head,
+.exam-analysis-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.exam-modal-head h2 {
+  flex: 1;
+  margin: 0;
+}
+
+.exam-confirm-card footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.exam-result-main {
+  flex: 1;
+  display: grid;
+  gap: 20px;
+  width: min(900px, calc(100% - 48px));
+  margin: 0 auto;
+  overflow-y: auto;
+  padding: 32px 0 48px;
+}
+
+.exam-result-card {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #4F46E5, #06B6D4);
+  color: white;
+  padding: 40px;
+}
+
+.exam-result-card strong {
+  font-size: 56px;
+  line-height: 1;
+}
+
+.exam-result-card em {
+  border-radius: var(--exam-radius-pill);
+  background: rgba(255, 255, 255, 0.18);
+  padding: 4px 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.exam-result-summary h2,
+.exam-analysis-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--exam-text-main);
+  font-size: 20px;
+}
+
+.exam-result-summary p {
+  margin: 12px 0 0;
+  color: var(--exam-text-sec);
+}
+
+.exam-analysis-card {
+  display: grid;
+  gap: 12px;
+}
+
+.exam-analysis-item {
+  overflow: hidden;
+  border: 1px solid var(--exam-border-default);
+  border-radius: var(--exam-radius-lg);
+  background: white;
+}
+
+.exam-analysis-item.open {
+  background: var(--exam-bg-page);
+}
+
+.exam-analysis-trigger {
+  width: 100%;
+  min-height: 48px;
+  color: var(--exam-text-main);
+  padding: 0 14px;
+  text-align: left;
+}
+
+.exam-analysis-trigger span {
+  margin-left: auto;
+}
+
+.exam-analysis-item.open .exam-analysis-trigger svg:last-child {
+  transform: rotate(180deg);
+}
+
+.exam-analysis-body {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--exam-border-default);
+  padding: 14px;
+}
+
+.exam-analysis-body p,
+.exam-analysis-body small {
+  margin: 0;
+  color: var(--exam-text-sec);
+}
+
+@media (max-width: 900px) {
+  .quiz-modern-header {
+    display: grid;
+    gap: 16px;
+  }
+
+  .practice-modern-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-settings-row,
+  .practice-feature-card {
+    align-items: stretch;
+    flex-direction: column;
+    border-radius: var(--quiz-radius-lg);
+  }
+
+  .exam-header {
+    height: auto;
+    min-height: 64px;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .exam-title {
+    position: static;
+    max-width: none;
+    transform: none;
+    font-size: 16px;
+  }
+
+  .exam-container {
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px 16px 104px;
+  }
+
+  .exam-nav-sidebar {
+    width: 100%;
+    flex-basis: auto;
+  }
+
+  .exam-q-grid {
+    grid-template-columns: repeat(8, minmax(34px, 1fr));
+    gap: 8px;
+  }
+
+  .exam-q-card {
+    padding: 24px;
+  }
+
+  .exam-q-meta-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .exam-footer-progress {
+    display: none;
+  }
+
+  .exam-footer-container {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .exam-btn {
+    min-width: 0;
+    padding: 0 14px;
+  }
 }
 </style>

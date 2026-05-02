@@ -2,6 +2,9 @@ from io import BytesIO
 
 from pptx import Presentation
 
+from app.db import session as db_session
+from app.db.models import QuizQuestion
+
 
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
     payload = {
@@ -141,6 +144,7 @@ def test_learning_core_flow(client):
     qa_data = qa_resp.json()["data"]
     assert qa_data["is_out_of_scope"] is False
     assert qa_data["sources"]
+    assert "thinking_process" in qa_data
 
     favorite_resp = client.post(
         f"/api/v1/qa/{qa_data['record_id']}/favorite",
@@ -157,6 +161,7 @@ def test_learning_core_flow(client):
     history_resp = client.get("/api/v1/qa/history", params={"keyword": "矩阵"}, headers=student_headers)
     assert history_resp.status_code == 200, history_resp.text
     assert len(history_resp.json()["data"]) >= 1
+    assert "thinking_process" in history_resp.json()["data"][0]
 
     problem_resp = client.post(
         "/api/v1/tutoring/problems/text",
@@ -233,6 +238,7 @@ def test_learning_core_flow(client):
     assert wrong_resp.status_code == 200, wrong_resp.text
     assert len(wrong_resp.json()["data"]) >= 1
     assert "knowledge_point_id" in wrong_resp.json()["data"][0]
+    wrong_count_before = len(wrong_resp.json()["data"])
 
     wrong_practice_resp = client.post(
         "/api/v1/learning/wrong-questions/practice",
@@ -240,15 +246,46 @@ def test_learning_core_flow(client):
         headers=student_headers,
     )
     assert wrong_practice_resp.status_code == 200, wrong_practice_resp.text
+    wrong_practice = wrong_practice_resp.json()["data"]
+    wrong_detail_resp = client.get(f"/api/v1/learning/quizzes/{wrong_practice['id']}", headers=student_headers)
+    assert wrong_detail_resp.status_code == 200, wrong_detail_resp.text
+    wrong_detail_questions = wrong_detail_resp.json()["data"]["questions"]
+    assert wrong_detail_questions
+
+    with db_session.SessionLocal() as db:
+        answer_payload = []
+        for item in wrong_detail_questions:
+            stored_question = db.get(QuizQuestion, item["id"])
+            reference = stored_question.reference_answer
+            if isinstance(reference, dict):
+                expected = reference.get("value", reference.get("answer", reference.get("correct_answer", reference.get("keywords", ""))))
+            else:
+                expected = reference
+            if isinstance(expected, list):
+                answer = " ".join(str(value) for value in expected) if item["question_type"] == "short_answer" else expected
+            else:
+                answer = expected
+            answer_payload.append({"question_id": item["id"], "answer": answer})
+    wrong_submit_resp = client.post(
+        f"/api/v1/learning/quizzes/{wrong_practice['id']}/submit",
+        json={"answers": answer_payload},
+        headers=student_headers,
+    )
+    assert wrong_submit_resp.status_code == 200, wrong_submit_resp.text
+    wrong_after_resp = client.get("/api/v1/learning/wrong-questions", params={"course_id": course["id"]}, headers=student_headers)
+    assert wrong_after_resp.status_code == 200, wrong_after_resp.text
+    assert len(wrong_after_resp.json()["data"]) < wrong_count_before
 
     practice_resp = client.post(
         "/api/v1/learning/quizzes/generate",
         json={
             "course_id": course["id"],
             "chapter_id": chapter["id"],
+            "chapter_ids": [chapter["id"]],
             "title": "章节自练",
             "quiz_type": "practice",
             "question_count": 2,
+            "prefer_weak_points": True,
         },
         headers=student_headers,
     )
@@ -256,7 +293,7 @@ def test_learning_core_flow(client):
 
     weak_resp = client.get("/api/v1/learning/weak-points", params={"course_id": course["id"]}, headers=student_headers)
     assert weak_resp.status_code == 200, weak_resp.text
-    assert len(weak_resp.json()["data"]) >= 1
+    assert isinstance(weak_resp.json()["data"], list)
 
     plan_resp = client.post(
         "/api/v1/learning/plans",
@@ -292,3 +329,106 @@ def test_learning_core_flow(client):
     assert records["recent_qa"]
     assert records["recent_problems"]
     assert records["recent_attempts"]
+
+
+def test_qa_stream_falls_back_to_regular_answer_when_upstream_stream_fails(client, monkeypatch):
+    course, _chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    lesson_detail_resp = client.get(f"/api/v1/lessons/{lesson_id}", headers=student_headers)
+    assert lesson_detail_resp.status_code == 200, lesson_detail_resp.text
+    first_page_id = lesson_detail_resp.json()["data"]["pages"][0]["id"]
+
+    def fail_stream(**kwargs):
+        raise RuntimeError("stream unavailable")
+
+    def fallback_answer(**kwargs):
+        return "非流式回退回答：矩阵可以表示线性变换。这个结论说明矩阵不仅是数字表格，还可以描述向量在空间中的旋转、缩放和投影。", False, "非流式回退思考过程"
+
+    monkeypatch.setattr(qa_service.ai_service, "stream_answer_question", fail_stream)
+    monkeypatch.setattr(qa_service.ai_service, "answer_question", fallback_answer)
+
+    with client.stream(
+        "POST",
+        "/api/v1/qa/ask/stream",
+        json={"course_id": course["id"], "lesson_page_id": first_page_id, "question": "矩阵可以表示什么"},
+        headers=student_headers,
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert response.status_code == 200, body
+    assert "event: error" not in body
+    assert "非流式回退回答" in body
+    assert "非流式回退思考过程" in body
+    assert "event: final" in body
+    assert body.count("event: delta") >= 2
+
+
+def test_qa_image_attachment_uploads_and_participates_in_stream_answer(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+    from app.services.ai import ChatDelta
+
+    captured: dict[str, str] = {}
+    monkeypatch.setattr(qa_service.ocr_service, "recognize", lambda upload, db=None: "矩阵可以表示线性变换")
+
+    def stream_answer(**kwargs):
+        captured["question"] = kwargs["question"]
+        yield ChatDelta("content", "图片中提到矩阵可以表示线性变换。")
+
+    monkeypatch.setattr(qa_service.ai_service, "stream_answer_question", stream_answer)
+
+    upload_resp = client.post(
+        "/api/v1/qa/attachments/image",
+        data={"course_id": str(course["id"])},
+        files={"file": ("matrix.png", b"fake-image", "image/png")},
+        headers=student_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    attachment = upload_resp.json()["data"]
+    assert attachment["filename"] == "matrix.png"
+    assert attachment["ocr_text"] == "矩阵可以表示线性变换"
+
+    with client.stream(
+        "POST",
+        "/api/v1/qa/ask/stream",
+        json={"course_id": course["id"], "question": "帮我看图", "attachments": [attachment]},
+        headers=student_headers,
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert response.status_code == 200, body
+    assert "event: error" not in body
+    assert "图片中提到矩阵" in body
+    assert "matrix.png" in body
+    assert "OCR识别内容" in captured["question"]
+    assert "矩阵可以表示线性变换" in captured["question"]
+
+    history_resp = client.get("/api/v1/qa/history", params={"course_id": course["id"]}, headers=student_headers)
+    assert history_resp.status_code == 200, history_resp.text
+    assert history_resp.json()["data"][0]["attachments"][0]["filename"] == "matrix.png"
+
+
+def test_knowledge_points_use_local_explanations(client, monkeypatch):
+    course, chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import knowledge as knowledge_service
+
+    monkeypatch.setattr(knowledge_service.ai_service, "extract_knowledge_points", lambda text, db=None: ["矩阵"])
+
+    def fail_explanation_call(**kwargs):
+        raise AssertionError("knowledge explanations should not call the model synchronously")
+
+    monkeypatch.setattr(knowledge_service.ai_service, "generate_knowledge_explanation", fail_explanation_call)
+
+    response = client.get(
+        "/api/v1/learning/knowledge-points",
+        params={"course_id": course["id"], "chapter_id": chapter["id"]},
+        headers=student_headers,
+    )
+    assert response.status_code == 200, response.text
+    point = response.json()["data"][0]
+    assert point["name"] == "矩阵"
+    assert point["content_by_level"]["standard"]["definition"].startswith("矩阵")

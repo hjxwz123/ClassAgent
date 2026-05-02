@@ -32,6 +32,7 @@ from app.db.models import (
 from app.services.analytics import get_course_analytics
 from app.services.audit import log_operation
 from app.services.courses import _assert_course_owner, _get_course_or_404, list_teaching_courses
+from app.services.storage import storage_service
 
 
 TEACHER_PROFILE_KEY = "teacher.profile"
@@ -49,9 +50,19 @@ DEFAULT_NOTIFICATION_SETTINGS = [
 ]
 
 
+def _aware_utc(value):
+    if value is None:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
 def _as_dict(item) -> dict:
     data = dict(item.__dict__)
     data.pop("_sa_instance_state", None)
+    if "preview_url" in data:
+        data["preview_url"] = storage_service.normalize_public_url(data["preview_url"])
+    if "audio_url" in data:
+        data["audio_url"] = storage_service.normalize_public_url(data["audio_url"])
     return data
 
 
@@ -135,24 +146,18 @@ def _lesson_progress(db: Session, lesson: Lesson, student_total: int) -> dict:
 
 
 def _material_status_counts(db: Session, course_id: int) -> dict:
-    rows = list(
-        db.execute(
-            select(CourseMaterial.parse_status, func.count(CourseMaterial.id))
-            .where(CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None))
-            .group_by(CourseMaterial.parse_status)
-        )
-    )
-    by_status = {status: int(count) for status, count in rows}
-    by_type = {
-        material_type: int(count)
-        for material_type, count in db.execute(
-            select(CourseMaterial.material_type, func.count(CourseMaterial.id))
-            .where(CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None))
-            .group_by(CourseMaterial.material_type)
-        )
-    }
+    from app.services.materials import repair_materials_with_existing_pages
+
+    materials = list(db.scalars(select(CourseMaterial).where(CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None))))
+    repair_materials_with_existing_pages(db, materials)
+    by_status = Counter(item.parse_status for item in materials)
+    by_type = Counter(item.material_type for item in materials)
     total = sum(by_status.values())
-    return {"total": total, "by_status": by_status, "by_type": by_type}
+    return {
+        "total": total,
+        "by_status": {status: int(count) for status, count in by_status.items()},
+        "by_type": {material_type: int(count) for material_type, count in by_type.items()},
+    }
 
 
 def _recent_activities(db: Session, course_id: int, limit: int = 8) -> list[dict]:
@@ -418,8 +423,11 @@ def get_teacher_course_home(db: Session, *, course_id: int, user: User) -> dict:
 
 
 def get_teacher_materials_summary(db: Session, *, course_id: int, user: User) -> dict:
+    from app.services.materials import repair_materials_with_existing_pages
+
     _assert_course_access(db, course_id=course_id, user=user)
     materials = list(db.scalars(select(CourseMaterial).where(CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None))))
+    repair_materials_with_existing_pages(db, materials)
     chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
     by_chapter = []
     for chapter in chapters:
@@ -458,11 +466,12 @@ def get_teacher_students(db: Session, *, course_id: int, user: User) -> dict:
         progress_percent = round(sum(item.progress_percent for item in progresses) / max(len(lessons), 1), 2) if lessons else 0
         studied_lessons = len([item for item in progresses if item.progress_percent > 0])
         last_progress = max([item.updated_at for item in progresses], default=None)
+        last_progress_for_compare = _aware_utc(last_progress)
         qa_count = db.scalar(select(func.count(QARecord.id)).where(QARecord.user_id == student.id, QARecord.course_id == course_id)) or 0
         wrong_count = db.scalar(select(func.sum(WrongQuestion.wrong_count)).where(WrongQuestion.user_id == student.id, WrongQuestion.course_id == course_id)) or 0
-        if last_progress and last_progress >= since_7:
+        if last_progress_for_compare and last_progress_for_compare >= since_7:
             active_count += 1
-        if not last_progress or last_progress < since_14:
+        if not last_progress_for_compare or last_progress_for_compare < since_14:
             inactive_14 += 1
         items.append(
             {
@@ -581,7 +590,7 @@ def export_teacher_students_csv(db: Session, *, course_id: int, user: User) -> s
     payload = get_teacher_students(db, course_id=course_id, user=user)
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(["姓名", "邮箱", "学号", "加入时间", "课堂进度", "已学课堂", "课堂总数", "提问次数", "错题数", "最近学习"])
+    writer.writerow(["姓名", "邮箱", "学号", "加入时间", "课时进度", "已学课时", "课时总数", "提问次数", "错题数", "最近学习"])
     for item in payload["items"]:
         student = item["student"]
         writer.writerow(
@@ -609,7 +618,7 @@ def export_teacher_analysis_csv(db: Session, *, course_id: int, user: User, days
     for key, value in payload.get("metrics", {}).items():
         writer.writerow(["指标", key, value])
     for item in payload.get("lesson_completion", []):
-        writer.writerow(["课堂完成率", item.get("title", ""), item.get("completion_rate", 0)])
+        writer.writerow(["课时完成率", item.get("title", ""), item.get("completion_rate", 0)])
     for item in payload.get("weak_points", []):
         writer.writerow(["薄弱点", item.get("knowledge_point", ""), item.get("wrong_count", 0)])
     for item in payload.get("high_frequency_questions", []):
@@ -646,7 +655,7 @@ def delete_chapter(db: Session, *, course_id: int, chapter_id: int, user: User) 
 def update_lesson(db: Session, *, lesson_id: int, user: User, title: str | None, chapter_id: int | None, status: str | None) -> Lesson:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     _assert_course_access(db, course_id=lesson.course_id, user=user)
     if title is not None:
         lesson.title = title
@@ -666,7 +675,7 @@ def update_lesson(db: Session, *, lesson_id: int, user: User, title: str | None,
 def delete_lesson(db: Session, *, lesson_id: int, user: User) -> None:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     _assert_course_access(db, course_id=lesson.course_id, user=user)
     db.execute(delete(LearningProgress).where(LearningProgress.lesson_id == lesson_id))
     db.execute(delete(LessonPage).where(LessonPage.lesson_id == lesson_id))
@@ -677,7 +686,7 @@ def delete_lesson(db: Session, *, lesson_id: int, user: User) -> None:
 def duplicate_lesson(db: Session, *, lesson_id: int, user: User) -> Lesson:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
-        raise not_found("课堂不存在")
+        raise not_found("课时不存在")
     _assert_course_access(db, course_id=lesson.course_id, user=user)
     clone = Lesson(
         course_id=lesson.course_id,

@@ -2,18 +2,17 @@
   <section class="admin-shell" :class="{ collapsed, 'sidebar-scrollable': sidebarScrollable }">
     <aside class="admin-sidebar">
       <div class="sidebar-header">
-        <button class="menu-btn" aria-label="折叠" @click="collapsed = !collapsed"><Menu :size="20" /></button>
+        <button class="menu-btn" @click="collapsed = !collapsed"><Menu :size="20" />{{ collapsed ? '展开' : '收起' }}</button>
         <span class="logo-mark"><Sparkles :size="17" /></span>
-        <strong v-if="!collapsed" class="logo-text">系统管理后台</strong>
+        <strong class="logo-text">系统管理后台</strong>
       </div>
 
       <nav ref="sidebarNavRef" class="sidebar-nav">
         <div v-for="group in navGroups" :key="group.title" class="nav-group">
-          <span v-if="!collapsed" class="nav-title">{{ group.title }}</span>
+          <span class="nav-title">{{ group.title }}</span>
           <button v-for="item in group.items" :key="item.key" class="nav-link" :class="{ active: active === item.key }" @click="go(item.key)">
             <component :is="item.icon" :size="18" />
-            <span v-if="!collapsed">{{ item.label }}</span>
-            <em v-if="collapsed">{{ item.label }}</em>
+            <span>{{ item.label }}</span>
           </button>
         </div>
       </nav>
@@ -21,7 +20,7 @@
       <div class="sidebar-footer">
         <div class="side-user">
           <span class="avatar">管</span>
-          <div v-if="!collapsed"><strong>{{ user.nickname }}</strong><span class="tag tag-ai">Super Admin</span></div>
+          <div><strong>{{ user.nickname }}</strong><span class="tag tag-ai">Super Admin</span></div>
         </div>
       </div>
     </aside>
@@ -30,9 +29,9 @@
       <div class="topbar-left"></div>
       <div class="top-actions">
         <span class="health-pill" :class="health?.status === 'ok' ? 'ok' : 'warn'"><i></i>{{ health?.status === 'ok' ? '运行正常' : '服务异常' }}</span>
-        <button class="notice-btn" aria-label="通知"><Bell :size="20" /><em v-if="alertCount">{{ alertCount }}</em></button>
+        <button class="notice-btn"><Bell :size="20" /><span>通知</span><em v-if="alertCount">{{ alertCount }}</em></button>
         <span class="divider"></span>
-        <div class="user-menu">
+        <div ref="userMenuRef" class="user-menu">
           <button class="user-trigger" @click="userMenuOpen = !userMenuOpen">
             <span class="avatar">管</span><span>{{ user.nickname }}</span><ChevronDown :size="16" />
           </button>
@@ -117,24 +116,32 @@
           </div>
           <article class="filter-card">
             <div class="search-field"><Search :size="16" /><input v-model="userFilter.keyword" placeholder="搜索用户名、邮箱、工号" @keyup.enter="loadUsers" /></div>
-            <select v-model="userFilter.role" class="select"><option value="">全部</option><option value="student">学生</option><option value="teacher">教师</option><option value="admin">管理员</option></select>
-            <select v-model="userFilter.status" class="select"><option value="">全部</option><option value="active">正常</option><option value="disabled">禁用</option></select>
+            <AppSelect v-model="userFilter.role" :options="userRoleFilterOptions" />
+            <AppSelect v-model="userFilter.status" :options="userStatusOptions" />
             <button class="btn btn-ghost" @click="clearUserFilter"><X :size="16" />清除</button>
             <span class="spacer"></span>
             <button class="btn btn-secondary" :disabled="!selectedUsers.length" @click="batchDisableUsers"><CheckSquare :size="16" />批量</button>
             <button class="btn btn-ghost" @click="exportCurrent"><Download :size="16" />导出</button>
           </article>
           <article class="table-card">
-            <div v-if="selectedUsers.length" class="bulk-bar"><label><input type="checkbox" checked @change="selectedUsers = []" /> 已选 {{ selectedUsers.length }} 人</label><button @click="batchDisableUsers">禁用</button><button @click="batchResetUsers">重置密码</button><button @click="batchDeleteUsers">删除</button><button @click="selectedUsers = []">取消</button></div>
+            <div v-if="selectedUsers.length" class="bulk-bar"><AppCheckbox :model-value="true" :label="`已选 ${selectedUsers.length} 人`" @update:model-value="selectedUsers = []" /><button @click="batchDisableUsers">禁用</button><button @click="batchResetUsers">重置密码</button><button @click="batchDeleteUsers">删除</button><button @click="selectedUsers = []">取消</button></div>
             <table class="admin-table">
-              <thead><tr><th class="check-col"><input type="checkbox" :checked="selectedUsers.length === users.length && users.length > 0" @change="toggleAllUsers" /></th><th>用户</th><th>角色</th><th>状态</th><th>所属课程</th><th>注册时间</th><th>最近登录</th><th>操作</th></tr></thead>
+              <thead><tr><th class="check-col"><AppCheckbox :model-value="selectedUsers.length === users.length && users.length > 0" @update:model-value="toggleAllUsers" /></th><th>用户</th><th>角色</th><th>状态</th><th>所属课程</th><th>注册时间</th><th>最近登录</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="item in users" :key="item.id" :class="{ disabled: item.status === 'disabled', selected: selectedUsers.includes(item.id) }">
-                  <td><input type="checkbox" :checked="selectedUsers.includes(item.id)" @change="toggleSelect(selectedUsers, item.id)" /></td>
+                  <td><AppCheckbox :model-value="selectedUsers.includes(item.id)" @update:model-value="toggleSelect(selectedUsers, item.id)" /></td>
                   <td><div class="identity"><span class="avatar small">{{ firstChar(item.nickname) }}</span><div><strong>{{ item.nickname }}</strong><span>{{ item.email }}</span></div></div></td>
-                  <td><select class="select role-select" :value="item.role" :disabled="isPending(`role:${item.id}`)" @change="selectUserRole(item, $event)"><option v-for="role in userRoleOptions" :key="role.value" :value="role.value">{{ role.label }}</option></select></td>
+                  <td><AppSelect class="role-select" :model-value="item.role" :options="userRoleOptions" :disabled="isPending(`role:${item.id}`)" @update:model-value="selectUserRole(item, $event)" /></td>
                   <td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
-                  <td><BookOpen :size="14" /> {{ item.course_count || '-' }}</td>
+                  <td>
+                    <div v-if="item.course_count" class="course-chip-list">
+                      <span v-for="course in (item.courses || []).slice(0, 2)" :key="`${course.relation}-${course.id}`" class="course-chip" :title="course.name">
+                        <BookOpen :size="13" />{{ course.name }}<em>{{ course.role }}</em>
+                      </span>
+                      <span v-if="item.course_count > 2" class="course-more">+{{ item.course_count - 2 }}</span>
+                    </div>
+                    <span v-else class="muted-cell">暂无</span>
+                  </td>
                   <td>{{ shortDate(item.created_at) }}</td>
                   <td :class="{ stale: isStale(item.last_login_at) }">{{ relativeTime(item.last_login_at) }}</td>
                   <td class="row-actions"><button class="text-action" @click="openUserDetail(item.id)"><Eye :size="14" />详情</button><button class="text-action" :data-loading="isPending(`reset:${item.id}`)" :disabled="isPending(`reset:${item.id}`)" @click="resetUser(item.id)"><KeyRound :size="14" />重置密码</button><button class="text-action danger" :data-loading="isPending(`delete:${item.id}`)" :disabled="isPending(`delete:${item.id}`)" @click="deleteUser(item.id)"><Trash2 :size="14" />删除</button></td>
@@ -154,23 +161,23 @@
           </div>
           <article class="filter-card">
             <div class="search-field"><Search :size="16" /><input v-model="courseFilter.keyword" placeholder="课程名称/教师名" @keyup.enter="loadCourses" /></div>
-            <select v-model="courseFilter.status" class="select"><option value="">全部</option><option value="active">正常</option><option value="inactive">下架</option></select>
+            <AppSelect v-model="courseFilter.status" :options="courseStatusOptions" />
             <input v-model="courseTerm" class="input" placeholder="学期" />
             <button class="btn btn-ghost" @click="clearCourseFilter"><X :size="16" />重置</button>
             <span class="spacer"></span>
-            <div class="view-toggle"><button :class="{ active: courseView === 'table' }" @click="courseView = 'table'"><List :size="16" /></button><button :class="{ active: courseView === 'grid' }" @click="courseView = 'grid'"><Grid2X2 :size="16" /></button></div>
+            <div class="view-toggle"><button :class="{ active: courseView === 'table' }" @click="courseView = 'table'"><List :size="16" />表格</button><button :class="{ active: courseView === 'grid' }" @click="courseView = 'grid'"><Grid2X2 :size="16" />卡片</button></div>
           </article>
           <article v-if="courseView === 'table'" class="table-card">
             <table class="admin-table">
-              <thead><tr><th class="check-col"><input type="checkbox" :checked="selectedCourses.length === courses.length && courses.length > 0" @change="toggleAllCourses" /></th><th>课程名称</th><th>主讲教师</th><th>学期</th><th>学生数</th><th>资料数</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
+              <thead><tr><th class="check-col"><AppCheckbox :model-value="selectedCourses.length === filteredCourses.length && filteredCourses.length > 0" @update:model-value="toggleAllCourses" /></th><th>课程名称</th><th>主讲教师</th><th>学期</th><th>学生数</th><th>资料数</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="item in filteredCourses" :key="item.id">
-                  <td><input type="checkbox" :checked="selectedCourses.includes(item.id)" @change="toggleSelect(selectedCourses, item.id)" /></td>
+                  <td><AppCheckbox :model-value="selectedCourses.includes(item.id)" @update:model-value="toggleSelect(selectedCourses, item.id)" /></td>
                   <td><strong>{{ item.name }}</strong><span class="tag mono">{{ item.course_code }}</span></td>
                   <td><span class="avatar mini">{{ firstChar(item.teacher_name) }}</span>{{ item.teacher_name || item.teacher_id }}</td>
                   <td>{{ item.term }}</td><td><Users :size="14" />{{ item.student_count || 0 }}</td><td><FileText :size="14" />{{ item.material_count || 0 }}</td>
                   <td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td><td>{{ shortDate(item.created_at) }}</td>
-                  <td class="row-actions"><button class="icon-action" @click="openCourseDetail(item.id)"><Eye :size="15" /></button><button class="icon-action" @click="openTakeover(item)"><UserCheck :size="15" /></button><button class="icon-action danger" @click="deactivateCourse(item.id)"><Ban :size="15" /></button></td>
+                  <td class="row-actions"><button class="icon-action" @click="openCourseDetail(item.id)"><Eye :size="15" />详情</button><button class="icon-action" @click="openTakeover(item)"><UserCheck :size="15" />接管</button><button class="icon-action danger" @click="deactivateCourse(item.id)"><Ban :size="15" />下架</button></td>
                 </tr>
               </tbody>
             </table>
@@ -180,7 +187,7 @@
               <div><strong>{{ item.name }}</strong><span class="tag mono">{{ item.course_code }}</span></div>
               <p>{{ item.teacher_name }} · {{ item.term }}</p>
               <div class="mini-metrics"><span><Users :size="14" />{{ item.student_count || 0 }}</span><span><FileText :size="14" />{{ item.material_count || 0 }}</span></div>
-              <button class="icon-action" @click="openCourseDetail(item.id)"><MoreHorizontal :size="16" /></button>
+              <button class="icon-action" @click="openCourseDetail(item.id)"><Eye :size="15" />详情</button>
             </article>
           </div>
         </section>
@@ -193,22 +200,22 @@
           </div>
           <article class="filter-card">
             <div class="search-field"><Search :size="16" /><input v-model="materialFilter.keyword" placeholder="文件名/课程名/教师名" @keyup.enter="loadMaterials" /></div>
-            <select v-model="materialFilter.material_type" class="select"><option value="">全部</option><option value="pptx">PPT</option><option value="pdf">PDF</option><option value="docx">Word</option><option value="txt">TXT</option></select>
-            <select v-model="materialFilter.category" class="select"><option value="">分类</option><option value="courseware">课件</option><option value="handout">讲义</option><option value="exercise">练习</option><option value="reference">参考</option></select>
+            <AppSelect v-model="materialFilter.material_type" :options="materialTypeOptions" />
+            <AppSelect v-model="materialFilter.category" :options="materialCategoryOptions" />
             <input v-model.number="materialFilter.teacher_id" class="input narrow" type="number" placeholder="教师ID" />
             <button class="btn btn-ghost" @click="clearMaterialFilter"><X :size="16" />清除</button><span class="spacer"></span><button class="btn btn-ghost" @click="exportCurrent"><Download :size="16" />导出</button>
           </article>
           <article class="table-card">
             <table class="admin-table">
-              <thead><tr><th class="check-col"><input type="checkbox" :checked="selectedMaterials.length === materials.length && materials.length > 0" @change="toggleAllMaterials" /></th><th>文件名</th><th>所属课程</th><th>上传教师</th><th>类型</th><th>上传时间</th><th>状态</th><th>操作</th></tr></thead>
+              <thead><tr><th class="check-col"><AppCheckbox :model-value="selectedMaterials.length === materials.length && materials.length > 0" @update:model-value="toggleAllMaterials" /></th><th>文件名</th><th>所属课程</th><th>上传教师</th><th>类型</th><th>上传时间</th><th>状态</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="item in materials" :key="item.id">
-                  <td><input type="checkbox" :checked="selectedMaterials.includes(item.id)" @change="toggleSelect(selectedMaterials, item.id)" /></td>
+                  <td><AppCheckbox :model-value="selectedMaterials.includes(item.id)" @update:model-value="toggleSelect(selectedMaterials, item.id)" /></td>
                   <td><div class="identity"><component :is="fileIcon(item.material_type)" :size="18" :class="`file-${item.material_type}`" /><div><strong>{{ item.title }}</strong><span>{{ item.size_label || sizeLabel(item.size_bytes) }}</span></div></div></td>
                   <td>{{ item.course_name || item.course_id }}</td><td><span class="avatar mini">{{ firstChar(item.teacher_name) }}</span>{{ item.teacher_name || item.uploader_id }}</td>
                   <td><span class="tag">{{ typeText(item.material_type) }}</span></td><td>{{ shortDate(item.created_at) }}</td>
                   <td><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span></td>
-                  <td class="row-actions"><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" /></button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" /></a><button class="icon-action danger" @click="deleteMaterial(item.id)"><Trash2 :size="15" /></button></td>
+                  <td class="row-actions"><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></td>
                 </tr>
               </tbody>
             </table>
@@ -221,10 +228,10 @@
             <div v-if="modelWarning" class="alert alert-danger"><AlertTriangle :size="16" />{{ modelWarning }}<button class="link-btn" @click="modelTab = 'llm'">配置</button></div>
             <article v-if="modelTab === 'llm'" class="panel-card form-panel">
               <div class="panel-head"><div><h2><Sparkles :size="18" />大语言模型</h2><span>按功能配置模型</span></div><button class="btn btn-secondary" @click="testDefaultModel">测试</button></div>
-              <div class="form-section"><h3>全局设置</h3><div class="form-grid"><label>供应商<select v-model="modelGlobal.provider" class="select"><option value="qwen">通义千问</option><option value="deepseek">DeepSeek</option><option value="openai">OpenAI</option><option value="azure">Azure</option><option value="mock">Mock</option><option value="custom">自定义</option></select></label><label>API Base<input v-model="modelGlobal.endpoint" class="input" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" /></label><label class="wide-field">API Key<input v-model="modelGlobal.api_key" class="input" type="password" placeholder="加密存储" /></label></div></div>
-              <div class="form-section"><h3>用途分配</h3><div class="purpose-config-grid"><article v-for="item in llmPurposes" :key="item.key" class="purpose-card"><div><component :is="item.icon" :size="16" /><strong>{{ item.label }}</strong></div><input v-model="modelDrafts[item.key].model_name" class="input" placeholder="qwen-max" /><label>Temperature <input v-model.number="modelDrafts[item.key].temperature" type="range" min="0" max="2" step="0.1" /> <b>{{ modelDrafts[item.key].temperature }}</b></label><label>最大 Token<input v-model.number="modelDrafts[item.key].max_tokens" class="input" type="number" /></label></article></div></div>
+              <div class="form-section"><h3>全局设置</h3><div class="form-grid"><label>供应商<AppSelect v-model="modelGlobal.provider" :options="modelProviderOptions" /></label><label>API Base<input v-model="modelGlobal.endpoint" class="input" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" /></label><label class="wide-field">API Key<PasswordField v-model="modelGlobal.api_key" placeholder="加密存储" /></label></div></div>
+              <div class="form-section"><h3>用途分配</h3><div class="purpose-config-grid"><article v-for="item in llmPurposes" :key="item.key" class="purpose-card"><div><component :is="item.icon" :size="16" /><strong>{{ item.label }}</strong></div><input v-model="modelDrafts[item.key].model_name" class="input" placeholder="qwen-max" /><label>Temperature <AppSlider v-model="modelDrafts[item.key].temperature" :min="0" :max="2" :step="0.1" /> <b>{{ modelDrafts[item.key].temperature }}</b></label><label>最大 Token<input v-model.number="modelDrafts[item.key].max_tokens" class="input" type="number" /></label></article></div></div>
             </article>
-            <article v-if="modelTab === 'embedding'" class="panel-card form-panel"><div class="panel-head"><div><h2><Layers :size="18" />Embedding 模型</h2><span>用于资料向量化</span></div><button class="btn btn-secondary" @click="testEmbeddingModel">测试</button></div><div class="form-grid"><label>供应商<select v-model="embeddingDraft.provider" class="select"><option value="qwen">通义千问</option><option value="openai">OpenAI</option><option value="mock">Mock</option></select></label><label>模型<input v-model="embeddingDraft.model_name" class="input" placeholder="text-embedding-v2" /></label><label>向量维度<input v-model.number="embeddingDraft.dimensions" class="input" type="number" /></label><label>API Key<input v-model="embeddingDraft.api_key" class="input" type="password" /></label><label class="wide-field">API Base<input v-model="embeddingDraft.endpoint" class="input" /></label></div></article>
+            <article v-if="modelTab === 'embedding'" class="panel-card form-panel"><div class="panel-head"><div><h2><Layers :size="18" />Embedding 模型</h2><span>用于资料向量化</span></div><button class="btn btn-secondary" @click="testEmbeddingModel">测试</button></div><div class="form-grid"><label>供应商<AppSelect v-model="embeddingDraft.provider" :options="embeddingProviderOptions" /></label><label>模型<input v-model="embeddingDraft.model_name" class="input" placeholder="text-embedding-v2" /></label><label>向量维度<input v-model.number="embeddingDraft.dimensions" class="input" type="number" /></label><label>API Key<PasswordField v-model="embeddingDraft.api_key" /></label><label class="wide-field">API Base<input v-model="embeddingDraft.endpoint" class="input" /></label></div></article>
             <article v-if="modelTab === 'usage'" class="panel-card">
               <div class="panel-head">
                 <div><h2>模型调用统计</h2><span>最近调用汇总</span></div>
@@ -261,11 +268,11 @@
                 </div>
               </header>
               <div class="aliyun-field-grid">
-                <label>供应商 / 类型<select v-model="serviceDrafts.oss.provider" class="select"><option value="aliyun">阿里云 OSS</option><option value="local">本地存储</option><option value="mock">Mock</option></select></label>
+                <label>供应商 / 类型<AppSelect v-model="serviceDrafts.oss.provider" :options="ossProviderOptions" /></label>
                 <label>配置名称<input v-model="serviceDrafts.oss.name" class="input" /></label>
                 <template v-if="serviceDrafts.oss.provider === 'aliyun'">
-                  <label>AccessKey ID<input v-model="serviceDrafts.oss.access_key_id" class="input" type="password" /></label>
-                  <label>AccessKey Secret<input v-model="serviceDrafts.oss.access_key_secret" class="input" type="password" /></label>
+                  <label>AccessKey ID<PasswordField v-model="serviceDrafts.oss.access_key_id" /></label>
+                  <label>AccessKey Secret<PasswordField v-model="serviceDrafts.oss.access_key_secret" /></label>
                   <label>Bucket 名称<input v-model="serviceDrafts.oss.bucket" class="input" /></label>
                   <label>Region<input v-model="serviceDrafts.oss.region" class="input" /></label>
                   <label>URL 过期<input v-model.number="serviceDrafts.oss.url_expire_hours" class="input" type="number" /></label>
@@ -287,13 +294,13 @@
                 </div>
               </header>
               <div class="aliyun-field-grid">
-                <label>供应商 / 类型<select v-model="serviceDrafts.ocr.provider" class="select"><option value="aliyun">阿里云 OCR</option><option value="mock">Mock</option></select></label>
+                <label>供应商 / 类型<AppSelect v-model="serviceDrafts.ocr.provider" :options="aliyunProviderOptions" /></label>
                 <label>配置名称<input v-model="serviceDrafts.ocr.name" class="input" /></label>
-                <label>AccessKey ID<input v-model="serviceDrafts.ocr.access_key_id" class="input" type="password" /></label>
-                <label>AccessKey Secret<input v-model="serviceDrafts.ocr.access_key_secret" class="input" type="password" /></label>
+                <label>AccessKey ID<PasswordField v-model="serviceDrafts.ocr.access_key_id" /></label>
+                <label>AccessKey Secret<PasswordField v-model="serviceDrafts.ocr.access_key_secret" /></label>
                 <label>超时<input v-model.number="serviceDrafts.ocr.timeout" class="input" type="number" /></label>
                 <label>重试<input v-model.number="serviceDrafts.ocr.retries" class="input" type="number" /></label>
-                <label>精度<select v-model="serviceDrafts.ocr.accuracy" class="select"><option value="normal">普通</option><option value="high">高精度</option></select></label>
+                <label>精度<AppSelect v-model="serviceDrafts.ocr.accuracy" :options="ocrAccuracyOptions" /></label>
               </div>
             </article>
 
@@ -311,18 +318,18 @@
                 </div>
               </header>
               <div class="aliyun-field-grid">
-                <label>供应商 / 类型<select v-model="serviceDrafts.doc_parser.provider" class="select"><option value="aliyun">阿里云 DocMind</option><option value="mock">Mock</option></select></label>
+                <label>供应商 / 类型<AppSelect v-model="serviceDrafts.doc_parser.provider" :options="docParserProviderOptions" /></label>
                 <label>配置名称<input v-model="serviceDrafts.doc_parser.name" class="input" /></label>
-                <label>AccessKey ID<input v-model="serviceDrafts.doc_parser.access_key_id" class="input" type="password" /></label>
-                <label>AccessKey Secret<input v-model="serviceDrafts.doc_parser.access_key_secret" class="input" type="password" /></label>
+                <label>AccessKey ID<PasswordField v-model="serviceDrafts.doc_parser.access_key_id" /></label>
+                <label>AccessKey Secret<PasswordField v-model="serviceDrafts.doc_parser.access_key_secret" /></label>
                 <label>Region<input v-model="serviceDrafts.doc_parser.region" class="input" /></label>
                 <label>任务超时<input v-model.number="serviceDrafts.doc_parser.timeout_seconds" class="input" type="number" min="30" /></label>
                 <label>轮询间隔<input v-model.number="serviceDrafts.doc_parser.poll_interval_seconds" class="input" type="number" min="1" /></label>
                 <label>拉取步长<input v-model.number="serviceDrafts.doc_parser.layout_step_size" class="input" type="number" min="1" max="3000" /></label>
-                <label>增强模式<select v-model="serviceDrafts.doc_parser.enhancement_mode" class="select"><option value="VLM">VLM</option><option value="">关闭</option></select></label>
-                <label>大模型增强<span class="aliyun-check"><input v-model="serviceDrafts.doc_parser.llm_enhancement" type="checkbox" />启用</span></label>
-                <label>公式增强<span class="aliyun-check"><input v-model="serviceDrafts.doc_parser.formula_enhancement" type="checkbox" />启用</span></label>
-                <label>HTML 表格<span class="aliyun-check"><input v-model="serviceDrafts.doc_parser.output_html_table" type="checkbox" />启用</span></label>
+                <label>增强模式<AppSelect v-model="serviceDrafts.doc_parser.enhancement_mode" :options="enhancementModeOptions" /></label>
+                <label>大模型增强<span class="aliyun-check"><AppCheckbox v-model="serviceDrafts.doc_parser.llm_enhancement" variant="switch" label="启用" /></span></label>
+                <label>公式增强<span class="aliyun-check"><AppCheckbox v-model="serviceDrafts.doc_parser.formula_enhancement" variant="switch" label="启用" /></span></label>
+                <label>HTML 表格<span class="aliyun-check"><AppCheckbox v-model="serviceDrafts.doc_parser.output_html_table" variant="switch" label="启用" /></span></label>
               </div>
             </article>
 
@@ -340,14 +347,14 @@
                 </div>
               </header>
               <div class="aliyun-field-grid">
-                <label>供应商 / 类型<select v-model="serviceDrafts.tts.provider" class="select"><option value="aliyun">阿里云 TTS</option><option value="mock">Mock</option></select></label>
+                <label>供应商 / 类型<AppSelect v-model="serviceDrafts.tts.provider" :options="ttsProviderOptions" /></label>
                 <label>配置名称<input v-model="serviceDrafts.tts.name" class="input" /></label>
-                <label>AccessKey ID<input v-model="serviceDrafts.tts.access_key_id" class="input" type="password" /></label>
-                <label>AccessKey Secret<input v-model="serviceDrafts.tts.access_key_secret" class="input" type="password" /></label>
+                <label>AccessKey ID<PasswordField v-model="serviceDrafts.tts.access_key_id" /></label>
+                <label>AccessKey Secret<PasswordField v-model="serviceDrafts.tts.access_key_secret" /></label>
                 <label>AppKey<input v-model="serviceDrafts.tts.appkey" class="input" /></label>
                 <label>音色<input v-model="serviceDrafts.tts.voice" class="input" /></label>
-                <label>语速<input v-model.number="serviceDrafts.tts.speech_rate" class="input" type="range" min="-500" max="500" /></label>
-                <label>音量<input v-model.number="serviceDrafts.tts.volume" class="input" type="range" min="0" max="100" /></label>
+                <label>语速<AppSlider v-model="serviceDrafts.tts.speech_rate" :min="-500" :max="500" :step="10" /></label>
+                <label>音量<AppSlider v-model="serviceDrafts.tts.volume" :min="0" :max="100" :step="1" /></label>
               </div>
             </article>
 
@@ -365,14 +372,14 @@
                 </div>
               </header>
               <div class="aliyun-field-grid">
-                <label>供应商 / 类型<select v-model="serviceDrafts.email.provider" class="select"><option value="smtp">SMTP</option><option value="mock">Mock</option></select></label>
+                <label>供应商 / 类型<AppSelect v-model="serviceDrafts.email.provider" :options="emailProviderOptions" /></label>
                 <label>配置名称<input v-model="serviceDrafts.email.name" class="input" /></label>
                 <label>Host<input v-model="serviceDrafts.email.host" class="input" /></label>
                 <label>Port<input v-model.number="serviceDrafts.email.port" class="input" type="number" /></label>
                 <label>发件人<input v-model="serviceDrafts.email.sender" class="input" /></label>
                 <label>用户名<input v-model="serviceDrafts.email.username" class="input" /></label>
-                <label>密码<input v-model="serviceDrafts.email.password" class="input" type="password" /></label>
-                <label>SSL<span class="aliyun-check"><input v-model="serviceDrafts.email.use_ssl" type="checkbox" />启用</span></label>
+                <label>密码<PasswordField v-model="serviceDrafts.email.password" /></label>
+                <label>SSL<span class="aliyun-check"><AppCheckbox v-model="serviceDrafts.email.use_ssl" variant="switch" label="启用" /></span></label>
               </div>
             </article>
           </div>
@@ -409,7 +416,7 @@
         </section>
 
         <section v-if="active === 'adminMonitor'" key="adminMonitor" class="admin-page">
-          <div class="monitor-top"><span><RefreshCw :size="16" :class="{ spin: autoRefresh }" />{{ lastUpdatedText }}</span><label class="switch-line"><input v-model="autoRefresh" type="checkbox" />自动刷新</label></div>
+          <div class="monitor-top"><span><RefreshCw :size="16" :class="{ spin: autoRefresh }" />{{ lastUpdatedText }}</span><AppCheckbox v-model="autoRefresh" variant="switch" label="自动刷新" /></div>
           <div class="service-overview">
             <article v-for="item in healthItems" :key="item.key" class="monitor-service" :class="statusClass(item.status)"><component :is="serviceIcon(item.key)" :size="20" /><div><strong>{{ item.name }}</strong><span>{{ item.detail }}</span></div><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></article>
           </div>
@@ -423,34 +430,60 @@
 
         <section v-if="active === 'adminLogs'" key="adminLogs" class="admin-page">
           <div class="log-tabs"><button :class="{ active: logType === 'login' }" @click="logType = 'login'"><UserCheck :size="16" />登录日志</button><button :class="{ active: logType === 'operations' }" @click="logType = 'operations'"><Pencil :size="16" />操作日志</button><button :class="{ active: logType === 'errors' }" @click="logType = 'errors'"><AlertCircle :size="16" />错误日志</button></div>
-          <article class="filter-card"><div class="search-field"><Search :size="16" /><input v-model="logKeyword" placeholder="关键词/IP地址" @keyup.enter="loadLogs" /></div><select v-if="logType === 'login'" v-model="logFilter.success" class="select"><option value="">全部</option><option value="true">成功</option><option value="false">失败</option></select><input v-if="logType === 'operations'" v-model="logFilter.action" class="input" placeholder="操作类型" /><select v-if="logType === 'errors'" v-model="logFilter.level" class="select"><option value="">全部</option><option value="warning">WARNING</option><option value="error">ERROR</option><option value="critical">CRITICAL</option></select><input v-model="logFilter.start_at" class="input" type="datetime-local" /><input v-model="logFilter.end_at" class="input" type="datetime-local" /><button class="btn btn-secondary" @click="loadLogs"><Search :size="16" />查询</button></article>
+          <article class="filter-card"><div class="search-field"><Search :size="16" /><input v-model="logKeyword" placeholder="关键词/IP地址" @keyup.enter="loadLogs" /></div><AppSelect v-if="logType === 'login'" v-model="logFilter.success" :options="logSuccessOptions" /><input v-if="logType === 'operations'" v-model="logFilter.action" class="input" placeholder="操作类型" /><AppSelect v-if="logType === 'errors'" v-model="logFilter.level" :options="logLevelOptions" /><input v-model="logFilter.start_at" class="input" type="text" placeholder="开始时间" /><input v-model="logFilter.end_at" class="input" type="text" placeholder="结束时间" /><button class="btn btn-secondary" @click="loadLogs"><Search :size="16" />查询</button></article>
           <article v-if="logType === 'errors' && todayErrors" class="alert alert-danger"><XCircle :size="16" />今日错误 {{ todayErrors }} 次<button class="link-btn" @click="logFilter.level = 'error'; loadLogs()">筛选</button></article>
-          <article class="table-card"><table class="admin-table"><thead><tr><th>时间</th><th>主体</th><th>内容</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in logs" :key="item.id"><td>{{ formatTime(item.created_at) }}</td><td>{{ logSubject(item) }}</td><td><code>{{ logContent(item) }}</code></td><td><span class="tag">{{ logMeta(item) }}</span></td><td><span class="tag" :class="item.detail?.resolved ? 'tag-success' : 'tag-warning'">{{ item.detail?.resolved ? '已处理' : '未处理' }}</span></td><td><button class="icon-action" @click="logDetail = item"><Eye :size="15" /></button><button v-if="logType === 'errors'" class="icon-action" @click="resolveError(item.id)"><CheckCircle :size="15" /></button></td></tr><tr v-if="!logs.length"><td colspan="6"><EmptyState text="暂无日志" /></td></tr></tbody></table></article>
+          <article class="table-card"><table class="admin-table"><thead><tr><th>时间</th><th>主体</th><th>内容</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in logs" :key="item.id"><td>{{ formatTime(item.created_at) }}</td><td>{{ logSubject(item) }}</td><td><code>{{ logContent(item) }}</code></td><td><span class="tag">{{ logMeta(item) }}</span></td><td><span class="tag" :class="item.detail?.resolved ? 'tag-success' : 'tag-warning'">{{ item.detail?.resolved ? '已处理' : '未处理' }}</span></td><td><button class="icon-action" @click="logDetail = item"><Eye :size="15" />详情</button><button v-if="logType === 'errors'" class="icon-action" @click="resolveError(item.id)"><CheckCircle :size="15" />处理</button></td></tr><tr v-if="!logs.length"><td colspan="6"><EmptyState text="暂无日志" /></td></tr></tbody></table></article>
         </section>
 
         <section v-if="active === 'adminBackups'" key="adminBackups" class="admin-page">
           <article class="backup-summary"><div><span>最后备份</span><strong>{{ backupSummary.last_backup ? relativeTime(backupSummary.last_backup.created_at) : '暂无' }}</strong><small>{{ backupSummary.last_backup?.status || '-' }}</small></div><div><span>备份文件</span><strong>{{ backupSummary.backup_count || 0 }}</strong><small>最旧：{{ shortDate(backupSummary.oldest_at) }}</small></div><div><span>总大小</span><strong>{{ backupSummary.total_size_label || '0 B' }}</strong><small>本地存储</small></div></article>
           <div class="backup-layout">
-            <article class="panel-card"><div class="panel-head"><h2><File :size="18" />备份文件</h2><span class="tag">{{ backups.length }}</span></div><table class="admin-table compact-table"><thead><tr><th>名称</th><th>类型</th><th>大小</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in backups" :key="item.id" :class="{ disabled: item.status === 'failed' }"><td class="mono">{{ item.backup_name }}</td><td><span class="tag">全量</span></td><td>{{ sizeLabel(item.file_size_bytes) }}</td><td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td><td>{{ formatTime(item.created_at) }}</td><td class="row-actions"><button class="icon-action" @click="downloadBackup(item)"><Download :size="15" /></button><button class="icon-action" @click="verifyBackup(item.id)"><ShieldCheck :size="15" /></button><button class="icon-action danger" @click="deleteBackup(item.id)"><Trash2 :size="15" /></button></td></tr></tbody></table></article>
-            <article class="panel-card"><div class="panel-head"><h2><Settings :size="18" />自动备份</h2></div><div class="policy-form"><label class="switch-line"><input v-model="backupPolicy.enabled" type="checkbox" />启用自动备份</label><label>备份频率<select v-model="backupPolicy.frequency" class="select"><option value="daily">每天</option><option value="6h">每6小时</option><option value="hourly">每小时</option></select></label><label>备份时间<input v-model="backupPolicy.time" class="input" type="time" /></label><label>保留数量<input v-model.number="backupPolicy.retention" class="input" type="number" /></label><label>通知邮箱<input v-model="backupNotifyEmail" class="input" type="email" /></label><button class="btn btn-primary wide-btn" @click="saveBackupPolicy">保存</button></div></article>
+            <article class="panel-card"><div class="panel-head"><h2><File :size="18" />备份文件</h2><span class="tag">{{ backups.length }}</span></div><table class="admin-table compact-table"><thead><tr><th>名称</th><th>类型</th><th>大小</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in backups" :key="item.id" :class="{ disabled: item.status === 'failed' }"><td class="mono">{{ item.backup_name }}</td><td><span class="tag">全量</span></td><td>{{ sizeLabel(item.file_size_bytes) }}</td><td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td><td>{{ formatTime(item.created_at) }}</td><td class="row-actions"><button class="icon-action" @click="downloadBackup(item)"><Download :size="15" />下载</button><button class="icon-action" @click="verifyBackup(item.id)"><ShieldCheck :size="15" />校验</button><button class="icon-action danger" @click="deleteBackup(item.id)"><Trash2 :size="15" />删除</button></td></tr></tbody></table></article>
+            <article class="panel-card"><div class="panel-head"><h2><Settings :size="18" />自动备份</h2></div><div class="policy-form"><AppCheckbox v-model="backupPolicy.enabled" variant="switch" label="启用自动备份" /><label>备份频率<AppSelect v-model="backupPolicy.frequency" :options="backupFrequencyOptions" /></label><label>备份时间<input v-model="backupPolicy.time" class="input" type="text" placeholder="03:00" /></label><label>保留数量<input v-model.number="backupPolicy.retention" class="input" type="number" /></label><label>通知邮箱<input v-model="backupNotifyEmail" class="input" type="email" /></label><button class="btn btn-primary wide-btn" @click="saveBackupPolicy">保存</button></div></article>
           </div>
-          <article class="danger-zone"><AlertTriangle :size="18" /><div><strong>数据恢复</strong><span>恢复将覆盖当前数据。</span></div><select v-model.number="restoreBackupId" class="select"><option :value="0">选择备份</option><option v-for="item in backups" :key="item.id" :value="item.id">{{ item.backup_name }}</option></select><input v-model="restoreConfirm" class="input" placeholder="CONFIRM" /><button class="btn btn-danger" :disabled="restoreConfirm !== 'CONFIRM' || !restoreBackupId" @click="restoreBackupAction">恢复</button></article>
+          <article class="danger-zone"><AlertTriangle :size="18" /><div><strong>数据恢复</strong><span>恢复将覆盖当前数据。</span></div><AppSelect v-model="restoreBackupId" :options="restoreBackupOptions" /><input v-model="restoreConfirm" class="input" placeholder="CONFIRM" /><button class="btn btn-danger" :disabled="restoreConfirm !== 'CONFIRM' || !restoreBackupId" @click="restoreBackupAction">恢复</button></article>
         </section>
       </TransitionGroup>
     </main>
 
     <Transition name="drawer">
       <aside v-if="userDrawer" class="drawer">
-        <div class="drawer-head"><h2>{{ userDrawer.user.nickname }}</h2><span class="tag">{{ roleText(userDrawer.user.role) }}</span><button class="icon-action" @click="userDrawer = null"><X :size="16" /></button></div>
-        <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="邮箱" :value="userDrawer.user.email" /><InfoRow label="状态" :value="statusText(userDrawer.user.status)" /><InfoRow label="注册" :value="formatTime(userDrawer.user.created_at)" /></section><section><h3>账号权限</h3><label class="drawer-field">用户角色<select class="select" :value="userDrawer.user.role" :disabled="isPending(`role:${userDrawer.user.id}`)" @change="selectUserRole(userDrawer.user, $event)"><option v-for="role in userRoleOptions" :key="role.value" :value="role.value">{{ role.label }}</option></select></label></section><section><h3>已加入课程</h3><div v-for="item in userDrawer.courses" :key="item.id" class="row-card"><span>{{ item.name }}</span><span class="tag">{{ item.role }}</span></div></section><section><h3>操作日志</h3><div v-for="item in userDrawer.logs" :key="item.id" class="timeline-item"><i></i><strong>{{ item.action }}</strong><span>{{ formatTime(item.created_at) }}</span></div></section></div>
+        <div class="drawer-head"><h2>{{ userDrawer.user.nickname }}</h2><span class="tag">{{ roleText(userDrawer.user.role) }}</span><button class="icon-action" @click="userDrawer = null"><X :size="16" />关闭</button></div>
+        <div class="drawer-body">
+          <section>
+            <h3>基本信息</h3>
+            <InfoRow label="邮箱" :value="userDrawer.user.email" />
+            <InfoRow label="状态" :value="statusText(userDrawer.user.status)" />
+            <InfoRow label="注册" :value="formatTime(userDrawer.user.created_at)" />
+            <InfoRow label="最近登录" :value="formatTime(userDrawer.user.last_login_at)" />
+            <InfoRow label="最近活跃" :value="formatTime(userDrawer.user.last_seen_at)" />
+          </section>
+          <section>
+            <h3>账号权限</h3>
+            <label class="drawer-field">用户角色<AppSelect :model-value="userDrawer.user.role" :options="userRoleOptions" :disabled="isPending(`role:${userDrawer.user.id}`)" @update:model-value="selectUserRole(userDrawer.user, $event)" /></label>
+          </section>
+          <section>
+            <h3>关联课程</h3>
+            <div v-for="item in userDrawer.courses" :key="`${item.relation}-${item.id}`" class="row-card course-row-card">
+              <div><strong>{{ item.name }}</strong><small>{{ item.term }} · {{ item.course_code }} · {{ statusText(item.status) }}</small></div>
+              <span class="tag" :class="item.relation === 'teacher' ? 'tag-success' : 'tag-primary'">{{ item.role }}</span>
+            </div>
+            <EmptyState v-if="!userDrawer.courses.length" text="暂无关联课程" />
+          </section>
+          <section>
+            <h3>操作日志</h3>
+            <div v-for="item in userDrawer.logs" :key="item.id" class="timeline-item"><i></i><strong>{{ item.action }}</strong><span>{{ formatTime(item.created_at) }}</span></div>
+            <EmptyState v-if="!userDrawer.logs.length" text="暂无日志" />
+          </section>
+        </div>
         <div class="drawer-foot"><button class="btn btn-danger" :data-loading="isPending(`delete:${userDrawer.user.id}`)" :disabled="isPending(`delete:${userDrawer.user.id}`)" @click="deleteUser(userDrawer.user.id)">删除</button><button class="btn btn-secondary" :data-loading="isPending(`reset:${userDrawer.user.id}`)" :disabled="isPending(`reset:${userDrawer.user.id}`)" @click="resetUser(userDrawer.user.id)">重置密码</button></div>
       </aside>
     </Transition>
 
     <Transition name="drawer">
       <aside v-if="courseDrawer" class="drawer wide">
-        <div class="drawer-head"><h2>{{ courseDrawer.course.name }}</h2><span class="tag" :class="statusClass(courseDrawer.course.status)">{{ statusText(courseDrawer.course.status) }}</span><button class="icon-action" @click="courseDrawer = null"><X :size="16" /></button></div>
-        <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="课程码" :value="courseDrawer.course.course_code" /><InfoRow label="教师" :value="String(courseDrawer.course.teacher_id)" /><InfoRow label="学生" :value="String(courseDrawer.student_count)" /><InfoRow label="资料" :value="String(courseDrawer.material_count)" /></section><section><h3>学生列表</h3><div v-for="item in courseDrawer.students" :key="item.membership_id" class="row-card"><span>{{ item.user.nickname }}</span><span class="tag">{{ item.user.email }}</span></div></section><section><h3>课程资料</h3><div v-for="item in courseDrawer.materials" :key="item.id" class="row-card"><span>{{ item.title }}</span><button class="link-btn" @click="deleteMaterial(item.id)">删除</button></div></section><section><h3>课堂列表</h3><div v-for="item in courseDrawer.lessons" :key="item.id" class="row-card"><span>{{ item.title }}</span><span class="tag">{{ item.status }}</span></div></section></div>
+        <div class="drawer-head"><h2>{{ courseDrawer.course.name }}</h2><span class="tag" :class="statusClass(courseDrawer.course.status)">{{ statusText(courseDrawer.course.status) }}</span><button class="icon-action" @click="courseDrawer = null"><X :size="16" />关闭</button></div>
+        <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="课程码" :value="courseDrawer.course.course_code" /><InfoRow label="教师" :value="String(courseDrawer.course.teacher_id)" /><InfoRow label="学生" :value="String(courseDrawer.student_count)" /><InfoRow label="资料" :value="String(courseDrawer.material_count)" /></section><section><h3>学生列表</h3><div v-for="item in courseDrawer.students" :key="item.membership_id" class="row-card"><span>{{ item.user.nickname }}</span><span class="tag">{{ item.user.email }}</span></div></section><section><h3>课程资料</h3><div v-for="item in courseDrawer.materials" :key="item.id" class="row-card"><span>{{ item.title }}</span><button class="link-btn" @click="deleteMaterial(item.id)">删除</button></div></section><section><h3>课时列表</h3><div v-for="item in courseDrawer.lessons" :key="item.id" class="row-card"><span>{{ item.title }}</span><span class="tag">{{ item.status }}</span></div></section></div>
         <div class="drawer-foot"><input v-model.number="takeoverTeacherId" class="input" type="number" placeholder="教师ID" /><button class="btn btn-secondary" @click="takeoverCourse(courseDrawer.course.id)">接管</button><button class="btn btn-danger" @click="deactivateCourse(courseDrawer.course.id)">下架</button></div>
       </aside>
     </Transition>
@@ -458,9 +491,9 @@
     <Transition name="modal-pop">
       <div v-if="adminModalOpen" class="modal-mask">
         <article class="modal">
-          <div class="modal-head"><Shield :size="20" /><h2>创建用户账号</h2><button class="icon-action" @click="adminModalOpen = false"><X :size="16" /></button></div>
+          <div class="modal-head"><Shield :size="20" /><h2>创建用户账号</h2><button class="icon-action" @click="adminModalOpen = false"><X :size="16" />关闭</button></div>
           <p v-if="adminFormError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ adminFormError }}</p>
-          <div class="form-grid"><label>用户名<input v-model="adminForm.nickname" class="input" :aria-invalid="adminFormError.includes('用户名')" /></label><label>邮箱<input v-model="adminForm.email" class="input" type="email" :aria-invalid="adminFormError.includes('邮箱')" /></label><label>角色<select v-model="adminForm.role" class="select"><option value="teacher">教师</option><option value="admin">管理员</option><option value="student">学生</option></select></label><label v-if="adminForm.role === 'teacher'">工号<input v-model="adminForm.employee_no" class="input" :aria-invalid="adminFormError.includes('工号')" /></label><label v-if="adminForm.role === 'student'">学号<input v-model="adminForm.student_no" class="input" :aria-invalid="adminFormError.includes('学号')" /></label><label>初始密码<input v-model="adminForm.password" class="input" type="password" :aria-invalid="adminFormError.includes('密码')" /></label><label>确认密码<input v-model="adminForm.confirm" class="input" type="password" :aria-invalid="adminFormError.includes('密码') || adminFormError.includes('不一致')" /></label><label class="wide-field">备注<textarea v-model="adminForm.note" class="textarea"></textarea></label></div>
+          <div class="form-grid"><label>用户名<input v-model="adminForm.nickname" class="input" :aria-invalid="adminFormError.includes('用户名')" /></label><label>邮箱<input v-model="adminForm.email" class="input" type="email" :aria-invalid="adminFormError.includes('邮箱')" /></label><label>角色<AppSelect v-model="adminForm.role" :options="adminRoleOptions" /></label><label v-if="adminForm.role === 'teacher'">工号<input v-model="adminForm.employee_no" class="input" :aria-invalid="adminFormError.includes('工号')" /></label><label v-if="adminForm.role === 'student'">学号<input v-model="adminForm.student_no" class="input" :aria-invalid="adminFormError.includes('学号')" /></label><label>初始密码<PasswordField v-model="adminForm.password" :aria-invalid="adminFormError.includes('密码')" /></label><label>确认密码<PasswordField v-model="adminForm.confirm" :aria-invalid="adminFormError.includes('密码') || adminFormError.includes('不一致')" /></label><label class="wide-field">备注<textarea v-model="adminForm.note" class="textarea"></textarea></label></div>
           <footer><button class="btn btn-secondary" @click="adminModalOpen = false">取消</button><button class="btn btn-primary" @click="createAdmin"><Plus :size="16" />创建</button></footer>
         </article>
       </div>
@@ -469,7 +502,7 @@
     <Transition name="modal-pop">
       <div v-if="resetPasswordResult" class="modal-mask">
         <article class="modal password-modal">
-          <div class="modal-head"><KeyRound :size="20" /><h2>新密码</h2><button class="icon-action" @click="resetPasswordResult = ''"><X :size="16" /></button></div>
+          <div class="modal-head"><KeyRound :size="20" /><h2>新密码</h2><button class="icon-action" @click="resetPasswordResult = ''"><X :size="16" />关闭</button></div>
           <div class="password-box">{{ resetPasswordResult }}</div>
           <footer><button class="btn btn-secondary" @click="copyPassword">复制</button><button class="btn btn-primary" @click="resetPasswordResult = ''">关闭</button></footer>
         </article>
@@ -478,13 +511,13 @@
 
     <Transition name="modal-pop">
       <div v-if="previewItem" class="modal-mask">
-        <article class="modal preview-modal"><div class="modal-head"><FileText :size="20" /><h2>{{ previewItem.title }}</h2><button class="icon-action" @click="previewItem = null"><X :size="16" /></button></div><iframe v-if="previewItem.preview_url" :src="previewItem.preview_url"></iframe><EmptyState v-else text="暂无预览" /></article>
+        <article class="modal preview-modal"><div class="modal-head"><FileText :size="20" /><h2>{{ previewItem.title }}</h2><button class="icon-action" @click="previewItem = null"><X :size="16" />关闭</button></div><iframe v-if="previewItem.preview_url" :src="previewItem.preview_url"></iframe><EmptyState v-else text="暂无预览" /></article>
       </div>
     </Transition>
 
     <Transition name="modal-pop">
       <div v-if="logDetail" class="modal-mask">
-        <article class="modal"><div class="modal-head"><FileText :size="20" /><h2>日志详情</h2><button class="icon-action" @click="logDetail = null"><X :size="16" /></button></div><pre>{{ JSON.stringify(logDetail, null, 2) }}</pre><footer><button class="btn btn-secondary" @click="logDetail = null">关闭</button></footer></article>
+        <article class="modal"><div class="modal-head"><FileText :size="20" /><h2>日志详情</h2><button class="icon-action" @click="logDetail = null"><X :size="16" />关闭</button></div><pre>{{ JSON.stringify(logDetail, null, 2) }}</pre><footer><button class="btn btn-secondary" @click="logDetail = null">关闭</button></footer></article>
       </div>
     </Transition>
   </section>
@@ -496,12 +529,16 @@ import { useRouter } from "vue-router";
 import {
   Activity, AlertCircle, AlertTriangle, Ban, BarChart2, Bell, BookOpen, CheckCircle, CheckSquare, ChevronDown,
   ChevronRight, Clock, Cloud, Database, Download, Eye, File, FileCheck, FileText, GraduationCap, Grid2X2,
-  Inbox, KeyRound, Layers, LayoutDashboard, List, LogOut, Menu, MoreHorizontal, Pencil, Plus, RefreshCw,
+  Inbox, KeyRound, Layers, LayoutDashboard, List, LogOut, Menu, Pencil, Plus, RefreshCw,
   Save, Scan, Search, Server, Settings, Shield, ShieldCheck, Sparkles, Trash2, Upload, User, UserCheck,
   Users, Volume2, X, XCircle
 } from "lucide-vue-next";
 import { api } from "../api/client";
 import type { Role, User as UserType } from "../types";
+import AppCheckbox from "../components/AppCheckbox.vue";
+import AppSelect from "../components/AppSelect.vue";
+import AppSlider from "../components/AppSlider.vue";
+import PasswordField from "../components/PasswordField.vue";
 import AdminChart from "./admin/AdminChart.vue";
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
@@ -527,6 +564,7 @@ const routeByKey: Record<string, string> = {
 const collapsed = ref(false);
 const userMenuOpen = ref(false);
 const sidebarNavRef = ref<HTMLElement | null>(null);
+const userMenuRef = ref<HTMLElement | null>(null);
 const sidebarScrollable = ref(false);
 const pendingAction = ref("");
 const active = ref(props.pageKey || "adminDashboard");
@@ -581,6 +619,28 @@ const userRoleOptions: Array<{ value: Role; label: string }> = [
   { value: "teacher", label: "教师" },
   { value: "admin", label: "管理员" }
 ];
+const userRoleFilterOptions = [{ label: "全部", value: "" }, ...userRoleOptions];
+const adminRoleOptions: Array<{ value: Role; label: string }> = [
+  { value: "teacher", label: "教师" },
+  { value: "admin", label: "管理员" },
+  { value: "student", label: "学生" }
+];
+const userStatusOptions = [{ label: "全部", value: "" }, { label: "正常", value: "active" }, { label: "禁用", value: "disabled" }];
+const courseStatusOptions = [{ label: "全部", value: "" }, { label: "正常", value: "active" }, { label: "下架", value: "inactive" }];
+const materialTypeOptions = [{ label: "全部", value: "" }, { label: "PPT", value: "pptx" }, { label: "PDF", value: "pdf" }, { label: "Word", value: "docx" }, { label: "TXT", value: "txt" }];
+const materialCategoryOptions = [{ label: "分类", value: "" }, { label: "课件", value: "courseware" }, { label: "讲义", value: "handout" }, { label: "练习", value: "exercise" }, { label: "参考", value: "reference" }];
+const modelProviderOptions = [{ label: "通义千问", value: "qwen" }, { label: "DeepSeek", value: "deepseek" }, { label: "OpenAI", value: "openai" }, { label: "Azure", value: "azure" }, { label: "Mock", value: "mock" }, { label: "自定义", value: "custom" }];
+const embeddingProviderOptions = [{ label: "通义千问", value: "qwen" }, { label: "OpenAI", value: "openai" }, { label: "Mock", value: "mock" }];
+const ossProviderOptions = [{ label: "阿里云 OSS", value: "aliyun" }, { label: "本地存储", value: "local" }, { label: "Mock", value: "mock" }];
+const aliyunProviderOptions = [{ label: "阿里云 OCR", value: "aliyun" }, { label: "Mock", value: "mock" }];
+const docParserProviderOptions = [{ label: "阿里云 DocMind", value: "aliyun" }, { label: "Mock", value: "mock" }];
+const ttsProviderOptions = [{ label: "阿里云 TTS", value: "aliyun" }, { label: "Mock", value: "mock" }];
+const emailProviderOptions = [{ label: "SMTP", value: "smtp" }, { label: "Mock", value: "mock" }];
+const ocrAccuracyOptions = [{ label: "普通", value: "normal" }, { label: "高精度", value: "high" }];
+const enhancementModeOptions = [{ label: "VLM", value: "VLM" }, { label: "关闭", value: "" }];
+const logSuccessOptions = [{ label: "全部", value: "" }, { label: "成功", value: "true" }, { label: "失败", value: "false" }];
+const logLevelOptions = [{ label: "全部", value: "" }, { label: "WARNING", value: "warning" }, { label: "ERROR", value: "error" }, { label: "CRITICAL", value: "critical" }];
+const backupFrequencyOptions = [{ label: "每天", value: "daily" }, { label: "每6小时", value: "6h" }, { label: "每小时", value: "hourly" }];
 const courseFilter = reactive({ keyword: "", status: "" });
 const materialFilter = reactive({ keyword: "", category: "", material_type: "", teacher_id: null as number | null });
 const logFilter = reactive({ success: "", action: "", level: "", source: "", start_at: "", end_at: "" });
@@ -619,7 +679,7 @@ for (const item of llmPurposes) modelDrafts[item.key] = { config_id: null, model
 const settingCategories = [
   { key: "upload", label: "文件上传" },
   { key: "ai", label: "AI 行为" },
-  { key: "classroom", label: "课堂音频" },
+  { key: "classroom", label: "课时音频" },
   { key: "quiz", label: "测验参数" },
   { key: "interface", label: "界面公告" },
   { key: "backup", label: "备份参数" }
@@ -683,6 +743,7 @@ const apiSeries = computed(() => [{ name: "API", data: (monitorSeriesData.value.
 const aiMonitorSeries = computed(() => [{ name: "AI", data: (monitorSeriesData.value.points || []).map((item: any) => item.ai_calls), color: "#8B5CF6" }, { name: "失败率", data: (monitorSeriesData.value.points || []).map((item: any) => item.ai_failure_rate), color: "#EF4444" }]);
 const lastUpdatedText = computed(() => (lastUpdatedAt.value ? `${relativeTime(lastUpdatedAt.value.toISOString())}更新` : "未更新"));
 const todayErrors = computed(() => logs.value.filter((item) => String(item.level).toLowerCase() === "error").length);
+const restoreBackupOptions = computed(() => [{ label: "选择备份", value: 0 }, ...backups.value.map((item) => ({ label: item.backup_name, value: item.id }))]);
 
 async function run<T>(task: () => Promise<T>, ok?: string) {
   try {
@@ -714,6 +775,7 @@ function updateSidebarOverflow() {
   });
 }
 async function go(key: string) {
+  userMenuOpen.value = false;
   await router.push(routeByKey[key] || "/admin");
 }
 function statusClass(status: unknown) {
@@ -793,14 +855,14 @@ function settingControl(item: any) {
         const key = innerProps.item.key;
         const update = (event: Event) => { innerProps.drafts[key] = (event.target as HTMLInputElement).value; };
         if (innerProps.item.type === "number") return h("input", { class: "input form-control", type: "number", value: innerProps.drafts[key], onInput: (event: Event) => { innerProps.drafts[key] = Number((event.target as HTMLInputElement).value); } });
-        if (innerProps.item.type === "range") return h("input", { class: "input form-control", type: "range", min: innerProps.item.min, max: innerProps.item.max, value: innerProps.drafts[key], onInput: (event: Event) => { innerProps.drafts[key] = Number((event.target as HTMLInputElement).value); } });
-        if (innerProps.item.type === "toggle") return h("label", { class: "checkbox-label inline" }, [h("input", { type: "checkbox", checked: !!innerProps.drafts[key], onChange: (event: Event) => { innerProps.drafts[key] = (event.target as HTMLInputElement).checked; } }), "启用"]);
+        if (innerProps.item.type === "range") return h(AppSlider, { modelValue: Number(innerProps.drafts[key] || 0), min: innerProps.item.min, max: innerProps.item.max, "onUpdate:modelValue": (value: number) => { innerProps.drafts[key] = value; } });
+        if (innerProps.item.type === "toggle") return h(AppCheckbox, { modelValue: !!innerProps.drafts[key], label: "启用", variant: "switch", "onUpdate:modelValue": (value: boolean) => { innerProps.drafts[key] = value; } });
         if (innerProps.item.type === "textarea") return h("textarea", { class: "textarea form-control", value: innerProps.drafts[key], onInput: update });
-        if (innerProps.item.type === "select") return h("select", { class: "select form-control", value: innerProps.drafts[key], onChange: update }, innerProps.item.options.map((option: string) => h("option", { value: option }, option)));
-        if (innerProps.item.type === "checks") return h("div", { class: "checkbox-group" }, innerProps.item.options.map((option: string) => h("label", { class: "checkbox-label" }, [h("input", { type: "checkbox", checked: Array.isArray(innerProps.drafts[key]) && innerProps.drafts[key].includes(option), onChange: (event: Event) => {
+        if (innerProps.item.type === "select") return h(AppSelect, { modelValue: innerProps.drafts[key], options: innerProps.item.options.map((option: string) => ({ label: option, value: option })), "onUpdate:modelValue": (value: unknown) => { innerProps.drafts[key] = value; } });
+        if (innerProps.item.type === "checks") return h("div", { class: "checkbox-group" }, innerProps.item.options.map((option: string) => h(AppCheckbox, { label: option, modelValue: Array.isArray(innerProps.drafts[key]) && innerProps.drafts[key].includes(option), "onUpdate:modelValue": (checked: boolean) => {
           const current = Array.isArray(innerProps.drafts[key]) ? [...innerProps.drafts[key]] : [];
-          innerProps.drafts[key] = (event.target as HTMLInputElement).checked ? [...new Set([...current, option])] : current.filter((value) => value !== option);
-        } }), option])));
+          innerProps.drafts[key] = checked ? [...new Set([...current, option])] : current.filter((value) => value !== option);
+        } })));
         if (innerProps.item.type === "json") return h("textarea", { class: "textarea form-control", value: JSON.stringify(innerProps.drafts[key] || {}, null, 2), onInput: (event: Event) => { try { innerProps.drafts[key] = JSON.parse((event.target as HTMLTextAreaElement).value || "{}"); } catch { innerProps.drafts[key] = (event.target as HTMLTextAreaElement).value; } } });
         return h("input", { class: "input form-control", value: innerProps.drafts[key], onInput: update });
       };
@@ -948,8 +1010,12 @@ async function updateUserRole(item: any, role: Role) {
     await loadUsers();
   });
 }
-function selectUserRole(item: any, event: Event) {
-  void updateUserRole(item, (event.target as HTMLSelectElement).value as Role);
+function checkedValue(value: boolean | Event) {
+  return typeof value === "boolean" ? value : (value.target as HTMLInputElement).checked;
+}
+function selectUserRole(item: any, value: unknown) {
+  const role = typeof value === "string" ? value : value && (value as Event).target ? ((value as Event).target as HTMLSelectElement).value : "";
+  void updateUserRole(item, role as Role);
 }
 function copyPassword() {
   if (!resetPasswordResult.value) return;
@@ -978,19 +1044,19 @@ async function batchResetUsers() {
   selectedUsers.value = [];
 }
 async function batchDeleteUsers() { for (const id of selectedUsers.value) await run(() => api.delete(`/admin/users/${id}`)); selectedUsers.value = []; await loadUsers(); }
-function toggleAllUsers(event: Event) { selectedUsers.value = (event.target as HTMLInputElement).checked ? users.value.map((item) => item.id) : []; }
+function toggleAllUsers(value: boolean | Event) { selectedUsers.value = checkedValue(value) ? users.value.map((item) => item.id) : []; }
 function clearUserFilter() { Object.assign(userFilter, { keyword: "", role: "", status: "" }); loadUsers(); }
 async function openCourseDetail(id: number) { courseDrawer.value = await run(() => api.get(`/admin/courses/${id}`)); }
 function openTakeover(item: any) { courseDrawer.value = { course: item, student_count: item.student_count, material_count: item.material_count, students: [], materials: [], lessons: [] }; }
 async function takeoverCourse(id: number) { if (!takeoverTeacherId.value) return; await run(() => api.post(`/admin/courses/${id}/takeover`, { teacher_id: takeoverTeacherId.value }), "已接管"); await loadCourses(); }
 async function deactivateCourse(id: number) { await run(() => api.post(`/admin/courses/${id}/deactivate`), "已下架"); await loadCourses(); }
 async function batchDeactivateCourses() { for (const id of selectedCourses.value) await deactivateCourse(id); selectedCourses.value = []; }
-function toggleAllCourses(event: Event) { selectedCourses.value = (event.target as HTMLInputElement).checked ? filteredCourses.value.map((item) => item.id) : []; }
+function toggleAllCourses(value: boolean | Event) { selectedCourses.value = checkedValue(value) ? filteredCourses.value.map((item) => item.id) : []; }
 function clearCourseFilter() { Object.assign(courseFilter, { keyword: "", status: "" }); courseTerm.value = ""; loadCourses(); }
 function previewMaterial(item: any) { previewItem.value = item; }
 async function deleteMaterial(id: number) { await run(() => api.delete(`/admin/materials/${id}`), "已删除"); await loadMaterials(); }
 async function batchDeleteMaterials() { for (const id of selectedMaterials.value) await run(() => api.delete(`/admin/materials/${id}`)); selectedMaterials.value = []; await loadMaterials(); }
-function toggleAllMaterials(event: Event) { selectedMaterials.value = (event.target as HTMLInputElement).checked ? materials.value.map((item) => item.id) : []; }
+function toggleAllMaterials(value: boolean | Event) { selectedMaterials.value = checkedValue(value) ? materials.value.map((item) => item.id) : []; }
 function clearMaterialFilter() { Object.assign(materialFilter, { keyword: "", category: "", material_type: "", teacher_id: null }); loadMaterials(); }
 async function saveAllModels() {
   for (const purpose of llmPurposes) {
@@ -1063,7 +1129,15 @@ watch(autoRefresh, (enabled) => {
   if (refreshTimer) window.clearInterval(refreshTimer);
   if (enabled) refreshTimer = window.setInterval(() => active.value === "adminMonitor" && loadMonitor(), 30000);
 });
+function onAdminDocumentPointerDown(event: PointerEvent) {
+  if (!userMenuRef.value?.contains(event.target as Node)) userMenuOpen.value = false;
+}
+function onAdminDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") userMenuOpen.value = false;
+}
 onMounted(async () => {
+  document.addEventListener("pointerdown", onAdminDocumentPointerDown);
+  document.addEventListener("keydown", onAdminDocumentKeydown);
   await loadHealth();
   await loadActive();
   updateSidebarOverflow();
@@ -1075,6 +1149,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   if (refreshTimer) window.clearInterval(refreshTimer);
   sidebarResizeObserver?.disconnect();
+  document.removeEventListener("pointerdown", onAdminDocumentPointerDown);
+  document.removeEventListener("keydown", onAdminDocumentKeydown);
   window.removeEventListener("resize", updateSidebarOverflow);
 });
 
@@ -1092,39 +1168,49 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 <style scoped>
 .admin-shell { min-width: 1280px; height: 100vh; overflow: hidden; background: var(--color-bg-page); color: var(--color-text-body); }
 .admin-topbar { position: fixed; top: 0; left: 240px; right: 0; z-index: var(--z-sticky); height: 60px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 0 24px; transition: left var(--duration-base) var(--ease-out); }
-.collapsed .admin-topbar { left: 64px; }
+.collapsed .admin-topbar { left: 220px; }
 .topbar-left { min-width: 1px; }
 .top-actions, .user-trigger, .identity, .panel-head h2, .service-row, .mini-metrics, .monitor-top, .switch-line { display: flex; align-items: center; gap: var(--space-2); }
+.admin-shell button,
+.admin-shell a.icon-action {
+  transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out);
+  will-change: transform;
+}
+.admin-shell button:active:not(:disabled),
+.admin-shell a.icon-action:active {
+  transform: scale(0.96);
+  transition: transform var(--duration-fast) var(--ease-spring);
+}
 .logo-mark { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: var(--radius-md); color: white; background: var(--color-ai-gradient); }
 .logo-text { min-width: 0; color: var(--color-text-primary); font-size: 16px; font-weight: 600; letter-spacing: .5px; white-space: nowrap; }
 .health-pill { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px; border-radius: var(--radius-full); font-size: var(--text-caption); }
 .health-pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .health-pill.ok { background: var(--color-success-50); color: var(--color-success-700); }
 .health-pill.warn { background: var(--color-danger-50); color: var(--color-danger-700); }
-.notice-btn, .icon-action { position: relative; display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); }
+.notice-btn, .icon-action { position: relative; display: inline-flex; min-height: 32px; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); padding: 0 10px; font-size: var(--text-caption); font-weight: 500; line-height: 1; white-space: nowrap; }
 .notice-btn:hover, .icon-action:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .text-action { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-height: 30px; border: 0; border-radius: var(--radius-md); background: var(--color-bg-muted); color: var(--color-text-secondary); padding: 0 8px; font-size: var(--text-caption); }
 .text-action:hover { background: var(--color-primary-50); color: var(--color-primary-700); }
 .text-action.danger { color: var(--color-danger-700); }
 .text-action.danger:hover { background: var(--color-danger-50); color: var(--color-danger-700); }
 .form-error { display: flex; align-items: center; gap: 6px; min-height: 34px; border: 1px solid var(--color-danger-100); border-radius: var(--radius-md); background: var(--color-danger-50); color: var(--color-danger-700); padding: 0 10px; font-size: var(--text-body-sm); }
-.notice-btn em { position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; border-radius: 8px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; }
+.notice-btn em { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; }
 .divider { width: 1px; height: 24px; background: var(--color-border-default); }
 .avatar { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: var(--radius-full); background: var(--color-ai-gradient); color: white; font-weight: 700; }
 .avatar.small { width: 30px; height: 30px; font-size: 13px; }
 .avatar.mini { width: 24px; height: 24px; font-size: 12px; margin-right: 6px; }
 .user-menu { position: relative; }
 .user-trigger { border: 0; background: transparent; color: var(--color-text-body); }
-.admin-account-menu { position: absolute; right: 0; top: 40px; z-index: var(--z-dropdown); min-width: 150px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 6px; }
+.admin-account-menu { position: absolute; right: 0; top: 40px; z-index: var(--z-popover); min-width: 150px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 6px; }
 .admin-account-menu button { display: flex; width: 100%; align-items: center; gap: 8px; border: 0; border-radius: 8px; background: transparent; padding: 8px; color: var(--color-text-body); }
 .admin-account-menu button:hover { background: var(--color-bg-muted); }
 .admin-sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: calc(var(--z-sticky) + 1); width: 240px; border-right: 1px solid var(--color-border-default); background: var(--color-bg-surface); transition: width var(--duration-base) var(--ease-out); display: flex; flex-direction: column; }
-.collapsed .admin-sidebar { width: 64px; }
+.collapsed .admin-sidebar { width: 220px; }
 .sidebar-header { height: 60px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; padding: 0 20px; }
-.collapsed .sidebar-header { justify-content: center; padding: 0; }
-.menu-btn { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out); }
+.collapsed .sidebar-header { padding: 0 14px; }
+.collapsed .logo-text { display: none; }
+.menu-btn { display: inline-flex; min-height: 30px; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-muted); padding: 0 8px; font-size: var(--text-caption); font-weight: 500; white-space: nowrap; }
 .menu-btn:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
-.collapsed .menu-btn { display: none; }
 .sidebar-nav { flex: 1 1 auto; min-height: 0; overflow: visible; overscroll-behavior: contain; padding: 16px 12px; }
 .sidebar-scrollable .sidebar-nav { overflow-y: auto; overflow-x: hidden; }
 .nav-group { margin-bottom: 24px; padding: 0; border-bottom: 0; }
@@ -1135,15 +1221,14 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .nav-link.active::before { display: none; }
 .nav-link:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .nav-link em { position: absolute; left: 44px; z-index: var(--z-tooltip); visibility: hidden; opacity: 0; pointer-events: none; white-space: nowrap; border-radius: 6px; background: var(--color-text-primary); color: white; padding: 4px 8px; font-style: normal; font-size: var(--text-caption); box-shadow: var(--shadow-lg); transform: translateX(-4px) scale(.96); transform-origin: left center; transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), visibility var(--duration-fast); }
-.collapsed .nav-link { justify-content: center; padding: 0; }
-.collapsed .nav-link:hover em { visibility: visible; opacity: 1; transform: translateX(0) scale(1); }
+.collapsed .nav-link { justify-content: flex-start; padding: 0 12px; }
 .sidebar-footer { flex-shrink: 0; border-top: 1px solid var(--color-border-default); padding: 16px 12px; }
 .side-user { display: flex; align-items: center; gap: 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-page); padding: 12px; }
-.collapsed .side-user { justify-content: center; padding: 8px; }
+.collapsed .side-user { justify-content: flex-start; padding: 10px; }
 .side-user div { display: grid; gap: 4px; }
 .side-user strong { color: var(--color-text-primary); }
 .admin-main { height: 100vh; margin-left: 240px; padding-top: 60px; overflow-y: auto; transition: margin-left var(--duration-base) var(--ease-out); }
-.collapsed .admin-main { margin-left: 64px; }
+.collapsed .admin-main { margin-left: 220px; }
 .breadcrumb { height: 64px; display: flex; align-items: center; justify-content: space-between; background: transparent; padding: 0 32px; }
 .breadcrumb > div { display: flex; align-items: center; gap: 6px; color: var(--color-text-secondary); }
 .breadcrumb strong { color: var(--color-text-primary); }
@@ -1188,7 +1273,7 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .segment-btn { min-height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-muted); padding: 6px 16px; font-size: 13px; font-weight: 500; transition: all var(--duration-fast) var(--ease-out); }
 .segment-btn.active { background: white; color: var(--color-text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .view-toggle { display: inline-flex; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); overflow: hidden; }
-.view-toggle button { min-height: 30px; border: 0; background: white; color: var(--color-text-secondary); padding: 0 10px; }
+.view-toggle button { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; border: 0; background: white; color: var(--color-text-secondary); padding: 0 12px; font-size: var(--text-caption); font-weight: 500; }
 .view-toggle button.active { background: var(--color-primary-600); color: white; }
 .service-list { display: grid; }
 .service-row { min-height: 48px; display: grid; grid-template-columns: auto 1fr auto 58px; border-bottom: 1px solid var(--color-border-subtle); }
@@ -1204,7 +1289,6 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .rank-row, .mini-user, .task-row, .row-card, .info-row { display: flex; align-items: center; gap: 10px; min-height: 38px; }
 .rank-row b { width: 24px; text-align: center; }
 .rank-1 { color: #B45309; }.rank-2 { color: #64748B; }.rank-3 { color: #92400E; }
-.rank-row progress { flex: 1; height: 7px; accent-color: var(--color-primary-600); }
 .mini-user div { display: grid; flex: 1; }
 .mini-user strong { color: var(--color-text-primary); }
 .mini-user span { color: var(--color-text-muted); font-size: var(--text-caption); }
@@ -1213,14 +1297,17 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .filter-card { min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
 .search-field { display: flex; align-items: center; gap: 8px; width: 280px; height: 36px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: white; padding: 0 10px; }
 .search-field input { width: 100%; border: 0; outline: 0; color: var(--color-text-body); }
-.filter-card .select { max-width: 130px; }
+.search-field:focus-within { border-color: var(--color-primary-600); box-shadow: var(--shadow-focus); }
+.filter-card .select, .filter-card .app-select { max-width: 130px; }
 .filter-card .input { max-width: 170px; }
 .filter-card .narrow { max-width: 96px; }
 .spacer { flex: 1; }
-.table-card { overflow: hidden; }
+.table-card { overflow: visible; }
 .admin-table { width: 100%; border-collapse: collapse; font-size: var(--text-body-sm); }
 .admin-table th, .admin-table td { border-bottom: 1px solid var(--color-border-subtle); padding: 12px 14px; text-align: left; vertical-align: middle; }
 .admin-table th { height: 44px; background: var(--color-bg-muted); color: var(--color-text-secondary); font-weight: 600; }
+.admin-table tbody tr:nth-child(even):not(.selected):not(.disabled) { background: rgba(248, 250, 252, 0.72); }
+.admin-table tbody tr:hover { background: var(--color-primary-50); }
 .admin-table tr.disabled { background: var(--color-danger-50); color: var(--color-text-muted); }
 .admin-table tr.selected { background: var(--color-primary-50); }
 .admin-table td svg { display: inline-block; vertical-align: middle; }
@@ -1228,6 +1315,12 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .identity div { display: grid; }
 .identity strong { color: var(--color-text-primary); }
 .identity span { color: var(--color-text-muted); font-size: var(--text-caption); }
+.course-chip-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 180px; max-width: 280px; }
+.course-chip { display: inline-flex; max-width: 138px; min-height: 28px; align-items: center; gap: 4px; overflow: hidden; border-radius: var(--radius-full); background: var(--color-primary-50); color: var(--color-primary-700); padding: 0 8px; font-size: var(--text-caption); font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.course-chip svg { flex: 0 0 auto; }
+.course-chip em { flex: 0 0 auto; border-radius: var(--radius-full); background: white; color: var(--color-text-muted); padding: 1px 6px; font-style: normal; font-weight: 500; }
+.course-more { display: inline-flex; min-height: 26px; align-items: center; border-radius: var(--radius-full); background: var(--color-bg-muted); color: var(--color-text-secondary); padding: 0 8px; font-size: var(--text-caption); font-weight: 600; }
+.muted-cell { color: var(--color-text-muted); font-size: var(--text-caption); }
 .role-select { width: 96px; min-width: 96px; }
 .row-actions { display: flex; gap: 4px; white-space: nowrap; }
 .icon-action.danger { color: var(--color-danger-700); }
@@ -1238,6 +1331,7 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .course-admin-card { position: relative; min-height: 148px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 16px; }
 .course-admin-card.inactive { opacity: 0.65; }
 .course-admin-card > button { position: absolute; top: 12px; right: 12px; }
+.course-admin-card > div:first-child { padding-right: 76px; }
 .course-admin-card strong { display: block; color: var(--color-text-primary); margin-bottom: 8px; }
 .course-admin-card p { color: var(--color-text-secondary); }
 .mini-metrics span { display: inline-flex; align-items: center; gap: 5px; color: var(--color-text-secondary); }
@@ -1267,7 +1361,6 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .form-control { width: 100%; height: 36px; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-bg-surface); color: var(--color-text-primary); padding: 0 12px; }
 .form-control:focus { outline: none; border-color: var(--color-primary-600); box-shadow: var(--shadow-focus); }
 textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: vertical; }
-.form-control[type="range"] { border: 0; background: transparent; box-shadow: none; padding: 0; }
 .alert { display: flex; align-items: center; gap: 10px; border-radius: var(--radius-md); padding: 12px 14px; }
 .alert-danger { background: var(--color-danger-50); color: var(--color-danger-700); }
 .alert-info { background: var(--color-info-50); color: var(--color-info-700); }
@@ -1305,7 +1398,8 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .aliyun-field-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; background: var(--color-bg-muted); padding: 26px; }
 .aliyun-field-grid label { display: grid; gap: 9px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-secondary); padding: 14px; font-size: 12px; font-weight: 500; }
 .aliyun-field-grid .input, .aliyun-field-grid .select { height: 38px; border-color: var(--color-border-default); background: white; }
-.aliyun-field-grid input[type="range"] { background: transparent; }
+.aliyun-field-grid .app-select { width: 100%; }
+.danger-zone .app-select { min-width: 220px; }
 .aliyun-check { min-height: 38px; display: inline-flex; align-items: center; gap: 8px; color: var(--color-text-body); font-size: var(--text-body-sm); }
 .settings-list { padding: 12px 32px; }
 .setting-row { display: grid; grid-template-columns: 200px minmax(260px, 1fr) 140px; align-items: center; gap: 16px; border-bottom: 1px dashed var(--color-border-default); padding: 20px 0; }
@@ -1361,6 +1455,10 @@ pre { max-height: 420px; overflow: auto; border-radius: var(--radius-md); backgr
 .drawer-field { display: grid; gap: 8px; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
 .drawer-foot { border-top: 1px solid var(--color-border-default); border-bottom: 0; justify-content: flex-end; }
 .row-card, .info-row { justify-content: space-between; border-bottom: 1px solid var(--color-border-subtle); padding: 8px 0; }
+.course-row-card { align-items: flex-start; }
+.course-row-card div { display: grid; gap: 3px; min-width: 0; }
+.course-row-card strong { overflow: hidden; color: var(--color-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.course-row-card small { color: var(--color-text-muted); font-size: var(--text-caption); }
 .info-row span { color: var(--color-text-muted); }
 .info-row strong { color: var(--color-text-primary); }
 .modal-mask { position: fixed; inset: 0; z-index: var(--z-modal-bg); display: grid; place-items: center; background: rgba(15,23,42,0.35); backdrop-filter: blur(6px); }
