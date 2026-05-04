@@ -22,6 +22,16 @@ def _assert_student_course_access(db: Session, *, course_id: int, user: User) ->
         raise forbidden("仅可在已加入课程内使用题目辅导")
 
 
+def _student_course_scope(db: Session, *, user: User, course_id: int | None) -> int | None:
+    if course_id is not None:
+        _assert_student_course_access(db, course_id=course_id, user=user)
+        return course_id
+    if user.role != UserRole.STUDENT.value:
+        raise forbidden("仅学生可使用题目辅导")
+    course_ids = list(db.scalars(select(CourseMembership.course_id).where(CourseMembership.user_id == user.id).limit(2)))
+    return course_ids[0] if len(course_ids) == 1 else None
+
+
 def _populate_problem_analysis(problem: ProblemRecord, text: str, db: Session) -> None:
     knowledge_points = ai_service.extract_knowledge_points(text, db=db)
     problem.corrected_text = text
@@ -73,6 +83,7 @@ def confirm_problem_text(db: Session, *, problem_id: int, user: User, corrected_
     problem = db.scalar(select(ProblemRecord).where(ProblemRecord.id == problem_id, ProblemRecord.user_id == user.id))
     if problem is None:
         raise not_found("题目记录不存在")
+    _assert_student_course_access(db, course_id=problem.course_id, user=user)
     _populate_problem_analysis(problem, corrected_text, db)
     db.add(problem)
     db.commit()
@@ -84,6 +95,7 @@ def get_problem_guidance(db: Session, *, problem_id: int, user: User, level: int
     problem = db.scalar(select(ProblemRecord).where(ProblemRecord.id == problem_id, ProblemRecord.user_id == user.id))
     if problem is None:
         raise not_found("题目记录不存在")
+    _assert_student_course_access(db, course_id=problem.course_id, user=user)
     guidance = db.scalar(
         select(ProblemGuidance).where(ProblemGuidance.problem_id == problem_id, ProblemGuidance.level == level)
     )
@@ -111,7 +123,9 @@ def get_problem_guidance(db: Session, *, problem_id: int, user: User, level: int
 
 
 def list_problem_history(db: Session, *, user: User, course_id: int | None = None) -> list[ProblemRecord]:
+    scoped_course_id = _student_course_scope(db, user=user, course_id=course_id)
+    if scoped_course_id is None:
+        return []
     statement = select(ProblemRecord).where(ProblemRecord.user_id == user.id)
-    if course_id is not None:
-        statement = statement.where(ProblemRecord.course_id == course_id)
+    statement = statement.where(ProblemRecord.course_id == scoped_course_id)
     return list(db.scalars(statement.order_by(ProblemRecord.created_at.desc())))

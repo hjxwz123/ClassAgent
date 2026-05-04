@@ -75,6 +75,8 @@ class Course(TimestampMixin, SoftDeleteMixin, Base):
     course_code: Mapped[str] = mapped_column(String(12), unique=True, index=True)
     teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     status: Mapped[str] = mapped_column(String(32), default=CourseStatus.ACTIVE.value)
+    cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cover_color: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class CourseMembership(TimestampMixin, Base):
@@ -323,6 +325,10 @@ class WrongQuestion(TimestampMixin, Base):
     knowledge_point_id: Mapped[int | None] = mapped_column(ForeignKey("knowledge_points.id"), nullable=True, index=True)
     wrong_count: Mapped[int] = mapped_column(Integer, default=1)
     last_attempt_id: Mapped[int | None] = mapped_column(ForeignKey("quiz_attempts.id"), nullable=True)
+    is_resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_wrong_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_correct_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class StudyPlan(TimestampMixin, Base):

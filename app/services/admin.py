@@ -56,6 +56,8 @@ def _model_dict(item) -> dict:
         data["preview_url"] = storage_service.normalize_public_url(data["preview_url"])
     if "audio_url" in data:
         data["audio_url"] = storage_service.normalize_public_url(data["audio_url"])
+    if "cover_url" in data:
+        data["cover_url"] = storage_service.normalize_public_url(data["cover_url"])
     return data
 
 

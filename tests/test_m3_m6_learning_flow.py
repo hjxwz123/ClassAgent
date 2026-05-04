@@ -1,9 +1,45 @@
 from io import BytesIO
 
+import pytest
 from pptx import Presentation
 
+from app.core.errors import AppError
 from app.db import session as db_session
 from app.db.models import QuizQuestion
+from app.services.ai import ai_service, sanitize_quiz_source_text
+
+
+def fake_quiz_questions(*, topic, source_text, count, db=None):
+    items = [
+        {
+            "question_type": "single_choice",
+            "stem": "矩阵可以表示线性变换，下列说法哪一项正确？",
+            "options": ["矩阵可以表示线性变换", "矩阵只能表示图片", "矩阵与线性变换无关", "矩阵不需要理解条件"],
+            "reference_answer": {"value": 0},
+            "explanation": "课程资料明确提到矩阵可以表示线性变换。",
+            "score": 10,
+            "difficulty": "standard",
+        },
+        {
+            "question_type": "judge",
+            "stem": "判断：行列式可以反映线性变换中的缩放系数。",
+            "options": ["正确", "错误"],
+            "reference_answer": {"value": 0},
+            "explanation": "课程资料提到行列式反映缩放系数。",
+            "score": 10,
+            "difficulty": "standard",
+        },
+        {
+            "question_type": "short_answer",
+            "stem": "请简述矩阵与线性变换之间的关系。",
+            "options": None,
+            "reference_answer": {"keywords": ["矩阵", "线性", "变换"]},
+            "explanation": "应围绕矩阵可以表示线性变换展开。",
+            "score": 20,
+            "difficulty": "advanced",
+        },
+    ]
+    return items[:count]
 
 
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
@@ -114,7 +150,8 @@ def bootstrap_course_with_material(client):
     return course, chapter, lesson_id, teacher_headers, student_headers
 
 
-def test_learning_core_flow(client):
+def test_learning_core_flow(client, monkeypatch):
+    monkeypatch.setattr(ai_service, "generate_quiz_questions", fake_quiz_questions)
     course, chapter, lesson_id, teacher_headers, student_headers = bootstrap_course_with_material(client)
 
     lessons_resp = client.get("/api/v1/lessons", params={"course_id": course["id"]}, headers=student_headers)
@@ -274,7 +311,10 @@ def test_learning_core_flow(client):
     assert wrong_submit_resp.status_code == 200, wrong_submit_resp.text
     wrong_after_resp = client.get("/api/v1/learning/wrong-questions", params={"course_id": course["id"]}, headers=student_headers)
     assert wrong_after_resp.status_code == 200, wrong_after_resp.text
-    assert len(wrong_after_resp.json()["data"]) < wrong_count_before
+    wrong_after_items = wrong_after_resp.json()["data"]
+    assert len(wrong_after_items) == wrong_count_before
+    assert any(item["is_resolved"] for item in wrong_after_items)
+    assert all(item["history_count"] >= 1 for item in wrong_after_items)
 
     practice_resp = client.post(
         "/api/v1/learning/quizzes/generate",
@@ -331,6 +371,62 @@ def test_learning_core_flow(client):
     assert records["recent_attempts"]
 
 
+def test_quiz_generation_requires_ai_questions(monkeypatch):
+    monkeypatch.setattr(ai_service, "_call_chat", lambda *args, **kwargs: None)
+    clean = sanitize_quiz_source_text(
+        "![d03903cfb024ca7b18336cdcfff771e3.jpeg](https://classagent.oss-cn-beijing.aliyuncs.com/a.png)\n"
+        "## 语法制导翻译概述\n语义分析的任务包括语义检查和翻译。"
+    )
+    assert "https" not in clean
+    assert "d03903cfb024" not in clean
+    assert "jpeg" not in clean
+    assert "语义分析" in clean
+    with pytest.raises(AppError) as exc:
+        ai_service.generate_quiz_questions(topic="语法制导翻译", source_text=clean, count=1)
+    assert "AI 出题失败" in exc.value.detail["message"]
+
+
+def test_quiz_generation_normalizes_ai_reference_answer(monkeypatch):
+    def ai_content(*args, **kwargs):
+        return (
+            '{"items":[{"question_type":"single_choice",'
+            '"stem":"属性文法三元组 A=(G,C,F) 中，F 表示什么？",'
+            '"options":["上下文无关文法","属性的计算规则","属性的有穷集","词法分析规则"],'
+            '"reference_answer":{"correct_option":"B"},'
+            '"explanation":"资料中说明 F 是关于属性的计算规则。",'
+            '"score":10,"difficulty":"standard"}]}'
+        )
+
+    monkeypatch.setattr(ai_service, "_call_chat", ai_content)
+    questions = ai_service.generate_quiz_questions(
+        topic="属性文法",
+        source_text="属性文法定义为 A=(G,C,F)，其中 F 是关于属性的计算规则。",
+        count=1,
+    )
+    assert questions[0]["reference_answer"] == {"value": 1}
+
+
+def test_quiz_generation_rejects_direct_fact_short_answer(monkeypatch):
+    def ai_content(*args, **kwargs):
+        return (
+            '{"items":[{"question_type":"short_answer",'
+            '"stem":"在自底向上的语法分析中，语义动作在何时执行？",'
+            '"options":null,'
+            '"reference_answer":{"keywords":["归约","产生式","语义动作"]},'
+            '"explanation":"资料中说明自底向上分析在规约时执行语义动作。",'
+            '"score":10,"difficulty":"standard"}]}'
+        )
+
+    monkeypatch.setattr(ai_service, "_call_chat", ai_content)
+    with pytest.raises(AppError) as exc:
+        ai_service.generate_quiz_questions(
+            topic="语法制导翻译",
+            source_text="自底向上的分析中，语义动作和产生式关联，当用产生式进行归约时执行。",
+            count=1,
+        )
+    assert "有效题目不足" in exc.value.detail["message"]
+
+
 def test_qa_stream_falls_back_to_regular_answer_when_upstream_stream_fails(client, monkeypatch):
     course, _chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
 
@@ -363,6 +459,103 @@ def test_qa_stream_falls_back_to_regular_answer_when_upstream_stream_fails(clien
     assert "非流式回退思考过程" in body
     assert "event: final" in body
     assert body.count("event: delta") >= 2
+
+
+def test_qa_uses_chapter_context_for_chapter_overview_when_vector_search_misses(client, monkeypatch):
+    course, chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    captured: dict[str, list[str]] = {}
+    monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        qa_service.ai_service,
+        "classify_qa_question_scope",
+        lambda **kwargs: {"scope": "chapter_overview", "chapter_id": chapter["id"], "confidence": 0.95, "reason": "test"},
+    )
+
+    def answer_question(**kwargs):
+        captured["contexts"] = list(kwargs["contexts"])
+        return "已根据章节资料生成重点。", False, None
+
+    monkeypatch.setattr(qa_service.ai_service, "answer_question", answer_question)
+    response = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "question": "第一章 的重点是什么？"},
+        headers=student_headers,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["is_out_of_scope"] is False
+    assert data["sources"]
+    assert captured["contexts"]
+    assert any(item.startswith("章节：") for item in captured["contexts"])
+    assert any("资料片段：" in item or "页面内容：" in item or "资料：" in item for item in captured["contexts"])
+
+
+def test_qa_uses_course_context_for_course_overview_when_vector_search_misses(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    captured: dict[str, list[str]] = {}
+    monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        qa_service.ai_service,
+        "classify_qa_question_scope",
+        lambda **kwargs: {"scope": "course_overview", "chapter_id": None, "confidence": 0.95, "reason": "test"},
+    )
+
+    def answer_question(**kwargs):
+        captured["contexts"] = list(kwargs["contexts"])
+        return "已根据课程资料生成整体重点。", False, None
+
+    monkeypatch.setattr(qa_service.ai_service, "answer_question", answer_question)
+    response = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "question": "这门课的重点是什么？"},
+        headers=student_headers,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["is_out_of_scope"] is False
+    assert data["sources"]
+    assert captured["contexts"]
+    assert any(item.startswith("课程：") for item in captured["contexts"])
+    assert any("章节结构：" in item or "资料片段：" in item or "页面内容：" in item or "资料：" in item for item in captured["contexts"])
+
+
+def test_qa_falls_back_to_database_chunks_when_vector_store_is_readonly(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import knowledge as knowledge_service
+    from app.services import qa as qa_service
+
+    captured: dict[str, list[str]] = {}
+    readonly_error = RuntimeError("Error updating collection: Database error: error returned from database: (code: 1032) attempt to write a readonly database")
+    monkeypatch.setattr(knowledge_service.vector_store, "query_course", lambda *args, **kwargs: (_ for _ in ()).throw(readonly_error))
+    monkeypatch.setattr(knowledge_service.vector_store, "upsert_chunks", lambda *args, **kwargs: (_ for _ in ()).throw(readonly_error))
+    monkeypatch.setattr(
+        qa_service.ai_service,
+        "classify_qa_question_scope",
+        lambda **kwargs: {"scope": "specific", "chapter_id": None, "confidence": 0.9, "reason": "test"},
+    )
+
+    def answer_question(**kwargs):
+        captured["contexts"] = list(kwargs["contexts"])
+        return "已根据数据库知识切片回答。", False, None
+
+    monkeypatch.setattr(qa_service.ai_service, "answer_question", answer_question)
+    response = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "question": "矩阵可以表示什么？"},
+        headers=student_headers,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["is_out_of_scope"] is False
+    assert captured["contexts"]
+    assert data["sources"]
 
 
 def test_qa_image_attachment_uploads_and_participates_in_stream_answer(client, monkeypatch):

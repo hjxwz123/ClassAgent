@@ -9,6 +9,7 @@ class CourseCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=255)
     description: str | None = Field(default=None, max_length=4000)
     term: str = Field(min_length=2, max_length=64)
+    cover_color: str | None = Field(default=None, max_length=32)
 
 
 class CourseUpdateRequest(BaseModel):
@@ -16,6 +17,8 @@ class CourseUpdateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     term: str | None = Field(default=None, min_length=2, max_length=64)
     status: str | None = Field(default=None, max_length=32)
+    cover_url: str | None = Field(default=None, max_length=500)
+    cover_color: str | None = Field(default=None, max_length=32)
 
 
 class JoinCourseRequest(BaseModel):
@@ -46,6 +49,8 @@ class CourseResponse(ORMModel):
     course_code: str
     teacher_id: int
     status: str
+    cover_url: str | None = None
+    cover_color: str | None = None
     created_at: datetime
     updated_at: datetime
 

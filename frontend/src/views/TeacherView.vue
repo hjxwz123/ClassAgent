@@ -1,5 +1,5 @@
 <template>
-  <section class="teacher-shell">
+  <section class="teacher-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <header class="teacher-header">
       <div class="brand">
         <span class="logo-mark"><Sparkles :size="17" /></span>
@@ -35,6 +35,17 @@
     </header>
 
     <aside class="teacher-sidebar">
+      <button
+        type="button"
+        class="teacher-sidebar-toggle"
+        :aria-label="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
+        :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
+        @click="sidebarCollapsed = !sidebarCollapsed"
+      >
+        <ChevronRight v-if="sidebarCollapsed" :size="17" />
+        <ChevronLeft v-else :size="17" />
+        <span>{{ sidebarCollapsed ? '展开' : '收起' }}</span>
+      </button>
       <nav>
         <div class="nav-group">
           <span>全局</span>
@@ -145,7 +156,7 @@
         <Transition name="fade-slide" mode="out-in">
           <TransitionGroup v-if="courseView === 'grid'" key="grid" name="card-list" tag="div" class="course-grid">
             <article v-for="course in filteredCourses" :key="course.id" class="course-card" :class="{ inactive: course.status !== 'active' }">
-              <div class="course-cover" :style="{ background: courseColor(course.id) }"><span class="tag">{{ course.term }}</span><span class="tag" :class="statusClass(course.status)">{{ statusText(course.status) }}</span><BookOpen :size="48" /></div>
+              <div class="course-cover" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><span class="tag">{{ course.term }}</span><span class="tag" :class="statusClass(course.status)">{{ statusText(course.status) }}</span><BookOpen v-if="!course.cover_url" :size="48" /></div>
               <section><h2>{{ course.name }}</h2><code>{{ course.course_code }}</code><div class="course-stats"><span><Users :size="15" />{{ course.student_count || 0 }}</span><span><Presentation :size="15" />{{ course.published_lesson_count || 0 }}/{{ course.lesson_count || 0 }}</span><span><File :size="15" />{{ course.material_count || 0 }}</span><span><Check :size="15" />{{ course.published_rate || 0 }}%</span></div></section>
               <footer><button class="btn btn-primary btn-sm" :data-loading="isPending(`select-course-${course.id}`)" :disabled="isPending(`select-course-${course.id}`)" @click="selectCourse(course.id, 'teacherCourseHome')">进入课程</button><button class="icon-action" :data-loading="isPending(`edit-course-${course.id}`)" :disabled="isPending(`edit-course-${course.id}`)" @click="editCourse(course)"><Pencil :size="15" />编辑</button></footer>
             </article>
@@ -158,11 +169,11 @@
       <section v-if="active === 'teacherCourseForm'" key="teacherCourseForm" class="teacher-content form-content">
         <section class="course-form-layout">
           <article class="panel-card form-panel">
-            <div class="form-section"><h2>基本信息</h2><label>课程名称<input v-model="courseForm.name" class="input" maxlength="50" /></label><label>课程简介<textarea v-model="courseForm.description" class="textarea" maxlength="500"></textarea><small>{{ courseForm.description.length }} / 500</small></label><label>学期<input v-model="courseForm.term" class="input" /></label><label>课程封面色<div class="color-row"><button v-for="color in palette" :key="color" :style="{ background: color }" :class="{ active: courseForm.cover_color === color }" @click="courseForm.cover_color = color"></button></div></label></div>
+            <div class="form-section"><h2>基本信息</h2><label>课程名称<input v-model="courseForm.name" class="input" maxlength="50" /></label><label>课程简介<textarea v-model="courseForm.description" class="textarea" maxlength="500"></textarea><small>{{ courseForm.description.length }} / 500</small></label><label>学期<input v-model="courseForm.term" class="input" /></label><label>课程封面<div class="cover-upload-field"><div class="cover-upload-preview" :style="courseCoverPreviewStyle()"><Image v-if="!(courseCoverPreview || courseForm.cover_url)" :size="28" /></div><div class="cover-upload-actions"><button type="button" class="btn btn-secondary btn-sm" @click="courseCoverInput?.click()"><Upload :size="14" />上传图片</button><button v-if="courseCoverPreview || courseForm.cover_url" type="button" class="btn btn-ghost btn-sm" @click="courseForm.cover_url = ''; resetCourseCoverSelection()">清除</button><small>{{ courseCoverFile?.name || '建议 16:9，最大 8MB' }}</small><input ref="courseCoverInput" type="file" accept="image/*" hidden @change="pickCourseCover" /></div></div></label><label>封面底色<div class="color-row"><button v-for="color in palette" :key="color" type="button" :style="{ background: color }" :class="{ active: courseForm.cover_color === color }" @click="courseForm.cover_color = color"></button></div></label></div>
             <div class="form-section"><div class="section-head"><h2><Layers :size="18" />课程章节</h2><button class="btn btn-ghost btn-sm" :disabled="courseForm.chapters.length >= 30" @click="addDraftChapter"><Plus :size="14" />添加章节</button></div><TransitionGroup name="chapter-list" tag="div" class="chapter-edit-list"><div v-for="(chapter, index) in courseForm.chapters" :key="chapter.local_id" class="chapter-edit" :class="{ 'just-added': freshChapterId === chapter.local_id }"><GripVertical :size="15" /><input v-model="chapter.title" class="input" /><input v-model.number="chapter.order_index" class="input order-input" type="number" /><button class="icon-action danger" :disabled="courseForm.chapters.length <= 1" @click="removeDraftChapter(index)"><Trash2 :size="15" />删除</button></div></TransitionGroup></div>
             <div class="advanced" :class="{ open: advancedOpen }"><button type="button" class="advanced-trigger" @click="advancedOpen = !advancedOpen"><Settings :size="16" />高级设置<ChevronDown :size="14" /></button><Transition name="accordion"><div v-if="advancedOpen" class="advanced-body"><AppCheckbox v-model="courseForm.allow_leave" label="学生退出" /><AppCheckbox v-model="courseForm.ai_qa" label="AI 问答" /><AppCheckbox v-model="courseForm.quiz_enabled" label="测验发布" /></div></Transition></div>
           </article>
-          <aside class="panel-card preview-card"><div class="panel-head"><h2><Eye :size="18" />卡片预览</h2></div><article class="course-card preview"><div class="course-cover" :style="{ background: courseForm.cover_color }"><BookOpen :size="44" /></div><section><h2>{{ courseForm.name || '课程名称' }}</h2><code>{{ courseForm.id ? currentCourse?.course_code : 'A8K3Z' }}</code><div class="course-stats"><span><Layers :size="15" />{{ courseForm.chapters.length }}</span><span><Users :size="15" />0</span></div></section></article></aside>
+          <aside class="panel-card preview-card"><div class="panel-head"><h2><Eye :size="18" />卡片预览</h2></div><article class="course-card preview"><div class="course-cover" :class="{ 'has-image': courseCoverPreview || courseForm.cover_url }" :style="courseCoverPreviewStyle()"><BookOpen v-if="!(courseCoverPreview || courseForm.cover_url)" :size="44" /></div><section><h2>{{ courseForm.name || '课程名称' }}</h2><code>{{ courseForm.id ? currentCourse?.course_code : 'A8K3Z' }}</code><div class="course-stats"><span><Layers :size="15" />{{ courseForm.chapters.length }}</span><span><Users :size="15" />0</span></div></section></article></aside>
         </section>
         <div class="fixed-actions"><span><Edit2 :size="15" />有未保存的更改</span><div><button class="btn btn-ghost" @click="go('teacherCourses')">取消</button><button v-if="courseForm.id" class="btn btn-danger" :data-loading="isPending('delete-course')" :disabled="isPending('delete-course')" @click="deleteCourse">删除课程</button><button class="btn btn-secondary" :data-loading="isPending('save-course')" :disabled="isPending('save-course')" @click="saveCourse">保存草稿</button><button class="btn btn-primary" :data-loading="isPending('save-course')" :disabled="isPending('save-course')" @click="saveCourse">{{ courseForm.id ? '保存修改' : '创建课程' }}</button></div></div>
       </section>
@@ -170,7 +181,7 @@
       <section v-if="active === 'teacherCourseHome'" key="teacherCourseHome" class="teacher-content">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
-          <article class="course-hero" :style="{ background: courseColor(currentCourse.id) }"><span><BookOpen :size="36" /></span><div><h1>{{ courseHome.course?.name || currentCourse.name }}</h1><p>{{ currentCourse.term }} · {{ currentCourse.course_code }}</p><small><Users :size="15" />{{ courseHome.quick_counts?.student_count || 0 }} 学生 <Presentation :size="15" />{{ courseHome.quick_counts?.lesson_count || 0 }} 课时 <File :size="15" />{{ courseHome.quick_counts?.material_count || 0 }} 资料</small></div><section><button class="btn ghost-white" @click="editCourse(currentCourse)"><Pencil :size="16" />编辑课程</button><button class="btn ghost-white" @click="copyText(currentCourse.course_code)"><Share2 :size="16" />分享课程码</button></section></article>
+          <article class="course-hero" :class="{ 'has-image': currentCourse.cover_url }" :style="courseHeroStyle(currentCourse)"><span><BookOpen :size="36" /></span><div><h1>{{ courseHome.course?.name || currentCourse.name }}</h1><p>{{ currentCourse.term }} · {{ currentCourse.course_code }}</p><small><Users :size="15" />{{ courseHome.quick_counts?.student_count || 0 }} 学生 <Presentation :size="15" />{{ courseHome.quick_counts?.lesson_count || 0 }} 课时 <File :size="15" />{{ courseHome.quick_counts?.material_count || 0 }} 资料</small></div><section><button class="btn ghost-white" @click="editCourse(currentCourse)"><Pencil :size="16" />编辑课程</button><button class="btn ghost-white" @click="copyText(currentCourse.course_code)"><Share2 :size="16" />分享课程码</button></section></article>
           <div class="quick-grid"><QuickAction :icon="Upload" label="上传资料" sub="PPT/PDF/Word/TXT" @click="go('teacherMaterials')" /><QuickAction :icon="Presentation" label="管理课时" sub="课时发布" @click="go('teacherLessons')" /><QuickAction :icon="UserPlus" label="邀请学生" sub="课程码" @click="copyText(currentCourse.course_code)" /><QuickAction :icon="BarChart2" label="教学分析" sub="课程数据" @click="go('teacherAnalytics')" /></div>
           <div class="course-home-grid">
             <article class="panel-card home-lesson-card">
@@ -210,7 +221,7 @@
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <div class="metric-grid three compact"><MetricCard :icon="File" label="资料总数" :value="materialSummary.total || 0" sub="份" /><MetricCard :icon="Database" label="存储用量" :value="sizeLabel(materialSummary.size_bytes)" sub="课程资料" tone="success" /><MetricCard :icon="Sparkles" label="已解析" :value="`${materialSummary.ready || 0}/${materialSummary.total || 0}`" sub="AI" tone="ai" /></div>
-          <div class="materials-layout"><aside class="chapter-tree"><div class="search-box small"><Search :size="15" /><input v-model="chapterKeyword" placeholder="搜索章节" /></div><button :class="{ active: selectedChapterId === 0 }" @click="selectedChapterId = 0"><FileText :size="16" />全部资料<span>{{ materialSummary.total || 0 }}</span></button><TransitionGroup name="motion-list" tag="div" class="chapter-buttons"><button v-for="chapter in filteredChapters" :key="chapter.id" :class="{ active: selectedChapterId === chapter.id, empty: !chapter.count, 'just-added': freshMaterialChapterId === chapter.id }" @click="selectedChapterId = chapter.id"><Layers :size="16" />{{ chapter.title }}<span>{{ chapter.count }}</span></button></TransitionGroup><button :data-loading="isPending('add-tree-chapter')" :disabled="isPending('add-tree-chapter')" @click="addChapterFromTree"><Plus :size="16" />添加章节</button></aside><section class="materials-panel" :class="{ 'panel-loading': isPending('filter-materials') }"><div class="material-filter"><div class="search-box"><Search :size="16" /><input v-model="materialFilter.keyword" placeholder="搜索文件名" @keyup.enter="refreshMaterials" /></div><AppSelect v-model="materialFilter.type" :options="materialTypeOptions" /><AppSelect v-model="materialFilter.status" :options="materialStatusOptions" /><AppSelect v-model="materialSort" :options="materialSortOptions" /><div class="view-toggle"><button type="button" :class="{ active: materialView === 'grid' }" @click="materialView = 'grid'"><Grid2X2 :size="16" />网格</button><button type="button" :class="{ active: materialView === 'list' }" @click="materialView = 'list'"><FileText :size="16" />列表</button></div></div><TransitionGroup name="material-list-motion" tag="div" class="material-list" :class="materialView"><article v-for="item in filteredMaterials" :key="item.id" class="material-row"><span class="file-badge" :class="item.material_type"><component :is="fileIcon(item.material_type)" :size="18" /></span><div><strong>{{ item.title }}</strong><small>{{ chapterName(item.chapter_id) }} · {{ typeText(item.material_type) }} · {{ sizeLabel(item.size_bytes) }}</small><MaterialStatus :item="item" /></div><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span><section><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button v-if="item.parse_status === 'ready'" class="icon-action" :data-loading="isPending(`open-ppt-${item.id}`)" :disabled="isPending(`open-ppt-${item.id}`)" @click="openPptWorkbench(item.id)"><Wand2 :size="15" />编辑课时</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" :data-loading="isPending(`delete-material-${item.id}`)" :disabled="isPending(`delete-material-${item.id}`)" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></section></article><EmptyState v-if="!filteredMaterials.length" key="empty" text="暂无资料" /></TransitionGroup></section></div>
+          <div class="materials-layout"><aside class="chapter-tree"><div class="search-box small"><Search :size="15" /><input v-model="chapterKeyword" placeholder="搜索章节" /></div><button :class="{ active: selectedChapterId === 0 }" @click="selectedChapterId = 0"><FileText :size="16" />全部资料<span>{{ materialSummary.total || 0 }}</span></button><TransitionGroup name="motion-list" tag="div" class="chapter-buttons"><div v-for="chapter in filteredChapters" :key="chapter.id" class="chapter-tree-row" :class="{ active: selectedChapterId === chapter.id, empty: !chapter.count, 'just-added': freshMaterialChapterId === chapter.id }"><button class="chapter-tree-main" @click="selectedChapterId = chapter.id"><Layers :size="16" />{{ chapter.title }}<span>{{ chapter.count }}</span></button><button class="chapter-tree-delete" :data-loading="isPending(`delete-chapter-${chapter.id}`)" :disabled="isPending(`delete-chapter-${chapter.id}`)" title="删除章节" @click="deleteChapterFromTree(chapter)"><Trash2 :size="14" /></button></div></TransitionGroup><button :data-loading="isPending('add-tree-chapter')" :disabled="isPending('add-tree-chapter')" @click="addChapterFromTree"><Plus :size="16" />添加章节</button></aside><section class="materials-panel" :class="{ 'panel-loading': isPending('filter-materials') }"><div class="material-filter"><div class="search-box"><Search :size="16" /><input v-model="materialFilter.keyword" placeholder="搜索文件名" @keyup.enter="refreshMaterials" /></div><AppSelect v-model="materialFilter.type" :options="materialTypeOptions" /><AppSelect v-model="materialFilter.status" :options="materialStatusOptions" /><AppSelect v-model="materialSort" :options="materialSortOptions" /><div class="view-toggle"><button type="button" :class="{ active: materialView === 'grid' }" @click="materialView = 'grid'"><Grid2X2 :size="16" />网格</button><button type="button" :class="{ active: materialView === 'list' }" @click="materialView = 'list'"><FileText :size="16" />列表</button></div></div><TransitionGroup name="material-list-motion" tag="div" class="material-list" :class="materialView"><article v-for="item in filteredMaterials" :key="item.id" class="material-row"><span class="file-badge" :class="item.material_type"><component :is="fileIcon(item.material_type)" :size="18" /></span><div><strong>{{ item.title }}</strong><small>{{ chapterName(item.chapter_id) }} · {{ typeText(item.material_type) }} · {{ sizeLabel(item.size_bytes) }}</small><MaterialStatus :item="item" /></div><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span><section><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" :data-loading="isPending(`reprocess-material-${item.id}`)" :disabled="isPending(`reprocess-material-${item.id}`)" @click="reprocessMaterial(item.id)"><RefreshCw :size="15" />重新解析</button><button v-if="item.parse_status === 'ready'" class="icon-action" :data-loading="isPending(`open-ppt-${item.id}`)" :disabled="isPending(`open-ppt-${item.id}`)" @click="openPptWorkbench(item.id)"><Wand2 :size="15" />编辑课时</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" :data-loading="isPending(`delete-material-${item.id}`)" :disabled="isPending(`delete-material-${item.id}`)" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></section></article><EmptyState v-if="!filteredMaterials.length" key="empty" text="暂无资料" /></TransitionGroup></section></div>
         </template>
       </section>
 
@@ -237,7 +248,7 @@
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <div class="metric-grid four compact"><MetricCard :icon="Users" label="学生总数" :value="studentPayload.stats?.total || 0" sub="本周新增" /><MetricCard :icon="Activity" label="活跃学生" :value="studentPayload.stats?.active_7d || 0" sub="近7天" tone="success" /><MetricCard :icon="CheckCircle" label="完成率" :value="`${studentPayload.stats?.average_completion || 0}%`" sub="平均" tone="success" /><MetricCard :icon="UserX" label="长期未活跃" :value="studentPayload.stats?.inactive_14d || 0" sub="14天" :danger="(studentPayload.stats?.inactive_14d || 0) > 0" /></div>
-          <article class="filter-card"><div class="search-box"><Search :size="16" /><input v-model="studentFilter.keyword" placeholder="搜索学生姓名" /></div><AppSelect v-model="studentFilter.progress" :options="studentProgressOptions" /><AppSelect v-model="studentFilter.active" :options="studentActiveOptions" /><button class="btn btn-ghost" @click="clearStudentFilter"><X :size="16" />清除</button><span></span><button class="btn btn-ghost" :data-loading="isPending('batch-remind')" :disabled="isPending('batch-remind')" @click="batchRemind"><Bell :size="16" />批量提醒</button></article>
+          <article class="filter-card"><div class="search-box"><Search :size="16" /><input v-model="studentFilter.keyword" placeholder="搜索学生姓名" /></div><AppSelect v-model="studentFilter.progress" :options="studentProgressOptions" /><AppSelect v-model="studentFilter.active" :options="studentActiveOptions" /><button class="btn btn-ghost" @click="clearStudentFilter"><X :size="16" />清除</button><span></span><button class="btn btn-ghost" :disabled="!filteredStudents.length" @click="batchRemind"><Bell :size="16" />批量提醒</button></article>
           <article class="table-card"><table class="teacher-table"><thead><tr><th>学生</th><th>加入时间</th><th>课时进度</th><th>提问次数</th><th>错题数</th><th>最近学习</th><th>操作</th></tr></thead><TransitionGroup name="row-list" tag="tbody"><tr v-for="item in filteredStudents" :key="item.student.id" :class="{ inactive: isLongInactive(item.last_study_at) }"><td><span class="avatar mini">{{ firstChar(item.student.nickname) }}</span><strong>{{ item.student.nickname }}</strong><code>{{ item.student.student_no || '-' }}</code></td><td>{{ shortDate(item.joined_at) }}</td><td><ProgressBar :value="item.progress_percent" />{{ item.studied_lessons }}/{{ item.lesson_total }}</td><td><MessageCircle :size="14" />{{ item.qa_count }}</td><td :class="{ danger: item.wrong_count > 10 }"><XCircle :size="14" />{{ item.wrong_count }}</td><td>{{ relativeTime(item.last_study_at) }}</td><td><button class="icon-action" :data-loading="isPending(`open-student-${item.student.id}`)" :disabled="isPending(`open-student-${item.student.id}`)" @click="openStudent(item.student.id)"><Eye :size="15" />详情</button><button class="icon-action" :data-loading="isPending(`remind-student-${item.student.id}`)" :disabled="isPending(`remind-student-${item.student.id}`)" @click="remindStudent(item.student.id)"><Bell :size="15" />提醒</button></td></tr></TransitionGroup></table></article>
         </template>
       </section>
@@ -245,13 +256,13 @@
       <section v-if="active === 'teacherAnalytics'" key="teacherAnalytics" class="teacher-content">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
-          <article class="ai-suggestion" :class="{ thinking: pageLoading || isPending('refresh-analysis') }"><span><Sparkles :size="20" /></span><div><h2>AI 教学建议</h2><p>{{ analysis.suggestion || '暂无建议' }}</p></div><button class="btn btn-ghost btn-sm" :data-loading="isPending('refresh-analysis')" :disabled="isPending('refresh-analysis')" @click="refreshAnalysis"><RefreshCw :size="14" />重新生成</button><span class="tag tag-ai">AI</span></article>
-          <div class="metric-grid five compact"><MetricCard :icon="Activity" label="活跃率" :value="`${analysis.metrics?.active_rate || 0}%`" sub="近7天" /><MetricCard :icon="Presentation" label="完成率" :value="`${analysis.metrics?.completion_rate || 0}%`" sub="课时" /><MetricCard :icon="MessageCircle" label="问答总量" :value="analysis.metrics?.qa_total || 0" sub="期间" /><MetricCard :icon="ClipboardList" label="平均分" :value="analysis.metrics?.average_score || 0" sub="/100" /><MetricCard :icon="AlertTriangle" label="薄弱点" :value="analysis.metrics?.weak_point_count || 0" sub="数量" :danger="(analysis.metrics?.weak_point_count || 0) > 0" /></div>
+          <article class="ai-suggestion" :class="{ thinking: pageLoading || isPending('refresh-analysis') }"><span><Sparkles :size="20" /></span><div><h2>教学建议</h2><p>{{ analysis.suggestion || '暂无建议' }}</p></div><button class="btn btn-ghost btn-sm" :data-loading="isPending('refresh-analysis')" :disabled="isPending('refresh-analysis')" @click="refreshAnalysis"><RefreshCw :size="14" />刷新</button><span class="tag tag-ai">{{ analysisRange }}</span></article>
+          <div class="metric-grid six compact"><MetricCard :icon="Activity" label="活跃率" :value="`${analysis.metrics?.active_rate || 0}%`" sub="近7天" /><MetricCard :icon="Clock" label="学习时长" :value="`${analysis.metrics?.study_hours || 0}h`" sub="期间" /><MetricCard :icon="Presentation" label="完成率" :value="`${analysis.metrics?.completion_rate || 0}%`" sub="课时" /><MetricCard :icon="MessageCircle" label="问答总量" :value="analysis.metrics?.qa_total || 0" sub="期间" /><MetricCard :icon="ClipboardList" label="平均分" :value="analysis.metrics?.average_score || 0" sub="/100" /><MetricCard :icon="AlertTriangle" label="薄弱点" :value="analysis.metrics?.weak_point_count || 0" sub="数量" :danger="(analysis.metrics?.weak_point_count || 0) > 0" /></div>
           <div class="analysis-grid two"><article class="panel-card"><div class="panel-head"><h2><Presentation :size="18" />课时完成率</h2></div><AdminChart type="hbar" :labels="lessonAnalysisLabels" :series="lessonAnalysisSeries" :height="260" /></article><article class="panel-card"><div class="panel-head"><h2><Clock :size="18" />学习时长</h2></div><AdminChart type="line" :labels="analysisTimeLabels" :series="analysisTimeSeries" :height="260" /></article></div>
-          <div class="analysis-grid knowledge"><article class="panel-card"><div class="panel-head"><h2><Layers :size="18" />章节掌握</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="260" /></article><article class="panel-card weak-list"><div class="panel-head"><h2><TrendingDown :size="18" />薄弱知识点</h2></div><TransitionGroup name="motion-list" tag="div" class="weak-row-list"><div v-for="(item, index) in analysis.weak_points || []" :key="item.knowledge_point" class="weak-row"><b>{{ rankNumber(index) }}</b><span>{{ item.knowledge_point }}</span><AppProgress :value="item.wrong_count" :max="weakMax" tone="danger" /><strong>{{ item.wrong_count }}</strong></div></TransitionGroup><button class="btn btn-ai btn-sm full" @click="go('teacherLessons')"><Sparkles :size="14" />生成练习</button></article></div>
+          <div class="analysis-grid knowledge"><article class="panel-card"><div class="panel-head"><h2><Layers :size="18" />章节掌握</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="260" /></article><article class="panel-card weak-list"><div class="panel-head"><h2><TrendingDown :size="18" />薄弱知识点</h2><button class="btn btn-ai btn-sm" :data-loading="isPending('weak-quiz-薄弱知识点')" :disabled="isPending('weak-quiz-薄弱知识点')" @click="generateWeakQuiz()"><Sparkles :size="14" />AI生成</button></div><TransitionGroup name="motion-list" tag="div" class="weak-row-list"><div v-for="(item, index) in analysis.weak_points || []" :key="item.knowledge_point" class="weak-row"><b>{{ rankNumber(index) }}</b><span>{{ item.knowledge_point }}</span><AppProgress :value="item.wrong_count" :max="weakMax" tone="danger" /><strong>{{ item.wrong_count }}</strong><button type="button" :data-loading="isPending(`weak-quiz-${item.knowledge_point}`)" :disabled="isPending(`weak-quiz-${item.knowledge_point}`)" @click="generateWeakQuiz(item)">生成</button></div></TransitionGroup><EmptyState v-if="!(analysis.weak_points || []).length" text="暂无薄弱点" /></article></div>
           <article class="panel-card"><div class="panel-head"><h2><MessageCircle :size="18" />学生高频问题</h2><small>{{ analysisRange }}</small></div><div class="question-layout"><TransitionGroup name="cloud-list" tag="div" class="word-cloud"><span v-for="item in analysis.high_frequency_questions || []" :key="item.question" :style="{ fontSize: cloudSize(item.count) }">{{ item.question.slice(0, 12) }}</span></TransitionGroup><TransitionGroup name="motion-list" tag="div"><div v-for="(item, index) in analysis.high_frequency_questions || []" :key="item.question" class="question-row"><b>{{ rankPlain(index) }}</b><span>{{ item.question }}</span><strong>{{ item.count }}次</strong></div></TransitionGroup></div></article>
           <div class="analysis-grid three"><article class="panel-card"><div class="panel-head"><h2><ClipboardList :size="18" />成绩分布</h2></div><AdminChart type="bar" :labels="scoreLabels" :series="scoreSeries" :height="220" /></article><article class="panel-card"><div class="panel-head"><h2><CheckCircle :size="18" />测验完成</h2></div><AdminChart type="hbar" :labels="lessonAnalysisLabels" :series="lessonAnalysisSeries" :height="220" /></article><article class="panel-card"><div class="panel-head"><h2><XCircle :size="18" />错题分布</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="220" /></article></div>
-          <article class="panel-card"><div class="panel-head"><h2><Users :size="18" />学生活跃度</h2><button class="btn btn-ghost btn-sm" :data-loading="isPending('batch-remind')" :disabled="isPending('batch-remind')" @click="batchRemind"><Bell :size="14" />批量提醒</button></div><div class="activity-layers"><LayerCard label="高度活跃" :value="analysis.student_layers?.high || 0" tone="success" /><LayerCard label="正常活跃" :value="analysis.student_layers?.normal || 0" /><LayerCard label="低活跃" :value="analysis.student_layers?.low || 0" tone="warning" /><LayerCard label="长期未活跃" :value="analysis.student_layers?.inactive || 0" tone="danger" /></div></article>
+          <article class="panel-card"><div class="panel-head"><h2><Users :size="18" />学生活跃度</h2><button class="btn btn-ghost btn-sm" :disabled="!filteredStudents.length" @click="batchRemind"><Bell :size="14" />批量提醒</button></div><div class="activity-layers"><LayerCard label="高度活跃" :value="analysis.student_layers?.high || 0" tone="success" /><LayerCard label="正常活跃" :value="analysis.student_layers?.normal || 0" /><LayerCard label="低活跃" :value="analysis.student_layers?.low || 0" tone="warning" /><LayerCard label="长期未活跃" :value="analysis.student_layers?.inactive || 0" tone="danger" /></div></article>
         </template>
       </section>
 
@@ -278,7 +289,7 @@
       <div v-if="uploadOpen" class="modal-mask">
         <article class="modal">
           <div class="modal-head"><Upload :size="20" /><h2>上传课程资料</h2><button class="icon-action" @click="uploadOpen = false"><X :size="16" />关闭</button></div>
-          <label class="upload-drop"><Upload :size="40" /><span>拖拽上传</span><input type="file" multiple @change="pickUploadFiles" /></label>
+          <label class="upload-drop"><Upload :size="40" /><span>拖拽上传</span><input type="file" multiple accept=".ppt,.pptx,.pdf,.doc,.docx,.txt,.md,.markdown" @change="pickUploadFiles" /></label>
           <TransitionGroup name="motion-list" tag="div" class="upload-list">
             <div v-for="item in uploadQueue" :key="item.id" class="upload-row"><File :size="18" /><span>{{ item.file.name }}</span><small>{{ sizeLabel(item.file.size) }}</small><AppSelect v-model="item.chapter_id" :options="uploadChapterOptions" /><AppSelect v-model="item.category" :options="materialCategoryOptions" /><button class="icon-action danger" @click="removeUpload(item.id)"><Trash2 :size="15" />移除</button></div>
           </TransitionGroup>
@@ -300,7 +311,49 @@
     </Transition>
 
     <Transition name="modal-pop">
-      <div v-if="previewItem" class="modal-mask"><article class="modal preview-modal"><div class="modal-head"><FileText :size="20" /><h2>{{ previewItem.title }}</h2><button class="icon-action" @click="previewItem = null"><X :size="16" />关闭</button></div><iframe v-if="previewItem.preview_url" :src="previewItem.preview_url"></iframe><EmptyState v-else text="暂无预览" /></article></div>
+      <div v-if="reminderOpen" class="modal-mask">
+        <article class="modal reminder-modal">
+          <div class="modal-head">
+            <Bell :size="20" />
+            <h2>发送学习提醒</h2>
+            <button class="icon-action" @click="reminderOpen = false"><X :size="16" />关闭</button>
+          </div>
+          <div class="reminder-recipients">
+            <Users :size="16" />
+            <span>发送给 {{ reminderTargetIds.length }} 名学生</span>
+            <small>{{ reminderTargetNames }}</small>
+          </div>
+          <label>提醒标题<input v-model="reminderForm.title" class="input" maxlength="80" /></label>
+          <label>提醒内容<textarea v-model="reminderForm.message" class="textarea" maxlength="500" rows="5"></textarea><small>{{ reminderForm.message.length }} / 500</small></label>
+          <footer>
+            <button class="btn btn-ghost" @click="reminderOpen = false">取消</button>
+            <button class="btn btn-primary" :data-loading="isPending('send-reminder')" :disabled="isPending('send-reminder') || !reminderForm.title.trim() || !reminderForm.message.trim()" @click="sendReminder"><Bell :size="16" />发送提醒</button>
+          </footer>
+        </article>
+      </div>
+    </Transition>
+
+    <Transition name="modal-pop">
+      <div v-if="previewItem" class="modal-mask">
+        <article class="modal preview-modal">
+          <div class="modal-head preview-head">
+            <FileText :size="20" />
+            <h2>{{ previewItem.title }}</h2>
+            <div class="preview-tabs">
+              <button type="button" :class="{ active: previewMode === 'markdown' }" :disabled="!hasPreviewMarkdown" @click="previewMode = 'markdown'">Markdown</button>
+              <button type="button" :class="{ active: previewMode === 'file' }" :disabled="!previewItem.preview_url" @click="previewMode = 'file'">原文件</button>
+            </div>
+            <a v-if="previewItem.preview_url" class="icon-action" :href="previewItem.preview_url" target="_blank" rel="noreferrer"><Download :size="16" />下载</a>
+            <button class="icon-action" @click="closePreview"><X :size="16" />关闭</button>
+          </div>
+          <div class="preview-content">
+            <div v-if="previewItem && isPending(`preview-material-${previewItem.id}`)" class="preview-loading"><span class="spinner"></span>正在读取解析内容</div>
+            <div v-else-if="previewMode === 'markdown' && hasPreviewMarkdown" class="markdown-preview markdown-body" v-html="previewMarkdownHtml"></div>
+            <iframe v-else-if="previewMode === 'file' && previewItem.preview_url" :src="previewItem.preview_url"></iframe>
+            <EmptyState v-else text="暂无可预览内容" />
+          </div>
+        </article>
+      </div>
     </Transition>
     <Transition name="modal-pop">
       <div v-if="lessonPreview" class="modal-mask">
@@ -322,6 +375,61 @@
         </article>
       </div>
     </Transition>
+    <Transition name="modal-pop">
+      <div v-if="quizEditorOpen" class="modal-mask">
+        <article class="modal quiz-editor-modal">
+          <div class="modal-head">
+            <Sparkles :size="20" />
+            <h2>编辑课堂测验</h2>
+            <span class="tag" :class="statusClass(quizEditor.status)">{{ statusText(quizEditor.status) }}</span>
+            <button class="icon-action" @click="quizEditorOpen = false"><X :size="16" />关闭</button>
+          </div>
+          <div class="quiz-editor-layout">
+            <aside class="quiz-editor-side">
+              <label>测验标题<input v-model="quizEditor.title" class="input" maxlength="80" /></label>
+              <label>测验说明<textarea v-model="quizEditor.description" class="textarea" maxlength="300"></textarea></label>
+              <div class="quiz-editor-stats"><span>{{ quizEditor.questions.length }}</span><small>题目数</small><span>{{ quizEditor.questions.reduce((sum, item) => sum + Number(item.score || 0), 0) }}</span><small>总分</small></div>
+              <button class="btn btn-secondary full" type="button" @click="addEditorQuestion"><Plus :size="15" />新增题目</button>
+            </aside>
+            <section class="quiz-editor-questions">
+              <article v-for="(question, qIndex) in quizEditor.questions" :key="question.local_id" class="quiz-edit-card">
+                <header>
+                  <b>{{ qIndex + 1 }}</b>
+                  <select v-model="question.question_type" class="input" @change="changeEditorQuestionType(question)">
+                    <option value="single_choice">单选题</option>
+                    <option value="multiple_choice">多选题</option>
+                    <option value="judge">判断题</option>
+                    <option value="short_answer">简答题</option>
+                    <option value="blank">填空题</option>
+                  </select>
+                  <input v-model.number="question.score" class="input score-input" type="number" min="1" max="100" />
+                  <button class="icon-action danger" type="button" :disabled="quizEditor.questions.length <= 1" @click="removeEditorQuestion(qIndex)"><Trash2 :size="15" />删除</button>
+                </header>
+                <label>题干<textarea v-model="question.stem" class="textarea" maxlength="2000"></textarea></label>
+                <div v-if="question.question_type === 'single_choice' || question.question_type === 'multiple_choice'" class="option-editor">
+                  <div v-for="(option, index) in question.options" :key="index" class="option-edit-row">
+                    <span>{{ optionLabel(Number(index)) }}</span>
+                    <input v-model="question.options[index]" class="input" />
+                    <label v-if="question.question_type === 'single_choice'" class="answer-radio"><input v-model.number="question.reference_answer.value" type="radio" :value="index" />正确</label>
+                    <label v-else class="answer-radio"><input type="checkbox" :checked="question.reference_answer.value?.includes(Number(index))" @change="toggleEditorMultiAnswer(question, Number(index))" />正确</label>
+                    <button class="icon-action danger" type="button" :disabled="question.options.length <= 2" @click="removeEditorOption(question, Number(index))"><Trash2 :size="14" /></button>
+                  </div>
+                  <button class="dashed-btn" type="button" @click="addEditorOption(question)"><Plus :size="15" />添加选项</button>
+                </div>
+                <label v-else-if="question.question_type === 'judge'">正确答案<select v-model="question.reference_answer.value" class="input"><option :value="true">正确</option><option :value="false">错误</option></select></label>
+                <label v-else>参考答案关键词<input v-model="question.reference_answer.keywordsText" class="input" placeholder="用逗号分隔" /></label>
+                <label>解析<textarea v-model="question.explanation" class="textarea" maxlength="2000"></textarea></label>
+              </article>
+            </section>
+          </div>
+          <footer>
+            <button class="btn btn-ghost" @click="quizEditorOpen = false">取消</button>
+            <button class="btn btn-secondary" :data-loading="quizEditorSaving" :disabled="quizEditorSaving || quizEditorPublishing" @click="saveQuizEditor"><Save :size="15" />保存</button>
+            <button class="btn btn-primary" :data-loading="quizEditorPublishing" :disabled="quizEditorSaving || quizEditorPublishing" @click="publishQuizEditor"><Check :size="15" />发布给学生</button>
+          </footer>
+        </article>
+      </div>
+    </Transition>
     <ConfirmDialog
       :open="confirmDeleteCourseOpen"
       title="删除课程"
@@ -337,12 +445,15 @@
 <script setup lang="ts">
 import { TransitionGroup, computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type PropType } from "vue";
 import { useRouter } from "vue-router";
+import MarkdownIt from "markdown-it";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import {
   Activity, AlertCircle, AlertTriangle, ArrowLeft, BarChart2, Bell, BookOpen, Camera, Check, CheckCircle,
   ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Database, Download, Edit2, Eye, File,
-  FileEdit, FileText, FolderOpen, GripVertical, Grid2X2, HelpCircle, Home, IdCard, Inbox, Layers, LayoutDashboard,
+  FileEdit, FileText, FolderOpen, GripVertical, Grid2X2, HelpCircle, Home, IdCard, Image, Inbox, Layers, LayoutDashboard,
   Lock, LogOut, Mail, Maximize, MessageCircle, Pencil, Plus, PlusCircle, Presentation, RefreshCw,
-  Search, Settings, Share2, SkipBack, SkipForward, Sparkles, Trash2, TrendingDown, Upload, User, UserPlus, UserX,
+  Save, Search, Settings, Share2, SkipBack, SkipForward, Sparkles, Trash2, TrendingDown, Upload, User, UserPlus, UserX,
   Users, Volume2, Wand2, X, XCircle, ZoomIn
 } from "lucide-vue-next";
 import { api } from "../api/client";
@@ -371,7 +482,158 @@ const routeByKey: Record<string, string> = {
   teacherProfile: "/teacher/profile"
 };
 
+const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const textPayloadKeys = ["markdownContent", "markdown_content", "llmResult", "llm_result", "page_text", "script_text", "content", "text"] as const;
+
+function renderMath(source: string, displayMode: boolean) {
+  try {
+    return katex.renderToString(source, {
+      displayMode,
+      throwOnError: false,
+      strict: false,
+      output: "html",
+    });
+  } catch {
+    return source;
+  }
+}
+
+function extractSerializedTextValues(value: string) {
+  const keyPattern = new RegExp(String.raw`['"](?:${textPayloadKeys.join("|")})['"]\s*:\s*`, "g");
+  const pieces: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = keyPattern.exec(value))) {
+    let cursor = match.index + match[0].length;
+    while (/\s/.test(value[cursor] || "")) cursor += 1;
+    const quote = value[cursor];
+    if (quote !== "'" && quote !== "\"") continue;
+    cursor += 1;
+    let raw = "";
+    let escaped = false;
+    for (; cursor < value.length; cursor += 1) {
+      const char = value[cursor];
+      if (escaped) {
+        raw += `\\${char}`;
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) {
+        if (raw.trim()) pieces.push(raw);
+        keyPattern.lastIndex = cursor + 1;
+        break;
+      }
+      raw += char;
+    }
+    if (escaped && raw.trim()) pieces.push(`${raw}\\`);
+  }
+  return pieces.join("\n\n");
+}
+
+function extractStructuredText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.map(extractStructuredText).filter(Boolean).join("\n\n");
+  if (typeof value === "object") {
+    const payload = value as Record<string, unknown>;
+    for (const key of textPayloadKeys) {
+      const text = extractStructuredText(payload[key]);
+      if (text) return text;
+    }
+    return Object.values(payload).map(extractStructuredText).filter(Boolean).join("\n\n");
+  }
+  let text = String(value).trim();
+  if (!text) return "";
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      return extractStructuredText(JSON.parse(text));
+    } catch {
+      text = extractSerializedTextValues(text) || text;
+    }
+  }
+  return text
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, "\"")
+    .trim();
+}
+
+function normalizeLatexEscapes(value: string) {
+  if (!value.includes("\\")) return value;
+  return value.replace(/(^|[^\\])\\\\([A-Za-z])/g, (_match, prefix: string, command: string) => `${prefix}\\${command}`);
+}
+
+function wrapBareLatexBlocks(value: string) {
+  if (!value.includes("\\")) return value;
+  const command = String.raw`(?:frac|mathrm|mathbf|mathbb|sqrt|sum|int|lim|left|right|begin|end|cdot|times|leq|geq|neq|approx|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|Delta|Omega|infty)`;
+  const commandPattern = new RegExp(String.raw`\\${command}`, "g");
+  let inFence = false;
+  return value.split("\n").map((line) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("```")) {
+      inFence = !inFence;
+      return line;
+    }
+    if (
+      inFence ||
+      !trimmed ||
+      trimmed.includes("@@MATH_") ||
+      trimmed.startsWith("$$") ||
+      trimmed.endsWith("$$") ||
+      trimmed.startsWith("\\[") ||
+      trimmed.startsWith("\\(")
+    ) {
+      return line;
+    }
+    const commands = trimmed.match(commandPattern) || [];
+    const syntaxWeight = (trimmed.match(/[\\{}_^=&]/g) || []).length / Math.max(trimmed.length, 1);
+    const formulaLike = commands.length > 0 && (/\\begin\{|\\left|\\right|\\frac|\\mathbb|\\mathrm|[_^=]/.test(trimmed));
+    if (formulaLike && (trimmed.startsWith("\\") || syntaxWeight > 0.12 || trimmed.length > 32)) {
+      const leading = line.match(/^\s*/)?.[0] || "";
+      return `${leading}$$ ${trimmed} $$`;
+    }
+    return line;
+  }).join("\n");
+}
+
+function wrapInlineBareLatex(value: string) {
+  if (!value.includes("\\")) return value;
+  const command = String.raw`(?:frac|mathrm|mathbf|mathbb|sqrt|sum|int|lim|left|right|cdot|times|div|pm|leq|geq|neq|approx|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|Delta|Omega|infty)`;
+  const pattern = new RegExp(String.raw`(^|[\s：:，,（(])((?:\\${command}(?:\{[^{}]*\}|\[[^\]]*\]|[^\s。；;!?！？])*)+)`, "g");
+  return value.split("\n").map((line) => {
+    if (line.includes("@@MATH_") || line.includes("$$") || line.includes("\\[") || line.includes("\\(")) return line;
+    return line.replace(pattern, (match, prefix: string, expr: string) => {
+      if (!expr) return match;
+      return `${prefix}$${expr.trim()}$`;
+    });
+  }).join("\n");
+}
+
+function renderRichText(value?: unknown) {
+  if (!value) return "";
+  const mathParts: string[] = [];
+  const stash = (html: string) => {
+    const token = `@@MATH_${mathParts.length}@@`;
+    mathParts.push(html);
+    return token;
+  };
+  const renderDelimitedMath = (text: string) => text
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), true)))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), true)))
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), false)))
+    .replace(/(^|[^\\])\$([^$\n]+?)\$/g, (_, prefix: string, expr: string) => `${prefix}${stash(renderMath(normalizeLatexEscapes(expr.trim()), false))}`);
+  const extracted = normalizeLatexEscapes(extractStructuredText(value));
+  const delimitedRendered = renderDelimitedMath(extracted);
+  const inferredMath = wrapInlineBareLatex(wrapBareLatexBlocks(delimitedRendered));
+  const textWithDelimitedMath = renderDelimitedMath(inferredMath);
+  return markdownRenderer.render(textWithDelimitedMath).replace(/@@MATH_(\d+)@@/g, (_, index: string) => mathParts[Number(index)] || "");
+}
+
 const active = ref(props.pageKey || "teacherDashboard");
+const sidebarCollapsed = ref(localStorage.getItem("teacher_sidebar_collapsed") === "1");
 const courses = ref<any[]>([]);
 const dashboard = ref<any>({});
 const courseHome = ref<any>({});
@@ -385,6 +647,7 @@ const lessons = ref<any[]>([]);
 const studentPayload = ref<any>({ stats: {}, items: [] });
 const studentDrawer = ref<any | null>(null);
 const analysis = ref<any>({});
+const analysisCache = reactive<Record<string, { fetchedAt: number; data: any }>>({});
 const pageLoading = ref(false);
 const currentCourseId = ref<number>(Number(localStorage.getItem("teacher_current_course_id") || 0));
 const courseMenuOpen = ref(false);
@@ -402,6 +665,8 @@ const uploadOpen = ref(false);
 const uploadQueue = ref<Array<{ id: number; file: File; chapter_id: number; category: string }>>([]);
 const removedChapterIds = ref<number[]>([]);
 const previewItem = ref<any | null>(null);
+const previewDetail = ref<MaterialDetail | any | null>(null);
+const previewMode = ref<"markdown" | "file">("markdown");
 const currentPageId = ref<number | null>(null);
 const scriptDraft = ref("");
 const analysisRange = ref("本月");
@@ -422,6 +687,15 @@ const scriptUndoStack = ref<string[]>([]);
 const scriptRedoStack = ref<string[]>([]);
 const editorPulse = ref("");
 const confirmDeleteCourseOpen = ref(false);
+const reminderOpen = ref(false);
+const reminderTargetIds = ref<number[]>([]);
+const courseCoverFile = ref<File | null>(null);
+const courseCoverPreview = ref("");
+const courseCoverInput = ref<HTMLInputElement | null>(null);
+const quizEditorOpen = ref(false);
+const quizEditorSaving = ref(false);
+const quizEditorPublishing = ref(false);
+const quizEditor = reactive({ id: 0, status: "", title: "", description: "", questions: [] as any[] });
 let freshChapterTimer = 0;
 let freshMaterialChapterTimer = 0;
 let editorPulseTimer = 0;
@@ -430,7 +704,8 @@ const courseFilter = reactive({ keyword: "", term: "", status: "" });
 const materialFilter = reactive({ keyword: "", type: "", status: "" });
 const lessonFilter = reactive({ keyword: "", chapter_id: 0, status: "" });
 const studentFilter = reactive({ keyword: "", progress: "", active: "" });
-const courseForm = reactive({ id: 0, name: "", description: "", term: "2026春", cover_color: "#4F46E5", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] as any[] });
+const courseForm = reactive({ id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#4F46E5", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] as any[] });
+const reminderForm = reactive({ title: "", message: "" });
 const profileForm = reactive({ nickname: props.user.nickname, organization: "", department: "", bio: props.user.bio || "" });
 const passwordForm = reactive({ old_password: "", new_password: "" });
 const noticeSettings = reactive([{ key: "join", label: "学生加入课程", enabled: true }, { key: "ppt", label: "PPT 解析完成", enabled: true }, { key: "script", label: "脚本生成完成", enabled: false }, { key: "tts", label: "TTS 合成失败", enabled: true }, { key: "qa", label: "学生问答汇总", enabled: true }, { key: "ai", label: "AI 任务状态", enabled: true }, { key: "peak", label: "提问高峰", enabled: true }, { key: "system", label: "系统公告", enabled: true }]);
@@ -439,7 +714,7 @@ const palette = ["#4F46E5", "#10B981", "#F59E0B", "#06B6D4", "#8B5CF6", "#EF4444
 const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const pageTitleMap: Record<string, string> = { teacherDashboard: "工作台首页", teacherCourses: "我的课程", teacherCourseForm: "创建课程", teacherCourseHome: "课程主页", teacherMaterials: "资料管理", teacherPpt: "PPT 工作台", teacherLessons: "课时管理", teacherStudents: "学生管理", teacherAnalytics: "教学分析", teacherProfile: "个人中心" };
 const courseStatusOptions = [{ label: "全部", value: "" }, { label: "进行中", value: "active" }, { label: "已停用", value: "inactive" }];
-const materialTypeOptions = [{ label: "全部", value: "" }, { label: "PPT", value: "pptx" }, { label: "PDF", value: "pdf" }, { label: "Word", value: "docx" }, { label: "TXT", value: "txt" }];
+const materialTypeOptions = [{ label: "全部", value: "" }, { label: "PPT", value: "pptx" }, { label: "PDF", value: "pdf" }, { label: "Word", value: "docx" }, { label: "TXT/Markdown", value: "txt" }];
 const materialStatusOptions = [{ label: "全部", value: "" }, { label: "已解析", value: "ready" }, { label: "解析中", value: "processing" }, { label: "解析失败", value: "failed" }];
 const materialSortOptions = [{ label: "上传时间", value: "time" }, { label: "文件名", value: "name" }, { label: "文件大小", value: "size" }];
 const materialCategoryOptions = [{ label: "课件", value: "courseware" }, { label: "讲义", value: "handout" }, { label: "习题", value: "exercise" }, { label: "参考资料", value: "reference" }];
@@ -478,6 +753,12 @@ const filteredStudents = computed(() => (studentPayload.value.items || []).filte
   const activeMatch = !studentFilter.active || (studentFilter.active === "long" ? isLongInactive(item.last_study_at) : studentFilter.active === "active" ? !isLongInactive(item.last_study_at) : true);
   return nameMatch && progressMatch && activeMatch;
 }));
+const reminderTargetNames = computed(() => {
+  const rows = studentPayload.value.items || [];
+  const names = reminderTargetIds.value.map((id) => rows.find((item: any) => item.student.id === id)?.student.nickname || (studentDrawer.value?.student?.id === id ? studentDrawer.value.student.nickname : `学生${id}`));
+  if (names.length <= 3) return names.join("、") || "未选择学生";
+  return `${names.slice(0, 3).join("、")} 等 ${names.length} 人`;
+});
 const pages = computed<any[]>(() => materialDetail.value?.pages || []);
 const currentPageIndex = computed(() => Math.max(0, pages.value.findIndex((page: any) => page.id === currentPageId.value)));
 const activePage = computed(() => pages.value[currentPageIndex.value] || null);
@@ -502,10 +783,27 @@ const materialStatusCards = computed(() => [
   { key: "pending", label: "待处理", value: Number(materialStatusCounts.value.pending || materialStatusCounts.value.review || 0), tone: "primary", icon: FileText },
   { key: "failed", label: "失败", value: Number(materialStatusCounts.value.failed || 0), tone: "danger", icon: XCircle }
 ]);
+const previewMarkdownText = computed(() => {
+  const pagesPayload = previewDetail.value?.pages || [];
+  if (pagesPayload.length) {
+    return pagesPayload
+      .map((page: any) => {
+        const title = page.page_title || `第${page.page_number || ""}页`;
+        const body = extractStructuredText(page.page_text);
+        if (!body) return "";
+        return `## ${title}\n\n${body}`;
+      })
+      .filter(Boolean)
+      .join("\n\n---\n\n");
+  }
+  return extractStructuredText(previewDetail.value?.material?.extracted_text || previewItem.value?.extracted_text || "");
+});
+const hasPreviewMarkdown = computed(() => Boolean(previewMarkdownText.value.trim()));
+const previewMarkdownHtml = computed(() => renderRichText(previewMarkdownText.value));
 const lessonAnalysisLabels = computed(() => (analysis.value.lesson_completion || []).map((item: any) => item.title));
 const lessonAnalysisSeries = computed(() => [{ name: "完成率", data: (analysis.value.lesson_completion || []).map((item: any) => item.completion_rate || item.average_progress || 0), color: "#10B981" }]);
-const analysisTimeLabels = computed(() => ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]);
-const analysisTimeSeries = computed(() => [{ name: "分钟", data: [12, 18, 32, 28, 22, 14, 10], color: "#4F46E5" }]);
+const analysisTimeLabels = computed(() => (analysis.value.study_time_series || []).map((item: any) => item.label));
+const analysisTimeSeries = computed(() => [{ name: "分钟", data: (analysis.value.study_time_series || []).map((item: any) => item.minutes || 0), color: "#4F46E5" }]);
 const weakLabels = computed(() => (analysis.value.weak_points || []).map((item: any) => item.knowledge_point));
 const weakSeries = computed(() => [{ name: "错题", data: (analysis.value.weak_points || []).map((item: any) => item.wrong_count), color: "#EF4444" }]);
 const weakMax = computed(() => Math.max(1, ...(analysis.value.weak_points || []).map((item: any) => item.wrong_count || 0)));
@@ -522,6 +820,7 @@ watch(activePage, (page) => {
 }, { immediate: true });
 watch(() => props.pageKey, (key) => { active.value = key || "teacherDashboard"; loadActive(); });
 watch(currentCourseId, (id) => { if (id) localStorage.setItem("teacher_current_course_id", String(id)); });
+watch(sidebarCollapsed, (value) => { localStorage.setItem("teacher_sidebar_collapsed", value ? "1" : "0"); });
 
 async function run<T>(task: () => Promise<T>, ok?: string) { try { const data = await task(); if (ok) emit("notice", "success", ok); return data; } catch (error) { emit("notice", "error", (error as Error).message); return null; } }
 function isPending(key: string) { return pendingActions.has(key); }
@@ -559,12 +858,25 @@ async function loadCourseHome() { if (!currentCourse.value) return; courseHome.v
 async function loadMaterials() { if (!currentCourse.value) return; materialSummary.value = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/materials/summary`))) || {}; materials.value = (await run(() => api.get<any[]>("/materials", { course_id: currentCourse.value.id, keyword: materialFilter.keyword, category: "" }))) || []; }
 async function loadLessons() { await loadCourseHome(); }
 async function loadStudents() { if (!currentCourse.value) return; studentPayload.value = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/students`))) || { stats: {}, items: [] }; }
-async function loadAnalysis() { if (!currentCourse.value) return; const days = analysisRange.value === "本周" ? 7 : analysisRange.value === "本月" ? 30 : 120; analysis.value = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/analysis`, { days }))) || {}; }
-async function refreshAnalysis() { await withAction("refresh-analysis", loadAnalysis); }
+function analysisDays() { return analysisRange.value === "本周" ? 7 : analysisRange.value === "本月" ? 30 : 120; }
+function analysisCacheKey() { return currentCourse.value ? `${currentCourse.value.id}:${analysisDays()}` : ""; }
+async function loadAnalysis(force = false) {
+  if (!currentCourse.value) return;
+  const key = analysisCacheKey();
+  const cached = analysisCache[key];
+  if (!force && cached && Date.now() - cached.fetchedAt < 5 * 60 * 1000) {
+    analysis.value = cached.data;
+    return;
+  }
+  const data = await run(() => api.get(`/teacher/courses/${currentCourse.value!.id}/analysis`, { days: analysisDays() }));
+  analysis.value = data || {};
+  if (data) analysisCache[key] = { fetchedAt: Date.now(), data };
+}
+async function refreshAnalysis() { await withAction("refresh-analysis", () => loadAnalysis(true)); }
 async function setAnalysisRange(value: string) {
   if (analysisRange.value === value) return;
   analysisRange.value = value;
-  await withAction("analysis-range", loadAnalysis);
+  await withAction("analysis-range", () => loadAnalysis());
 }
 async function loadTeacherProfile() { const data = await run<any>(() => api.get("/teacher/profile")); if (!data) return; Object.assign(profileForm, { nickname: data.user?.nickname || profileForm.nickname, bio: data.user?.bio || "", organization: data.teacher_profile?.organization || "", department: data.teacher_profile?.department || "" }); if (Array.isArray(data.notification_settings)) noticeSettings.splice(0, noticeSettings.length, ...data.notification_settings); }
 async function loadActive() {
@@ -591,11 +903,18 @@ async function selectCourse(id: number, target = active.value) {
   });
 }
 async function enterRecentCourse() { if (currentCourse.value) await selectCourse(currentCourse.value.id, "teacherCourseHome"); else await go("teacherCourses"); }
-function newCourse() { removedChapterIds.value = []; Object.assign(courseForm, { id: 0, name: "", description: "", term: "2026春", cover_color: "#4F46E5", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] }); go("teacherCourseForm"); }
+function resetCourseCoverSelection() {
+  if (courseCoverPreview.value && courseCoverPreview.value.startsWith("blob:")) URL.revokeObjectURL(courseCoverPreview.value);
+  courseCoverFile.value = null;
+  courseCoverPreview.value = "";
+  if (courseCoverInput.value) courseCoverInput.value.value = "";
+}
+function newCourse() { removedChapterIds.value = []; resetCourseCoverSelection(); Object.assign(courseForm, { id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#4F46E5", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] }); go("teacherCourseForm"); }
 async function editCourse(course: any) {
   const detail = await withAction<CourseDetail>(`edit-course-${course.id}`, () => api.get(`/courses/${course.id}`));
   removedChapterIds.value = [];
-  Object.assign(courseForm, { id: course.id, name: course.name, description: course.description || "", term: course.term, cover_color: course.cover_color || "#4F46E5", chapters: (detail?.chapters || []).length ? detail!.chapters.map((chapter: any) => ({ ...chapter, local_id: chapter.id })) : [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] });
+  resetCourseCoverSelection();
+  Object.assign(courseForm, { id: course.id, name: course.name, description: course.description || "", term: course.term, cover_url: course.cover_url || "", cover_color: course.cover_color || "#4F46E5", chapters: (detail?.chapters || []).length ? detail!.chapters.map((chapter: any) => ({ ...chapter, local_id: chapter.id })) : [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] });
   go("teacherCourseForm");
 }
 function markFreshChapter(localId: number) {
@@ -616,13 +935,37 @@ function addDraftChapter() {
   markFreshChapter(localId);
 }
 function removeDraftChapter(index: number) { const [chapter] = courseForm.chapters.splice(index, 1); if (chapter?.id) removedChapterIds.value.push(chapter.id); }
+function pickCourseCover(event: Event) {
+  const file = ((event.target as HTMLInputElement).files || [])[0];
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    emit("notice", "warning", "请上传图片文件");
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    emit("notice", "warning", "课程封面不能超过 8MB");
+    return;
+  }
+  resetCourseCoverSelection();
+  courseCoverFile.value = file;
+  courseCoverPreview.value = URL.createObjectURL(file);
+}
+async function uploadCourseCover(courseId: number) {
+  if (!courseCoverFile.value) return null;
+  const form = new FormData();
+  form.set("file", courseCoverFile.value);
+  return await run<Course>(() => api.post(`/courses/${courseId}/cover`, form), "封面已上传");
+}
 async function saveCourse() {
   if (!courseForm.name.trim() || !courseForm.term.trim()) return emit("notice", "warning", "课程必填");
   await withAction("save-course", async () => {
-    const payload = { name: courseForm.name, description: courseForm.description, term: courseForm.term };
+    const payload = { name: courseForm.name, description: courseForm.description, term: courseForm.term, cover_url: courseForm.cover_url, cover_color: courseForm.cover_color };
     const course = courseForm.id ? await run<Course>(() => api.patch(`/courses/${courseForm.id}`, payload), "已保存") : await run<Course>(() => api.post("/courses", payload), "已创建");
     if (!course) return;
     currentCourseId.value = course.id;
+    const coverCourse = await uploadCourseCover(course.id);
+    if (coverCourse?.cover_url) courseForm.cover_url = coverCourse.cover_url;
+    resetCourseCoverSelection();
     for (const chapterId of removedChapterIds.value) await run(() => api.delete(`/teacher/courses/${course.id}/chapters/${chapterId}`));
     removedChapterIds.value = [];
     for (const chapter of courseForm.chapters) {
@@ -656,6 +999,158 @@ async function addChapterFromTree() {
     await loadMaterials();
     await loadCourseHome();
     markFreshMaterialChapter(chapter?.id || (materialSummary.value.chapters || []).find((item: any) => item.title === title)?.id);
+  });
+}
+async function deleteChapterFromTree(chapter: any) {
+  if (!currentCourse.value || !chapter?.id) return;
+  const linkedCount = Number(chapter.count || 0);
+  const message = linkedCount > 0
+    ? `确定删除“${chapter.title}”？该章节下 ${linkedCount} 份资料会保留并改为未分章。`
+    : `确定删除“${chapter.title}”？`;
+  if (!window.confirm(message)) return;
+  await withAction(`delete-chapter-${chapter.id}`, async () => {
+    await run(() => api.delete(`/teacher/courses/${currentCourse.value!.id}/chapters/${chapter.id}`), "已删除章节");
+    if (selectedChapterId.value === chapter.id) selectedChapterId.value = 0;
+    uploadQueue.value = uploadQueue.value.map((item) => item.chapter_id === chapter.id ? { ...item, chapter_id: 0 } : item);
+    await loadMaterials();
+    await loadCourseHome();
+  });
+}
+function optionLabel(index: number) { return String.fromCharCode(65 + index); }
+function normalizeAnswerPayload(questionType: string, referenceAnswer: any) {
+  const value = referenceAnswer && typeof referenceAnswer === "object" && !Array.isArray(referenceAnswer)
+    ? referenceAnswer.value ?? referenceAnswer.answer ?? referenceAnswer.correct_answer ?? referenceAnswer.correct ?? referenceAnswer.option_index ?? referenceAnswer.index ?? referenceAnswer.key ?? referenceAnswer.text ?? referenceAnswer.choice ?? referenceAnswer.correct_option ?? referenceAnswer.judge
+    : referenceAnswer;
+  if (questionType === "judge") return { value: value === true || value === "true" || value === "正确" || value === "对" || value === 0 || value === "0" };
+  if (questionType === "multiple_choice") {
+    const values = Array.isArray(value) ? value : String(value ?? "").split(/[，,；;、\s]/).filter(Boolean);
+    return { value: values.map((item: any) => Number.isNaN(Number(item)) ? item : Number(item)) };
+  }
+  if (questionType === "single_choice") return { value: value ?? 0 };
+  const keywords = Array.isArray(referenceAnswer?.keywords) ? referenceAnswer.keywords : Array.isArray(value) ? value : String(value || "").split(/[，,；;、]/).map((item) => item.trim()).filter(Boolean);
+  return { keywordsText: keywords.join("，") };
+}
+function normalizeEditorQuestion(item: any = {}) {
+  const type = item.question_type || "single_choice";
+  const options = Array.isArray(item.options) && item.options.length ? [...item.options] : type === "judge" ? ["正确", "错误"] : ["", "", "", ""];
+  return {
+    local_id: item.id || Date.now() + Math.floor(Math.random() * 1000),
+    id: item.id || 0,
+    chapter_id: item.chapter_id || null,
+    knowledge_point_id: item.knowledge_point_id || null,
+    question_type: type,
+    stem: item.stem || "",
+    options,
+    reference_answer: normalizeAnswerPayload(type, item.reference_answer),
+    explanation: item.explanation || "",
+    score: Number(item.score || 10),
+    difficulty: item.difficulty || "standard",
+  };
+}
+function openQuizEditor(detail: any) {
+  if (!detail?.quiz) return;
+  quizEditor.id = detail.quiz.id;
+  quizEditor.status = detail.quiz.status;
+  quizEditor.title = detail.quiz.title || "";
+  quizEditor.description = detail.quiz.description || "";
+  quizEditor.questions = (detail.questions || []).map((item: any) => normalizeEditorQuestion(item));
+  quizEditorOpen.value = true;
+}
+function addEditorQuestion() { quizEditor.questions.push(normalizeEditorQuestion()); }
+function removeEditorQuestion(index: number) {
+  if (quizEditor.questions.length <= 1) return emit("notice", "warning", "至少保留一道题");
+  quizEditor.questions.splice(index, 1);
+}
+function addEditorOption(question: any) { question.options.push(""); }
+function removeEditorOption(question: any, index: number) {
+  if (question.options.length <= 2) return;
+  question.options.splice(index, 1);
+  if (Number(question.reference_answer.value) >= question.options.length) question.reference_answer.value = 0;
+}
+function toggleEditorMultiAnswer(question: any, index: number) {
+  const values = Array.isArray(question.reference_answer.value) ? question.reference_answer.value : [];
+  question.reference_answer.value = values.includes(index) ? values.filter((item: number) => item !== index) : [...values, index];
+}
+function changeEditorQuestionType(question: any) {
+  question.reference_answer = normalizeAnswerPayload(question.question_type, question.reference_answer);
+  if (question.question_type === "judge") question.options = ["正确", "错误"];
+  if ((question.question_type === "single_choice" || question.question_type === "multiple_choice") && (!Array.isArray(question.options) || question.options.length < 2)) question.options = ["", "", "", ""];
+}
+function serializeEditorQuestion(question: any) {
+  let reference_answer: any = question.reference_answer;
+  let options: any[] | null = null;
+  if (question.question_type === "single_choice") {
+    options = question.options.map((item: string) => item.trim()).filter(Boolean);
+    reference_answer = { value: Number(question.reference_answer.value || 0) };
+  } else if (question.question_type === "multiple_choice") {
+    options = question.options.map((item: string) => item.trim()).filter(Boolean);
+    const values = Array.isArray(question.reference_answer.value) ? question.reference_answer.value : [question.reference_answer.value];
+    reference_answer = { values };
+  } else if (question.question_type === "judge") {
+    options = ["正确", "错误"];
+    reference_answer = { value: question.reference_answer.value === true || question.reference_answer.value === "true" };
+  } else {
+    const keywords = String(question.reference_answer.keywordsText || "").split(/[，,；;、]/).map((item) => item.trim()).filter(Boolean);
+    reference_answer = { keywords };
+  }
+  return {
+    id: question.id || undefined,
+    chapter_id: question.chapter_id || undefined,
+    knowledge_point_id: question.knowledge_point_id || undefined,
+    question_type: question.question_type,
+    stem: question.stem,
+    options,
+    reference_answer,
+    explanation: question.explanation,
+    score: Number(question.score || 10),
+    difficulty: question.difficulty || "standard",
+  };
+}
+async function saveQuizEditor() {
+  if (!quizEditor.id || quizEditorSaving.value) return null;
+  quizEditorSaving.value = true;
+  try {
+    const detail = await run<any>(() => api.put(`/learning/quizzes/${quizEditor.id}`, {
+      title: quizEditor.title,
+      description: quizEditor.description,
+      questions: quizEditor.questions.map(serializeEditorQuestion),
+    }), "测验已保存");
+    if (detail) openQuizEditor(detail);
+    return detail;
+  } finally {
+    quizEditorSaving.value = false;
+  }
+}
+async function publishQuizEditor() {
+  if (!quizEditor.id || quizEditorPublishing.value) return;
+  quizEditorPublishing.value = true;
+  try {
+    const detail = await saveQuizEditor();
+    if (!detail) return;
+    const quiz = await run<any>(() => api.post(`/learning/quizzes/${quizEditor.id}/publish`), "已发布给学生");
+    if (quiz) {
+      quizEditor.status = quiz.status;
+      quizEditorOpen.value = false;
+      await loadAnalysis(true);
+    }
+  } finally {
+    quizEditorPublishing.value = false;
+  }
+}
+async function generateWeakQuiz(item?: any) {
+  if (!currentCourse.value) return;
+  const topic = item?.knowledge_point || (analysis.value.weak_points || [])[0]?.knowledge_point || "薄弱知识点";
+  await withAction(`weak-quiz-${topic}`, async () => {
+    const quiz = await run<any>(() => api.post("/learning/quizzes/generate", {
+      course_id: currentCourse.value!.id,
+      title: `${topic}专项测验`,
+      quiz_type: "course",
+      question_count: 8,
+      prefer_weak_points: true,
+    }), "已生成测验");
+    if (!quiz) return;
+    const detail = await run<any>(() => api.get(`/learning/quizzes/${quiz.id}`));
+    openQuizEditor(detail);
   });
 }
 async function refreshMaterials() { await withAction("filter-materials", loadMaterials); }
@@ -694,7 +1189,26 @@ async function uploadMaterials() {
   });
 }
 async function deleteMaterial(id: number) { await withAction(`delete-material-${id}`, async () => { await run(() => api.delete(`/materials/${id}`), "已删除"); await loadMaterials(); }); }
-function previewMaterial(item: any) { previewItem.value = item; }
+async function reprocessMaterial(id: number) {
+  await withAction(`reprocess-material-${id}`, async () => {
+    await run(() => api.post(`/materials/${id}/reprocess`), "已重新提交解析");
+    await loadMaterials();
+    scheduleMaterialRefreshes();
+  });
+}
+function closePreview() {
+  previewItem.value = null;
+  previewDetail.value = null;
+  previewMode.value = "markdown";
+}
+async function previewMaterial(item: any) {
+  previewItem.value = item;
+  previewDetail.value = null;
+  previewMode.value = "markdown";
+  const detail = await withAction<MaterialDetail>(`preview-material-${item.id}`, () => api.get(`/materials/${item.id}`));
+  if (detail) previewDetail.value = detail;
+  if (!hasPreviewMarkdown.value && item.preview_url) previewMode.value = "file";
+}
 async function openPptWorkbench(materialId: number) {
   const detail = await withAction<MaterialDetail>(`open-ppt-${materialId}`, () => api.get(`/materials/${materialId}`));
   if (!detail) return;
@@ -839,9 +1353,38 @@ async function openStudent(id: number) {
   studentDrawer.value = data;
   studentTab.value = "base";
 }
-async function remindStudent(id: number) { if (!currentCourse.value) return; await withAction(`remind-student-${id}`, () => api.post(`/teacher/courses/${currentCourse.value!.id}/students/${id}/remind`), "已提醒"); }
+function defaultReminderTitle() { return currentCourse.value ? `${currentCourse.value.name}学习提醒` : "学习提醒"; }
+function defaultReminderMessage() { return `请及时查看《${currentCourse.value?.name || "课程"}》的学习进度，完成未学课时、练习或待办任务。`; }
+function openReminderModal(ids: number[]) {
+  if (!currentCourse.value) return emit("notice", "warning", "请先选择课程");
+  const uniqueIds = Array.from(new Set(ids.map(Number).filter(Boolean)));
+  if (!uniqueIds.length) return emit("notice", "warning", "请先选择学生");
+  reminderTargetIds.value = uniqueIds;
+  reminderForm.title = defaultReminderTitle();
+  reminderForm.message = defaultReminderMessage();
+  reminderOpen.value = true;
+}
+function remindStudent(id: number) { openReminderModal([id]); }
 async function removeStudent(id: number) { if (!currentCourse.value) return; await withAction(`remove-student-${id}`, async () => { await run(() => api.delete(`/teacher/courses/${currentCourse.value!.id}/students/${id}`), "已移出"); studentDrawer.value = null; await loadStudents(); }); }
-async function batchRemind() { await withAction("batch-remind", async () => { for (const item of filteredStudents.value) await run(() => api.post(`/teacher/courses/${currentCourse.value!.id}/students/${item.student.id}/remind`)); emit("notice", "success", "已提醒"); }); }
+function batchRemind() { openReminderModal(filteredStudents.value.map((item: any) => item.student.id)); }
+async function sendReminder() {
+  if (!currentCourse.value || !reminderTargetIds.value.length) return;
+  const title = reminderForm.title.trim();
+  const message = reminderForm.message.trim();
+  if (!title || !message) return emit("notice", "warning", "提醒标题和内容不能为空");
+  await withAction("send-reminder", async () => {
+    let sent = 0;
+    for (const studentId of reminderTargetIds.value) {
+      const data = await run<any>(() => api.post(`/teacher/courses/${currentCourse.value!.id}/students/${studentId}/remind`, { title, message }));
+      if (data?.sent) sent += 1;
+    }
+    if (!sent) return;
+    emit("notice", "success", sent === reminderTargetIds.value.length ? "已发送提醒" : `已发送 ${sent}/${reminderTargetIds.value.length} 条提醒`);
+    reminderOpen.value = false;
+    reminderTargetIds.value = [];
+    await loadStudents();
+  });
+}
 function clearStudentFilter() { Object.assign(studentFilter, { keyword: "", progress: "", active: "" }); }
 async function exportCurrent() { if (!currentCourse.value) return; await withAction(`export-${active.value}`, async () => { if (active.value === "teacherStudents") await run(() => api.download(`/teacher/courses/${currentCourse.value!.id}/students/export`, `students-${currentCourse.value!.course_code}.csv`), "已导出"); if (active.value === "teacherAnalytics") { const days = analysisRange.value === "本周" ? 7 : analysisRange.value === "本月" ? 30 : 120; await run(() => api.download(`/teacher/courses/${currentCourse.value!.id}/analysis/export`, `analysis-${currentCourse.value!.course_code}.csv`, { days }), "已导出"); } }); }
 function retryTask() { emit("notice", "info", "已重试"); }
@@ -859,12 +1402,31 @@ function formatTime(value?: string | null) { return value ? new Date(value).toLo
 function shortDate(value?: string | null) { return value ? new Date(value).toLocaleDateString("zh-CN") : "-"; }
 function relativeTime(value?: string | null) { if (!value) return "从未"; const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
 function statusClass(status?: string) { if (["ready", "published", "active", "success"].includes(String(status))) return "tag-success"; if (["pending", "processing", "review"].includes(String(status))) return "tag-warning"; if (["failed", "inactive", "disabled"].includes(String(status))) return "tag-danger"; return ""; }
-function statusText(status?: string) { return { ready: "已解析", published: "已发布", active: "进行中", inactive: "已停用", pending: "待处理", processing: "处理中", failed: "失败", draft: "草稿" }[String(status)] || String(status || "-"); }
+function statusText(status?: string) { return { ready: "已解析", published: "已发布", active: "进行中", inactive: "已停用", pending: "待处理", processing: "处理中", failed: "失败", draft: "草稿", review: "待发布", closed: "已关闭" }[String(status)] || String(status || "-"); }
 function courseColor(id: number) { return `linear-gradient(135deg, ${palette[id % palette.length]}, #0F172A)`; }
+function courseCoverStyle(course: any) {
+  if (course?.cover_url) return { backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.38)), url(${course.cover_url})` };
+  return { background: course?.cover_color || courseColor(Number(course?.id || 1)) };
+}
+function courseHeroStyle(course: any) {
+  if (course?.cover_url) {
+    return {
+      backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.72), rgba(79,70,229,0.50)), url(${course.cover_url})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+  return { background: course?.cover_color || courseColor(Number(course?.id || 1)) };
+}
+function courseCoverPreviewStyle() {
+  const preview = courseCoverPreview.value || courseForm.cover_url;
+  if (preview) return { backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.38)), url(${preview})` };
+  return { background: courseForm.cover_color };
+}
 function heatOpacity(count: number) { return String(Math.min(1, 0.15 + count / 20)); }
 function todoIcon(type: string) { return type === "error" ? AlertCircle : type === "lesson" ? Presentation : FileText; }
 function fileIcon(type: string) { if (type === "pptx") return Presentation; if (type === "pdf") return FileText; if (type === "docx") return FileEdit; return File; }
-function typeText(type: string) { return { pptx: "PPT", pdf: "PDF", docx: "Word", txt: "TXT" }[type] || type; }
+function typeText(type: string) { return { pptx: "PPT", pdf: "PDF", docx: "Word", txt: "TXT/Markdown" }[type] || type; }
 function sizeLabel(size?: number) { const value = Number(size || 0); if (value < 1024) return `${value} B`; if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`; if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`; return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`; }
 function chapterName(id?: number | null) { return (courseHome.value.chapters || []).find((chapter: any) => chapter.id === id)?.title || "未分章"; }
 function isLongInactive(value?: string | null) { return !value || Date.now() - new Date(value).getTime() > 14 * 86400000; }
@@ -889,6 +1451,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onTeacherDocumentPointerDown);
   document.removeEventListener("keydown", onTeacherDocumentKeydown);
+  resetCourseCoverSelection();
 });
 
 const MetricCard = defineComponent({ props: { icon: { type: Object, required: true }, label: { type: String, required: true }, value: { type: [String, Number], required: true }, sub: { type: String, default: "" }, tone: { type: String, default: "primary" }, danger: { type: Boolean, default: false } }, setup(p) { return () => h("article", { class: ["metric-card", p.tone, p.danger ? "danger" : ""] }, [h("div", [h("span", { class: "metric-icon" }, [h(p.icon as any, { size: 20 })]), h("span", p.label)]), h("strong", String(p.value)), h("small", p.sub)]); } });
@@ -928,13 +1491,17 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 
 <style scoped>
 .teacher-shell { min-width: 1280px; min-height: 100vh; background: var(--color-bg-page); color: var(--color-text-body); }
-.teacher-header { position: fixed; inset: 0 0 auto; z-index: var(--z-sticky); height: 60px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 0 24px; }
+.teacher-header { position: fixed; inset: 0 0 auto; z-index: var(--z-sticky); height: 60px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 18px; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 0 24px; }
 .brand, .header-actions, .user-menu > button, .course-switch > button, .breadcrumb > div, .page-actions, .panel-head h2, .todo-row, .script-row, .quick-action, .drawer-head { display: flex; align-items: center; gap: var(--space-2); }
+.brand { min-width: 0; overflow: hidden; }
 .brand strong { color: var(--color-text-primary); font-size: 17px; font-weight: 600; }
 .brand > i, .header-actions > i { width: 1px; height: 16px; background: var(--color-border-default); }
 .logo-mark { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; background: var(--color-ai-gradient); color: white; }
 .course-switch, .user-menu { position: relative; }
+.course-switch { min-width: 0; }
 .course-switch > button, .user-menu > button { border: 0; background: transparent; color: var(--color-text-body); }
+.course-switch > button { max-width: min(420px, 42vw); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header-actions { flex: 0 0 auto; justify-content: flex-end; gap: 12px; min-width: max-content; }
 .teacher-shell button,
 .teacher-shell a.icon-action {
   transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out);
@@ -954,14 +1521,27 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .course-popover button.active, .course-popover button:hover, .user-popover button:hover { background: var(--color-primary-50); color: var(--color-primary-700); }
 .user-popover { right: 0; min-width: 160px; }
 .icon-btn, .icon-action { position: relative; display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); padding: 0 10px; font-size: var(--text-caption); font-weight: 500; line-height: 1; white-space: nowrap; }
+.header-actions > .icon-btn { flex: 0 0 auto; min-width: 74px; min-height: 38px; padding: 0 12px; }
 .icon-btn:hover, .icon-action:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .icon-action.active { background: var(--color-primary-50); color: var(--color-primary-700); box-shadow: var(--shadow-focus); }
+.header-actions > .icon-btn em { position: static; display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 9px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 1; padding: 0 5px; box-shadow: 0 0 0 2px white; }
 .icon-btn em { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; }
 .avatar { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: 50%; background: var(--color-ai-gradient); color: white; font-weight: 700; }
 .avatar.mini { width: 24px; height: 24px; font-size: 12px; }
 .avatar.large { position: relative; width: 80px; height: 80px; font-size: 26px; }
 .avatar.large svg { position: absolute; right: 0; bottom: 0; border-radius: 50%; background: var(--color-primary-600); padding: 4px; }
-.teacher-sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; border-right: 1px solid var(--color-border-default); background: white; padding: 18px 12px; }
+.teacher-sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; border-right: 1px solid var(--color-border-default); background: white; padding: 18px 12px; transition: width var(--duration-base) var(--ease-out), padding var(--duration-base) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }
+.teacher-sidebar-toggle { display: flex; width: 100%; height: 40px; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-muted); color: var(--color-text-secondary); font-size: var(--text-caption); font-weight: 600; margin-bottom: 10px; }
+.teacher-sidebar-toggle:hover { border-color: var(--color-primary-200); background: var(--color-primary-50); color: var(--color-primary-700); box-shadow: var(--shadow-sm); }
+.teacher-shell.sidebar-collapsed .teacher-sidebar { width: 72px; padding: 14px 8px; }
+.teacher-shell.sidebar-collapsed .teacher-sidebar-toggle { width: 44px; padding: 0; margin-inline: auto; }
+.teacher-shell.sidebar-collapsed .teacher-sidebar-toggle span { display: none; }
+.teacher-shell.sidebar-collapsed .nav-group { justify-items: center; gap: 6px; padding: 8px 0; }
+.teacher-shell.sidebar-collapsed .nav-group > span { width: 0; height: 0; overflow: hidden; opacity: 0; padding: 0; }
+.teacher-shell.sidebar-collapsed .nav-group button { width: 44px; height: 44px; justify-content: center; gap: 0; padding: 0; font-size: 0; }
+.teacher-shell.sidebar-collapsed .nav-group button svg { width: 18px; height: 18px; }
+.teacher-shell.sidebar-collapsed .nav-group button.active::before { left: 4px; top: 10px; bottom: 10px; }
+.teacher-shell.sidebar-collapsed .course-title { display: none; }
 .nav-group { display: grid; gap: 2px; padding: 12px 0; border-bottom: 1px solid var(--color-border-subtle); }
 .nav-group > span { padding: 0 12px 8px; color: var(--color-text-muted); font-size: var(--text-overline); font-weight: 600; }
 .course-title { display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-style: normal; border-radius: var(--radius-md); transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out); }
@@ -972,7 +1552,8 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .nav-group button.active { background: var(--color-primary-50); color: var(--color-primary-700); font-weight: 500; }
 .nav-group button.active::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--color-primary-600); }
 .nav-group button:disabled { opacity: 0.45; }
-.teacher-main { margin-left: 240px; padding-top: 60px; }
+.teacher-main { margin-left: 240px; padding-top: 60px; transition: margin-left var(--duration-base) var(--ease-out); }
+.teacher-shell.sidebar-collapsed .teacher-main { margin-left: 72px; }
 .teacher-main.immersive { padding-top: 60px; }
 .teacher-page-stack { display: contents; }
 .teacher-page-loading {
@@ -1005,6 +1586,7 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .metric-grid.four { grid-template-columns: repeat(4, 1fr); }
 .metric-grid.three { grid-template-columns: repeat(3, 1fr); }
 .metric-grid.five { grid-template-columns: repeat(5, 1fr); }
+.metric-grid.six { grid-template-columns: repeat(6, 1fr); }
 .metric-card { min-height: 100px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 18px; }
 .metric-card > div { display: flex; align-items: center; gap: 10px; color: var(--color-text-secondary); }
 .metric-icon { display: inline-flex; width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-600); }
@@ -1067,7 +1649,9 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .course-grid { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .course-card { overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); }
 .course-card.inactive .course-cover { filter: grayscale(1); opacity: 0.55; }
-.course-cover { position: relative; aspect-ratio: 16 / 9; display: grid; place-items: center; color: white; }
+.course-cover { position: relative; aspect-ratio: 16 / 9; display: grid; place-items: center; color: white; background-size: cover; background-position: center; }
+.course-cover.has-image::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15,23,42,0.04), rgba(15,23,42,0.42)); pointer-events: none; }
+.course-cover.has-image .tag { z-index: 1; }
 .course-cover .tag:first-child { position: absolute; top: 12px; left: 12px; }
 .course-cover .tag:nth-child(2) { position: absolute; top: 12px; right: 12px; }
 .course-card section { padding: 16px; }
@@ -1094,6 +1678,10 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .color-row { display: flex; gap: 8px; }
 .color-row button { width: 28px; height: 28px; border: 2px solid transparent; border-radius: 50%; }
 .color-row button.active { border-color: var(--color-text-primary); }
+.cover-upload-field { display: grid; grid-template-columns: 176px 1fr; gap: 14px; align-items: center; }
+.cover-upload-preview { width: 176px; aspect-ratio: 16 / 9; display: grid; place-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background-size: cover; background-position: center; color: white; overflow: hidden; }
+.cover-upload-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cover-upload-actions small { flex-basis: 100%; color: var(--color-text-muted); }
 .section-head { display: flex; align-items: center; justify-content: space-between; }
 .chapter-edit-list { position: relative; display: grid; gap: 8px; }
 .chapter-edit { display: grid; grid-template-columns: auto 1fr 76px auto; gap: 8px; align-items: center; border-radius: var(--radius-md); padding: 2px; transition: background var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out); }
@@ -1107,10 +1695,11 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .advanced-body { display: grid; gap: 10px; padding-top: 12px; }
 .advanced.open label { animation: fade-slide-up var(--duration-base) var(--ease-out) both; }
 .preview-card .course-card { transform-origin: top left; width: 260px; box-shadow: none; }
-.fixed-actions { position: fixed; left: 240px; right: 0; bottom: 0; z-index: var(--z-fixed); height: 64px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--color-border-default); background: white; padding: 0 32px; }
+.fixed-actions { position: fixed; left: 240px; right: 0; bottom: 0; z-index: var(--z-fixed); height: 64px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--color-border-default); background: white; padding: 0 32px; transition: left var(--duration-base) var(--ease-out); }
+.teacher-shell.sidebar-collapsed .fixed-actions { left: 72px; }
 .fixed-actions span { display: flex; align-items: center; gap: 6px; color: var(--color-warning-700); }
 .fixed-actions div { display: flex; gap: 10px; }
-.course-hero { min-height: 120px; display: grid; grid-template-columns: 80px 1fr auto; align-items: center; gap: 20px; border-radius: var(--radius-xl); color: white; padding: 20px 24px; }
+.course-hero { min-height: 120px; display: grid; grid-template-columns: 80px 1fr auto; align-items: center; gap: 20px; border-radius: var(--radius-xl); color: white; padding: 20px 24px; background-size: cover; background-position: center; }
 .course-hero > span { display: inline-flex; width: 80px; height: 80px; align-items: center; justify-content: center; border-radius: var(--radius-xl); background: rgba(255,255,255,0.2); backdrop-filter: blur(8px); }
 .course-hero h1 { margin: 0; font-size: 22px; }
 .course-hero p, .course-hero small { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,0.82); }
@@ -1194,6 +1783,48 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .chapter-tree button.active { background: var(--color-primary-50); color: var(--color-primary-700); box-shadow: inset 3px 0 0 var(--color-primary-600); }
 .chapter-tree button.empty { color: var(--color-text-muted); }
 .chapter-tree button.just-added { animation: item-confirm 1100ms var(--ease-out) both; }
+.chapter-tree-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  align-items: center;
+  border-radius: var(--radius-md);
+  transition: background var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+.chapter-tree-row:hover { background: var(--color-bg-muted); }
+.chapter-tree-row.active {
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+  box-shadow: inset 3px 0 0 var(--color-primary-600);
+}
+.chapter-tree-row.empty { color: var(--color-text-muted); }
+.chapter-tree-row.just-added { animation: item-confirm 1100ms var(--ease-out) both; }
+.chapter-tree .chapter-tree-main {
+  min-width: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+}
+.chapter-tree .chapter-tree-main:hover { background: transparent; }
+.chapter-tree .chapter-tree-delete {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  padding: 0;
+  opacity: 0;
+}
+.chapter-tree-row:hover .chapter-tree-delete,
+.chapter-tree-row .chapter-tree-delete[data-loading="true"] {
+  opacity: 1;
+}
+.chapter-tree .chapter-tree-delete:hover {
+  background: var(--color-danger-50);
+  color: var(--color-danger-700);
+}
 .materials-panel { position: relative; min-width: 0; overflow: visible; }
 .materials-panel.panel-loading::after {
   content: "";
@@ -1339,8 +1970,11 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .analysis-grid.two { grid-template-columns: repeat(2, 1fr); }
 .analysis-grid.three { grid-template-columns: repeat(3, 1fr); }
 .analysis-grid.knowledge { grid-template-columns: 40fr 60fr; }
-.weak-row { display: grid; grid-template-columns: 34px 1fr 180px 50px; align-items: center; gap: 10px; min-height: 42px; }
+.weak-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 160px 44px 56px; align-items: center; gap: 10px; min-height: 42px; }
 .weak-row b { font-family: var(--font-family-mono); color: var(--color-text-muted); }
+.weak-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weak-row button { min-height: 30px; border: 0; border-radius: var(--radius-full); background: var(--color-primary-50); color: var(--color-primary-700); padding: 0 10px; font-size: 12px; font-weight: 700; }
+.weak-row button:hover { background: var(--color-primary-600); color: white; }
 .question-layout { display: grid; grid-template-columns: 55fr 45fr; gap: 16px; }
 .word-cloud { min-height: 320px; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 12px; border-radius: var(--radius-lg); background: var(--color-bg-muted); padding: 18px; color: var(--color-primary-700); }
 .word-cloud span { transition: transform var(--duration-base) var(--ease-out), color var(--duration-fast) var(--ease-out); }
@@ -1363,8 +1997,50 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .notice-list label { display: flex; align-items: center; gap: 10px; min-height: 36px; }
 .modal-mask { position: fixed; inset: 0; z-index: var(--z-modal-bg); display: grid; place-items: center; background: rgba(15,23,42,0.38); backdrop-filter: blur(6px); }
 .modal { width: 640px; max-height: 90vh; overflow: auto; border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-xl); padding: 20px; }
-.modal.preview-modal { width: 800px; height: 90vh; display: grid; grid-template-rows: auto 1fr; }
-.preview-modal iframe { width: 100%; height: 100%; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
+.reminder-modal { display: grid; gap: 14px; }
+.reminder-modal label { display: grid; gap: 8px; color: var(--color-text-secondary); font-weight: 600; }
+.reminder-modal .textarea { min-height: 132px; resize: vertical; }
+.reminder-recipients { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; border-radius: var(--radius-lg); background: var(--color-primary-50); color: var(--color-primary-700); padding: 12px 14px; }
+.reminder-recipients small { grid-column: 2; color: var(--color-text-secondary); }
+.modal.preview-modal { width: min(1120px, 92vw); height: min(820px, 90vh); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+.preview-head { min-width: 0; }
+.preview-head h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-tabs { display: inline-flex; overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-muted); padding: 3px; }
+.preview-tabs button { min-height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--color-text-secondary); padding: 0 12px; font-size: var(--text-caption); font-weight: 600; }
+.preview-tabs button:hover:not(:disabled) { background: white; color: var(--color-primary-700); }
+.preview-tabs button.active { background: white; color: var(--color-primary-700); box-shadow: var(--shadow-xs); }
+.preview-tabs button:disabled { cursor: not-allowed; opacity: 0.45; }
+.preview-content { min-height: 0; position: relative; overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-muted); }
+.preview-content iframe { width: 100%; height: 100%; border: 0; background: white; }
+.preview-loading { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 10px; background: rgba(255,255,255,0.86); color: var(--color-text-secondary); font-size: var(--text-body-sm); backdrop-filter: blur(4px); }
+.markdown-preview { height: 100%; overflow: auto; background: white; color: var(--color-text-body); padding: 28px 34px 44px; line-height: 1.78; }
+.markdown-preview :deep(h1),
+.markdown-preview :deep(h2),
+.markdown-preview :deep(h3) { margin: 1.1em 0 0.55em; color: var(--color-text-primary); line-height: 1.35; }
+.markdown-preview :deep(h1:first-child),
+.markdown-preview :deep(h2:first-child),
+.markdown-preview :deep(h3:first-child) { margin-top: 0; }
+.markdown-preview :deep(p),
+.markdown-preview :deep(ul),
+.markdown-preview :deep(ol),
+.markdown-preview :deep(blockquote),
+.markdown-preview :deep(pre),
+.markdown-preview :deep(table) { margin: 0 0 14px; }
+.markdown-preview :deep(ul),
+.markdown-preview :deep(ol) { padding-left: 1.35em; }
+.markdown-preview :deep(li + li) { margin-top: 6px; }
+.markdown-preview :deep(a) { color: var(--color-primary-700); text-decoration: none; }
+.markdown-preview :deep(a:hover) { text-decoration: underline; }
+.markdown-preview :deep(code) { border-radius: 6px; background: var(--color-bg-muted); color: var(--color-danger-700); padding: 2px 6px; font-family: var(--font-family-mono); font-size: 0.92em; }
+.markdown-preview :deep(pre) { overflow: auto; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: #0F172A; color: #E2E8F0; padding: 14px 16px; }
+.markdown-preview :deep(pre code) { background: transparent; color: inherit; padding: 0; }
+.markdown-preview :deep(blockquote) { border-left: 4px solid var(--color-primary-200); border-radius: 0 var(--radius-md) var(--radius-md) 0; background: var(--color-primary-50); color: var(--color-text-secondary); padding: 10px 14px; }
+.markdown-preview :deep(table) { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: var(--radius-md); }
+.markdown-preview :deep(th),
+.markdown-preview :deep(td) { border: 1px solid var(--color-border-default); padding: 9px 11px; text-align: left; }
+.markdown-preview :deep(th) { background: var(--color-bg-muted); color: var(--color-text-primary); }
+.markdown-preview :deep(hr) { height: 1px; border: 0; background: var(--color-border-default); margin: 22px 0; }
+.markdown-preview :deep(.katex-display) { overflow-x: auto; overflow-y: hidden; padding: 8px 0; }
 .lesson-preview-modal { width: min(1040px, 92vw); height: min(760px, 90vh); display: grid; grid-template-rows: auto minmax(0, 1fr); }
 .lesson-preview-layout { min-height: 0; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; }
 .lesson-preview-layout aside { min-height: 0; overflow: auto; display: grid; align-content: start; gap: 8px; border-right: 1px solid var(--color-border-default); padding-right: 12px; }
@@ -1382,6 +2058,22 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .upload-drop { position: relative; height: 160px; flex-direction: column; color: var(--color-text-muted); margin-bottom: 14px; }
 .upload-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .upload-row { display: grid; grid-template-columns: auto 1fr 80px 140px 120px auto; align-items: center; gap: 8px; border-bottom: 1px solid var(--color-border-subtle); padding: 8px 0; }
+.quiz-editor-modal { width: min(1180px, 94vw); height: min(820px, 92vh); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
+.quiz-editor-layout { min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; }
+.quiz-editor-side { display: grid; align-content: start; gap: 14px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-muted); padding: 14px; }
+.quiz-editor-side label, .quiz-edit-card label { display: grid; gap: 6px; color: var(--color-text-secondary); font-weight: 600; font-size: var(--text-body-sm); }
+.quiz-editor-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border-radius: var(--radius-lg); background: white; padding: 12px; }
+.quiz-editor-stats span { color: var(--color-primary-700); font-size: 24px; font-weight: 800; line-height: 1; }
+.quiz-editor-stats small { color: var(--color-text-muted); }
+.quiz-editor-questions { min-height: 0; overflow: auto; display: grid; align-content: start; gap: 14px; padding-right: 4px; }
+.quiz-edit-card { display: grid; gap: 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 16px; }
+.quiz-edit-card header { display: grid; grid-template-columns: 34px 160px 86px auto; gap: 10px; align-items: center; }
+.quiz-edit-card header b { display: inline-grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; background: var(--color-primary-50); color: var(--color-primary-700); font-family: var(--font-family-mono); }
+.score-input { text-align: center; }
+.option-editor { display: grid; gap: 8px; }
+.option-edit-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 72px 34px; gap: 8px; align-items: center; }
+.option-edit-row > span { display: inline-grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--color-bg-muted); color: var(--color-text-secondary); font-weight: 800; }
+.answer-radio { display: inline-flex !important; grid-template-columns: none !important; align-items: center; gap: 6px !important; color: var(--color-text-secondary); white-space: nowrap; }
 .modal footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
 .drawer { position: fixed; top: 60px; right: 0; bottom: 0; z-index: var(--z-fixed); width: 520px; display: grid; grid-template-rows: auto auto 1fr; border-left: 1px solid var(--color-border-default); background: white; box-shadow: var(--shadow-xl); }
 .drawer-head { padding: 16px; border-bottom: 1px solid var(--color-border-default); }

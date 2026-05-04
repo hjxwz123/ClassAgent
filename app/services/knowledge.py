@@ -40,33 +40,49 @@ def search_course_knowledge(
     lesson_page_id: int | None = None,
     limit: int = 5,
 ) -> list[KnowledgeChunk]:
-    rows = vector_store.query_course(
-        db,
-        course_id=course_id,
-        query=query,
-        chapter_id=chapter_id,
-        lesson_page_id=lesson_page_id,
-        limit=limit,
-    )
+    try:
+        rows = vector_store.query_course(
+            db,
+            course_id=course_id,
+            query=query,
+            chapter_id=chapter_id,
+            lesson_page_id=lesson_page_id,
+            limit=limit,
+        )
+    except Exception:
+        rows = []
     if not rows:
         backfill_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
         if chapter_id is not None:
             backfill_statement = backfill_statement.where(KnowledgeChunk.chapter_id == chapter_id)
+        if lesson_page_id is not None:
+            backfill_statement = backfill_statement.where(KnowledgeChunk.lesson_page_id == lesson_page_id)
         chunks_to_index = list(db.scalars(backfill_statement))
         if chunks_to_index:
-            vector_store.upsert_chunks(db, chunks=chunks_to_index)
-            db.commit()
-            rows = vector_store.query_course(
-                db,
-                course_id=course_id,
-                query=query,
-                chapter_id=chapter_id,
-                lesson_page_id=lesson_page_id,
-                limit=limit,
-            )
+            try:
+                vector_store.upsert_chunks(db, chunks=chunks_to_index)
+                db.commit()
+                rows = vector_store.query_course(
+                    db,
+                    course_id=course_id,
+                    query=query,
+                    chapter_id=chapter_id,
+                    lesson_page_id=lesson_page_id,
+                    limit=limit,
+                )
+            except Exception:
+                db.rollback()
+                rows = []
     chunk_ids = [chunk_id for chunk_id, _ in rows]
     if not chunk_ids:
-        return []
+        return _relational_chunk_fallback(
+            db,
+            course_id=course_id,
+            query=query,
+            chapter_id=chapter_id,
+            lesson_page_id=lesson_page_id,
+            limit=limit,
+        )
     statement = select(KnowledgeChunk).where(KnowledgeChunk.id.in_(chunk_ids), KnowledgeChunk.course_id == course_id)
     if chapter_id is not None:
         statement = statement.where(KnowledgeChunk.chapter_id == chapter_id)
@@ -74,6 +90,34 @@ def search_course_knowledge(
         statement = statement.where(KnowledgeChunk.lesson_page_id == lesson_page_id)
     chunks = {chunk.id: chunk for chunk in db.scalars(statement)}
     return [chunks[chunk_id] for chunk_id in chunk_ids if chunk_id in chunks][:limit]
+
+
+def _relational_chunk_fallback(
+    db: Session,
+    *,
+    course_id: int,
+    query: str,
+    chapter_id: int | None,
+    lesson_page_id: int | None,
+    limit: int,
+) -> list[KnowledgeChunk]:
+    statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
+    if chapter_id is not None:
+        statement = statement.where(KnowledgeChunk.chapter_id == chapter_id)
+    if lesson_page_id is not None:
+        statement = statement.where(KnowledgeChunk.lesson_page_id == lesson_page_id)
+    chunks = list(db.scalars(statement.order_by(KnowledgeChunk.chapter_id.is_(None), KnowledgeChunk.chapter_id, KnowledgeChunk.id).limit(80)))
+    if not chunks:
+        return []
+    keywords = [item.lower() for item in ai_service.extract_keywords(query, limit=10)]
+
+    def score(chunk: KnowledgeChunk) -> tuple[int, int]:
+        text = f"{chunk.title} {chunk.content}".lower()
+        keyword_score = sum(1 for keyword in keywords if keyword and keyword in text)
+        token_score = sum(1 for token in chunk.tokens or [] if str(token).lower() in keywords)
+        return keyword_score + token_score, -int(chunk.id)
+
+    return sorted(chunks, key=score, reverse=True)[:limit]
 
 
 def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None = None) -> list[KnowledgePoint]:

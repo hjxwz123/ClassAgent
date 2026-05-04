@@ -21,8 +21,13 @@ from app.db.models import (
     User,
     WrongQuestion,
 )
-from app.services.ai import ai_service
 from app.services.courses import _assert_course_owner, _get_course_or_404
+
+
+def _aware_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 def _assert_teacher_access(db: Session, *, course_id: int, user: User) -> None:
@@ -134,17 +139,54 @@ def get_course_analytics(db: Session, *, course_id: int, user: User, days: int =
         ) or 0
     completion_rate = round(completed_count / total_required * 100, 2) if student_ids and published_lessons else 0.0
 
-    suggestion = ai_service.generate_teaching_suggestion(
-        high_frequency_questions=len(high_frequency_questions),
-        weak_points=[item["knowledge_point"] for item in weak_points],
-        inactive_students=len(inactive_students),
-        db=db,
+    progress_rows = list(
+        db.scalars(
+            select(LearningProgress)
+            .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+            .where(Lesson.course_id == course_id)
+        )
     )
+    total_study_seconds = int(sum(item.total_study_seconds or 0 for item in progress_rows))
+    period_progress_rows = [item for item in progress_rows if _aware_utc(item.updated_at) and _aware_utc(item.updated_at) >= since]
+    period_study_seconds = int(sum(item.total_study_seconds or 0 for item in period_progress_rows))
+    day_count = min(max(days, 1), 30)
+    day_start = (datetime.now(UTC) - timedelta(days=day_count - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    daily_seconds: dict[str, int] = {}
+    for index in range(day_count):
+        day = day_start + timedelta(days=index)
+        daily_seconds[day.date().isoformat()] = 0
+    for progress in period_progress_rows:
+        updated_at = _aware_utc(progress.updated_at)
+        if updated_at is None:
+            continue
+        key = updated_at.date().isoformat()
+        if key in daily_seconds:
+            daily_seconds[key] += int(progress.total_study_seconds or 0)
+    study_time_series = [
+        {
+            "date": key,
+            "label": datetime.fromisoformat(key).strftime("%m/%d"),
+            "minutes": round(seconds / 60, 2),
+            "seconds": seconds,
+        }
+        for key, seconds in daily_seconds.items()
+    ]
+    if weak_points:
+        suggestion = f"优先处理“{weak_points[0]['knowledge_point']}”等薄弱点，并发布一组专项练习。"
+    elif inactive_students:
+        suggestion = f"有 {len(inactive_students)} 名学生近期未活跃，建议发送学习提醒并安排低门槛复习任务。"
+    elif high_frequency_questions:
+        suggestion = "高频问题较集中，建议补充一段课堂讲解或整理答疑材料。"
+    else:
+        suggestion = "当前课程数据平稳，可继续保持课时发布与练习反馈节奏。"
     return {
         "high_frequency_questions": high_frequency_questions,
         "weak_points": weak_points,
         "inactive_students": inactive_students,
         "score_distribution": score_distribution,
         "completion_rate": completion_rate,
+        "study_seconds": total_study_seconds,
+        "period_study_seconds": period_study_seconds,
+        "study_time_series": study_time_series,
         "suggestion": suggestion,
     }

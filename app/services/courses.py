@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from random import choices
 from string import ascii_uppercase, digits
 
+from fastapi import UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -10,6 +11,7 @@ from app.core.errors import bad_request, forbidden, not_found
 from app.db.models import Chapter, Course, CourseMembership, User
 from app.schemas.course import ChapterCreateRequest, CourseCreateRequest, CourseUpdateRequest
 from app.services.audit import log_operation
+from app.services.storage import storage_service
 
 
 COURSE_CODE_CHARS = ascii_uppercase + digits
@@ -56,6 +58,7 @@ def create_course(db: Session, user: User, payload: CourseCreateRequest) -> Cour
         course_code=_generate_course_code(db),
         teacher_id=user.id,
         status=CourseStatus.ACTIVE.value,
+        cover_color=payload.cover_color,
     )
     db.add(course)
     db.commit()
@@ -83,6 +86,10 @@ def update_course(db: Session, user: User, course_id: int, payload: CourseUpdate
         course.term = payload.term
     if payload.status is not None:
         course.status = payload.status
+    if payload.cover_url is not None:
+        course.cover_url = payload.cover_url or None
+    if payload.cover_color is not None:
+        course.cover_color = payload.cover_color or None
     db.add(course)
     log_operation(
         db,
@@ -90,6 +97,31 @@ def update_course(db: Session, user: User, course_id: int, payload: CourseUpdate
         action="course.update",
         target_type="course",
         target_id=course.id,
+    )
+    db.commit()
+    db.refresh(course)
+    return course
+
+
+def upload_course_cover(db: Session, user: User, course_id: int, upload: UploadFile) -> Course:
+    course = _get_course_or_404(db, course_id)
+    _assert_course_owner(course, user)
+    suffix = (upload.filename or "").rsplit(".", 1)[-1].lower() if "." in (upload.filename or "") else ""
+    content_type = (upload.content_type or "").lower()
+    if not content_type.startswith("image/") and suffix not in {"jpg", "jpeg", "png", "webp", "gif"}:
+        raise bad_request("课程封面仅支持图片文件")
+    storage_path, size_bytes = storage_service.save_upload(upload, folder=f"course_covers/course_{course_id}", db=db)
+    if size_bytes > 8 * 1024 * 1024:
+        raise bad_request("课程封面不能超过 8MB")
+    course.cover_url = storage_service.public_url(storage_path, db=db)
+    db.add(course)
+    log_operation(
+        db,
+        user_id=user.id,
+        action="course.cover.upload",
+        target_type="course",
+        target_id=course.id,
+        detail={"filename": upload.filename, "size_bytes": size_bytes},
     )
     db.commit()
     db.refresh(course)

@@ -15,7 +15,7 @@ for path in (STORAGE_DIR, RUNTIME_DIR, BACKUP_DIR, UPLOAD_DIR, GENERATED_DIR, VE
 
 def _build_engine(database_url: str) -> Engine:
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    return create_engine(database_url, connect_args=connect_args, future=True)
+    return create_engine(database_url, connect_args=connect_args, future=True, pool_pre_ping=True, pool_recycle=3600)
 
 
 settings = get_settings()
@@ -41,14 +41,30 @@ def init_db() -> None:
 
 def _ensure_schema_updates(target_engine: Engine) -> None:
     inspector = inspect(target_engine)
-    if "qa_records" not in inspector.get_table_names():
-        return
-    columns = {column["name"] for column in inspector.get_columns("qa_records")}
+    table_names = inspector.get_table_names()
     statements: list[str] = []
-    if "thinking_process" not in columns:
-        statements.append("ALTER TABLE qa_records ADD COLUMN thinking_process TEXT")
-    if "attachments" not in columns:
-        statements.append("ALTER TABLE qa_records ADD COLUMN attachments JSON")
+    if "qa_records" in table_names:
+        columns = {column["name"] for column in inspector.get_columns("qa_records")}
+        if "thinking_process" not in columns:
+            statements.append("ALTER TABLE qa_records ADD COLUMN thinking_process TEXT")
+        if "attachments" not in columns:
+            statements.append("ALTER TABLE qa_records ADD COLUMN attachments JSON")
+    if "courses" in table_names:
+        course_columns = {column["name"] for column in inspector.get_columns("courses")}
+        if "cover_url" not in course_columns:
+            statements.append("ALTER TABLE courses ADD COLUMN cover_url VARCHAR(500)")
+        if "cover_color" not in course_columns:
+            statements.append("ALTER TABLE courses ADD COLUMN cover_color VARCHAR(32)")
+    if "wrong_questions" in table_names:
+        wrong_columns = {column["name"] for column in inspector.get_columns("wrong_questions")}
+        if "is_resolved" not in wrong_columns:
+            statements.append("ALTER TABLE wrong_questions ADD COLUMN is_resolved BOOLEAN NOT NULL DEFAULT 0")
+        if "resolved_at" not in wrong_columns:
+            statements.append("ALTER TABLE wrong_questions ADD COLUMN resolved_at DATETIME")
+        if "last_wrong_at" not in wrong_columns:
+            statements.append("ALTER TABLE wrong_questions ADD COLUMN last_wrong_at DATETIME")
+        if "last_correct_at" not in wrong_columns:
+            statements.append("ALTER TABLE wrong_questions ADD COLUMN last_correct_at DATETIME")
     if not statements:
         return
     with target_engine.begin() as connection:

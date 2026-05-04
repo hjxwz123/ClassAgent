@@ -29,6 +29,8 @@ export type Course = {
   course_code: string;
   teacher_id: number;
   status: string;
+  cover_url?: string | null;
+  cover_color?: string | null;
   created_at: string;
   updated_at: string;
 };

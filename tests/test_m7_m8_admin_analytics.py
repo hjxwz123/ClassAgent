@@ -2,6 +2,32 @@ from io import BytesIO
 
 from pptx import Presentation
 
+from app.services.ai import ai_service
+
+
+def fake_quiz_questions(*, topic, source_text, count, db=None):
+    items = [
+        {
+            "question_type": "single_choice",
+            "stem": "特征值描述线性变换的固有缩放因子，下列说法正确的是？",
+            "options": ["特征值描述固有缩放因子", "特征值只表示课程编号", "特征值与线性变换无关", "特征值是图片文件名"],
+            "reference_answer": {"value": 0},
+            "explanation": "课程资料说明特征值描述线性变换的固有缩放因子。",
+            "score": 10,
+            "difficulty": "standard",
+        },
+        {
+            "question_type": "judge",
+            "stem": "判断：特征值与线性变换的固有缩放因子有关。",
+            "options": ["正确", "错误"],
+            "reference_answer": {"value": 0},
+            "explanation": "资料中明确提到特征值描述固有缩放因子。",
+            "score": 10,
+            "difficulty": "standard",
+        },
+    ]
+    return items[:count]
+
 
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
     payload = {
@@ -125,8 +151,38 @@ def prepare_activity_data(client):
         headers=teacher_headers,
     )
     quiz = quiz_resp.json()["data"]
+    teacher_detail = client.get(f"/api/v1/learning/quizzes/{quiz['id']}", headers=teacher_headers).json()["data"]
+    edit_resp = client.put(
+        f"/api/v1/learning/quizzes/{quiz['id']}",
+        json={
+            "title": "特征值薄弱点专项",
+            "description": "教师审核后发布",
+            "questions": [
+                {
+                    **teacher_detail["questions"][0],
+                    "stem": "特征值描述线性变换的哪类性质？",
+                    "reference_answer": {"value": 0},
+                },
+                {
+                    "question_type": "judge",
+                    "stem": "判断：特征值可以辅助理解线性变换。",
+                    "options": ["正确", "错误"],
+                    "reference_answer": {"value": 0},
+                    "explanation": "课程资料围绕特征值与线性变换展开。",
+                    "score": 10,
+                    "difficulty": "standard",
+                },
+            ],
+        },
+        headers=teacher_headers,
+    )
+    assert edit_resp.status_code == 200, edit_resp.text
+    edited = edit_resp.json()["data"]
+    assert edited["quiz"]["title"] == "特征值薄弱点专项"
+    assert len(edited["questions"]) == 2
     client.post(f"/api/v1/learning/quizzes/{quiz['id']}/publish", headers=teacher_headers)
     quiz_detail = client.get(f"/api/v1/learning/quizzes/{quiz['id']}", headers=student_headers).json()["data"]
+    assert quiz_detail["quiz"]["title"] == "特征值薄弱点专项"
     questions = quiz_detail["questions"]
     client.post(
         f"/api/v1/learning/quizzes/{quiz['id']}/submit",
@@ -136,7 +192,8 @@ def prepare_activity_data(client):
     return course, teacher_headers
 
 
-def test_teacher_analytics_and_admin_operations(client):
+def test_teacher_analytics_and_admin_operations(client, monkeypatch):
+    monkeypatch.setattr(ai_service, "generate_quiz_questions", fake_quiz_questions)
     course, teacher_headers = prepare_activity_data(client)
     admin_login = login_user(client, email="admin@classagent.com", password="Admin123456")
     admin_headers = auth_headers(admin_login["access_token"])
@@ -150,6 +207,13 @@ def test_teacher_analytics_and_admin_operations(client):
     analytics = analytics_resp.json()["data"]
     assert "high_frequency_questions" in analytics
     assert "suggestion" in analytics
+    assert analytics["period_study_seconds"] >= 180
+    assert sum(item["seconds"] for item in analytics["study_time_series"]) >= 180
+
+    teacher_analysis_resp = client.get(f"/api/v1/teacher/courses/{course['id']}/analysis", headers=teacher_headers)
+    assert teacher_analysis_resp.status_code == 200, teacher_analysis_resp.text
+    teacher_analysis = teacher_analysis_resp.json()["data"]
+    assert teacher_analysis["metrics"]["study_hours"] >= 0.05
 
     users_resp = client.get("/api/v1/admin/users", headers=admin_headers)
     assert users_resp.status_code == 200, users_resp.text
@@ -190,6 +254,13 @@ def test_teacher_analytics_and_admin_operations(client):
         headers=admin_headers,
     )
     assert reset_pwd_resp.status_code == 200, reset_pwd_resp.text
+    reset_teacher_pwd_resp = client.post(
+        f"/api/v1/admin/users/{target_teacher['id']}/reset-password",
+        json={"new_password": "Teacher999"},
+        headers=admin_headers,
+    )
+    assert reset_teacher_pwd_resp.status_code == 200, reset_teacher_pwd_resp.text
+    assert login_user(client, email="teacher4@example.com", password="Teacher999")["user"]["id"] == target_teacher["id"]
 
     courses_resp = client.get("/api/v1/admin/courses", headers=admin_headers)
     assert courses_resp.status_code == 200, courses_resp.text
