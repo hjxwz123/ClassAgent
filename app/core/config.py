@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     api_v1_prefix: str = "/api/v1"
     secret_key: str = Field(default="change-this-secret-key-in-production", min_length=16)
     access_token_expire_minutes: int = 60 * 24
-    database_url: str = f"sqlite:///{(STORAGE_DIR / 'app.db').as_posix()}"
+    database_url: str = "mysql+pymysql://class_agent:class_agent_2026@127.0.0.1:3306/class_agent?charset=utf8mb4"
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     public_base_url: str = "http://127.0.0.1:8000"
     vector_store_provider: Literal["chroma"] = "chroma"
     chroma_persist_dir: str = str(VECTOR_DIR / "chroma")
-    embedding_dimension: int = 384
+    embedding_dimension: int = 1536
     vector_query_limit: int = 5
     vector_max_distance: float = 0.85
     default_upload_limit_mb: int = 50

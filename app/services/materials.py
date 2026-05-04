@@ -35,6 +35,8 @@ ALLOWED_EXTENSIONS = {
     ".pdf": MaterialType.PDF.value,
     ".docx": MaterialType.DOCX.value,
     ".txt": MaterialType.TXT.value,
+    ".md": MaterialType.TXT.value,
+    ".markdown": MaterialType.TXT.value,
 }
 
 
@@ -80,7 +82,7 @@ def _detect_material_type(filename: str) -> str:
     suffix = Path(filename).suffix.lower()
     material_type = ALLOWED_EXTENSIONS.get(suffix)
     if material_type is None:
-        raise bad_request("仅支持 .pptx、.pdf、.docx、.txt")
+        raise bad_request("仅支持 .pptx、.pdf、.docx、.txt、.md、.markdown")
     return material_type
 
 

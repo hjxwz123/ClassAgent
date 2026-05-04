@@ -64,6 +64,25 @@ class QuizDetailResponse(BaseModel):
     questions: list[QuizQuestionPayload]
 
 
+class QuizQuestionEditPayload(BaseModel):
+    id: int | None = None
+    chapter_id: int | None = None
+    knowledge_point_id: int | None = None
+    question_type: str = Field(default="single_choice", max_length=32)
+    stem: str = Field(min_length=1, max_length=4000)
+    options: list | None = None
+    reference_answer: dict | list | str | bool | int | float | None = None
+    explanation: str | None = Field(default=None, max_length=4000)
+    score: float = Field(default=10, gt=0, le=100)
+    difficulty: str = Field(default="standard", max_length=32)
+
+
+class QuizEditRequest(BaseModel):
+    title: str = Field(min_length=2, max_length=255)
+    description: str | None = Field(default=None, max_length=4000)
+    questions: list[QuizQuestionEditPayload] = Field(min_length=1, max_length=50)
+
+
 class QuizSubmitRequest(BaseModel):
     answers: list[dict]
 
@@ -124,8 +143,14 @@ class WrongQuestionResponse(BaseModel):
     wrong_question_id: int
     question: QuizQuestionPayload
     wrong_count: int
+    history_count: int | None = None
+    is_resolved: bool = False
     knowledge_point_id: int | None = None
     knowledge_point_name: str | None = None
+    last_attempt_id: int | None = None
+    resolved_at: datetime | None = None
+    last_wrong_at: datetime | None = None
+    last_correct_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

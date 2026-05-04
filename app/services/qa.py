@@ -8,10 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import QAFeedback, UserRole
 from app.core.errors import bad_request, forbidden, not_found
-from app.db.models import CourseMembership, QAConversation, QARecord, User
+from app.db.models import Chapter, Course, CourseMaterial, CourseMembership, KnowledgeChunk, Lesson, LessonPage, QAConversation, QARecord, User
 from app.schemas.qa import QAAskRequest
 from app.services.ai import ai_service
 from app.services.knowledge import search_course_knowledge
+from app.services.parser import _extract_text_payload
 from app.services.ocr import ocr_service
 from app.services.storage import storage_service
 from app.services.usage import log_ai_usage
@@ -33,6 +34,24 @@ def _assert_student_course_access(db: Session, *, course_id: int, user: User) ->
     )
     if membership is None:
         raise forbidden("仅可在已加入课程内提问")
+
+
+def _get_or_create_course_conversation(db: Session, *, user: User, payload: QAAskRequest) -> QAConversation:
+    conversation = None
+    if payload.conversation_id:
+        conversation = db.scalar(
+            select(QAConversation).where(
+                QAConversation.id == payload.conversation_id,
+                QAConversation.user_id == user.id,
+                QAConversation.course_id == payload.course_id,
+            )
+        )
+    if conversation is None:
+        conversation = QAConversation(course_id=payload.course_id, user_id=user.id, title=payload.question[:30])
+        db.add(conversation)
+        db.commit()
+        db.refresh(conversation)
+    return conversation
 
 
 def _find_tag(buffer: str, tags: tuple[str, ...]) -> tuple[int, str] | None:
@@ -129,6 +148,253 @@ def _question_with_attachments(question: str, attachments: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
+def _lesson_page_context(db: Session, *, course_id: int, lesson_page_id: int | None) -> tuple[list[str], list[dict]]:
+    if lesson_page_id is None:
+        return [], []
+    row = db.execute(
+        select(LessonPage, Lesson)
+        .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .where(LessonPage.id == lesson_page_id, Lesson.course_id == course_id)
+    ).first()
+    if row is None:
+        return [], []
+    page, lesson = row
+    page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
+    script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
+    parts = [
+        f"当前课时：{lesson.title}",
+        f"当前页：第{page.page_number}页 {page.page_title or ''}".strip(),
+    ]
+    if page_text:
+        parts.append(f"页面内容：\n{page_text}")
+    if script_text and script_text != page_text:
+        parts.append(f"讲解文稿：\n{script_text}")
+    source = {
+        "title": f"{lesson.title} · 第{page.page_number}页",
+        "lesson_id": lesson.id,
+        "lesson_page_id": page.id,
+        "page_number": page.page_number,
+    }
+    return ["\n\n".join(parts)], [source]
+
+
+def _trim_context(value: str, limit: int = 1200) -> str:
+    clean = str(value or "").strip()
+    return clean[:limit]
+
+
+def _chapter_context(db: Session, *, course_id: int, chapter_id: int | None, limit: int = 8) -> tuple[list[str], list[dict]]:
+    if chapter_id is None:
+        return [], []
+    chapter = db.get(Chapter, chapter_id)
+    if chapter is None or chapter.course_id != course_id:
+        return [], []
+    contexts: list[str] = []
+    sources: list[dict] = []
+    heading = f"章节：{chapter.title}"
+    if chapter.description:
+        contexts.append(f"{heading}\n章节说明：{chapter.description}")
+        sources.append({"chapter_id": chapter.id, "chapter_title": chapter.title, "type": "chapter"})
+
+    chunks = list(
+        db.scalars(
+            select(KnowledgeChunk)
+            .where(KnowledgeChunk.course_id == course_id, KnowledgeChunk.chapter_id == chapter_id)
+            .order_by(KnowledgeChunk.id)
+            .limit(limit)
+        )
+    )
+    for chunk in chunks:
+        content = _trim_context(chunk.content)
+        if not content:
+            continue
+        contexts.append(f"{heading}\n资料片段：{chunk.title}\n{content}")
+        source = dict(chunk.source_meta or {})
+        source.update({"chapter_id": chapter.id, "chapter_title": chapter.title, "chunk_id": chunk.id, "title": chunk.title})
+        sources.append(source)
+    if contexts:
+        return contexts, sources
+
+    page_rows = db.execute(
+        select(LessonPage, Lesson)
+        .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .where(Lesson.course_id == course_id, Lesson.chapter_id == chapter_id)
+        .order_by(Lesson.id, LessonPage.page_number)
+        .limit(limit)
+    )
+    for page, lesson in page_rows:
+        page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
+        script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
+        pieces = [f"{heading}", f"课时：{lesson.title}", f"页面：第{page.page_number}页 {page.page_title or ''}".strip()]
+        if page_text:
+            pieces.append(f"页面内容：{_trim_context(page_text)}")
+        if script_text and script_text != page_text:
+            pieces.append(f"讲解文稿：{_trim_context(script_text)}")
+        if len(pieces) <= 3:
+            continue
+        contexts.append("\n".join(pieces))
+        sources.append(
+            {
+                "chapter_id": chapter.id,
+                "chapter_title": chapter.title,
+                "lesson_id": lesson.id,
+                "lesson_page_id": page.id,
+                "page_number": page.page_number,
+                "title": f"{lesson.title} · 第{page.page_number}页",
+            }
+        )
+    if contexts:
+        return contexts, sources
+
+    materials = list(
+        db.scalars(
+            select(CourseMaterial)
+            .where(CourseMaterial.course_id == course_id, CourseMaterial.chapter_id == chapter_id, CourseMaterial.deleted_at.is_(None))
+            .order_by(CourseMaterial.id)
+            .limit(4)
+        )
+    )
+    for material in materials:
+        text = _extract_text_payload(material.extracted_text) or str(material.extracted_text or "").strip()
+        if not text:
+            continue
+        contexts.append(f"{heading}\n资料：{material.title}\n{_trim_context(text, limit=1800)}")
+        sources.append({"chapter_id": chapter.id, "chapter_title": chapter.title, "material_id": material.id, "material_title": material.title})
+    return contexts, sources
+
+
+def _course_context(db: Session, *, course_id: int, limit: int = 12) -> tuple[list[str], list[dict]]:
+    course = db.get(Course, course_id)
+    if course is None:
+        return [], []
+    contexts: list[str] = []
+    sources: list[dict] = []
+    course_heading = f"课程：{course.name}"
+    if course.description:
+        contexts.append(f"{course_heading}\n课程说明：{course.description}")
+        sources.append({"course_id": course.id, "course_name": course.name, "type": "course"})
+
+    chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
+    if chapters:
+        chapter_lines = [f"{item.order_index}. {item.title}" + (f"：{item.description}" if item.description else "") for item in chapters]
+        contexts.append(f"{course_heading}\n章节结构：\n" + "\n".join(chapter_lines[:12]))
+        sources.append({"course_id": course.id, "course_name": course.name, "type": "chapters"})
+
+    chunks = list(
+        db.scalars(
+            select(KnowledgeChunk)
+            .where(KnowledgeChunk.course_id == course_id)
+            .order_by(KnowledgeChunk.chapter_id.is_(None), KnowledgeChunk.chapter_id, KnowledgeChunk.id)
+            .limit(limit)
+        )
+    )
+    for chunk in chunks:
+        content = _trim_context(chunk.content, limit=1000)
+        if not content:
+            continue
+        title = chunk.title or "资料片段"
+        contexts.append(f"{course_heading}\n资料片段：{title}\n{content}")
+        source = dict(chunk.source_meta or {})
+        source.update({"course_id": course.id, "course_name": course.name, "chunk_id": chunk.id, "title": title})
+        sources.append(source)
+    if len(contexts) > (2 if chapters else 1):
+        return contexts, sources
+
+    page_rows = db.execute(
+        select(LessonPage, Lesson)
+        .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .where(Lesson.course_id == course_id)
+        .order_by(Lesson.chapter_id.is_(None), Lesson.chapter_id, Lesson.id, LessonPage.page_number)
+        .limit(limit)
+    )
+    for page, lesson in page_rows:
+        page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
+        script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
+        pieces = [course_heading, f"课时：{lesson.title}", f"页面：第{page.page_number}页 {page.page_title or ''}".strip()]
+        if page_text:
+            pieces.append(f"页面内容：{_trim_context(page_text, limit=1000)}")
+        if script_text and script_text != page_text:
+            pieces.append(f"讲解文稿：{_trim_context(script_text, limit=1000)}")
+        if len(pieces) <= 3:
+            continue
+        contexts.append("\n".join(pieces))
+        sources.append(
+            {
+                "course_id": course.id,
+                "course_name": course.name,
+                "lesson_id": lesson.id,
+                "lesson_page_id": page.id,
+                "page_number": page.page_number,
+                "title": f"{lesson.title} · 第{page.page_number}页",
+            }
+        )
+    if len(contexts) > (2 if chapters else 1):
+        return contexts, sources
+
+    materials = list(
+        db.scalars(
+            select(CourseMaterial)
+            .where(CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None))
+            .order_by(CourseMaterial.chapter_id.is_(None), CourseMaterial.chapter_id, CourseMaterial.id)
+            .limit(6)
+        )
+    )
+    for material in materials:
+        text = _extract_text_payload(material.extracted_text) or str(material.extracted_text or "").strip()
+        if not text:
+            continue
+        contexts.append(f"{course_heading}\n资料：{material.title}\n{_trim_context(text, limit=1600)}")
+        sources.append({"course_id": course.id, "course_name": course.name, "material_id": material.id, "material_title": material.title})
+    return contexts, sources
+
+
+def _merge_contexts(primary: list[str], chunks: list) -> list[str]:
+    seen: set[str] = set()
+    contexts: list[str] = []
+    for text in [*primary, *(chunk.content for chunk in chunks)]:
+        clean = " ".join(str(text or "").split())
+        if not clean or clean in seen:
+            continue
+        seen.add(clean)
+        contexts.append(str(text))
+    return contexts
+
+
+def _qa_contexts_and_sources(db: Session, *, course_id: int, payload: QAAskRequest, question_for_ai: str) -> tuple[list[str], list[dict], list]:
+    course = db.get(Course, course_id)
+    chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
+    chapter_rows = [{"id": chapter.id, "title": chapter.title, "order_index": chapter.order_index} for chapter in chapters]
+    classification = ai_service.classify_qa_question_scope(
+        question=payload.question,
+        course_name=course.name if course else "",
+        chapters=chapter_rows,
+        db=db,
+    )
+    scope = classification.get("scope")
+    classified_chapter_id = classification.get("chapter_id")
+    retrieval_chapter_id = payload.chapter_id if payload.chapter_id is not None else classified_chapter_id
+    chunks = search_course_knowledge(
+        db,
+        course_id=course_id,
+        query=question_for_ai,
+        chapter_id=retrieval_chapter_id,
+        lesson_page_id=payload.lesson_page_id,
+        limit=4,
+    )
+    page_contexts, page_sources = _lesson_page_context(db, course_id=course_id, lesson_page_id=payload.lesson_page_id)
+    chapter_contexts: list[str] = []
+    chapter_sources: list[dict] = []
+    course_contexts: list[str] = []
+    course_sources: list[dict] = []
+    if scope == "chapter_overview":
+        chapter_contexts, chapter_sources = _chapter_context(db, course_id=course_id, chapter_id=retrieval_chapter_id)
+    if scope == "course_overview" and not page_contexts and not chapter_contexts:
+        course_contexts, course_sources = _course_context(db, course_id=course_id)
+    contexts = _merge_contexts([*page_contexts, *chapter_contexts, *course_contexts], chunks)
+    sources = [*page_sources, *chapter_sources, *course_sources, *(chunk.source_meta or {} for chunk in chunks)]
+    return contexts, sources, chunks
+
+
 def upload_qa_image(db: Session, *, user: User, course_id: int, upload: UploadFile) -> dict:
     _assert_student_course_access(db, course_id=course_id, user=user)
     suffix = Path(upload.filename or "").suffix.lower()
@@ -152,16 +418,7 @@ def upload_qa_image(db: Session, *, user: User, course_id: int, upload: UploadFi
 
 def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
     _assert_student_course_access(db, course_id=payload.course_id, user=user)
-    conversation = None
-    if payload.conversation_id:
-        conversation = db.scalar(
-            select(QAConversation).where(QAConversation.id == payload.conversation_id, QAConversation.user_id == user.id)
-        )
-    if conversation is None:
-        conversation = QAConversation(course_id=payload.course_id, user_id=user.id, title=payload.question[:30])
-        db.add(conversation)
-        db.commit()
-        db.refresh(conversation)
+    conversation = _get_or_create_course_conversation(db, user=user, payload=payload)
     history = list(
         db.scalars(
             select(QARecord).where(QARecord.conversation_id == conversation.id).order_by(QARecord.created_at.asc())
@@ -169,21 +426,13 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
     )
     attachments = _attachment_dicts(payload)
     question_for_ai = _question_with_attachments(payload.question, attachments)
-    chunks = search_course_knowledge(
-        db,
-        course_id=payload.course_id,
-        query=question_for_ai,
-        chapter_id=payload.chapter_id,
-        lesson_page_id=payload.lesson_page_id,
-        limit=4,
-    )
+    contexts, sources, _chunks = _qa_contexts_and_sources(db, course_id=payload.course_id, payload=payload, question_for_ai=question_for_ai)
     answer, out_of_scope, thinking_process = ai_service.answer_question(
         question=question_for_ai,
-        contexts=[chunk.content for chunk in chunks],
+        contexts=contexts,
         history=[item.question for item in history[-3:]],
         db=db,
     )
-    sources = [chunk.source_meta or {} for chunk in chunks]
     record = QARecord(
         conversation_id=conversation.id,
         course_id=payload.course_id,
@@ -215,16 +464,7 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
 
 def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> Iterator[dict]:
     _assert_student_course_access(db, course_id=payload.course_id, user=user)
-    conversation = None
-    if payload.conversation_id:
-        conversation = db.scalar(
-            select(QAConversation).where(QAConversation.id == payload.conversation_id, QAConversation.user_id == user.id)
-        )
-    if conversation is None:
-        conversation = QAConversation(course_id=payload.course_id, user_id=user.id, title=payload.question[:30])
-        db.add(conversation)
-        db.commit()
-        db.refresh(conversation)
+    conversation = _get_or_create_course_conversation(db, user=user, payload=payload)
     history = list(
         db.scalars(
             select(QARecord).where(QARecord.conversation_id == conversation.id).order_by(QARecord.created_at.asc())
@@ -232,16 +472,8 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
     )
     attachments = _attachment_dicts(payload)
     question_for_ai = _question_with_attachments(payload.question, attachments)
-    chunks = search_course_knowledge(
-        db,
-        course_id=payload.course_id,
-        query=question_for_ai,
-        chapter_id=payload.chapter_id,
-        lesson_page_id=payload.lesson_page_id,
-        limit=4,
-    )
-    sources = [chunk.source_meta or {} for chunk in chunks]
-    out_of_scope = not chunks
+    contexts, sources, _chunks = _qa_contexts_and_sources(db, course_id=payload.course_id, payload=payload, question_for_ai=question_for_ai)
+    out_of_scope = not contexts
     answer_parts: list[str] = []
     thought_parts: list[str] = []
     tag_state: dict[str, object] = {"buffer": "", "in_think": False}
@@ -250,7 +482,7 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
     try:
         for delta in ai_service.stream_answer_question(
             question=question_for_ai,
-            contexts=[chunk.content for chunk in chunks],
+            contexts=contexts,
             history=[item.question for item in history[-3:]],
             db=db,
         ):
@@ -266,7 +498,7 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
         try:
             fallback_answer, fallback_out_of_scope, fallback_thinking = ai_service.answer_question(
                 question=question_for_ai,
-                contexts=[chunk.content for chunk in chunks],
+                contexts=contexts,
                 history=[item.question for item in history[-3:]],
                 db=db,
             )
@@ -331,6 +563,15 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
 
 
 def list_history(db: Session, *, user: User, course_id: int | None = None, keyword: str | None = None) -> list[QARecord]:
+    if user.role == UserRole.STUDENT.value:
+        if course_id is None:
+            course_ids = list(
+                db.scalars(select(CourseMembership.course_id).where(CourseMembership.user_id == user.id).limit(2))
+            )
+            if len(course_ids) != 1:
+                return []
+            course_id = course_ids[0]
+        _assert_student_course_access(db, course_id=course_id, user=user)
     statement = select(QARecord).where(QARecord.user_id == user.id)
     if course_id is not None:
         statement = statement.where(QARecord.course_id == course_id)
@@ -344,6 +585,8 @@ def update_favorite(db: Session, *, record_id: int, user: User, is_favorite: boo
     record = db.scalar(select(QARecord).where(QARecord.id == record_id, QARecord.user_id == user.id))
     if record is None:
         raise not_found("问答记录不存在")
+    if user.role == UserRole.STUDENT.value:
+        _assert_student_course_access(db, course_id=record.course_id, user=user)
     record.is_favorite = is_favorite
     db.add(record)
     db.commit()
@@ -357,6 +600,8 @@ def update_feedback(db: Session, *, record_id: int, user: User, feedback: str, f
     record = db.scalar(select(QARecord).where(QARecord.id == record_id, QARecord.user_id == user.id))
     if record is None:
         raise not_found("问答记录不存在")
+    if user.role == UserRole.STUDENT.value:
+        _assert_student_course_access(db, course_id=record.course_id, user=user)
     record.feedback = feedback
     record.feedback_comment = feedback_comment
     db.add(record)

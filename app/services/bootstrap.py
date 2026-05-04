@@ -11,7 +11,7 @@ def default_system_settings() -> dict[str, tuple[object, str, str]]:
     settings = get_settings()
     return {
         "upload.max_size_mb": (settings.default_upload_limit_mb, "单文件上传上限，单位 MB", "upload"),
-        "upload.allowed_types": (["ppt", "pptx", "pdf", "doc", "docx", "txt"], "允许上传的资料格式", "upload"),
+        "upload.allowed_types": (["ppt", "pptx", "pdf", "doc", "docx", "txt", "md", "markdown"], "允许上传的资料格式", "upload"),
         "upload.max_files_once": (5, "单次最多上传文件数量", "upload"),
         "course.material.max_count": (settings.max_course_materials, "单课程资料数量上限", "upload"),
         "qa.context.turn_limit": (settings.qa_context_turn_limit, "问答多轮上下文轮数", "ai"),

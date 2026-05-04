@@ -1,6 +1,9 @@
+from sqlalchemy import select
+
 from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus, QuizStatus, QuizType, QuestionType
 from app.db import session as db_session
-from app.db.models import CourseMaterial, Lesson, LessonPage, Quiz, QuizQuestion
+from app.db.models import CourseMaterial, Lesson, LessonPage, ProblemRecord, QAConversation, QARecord, Quiz, QuizQuestion, StudyPlan, User
+from app.services.learning import extract_reference_answer_value
 
 
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
@@ -267,6 +270,64 @@ def test_student_console_endpoints_and_multiple_courses(client):
     alias_result = alias_submit_response.json()["data"]
     assert alias_result["score"] == 5
     assert alias_result["answers"][0]["correct_answer"] == "可靠传输"
+    assert extract_reference_answer_value({"key": "A"}) == "A"
+    assert extract_reference_answer_value({"text": "格式奖励是二值设计"}) == "格式奖励是二值设计"
+
+    wrong_first_response = client.get("/api/v1/learning/wrong-questions", params={"course_id": first_course["id"]}, headers=student_headers)
+    assert wrong_first_response.status_code == 200, wrong_first_response.text
+    assert wrong_first_response.json()["data"]
+    assert {item["question"]["course_id"] for item in wrong_first_response.json()["data"]} == {first_course["id"]}
+    wrong_second_response = client.get("/api/v1/learning/wrong-questions", params={"course_id": second_course["id"]}, headers=student_headers)
+    assert wrong_second_response.status_code == 200, wrong_second_response.text
+    assert wrong_second_response.json()["data"] == []
+
+    with db_session.SessionLocal() as db:
+        student_id = db.scalar(select(User.id).where(User.email == "student-console-user@example.com"))
+        first_conversation = QAConversation(course_id=first_course["id"], user_id=student_id, title="TCP问答")
+        second_conversation = QAConversation(course_id=second_course["id"], user_id=student_id, title="进程问答")
+        db.add_all([first_conversation, second_conversation])
+        db.flush()
+        db.add_all(
+            [
+                QARecord(conversation_id=first_conversation.id, course_id=first_course["id"], user_id=student_id, question="TCP是什么", answer="可靠传输协议"),
+                QARecord(conversation_id=second_conversation.id, course_id=second_course["id"], user_id=student_id, question="进程是什么", answer="资源分配单位"),
+                ProblemRecord(course_id=first_course["id"], user_id=student_id, source_type="text", raw_text="TCP题目", corrected_text="TCP题目"),
+                ProblemRecord(course_id=second_course["id"], user_id=student_id, source_type="text", raw_text="进程题目", corrected_text="进程题目"),
+                StudyPlan(user_id=student_id, course_id=first_course["id"], title="TCP计划", goal="复习TCP", summary="TCP"),
+                StudyPlan(user_id=student_id, course_id=second_course["id"], title="OS计划", goal="复习进程", summary="OS"),
+            ]
+        )
+        db.commit()
+
+    qa_first_response = client.get("/api/v1/qa/history", params={"course_id": first_course["id"]}, headers=student_headers)
+    assert qa_first_response.status_code == 200, qa_first_response.text
+    assert {item["course_id"] for item in qa_first_response.json()["data"]} == {first_course["id"]}
+    qa_second_response = client.get("/api/v1/qa/history", params={"course_id": second_course["id"]}, headers=student_headers)
+    assert qa_second_response.status_code == 200, qa_second_response.text
+    assert {item["course_id"] for item in qa_second_response.json()["data"]} == {second_course["id"]}
+    qa_mixed_response = client.get("/api/v1/qa/history", headers=student_headers)
+    assert qa_mixed_response.status_code == 200, qa_mixed_response.text
+    assert qa_mixed_response.json()["data"] == []
+
+    tutoring_first_response = client.get("/api/v1/tutoring/history", params={"course_id": first_course["id"]}, headers=student_headers)
+    assert tutoring_first_response.status_code == 200, tutoring_first_response.text
+    assert {item["course_id"] for item in tutoring_first_response.json()["data"]} == {first_course["id"]}
+    tutoring_second_response = client.get("/api/v1/tutoring/history", params={"course_id": second_course["id"]}, headers=student_headers)
+    assert tutoring_second_response.status_code == 200, tutoring_second_response.text
+    assert {item["course_id"] for item in tutoring_second_response.json()["data"]} == {second_course["id"]}
+    tutoring_mixed_response = client.get("/api/v1/tutoring/history", headers=student_headers)
+    assert tutoring_mixed_response.status_code == 200, tutoring_mixed_response.text
+    assert tutoring_mixed_response.json()["data"] == []
+
+    plans_first_response = client.get("/api/v1/learning/plans", params={"course_id": first_course["id"]}, headers=student_headers)
+    assert plans_first_response.status_code == 200, plans_first_response.text
+    assert {item["course_id"] for item in plans_first_response.json()["data"]} == {first_course["id"]}
+    plans_second_response = client.get("/api/v1/learning/plans", params={"course_id": second_course["id"]}, headers=student_headers)
+    assert plans_second_response.status_code == 200, plans_second_response.text
+    assert {item["course_id"] for item in plans_second_response.json()["data"]} == {second_course["id"]}
+    plans_mixed_response = client.get("/api/v1/learning/plans", headers=student_headers)
+    assert plans_mixed_response.status_code == 200, plans_mixed_response.text
+    assert plans_mixed_response.json()["data"] == []
 
     profile_response = client.patch(
         "/api/v1/student/profile",

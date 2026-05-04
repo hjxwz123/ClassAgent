@@ -38,7 +38,7 @@ cp .env.example .env
 ```env
 APP_ENV=development
 SECRET_KEY=change-this-secret-key-in-production
-DATABASE_URL=sqlite:///./storage/app.db
+DATABASE_URL=mysql+pymysql://class_agent:class_agent_2026@127.0.0.1:3306/class_agent?charset=utf8mb4
 REDIS_URL=redis://localhost:6379/0
 CELERY_BROKER_URL=redis://localhost:6379/1
 CELERY_RESULT_BACKEND=redis://localhost:6379/2
@@ -47,6 +47,8 @@ EXTERNAL_AI_MODE=auto
 EXTERNAL_STORAGE_MODE=auto
 EXTERNAL_SERVICE_TIMEOUT_SECONDS=30
 PUBLIC_BASE_URL=http://127.0.0.1:8000
+CHROMA_PERSIST_DIR=storage/vectors/chroma
+EMBEDDING_DIMENSION=1536
 ADMIN_DEFAULT_EMAIL=admin@classagent.com
 ADMIN_DEFAULT_PASSWORD=Admin123456
 ADMIN_DEFAULT_NAME=系统管理员

@@ -124,7 +124,7 @@
             <button class="btn btn-ghost" @click="exportCurrent"><Download :size="16" />导出</button>
           </article>
           <article class="table-card">
-            <div v-if="selectedUsers.length" class="bulk-bar"><AppCheckbox :model-value="true" :label="`已选 ${selectedUsers.length} 人`" @update:model-value="selectedUsers = []" /><button @click="batchDisableUsers">禁用</button><button @click="batchResetUsers">重置密码</button><button @click="batchDeleteUsers">删除</button><button @click="selectedUsers = []">取消</button></div>
+            <div v-if="selectedUsers.length" class="bulk-bar"><AppCheckbox :model-value="true" :label="`已选 ${selectedUsers.length} 人`" @update:model-value="selectedUsers = []" /><button @click="batchDisableUsers">禁用</button><button @click="openBatchResetPasswordModal">重置密码</button><button @click="batchDeleteUsers">删除</button><button @click="selectedUsers = []">取消</button></div>
             <table class="admin-table">
               <thead><tr><th class="check-col"><AppCheckbox :model-value="selectedUsers.length === users.length && users.length > 0" @update:model-value="toggleAllUsers" /></th><th>用户</th><th>角色</th><th>状态</th><th>所属课程</th><th>注册时间</th><th>最近登录</th><th>操作</th></tr></thead>
               <tbody>
@@ -144,7 +144,7 @@
                   </td>
                   <td>{{ shortDate(item.created_at) }}</td>
                   <td :class="{ stale: isStale(item.last_login_at) }">{{ relativeTime(item.last_login_at) }}</td>
-                  <td class="row-actions"><button class="text-action" @click="openUserDetail(item.id)"><Eye :size="14" />详情</button><button class="text-action" :data-loading="isPending(`reset:${item.id}`)" :disabled="isPending(`reset:${item.id}`)" @click="resetUser(item.id)"><KeyRound :size="14" />重置密码</button><button class="text-action danger" :data-loading="isPending(`delete:${item.id}`)" :disabled="isPending(`delete:${item.id}`)" @click="deleteUser(item.id)"><Trash2 :size="14" />删除</button></td>
+                  <td class="row-actions"><button class="text-action" @click="openUserDetail(item.id)"><Eye :size="14" />详情</button><button class="text-action" :data-loading="isPending(`reset:${item.id}`)" :disabled="isPending(`reset:${item.id}`)" @click="openResetPasswordModal(item)"><KeyRound :size="14" />修改密码</button><button class="text-action danger" :data-loading="isPending(`delete:${item.id}`)" :disabled="isPending(`delete:${item.id}`)" @click="deleteUser(item.id)"><Trash2 :size="14" />删除</button></td>
                 </tr>
                 <tr v-if="!users.length"><td colspan="8"><EmptyState text="暂无用户" /></td></tr>
               </tbody>
@@ -476,7 +476,7 @@
             <EmptyState v-if="!userDrawer.logs.length" text="暂无日志" />
           </section>
         </div>
-        <div class="drawer-foot"><button class="btn btn-danger" :data-loading="isPending(`delete:${userDrawer.user.id}`)" :disabled="isPending(`delete:${userDrawer.user.id}`)" @click="deleteUser(userDrawer.user.id)">删除</button><button class="btn btn-secondary" :data-loading="isPending(`reset:${userDrawer.user.id}`)" :disabled="isPending(`reset:${userDrawer.user.id}`)" @click="resetUser(userDrawer.user.id)">重置密码</button></div>
+        <div class="drawer-foot"><button class="btn btn-danger" :data-loading="isPending(`delete:${userDrawer.user.id}`)" :disabled="isPending(`delete:${userDrawer.user.id}`)" @click="deleteUser(userDrawer.user.id)">删除</button><button class="btn btn-secondary" :data-loading="isPending(`reset:${userDrawer.user.id}`)" :disabled="isPending(`reset:${userDrawer.user.id}`)" @click="openResetPasswordModal(userDrawer.user)">修改密码</button></div>
       </aside>
     </Transition>
 
@@ -495,6 +495,28 @@
           <p v-if="adminFormError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ adminFormError }}</p>
           <div class="form-grid"><label>用户名<input v-model="adminForm.nickname" class="input" :aria-invalid="adminFormError.includes('用户名')" /></label><label>邮箱<input v-model="adminForm.email" class="input" type="email" :aria-invalid="adminFormError.includes('邮箱')" /></label><label>角色<AppSelect v-model="adminForm.role" :options="adminRoleOptions" /></label><label v-if="adminForm.role === 'teacher'">工号<input v-model="adminForm.employee_no" class="input" :aria-invalid="adminFormError.includes('工号')" /></label><label v-if="adminForm.role === 'student'">学号<input v-model="adminForm.student_no" class="input" :aria-invalid="adminFormError.includes('学号')" /></label><label>初始密码<PasswordField v-model="adminForm.password" :aria-invalid="adminFormError.includes('密码')" /></label><label>确认密码<PasswordField v-model="adminForm.confirm" :aria-invalid="adminFormError.includes('密码') || adminFormError.includes('不一致')" /></label><label class="wide-field">备注<textarea v-model="adminForm.note" class="textarea"></textarea></label></div>
           <footer><button class="btn btn-secondary" @click="adminModalOpen = false">取消</button><button class="btn btn-primary" @click="createAdmin"><Plus :size="16" />创建</button></footer>
+        </article>
+      </div>
+    </Transition>
+
+    <Transition name="modal-pop">
+      <div v-if="resetPasswordModalOpen" class="modal-mask">
+        <article class="modal password-set-modal">
+          <div class="modal-head"><KeyRound :size="20" /><h2>{{ resetPasswordContext.mode === 'batch' ? '批量修改密码' : '修改用户密码' }}</h2><button class="icon-action" @click="closeResetPasswordModal"><X :size="16" />关闭</button></div>
+          <div class="password-target-card">
+            <span class="password-target-icon"><ShieldCheck :size="20" /></span>
+            <div><strong>{{ resetPasswordTargetTitle }}</strong><p>{{ resetPasswordTargetSubtitle }}</p></div>
+          </div>
+          <p v-if="resetPasswordForm.error" class="form-error input-error-shake"><AlertCircle :size="15" />{{ resetPasswordForm.error }}</p>
+          <div class="password-form-grid">
+            <label>新密码<PasswordField v-model="resetPasswordForm.password" placeholder="输入指定新密码，至少 8 位" :aria-invalid="resetPasswordForm.error.includes('密码')" /></label>
+            <label>确认密码<PasswordField v-model="resetPasswordForm.confirm" placeholder="再次输入新密码" :aria-invalid="resetPasswordForm.error.includes('密码') || resetPasswordForm.error.includes('不一致')" /></label>
+          </div>
+          <div class="password-tools-row">
+            <button class="btn btn-secondary" type="button" @click="fillGeneratedResetPassword"><RefreshCw :size="15" />生成随机密码</button>
+            <span>批量修改时，所选用户将使用同一个新密码。</span>
+          </div>
+          <footer><button class="btn btn-secondary" @click="closeResetPasswordModal">取消</button><button class="btn btn-primary" :data-loading="isPending('reset-password-modal')" :disabled="isPending('reset-password-modal')" @click="submitResetPassword"><KeyRound :size="16" />确认修改</button></footer>
         </article>
       </div>
     </Transition>
@@ -595,6 +617,9 @@ const logDetail = ref<any | null>(null);
 const adminModalOpen = ref(false);
 const adminFormError = ref("");
 const resetPasswordResult = ref("");
+const resetPasswordModalOpen = ref(false);
+const resetPasswordContext = reactive({ mode: "single" as "single" | "batch", ids: [] as number[], names: [] as string[], emails: [] as string[] });
+const resetPasswordForm = reactive({ password: "", confirm: "", error: "" });
 const selectedUsers = ref<number[]>([]);
 const selectedCourses = ref<number[]>([]);
 const selectedMaterials = ref<number[]>([]);
@@ -686,7 +711,7 @@ const settingCategories = [
 ];
 const settingRows = [
   { key: "upload.max_size_mb", category: "upload", label: "单文件大小", desc: "上传文件上限", type: "number" },
-  { key: "upload.allowed_types", category: "upload", label: "文件格式", desc: "支持资料格式", type: "checks", options: ["ppt", "pptx", "pdf", "doc", "docx", "txt"] },
+  { key: "upload.allowed_types", category: "upload", label: "文件格式", desc: "支持资料格式", type: "checks", options: ["ppt", "pptx", "pdf", "doc", "docx", "txt", "md", "markdown"] },
   { key: "course.material.max_count", category: "upload", label: "课程资料数", desc: "单课程上限", type: "number" },
   { key: "upload.max_files_once", category: "upload", label: "单次上传数", desc: "一次上传上限", type: "number" },
   { key: "qa.context.turn_limit", category: "ai", label: "上下文轮次", desc: "多轮问答记忆", type: "range", min: 1, max: 20 },
@@ -744,6 +769,14 @@ const aiMonitorSeries = computed(() => [{ name: "AI", data: (monitorSeriesData.v
 const lastUpdatedText = computed(() => (lastUpdatedAt.value ? `${relativeTime(lastUpdatedAt.value.toISOString())}更新` : "未更新"));
 const todayErrors = computed(() => logs.value.filter((item) => String(item.level).toLowerCase() === "error").length);
 const restoreBackupOptions = computed(() => [{ label: "选择备份", value: 0 }, ...backups.value.map((item) => ({ label: item.backup_name, value: item.id }))]);
+const resetPasswordTargetTitle = computed(() => {
+  if (resetPasswordContext.mode === "batch") return `已选择 ${resetPasswordContext.ids.length} 个账号`;
+  return resetPasswordContext.names[0] || "指定账号";
+});
+const resetPasswordTargetSubtitle = computed(() => {
+  if (resetPasswordContext.mode === "batch") return resetPasswordContext.names.slice(0, 3).join("、") + (resetPasswordContext.names.length > 3 ? ` 等 ${resetPasswordContext.names.length} 人` : "");
+  return resetPasswordContext.emails[0] || "学生/教师账号";
+});
 
 async function run<T>(task: () => Promise<T>, ok?: string) {
   try {
@@ -1022,27 +1055,64 @@ function copyPassword() {
   navigator.clipboard?.writeText(resetPasswordResult.value);
   emit("notice", "success", "已复制");
 }
-async function resetUser(id: number, password = generateTempPassword(), silent = false) {
-  const updated = await withPending(`reset:${id}`, async () => run(() => api.post(`/admin/users/${id}/reset-password`, { new_password: password })));
+function openResetPasswordModal(item: any) {
+  resetPasswordResult.value = "";
+  resetPasswordContext.mode = "single";
+  resetPasswordContext.ids = [Number(item.id)];
+  resetPasswordContext.names = [item.nickname || item.email || `用户 ${item.id}`];
+  resetPasswordContext.emails = [item.email || ""];
+  Object.assign(resetPasswordForm, { password: "", confirm: "", error: "" });
+  resetPasswordModalOpen.value = true;
+}
+function openBatchResetPasswordModal() {
+  if (!selectedUsers.value.length) return;
+  const selected = users.value.filter((item) => selectedUsers.value.includes(item.id));
+  resetPasswordResult.value = "";
+  resetPasswordContext.mode = "batch";
+  resetPasswordContext.ids = [...selectedUsers.value];
+  resetPasswordContext.names = selected.map((item) => item.nickname || item.email || `用户 ${item.id}`);
+  resetPasswordContext.emails = selected.map((item) => item.email || "");
+  Object.assign(resetPasswordForm, { password: "", confirm: "", error: "" });
+  resetPasswordModalOpen.value = true;
+}
+function closeResetPasswordModal() {
+  resetPasswordModalOpen.value = false;
+  Object.assign(resetPasswordForm, { password: "", confirm: "", error: "" });
+}
+function fillGeneratedResetPassword() {
+  const password = generateTempPassword();
+  resetPasswordForm.password = password;
+  resetPasswordForm.confirm = password;
+}
+async function resetUser(id: number, password: string, silent = false, usePending = true) {
+  const request = () => run(() => api.post(`/admin/users/${id}/reset-password`, { new_password: password }));
+  const updated = usePending ? await withPending(`reset:${id}`, request) : await request();
   if (!updated) return false;
-  resetPasswordResult.value = password;
+  if (!silent) resetPasswordResult.value = password;
   if (!silent) emit("notice", "success", "已重置");
   return true;
 }
-async function deleteUser(id: number) { await withPending(`delete:${id}`, async () => { await run(() => api.delete(`/admin/users/${id}`), "已删除"); userDrawer.value = null; await loadUsers(); }); }
-async function batchDisableUsers() { for (const id of selectedUsers.value) await run(() => api.patch(`/admin/users/${id}`, { status: "disabled" })); selectedUsers.value = []; await loadUsers(); }
-async function batchResetUsers() {
-  if (!selectedUsers.value.length) return;
-  const password = generateTempPassword();
+async function submitResetPassword() {
+  resetPasswordForm.error = "";
+  const password = resetPasswordForm.password.trim();
+  if (!resetPasswordContext.ids.length) return void (resetPasswordForm.error = "请选择要修改的账号");
+  if (password.length < 8) return void (resetPasswordForm.error = "密码至少8位");
+  if (password.length > 64) return void (resetPasswordForm.error = "密码不能超过64位");
+  if (password !== resetPasswordForm.confirm.trim()) return void (resetPasswordForm.error = "两次密码不一致");
   let successCount = 0;
-  for (const id of selectedUsers.value) {
-    if (await resetUser(id, password, true)) successCount += 1;
-  }
+  await withPending("reset-password-modal", async () => {
+    for (const id of resetPasswordContext.ids) {
+      if (await resetUser(id, password, true, false)) successCount += 1;
+    }
+  });
   if (!successCount) return;
   resetPasswordResult.value = password;
-  emit("notice", "success", `已重置 ${successCount} 人`);
+  resetPasswordModalOpen.value = false;
   selectedUsers.value = [];
+  emit("notice", "success", resetPasswordContext.mode === "batch" ? `已修改 ${successCount} 人密码` : "密码已修改");
 }
+async function deleteUser(id: number) { await withPending(`delete:${id}`, async () => { await run(() => api.delete(`/admin/users/${id}`), "已删除"); userDrawer.value = null; await loadUsers(); }); }
+async function batchDisableUsers() { for (const id of selectedUsers.value) await run(() => api.patch(`/admin/users/${id}`, { status: "disabled" })); selectedUsers.value = []; await loadUsers(); }
 async function batchDeleteUsers() { for (const id of selectedUsers.value) await run(() => api.delete(`/admin/users/${id}`)); selectedUsers.value = []; await loadUsers(); }
 function toggleAllUsers(value: boolean | Event) { selectedUsers.value = checkedValue(value) ? users.value.map((item) => item.id) : []; }
 function clearUserFilter() { Object.assign(userFilter, { keyword: "", role: "", status: "" }); loadUsers(); }
@@ -1464,12 +1534,21 @@ pre { max-height: 420px; overflow: auto; border-radius: var(--radius-md); backgr
 .modal-mask { position: fixed; inset: 0; z-index: var(--z-modal-bg); display: grid; place-items: center; background: rgba(15,23,42,0.35); backdrop-filter: blur(6px); }
 .modal { width: 640px; max-height: 90vh; overflow: auto; border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-xl); padding: 20px; }
 .modal.password-modal { width: 420px; }
+.modal.password-set-modal { width: 520px; padding: 24px; overflow: visible; }
 .modal.preview-modal { width: 800px; height: 90vh; display: grid; grid-template-rows: auto 1fr; }
 .preview-modal iframe { width: 100%; height: 100%; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
 .modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .modal-head h2 { flex: 1; margin: 0; color: var(--color-text-primary); font-size: var(--text-h3); }
 .modal footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 .password-box { min-height: 46px; display: flex; align-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-muted); color: var(--color-text-primary); font-family: var(--font-family-mono); font-size: 18px; padding: 0 14px; user-select: all; }
+.password-target-card { display: flex; align-items: center; gap: 14px; border: 1px solid var(--color-primary-100); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--color-primary-50), rgba(245,243,255,0.9)); padding: 16px; margin-bottom: 16px; }
+.password-target-icon { width: 44px; height: 44px; display: grid; place-items: center; flex: 0 0 44px; border-radius: 14px; background: white; color: var(--color-primary-600); box-shadow: var(--shadow-sm); }
+.password-target-card strong { display: block; color: var(--color-text-primary); font-size: var(--text-body-lg); }
+.password-target-card p { margin: 2px 0 0; color: var(--color-text-muted); font-size: var(--text-body-sm); }
+.password-form-grid { display: grid; gap: 14px; }
+.password-form-grid label { display: grid; gap: 8px; color: var(--color-text-secondary); font-size: var(--text-body-sm); font-weight: 600; }
+.password-tools-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-muted); padding: 12px; margin-top: 14px; }
+.password-tools-row span { color: var(--color-text-muted); font-size: var(--text-caption); text-align: right; }
 .empty { min-height: 90px; display: grid; place-items: center; gap: 8px; color: var(--color-text-muted); }
 @media (max-width: 1279px) { .admin-shell { min-width: 1280px; } }
 </style>

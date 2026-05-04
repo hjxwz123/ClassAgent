@@ -28,8 +28,8 @@ from app.db.models import (
     WrongQuestion,
     LearningProgress,
 )
-from app.schemas.learning import QuizGenerateRequest, StudyPlanCreateRequest
-from app.services.ai import ai_service
+from app.schemas.learning import QuizEditRequest, QuizGenerateRequest, StudyPlanCreateRequest
+from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.knowledge import ensure_knowledge_points
 from app.services.usage import log_ai_usage
@@ -43,6 +43,16 @@ def _assert_student_course_access(db: Session, *, course_id: int, user: User) ->
     )
     if membership is None:
         raise forbidden("仅可在已加入课程内使用该功能")
+
+
+def _student_course_scope(db: Session, *, user: User, course_id: int | None) -> int | None:
+    if course_id is not None:
+        _assert_student_course_access(db, course_id=course_id, user=user)
+        return course_id
+    if user.role != UserRole.STUDENT.value:
+        raise forbidden("仅学生可使用该功能")
+    course_ids = list(db.scalars(select(CourseMembership.course_id).where(CourseMembership.user_id == user.id).limit(2)))
+    return course_ids[0] if len(course_ids) == 1 else None
 
 
 def get_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None, user: User) -> list[KnowledgePoint]:
@@ -82,7 +92,9 @@ def _append_source_piece(pieces: list[str], seen: set[str], value, *, limit: int
     for text in _flatten_text(value):
         if not text or any(marker in text for marker in _PLACEHOLDER_SOURCE_TEXT):
             continue
-        compact = text[:limit]
+        compact = sanitize_quiz_source_text(text)[:limit]
+        if not compact:
+            continue
         fingerprint = compact[:220]
         if fingerprint in seen:
             continue
@@ -163,19 +175,20 @@ def _knowledge_points_for_quiz(db: Session, *, course_id: int, chapter_ids: list
 
 
 def _prioritize_weak_points(db: Session, *, points: list[KnowledgePoint], course_id: int, user: User, enabled: bool) -> list[KnowledgePoint]:
-    if not enabled or user.role != UserRole.STUDENT.value or not points:
+    if not enabled or not points:
+        return points
+    statement = select(WrongQuestion.knowledge_point_id).where(
+        WrongQuestion.course_id == course_id,
+        WrongQuestion.knowledge_point_id.is_not(None),
+    )
+    if user.role == UserRole.STUDENT.value:
+        statement = statement.where(WrongQuestion.user_id == user.id)
+    elif user.role not in {UserRole.TEACHER.value, UserRole.ADMIN.value}:
         return points
     weak_ids = [
         point_id
         for point_id in db.scalars(
-            select(WrongQuestion.knowledge_point_id)
-            .where(
-                WrongQuestion.user_id == user.id,
-                WrongQuestion.course_id == course_id,
-                WrongQuestion.knowledge_point_id.is_not(None),
-            )
-            .group_by(WrongQuestion.knowledge_point_id)
-            .order_by(func.sum(WrongQuestion.wrong_count).desc())
+            statement.group_by(WrongQuestion.knowledge_point_id).order_by(func.sum(WrongQuestion.wrong_count).desc())
         )
         if point_id is not None
     ]
@@ -209,6 +222,12 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         target = "所选章节" if chapter_ids else "当前课程"
         raise bad_request(f"{target}暂无可用课程资料，无法生成练习。请先上传并解析课件或发布课时。")
     quiz_topic = _quiz_topic_for_generation(course_name=course.name, points=points, source_text=source_text)
+    question_dicts = ai_service.generate_quiz_questions(
+        topic=quiz_topic,
+        source_text=source_text,
+        count=payload.question_count,
+        db=db,
+    )
     quiz = Quiz(
         course_id=payload.course_id,
         chapter_id=chapter_ids[0] if len(chapter_ids) == 1 else None,
@@ -227,14 +246,8 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         total_score=0,
     )
     db.add(quiz)
-    db.commit()
+    db.flush()
     db.refresh(quiz)
-    question_dicts = ai_service.generate_quiz_questions(
-        topic=quiz_topic,
-        source_text=source_text,
-        count=payload.question_count,
-        db=db,
-    )
     total_score = 0.0
     for index, question_dict in enumerate(question_dicts):
         point = points[index % len(points)] if points else None
@@ -281,6 +294,88 @@ def publish_quiz(db: Session, *, quiz_id: int, user: User) -> Quiz:
     return quiz
 
 
+def _assert_quiz_teacher_access(db: Session, *, quiz: Quiz, user: User) -> None:
+    course = _get_course_or_404(db, quiz.course_id)
+    _assert_course_owner(course, user)
+
+
+def _validate_reference_answer(question_type: str, reference_answer) -> None:
+    if reference_answer is None or reference_answer == "":
+        raise bad_request("题目必须设置正确答案")
+    if question_type in {QuestionType.SINGLE_CHOICE.value, QuestionType.MULTIPLE_CHOICE.value}:
+        value = extract_reference_answer_value(reference_answer)
+        values = _answer_values(value)
+        if not values:
+            raise bad_request("选择题必须设置正确选项")
+
+
+def _validate_question_payload(item) -> tuple[list | None, object]:
+    question_type = item.question_type
+    if question_type not in {value.value for value in QuestionType}:
+        raise bad_request("题型不合法")
+    options = item.options
+    if question_type in {QuestionType.SINGLE_CHOICE.value, QuestionType.MULTIPLE_CHOICE.value}:
+        options = [str(option).strip() for option in (options or []) if str(option).strip()]
+        if len(options) < 2:
+            raise bad_request("选择题至少需要 2 个选项")
+    elif question_type == QuestionType.JUDGE.value:
+        options = options or ["正确", "错误"]
+    _validate_reference_answer(question_type, item.reference_answer)
+    return options, item.reference_answer
+
+
+def update_quiz_content(db: Session, *, quiz_id: int, user: User, payload: QuizEditRequest) -> tuple[Quiz, list[QuizQuestion]]:
+    quiz = db.get(Quiz, quiz_id)
+    if quiz is None:
+        raise not_found("测验不存在")
+    _assert_quiz_teacher_access(db, quiz=quiz, user=user)
+    existing_questions = list(db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id).order_by(QuizQuestion.id)))
+    existing_by_id = {item.id: item for item in existing_questions}
+    seen_ids: set[int] = set()
+    quiz.title = payload.title.strip()
+    quiz.description = payload.description.strip() if payload.description else None
+    total_score = 0.0
+    for item in payload.questions:
+        options, reference_answer = _validate_question_payload(item)
+        if item.id:
+            question = existing_by_id.get(item.id)
+            if question is None:
+                raise bad_request("题目不属于当前测验")
+            seen_ids.add(question.id)
+        else:
+            question = QuizQuestion(
+                quiz_id=quiz.id,
+                course_id=quiz.course_id,
+                chapter_id=quiz.chapter_id,
+                stem=item.stem.strip(),
+            )
+            db.add(question)
+            db.flush()
+            seen_ids.add(question.id)
+        question.chapter_id = item.chapter_id if item.chapter_id is not None else quiz.chapter_id
+        question.knowledge_point_id = item.knowledge_point_id
+        question.question_type = item.question_type
+        question.stem = item.stem.strip()
+        question.options = options
+        question.reference_answer = reference_answer
+        question.explanation = item.explanation.strip() if item.explanation else None
+        question.score = float(item.score)
+        question.difficulty = item.difficulty or "standard"
+        total_score += float(question.score)
+        db.add(question)
+    for question in existing_questions:
+        if question.id not in seen_ids:
+            db.delete(question)
+    quiz.total_score = round(total_score, 2)
+    metadata = quiz.metadata_json if isinstance(quiz.metadata_json, dict) else {}
+    quiz.metadata_json = {**metadata, "edited": True, "edited_at": datetime.now(UTC).isoformat()}
+    db.add(quiz)
+    db.commit()
+    db.refresh(quiz)
+    questions = list(db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id).order_by(QuizQuestion.id)))
+    return quiz, questions
+
+
 def list_quizzes(db: Session, *, course_id: int, user: User) -> list[Quiz]:
     statement = select(Quiz).where(Quiz.course_id == course_id)
     if user.role == UserRole.STUDENT.value:
@@ -312,7 +407,19 @@ def get_quiz_detail(db: Session, *, quiz_id: int, user: User) -> tuple[Quiz, lis
 
 def extract_reference_answer_value(reference_answer):
     if isinstance(reference_answer, dict):
-        for key in ("value", "answer", "correct_answer", "correct", "option_index", "index"):
+        for key in (
+            "value",
+            "answer",
+            "correct_answer",
+            "correct",
+            "option_index",
+            "index",
+            "key",
+            "text",
+            "choice",
+            "correct_option",
+            "judge",
+        ):
             if key in reference_answer:
                 return reference_answer[key]
         for key in ("values", "answers", "correct_answers"):
@@ -443,12 +550,21 @@ def _record_answer_to_wrong_book(
 ) -> None:
     source_question_id = _source_question_id(quiz, question.id)
     source_question = db.get(QuizQuestion, source_question_id) or question
+    now = datetime.now(UTC)
     wrong = db.scalar(
-        select(WrongQuestion).where(WrongQuestion.user_id == user.id, WrongQuestion.question_id == source_question_id)
+        select(WrongQuestion).where(
+            WrongQuestion.user_id == user.id,
+            WrongQuestion.question_id == source_question_id,
+            WrongQuestion.course_id == quiz.course_id,
+        )
     )
     if is_correct:
-        if quiz.quiz_type == QuizType.WRONG_BOOK.value and wrong is not None:
-            db.delete(wrong)
+        if wrong is not None:
+            wrong.is_resolved = True
+            wrong.resolved_at = now
+            wrong.last_correct_at = now
+            wrong.last_attempt_id = attempt.id
+            db.add(wrong)
         return
     if wrong is None:
         wrong = WrongQuestion(
@@ -458,10 +574,17 @@ def _record_answer_to_wrong_book(
             knowledge_point_id=source_question.knowledge_point_id,
             wrong_count=1,
             last_attempt_id=attempt.id,
+            is_resolved=False,
+            resolved_at=None,
+            last_wrong_at=now,
         )
     else:
         wrong.wrong_count += 1
         wrong.last_attempt_id = attempt.id
+        wrong.knowledge_point_id = source_question.knowledge_point_id
+        wrong.is_resolved = False
+        wrong.resolved_at = None
+        wrong.last_wrong_at = now
     db.add(wrong)
 
 
@@ -549,7 +672,11 @@ def list_wrong_questions(db: Session, *, course_id: int, user: User) -> list[tup
         db.execute(
             select(WrongQuestion, QuizQuestion)
             .join(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
-            .where(WrongQuestion.user_id == user.id, WrongQuestion.course_id == course_id)
+            .where(
+                WrongQuestion.user_id == user.id,
+                WrongQuestion.course_id == course_id,
+                QuizQuestion.course_id == course_id,
+            )
             .order_by(WrongQuestion.updated_at.desc())
         ).all()
     )
@@ -560,6 +687,8 @@ def generate_wrong_book_practice(db: Session, *, course_id: int, user: User) -> 
     wrong_rows = list_wrong_questions(db, course_id=course_id, user=user)
     if not wrong_rows:
         raise bad_request("暂无错题可重练")
+    active_wrong_rows = [(wrong, question) for wrong, question in wrong_rows if not wrong.is_resolved]
+    practice_rows = active_wrong_rows or wrong_rows
     quiz = Quiz(
         course_id=course_id,
         chapter_id=None,
@@ -575,7 +704,7 @@ def generate_wrong_book_practice(db: Session, *, course_id: int, user: User) -> 
     db.refresh(quiz)
     total_score = 0.0
     source_question_map: dict[str, int] = {}
-    for wrong, question in wrong_rows[:10]:
+    for wrong, question in practice_rows[:10]:
         clone = QuizQuestion(
             quiz_id=quiz.id,
             course_id=question.course_id,
@@ -659,9 +788,11 @@ def create_study_plan(db: Session, *, user: User, payload: StudyPlanCreateReques
 
 
 def list_study_plans(db: Session, *, user: User, course_id: int | None = None) -> list[StudyPlan]:
+    scoped_course_id = _student_course_scope(db, user=user, course_id=course_id)
+    if scoped_course_id is None:
+        return []
     statement = select(StudyPlan).where(StudyPlan.user_id == user.id)
-    if course_id is not None:
-        statement = statement.where(StudyPlan.course_id == course_id)
+    statement = statement.where(StudyPlan.course_id == scoped_course_id)
     return list(db.scalars(statement.order_by(StudyPlan.created_at.desc())))
 
 
@@ -669,6 +800,7 @@ def get_plan_tasks(db: Session, *, plan_id: int, user: User) -> list[StudyPlanTa
     plan = db.scalar(select(StudyPlan).where(StudyPlan.id == plan_id, StudyPlan.user_id == user.id))
     if plan is None:
         raise not_found("学习计划不存在")
+    _assert_student_course_access(db, course_id=plan.course_id, user=user)
     return list(db.scalars(select(StudyPlanTask).where(StudyPlanTask.plan_id == plan_id).order_by(StudyPlanTask.task_date)))
 
 
@@ -679,6 +811,7 @@ def checkin_task(db: Session, *, task_id: int, user: User, notes: str | None) ->
     plan = db.get(StudyPlan, task.plan_id)
     if plan is None or plan.user_id != user.id:
         raise forbidden("无权限打卡该任务")
+    _assert_student_course_access(db, course_id=plan.course_id, user=user)
     task.status = TaskStatus.DONE.value
     checkin = db.scalar(select(StudyCheckin).where(StudyCheckin.task_id == task_id, StudyCheckin.user_id == user.id))
     if checkin is None:

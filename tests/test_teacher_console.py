@@ -129,7 +129,7 @@ def prepare_teacher_course(client):
 
 
 def test_teacher_console_aggregation_and_actions(client):
-    teacher_headers, _, course, chapter, empty_chapter, material, lesson_id = prepare_teacher_course(client)
+    teacher_headers, student_headers, course, chapter, empty_chapter, material, lesson_id = prepare_teacher_course(client)
 
     dashboard_response = client.get("/api/v1/teacher/dashboard", headers=teacher_headers)
     assert dashboard_response.status_code == 200, dashboard_response.text
@@ -140,6 +140,17 @@ def test_teacher_console_aggregation_and_actions(client):
     courses_response = client.get("/api/v1/teacher/courses", headers=teacher_headers)
     assert courses_response.status_code == 200, courses_response.text
     assert courses_response.json()["data"][0]["material_count"] == 1
+
+    cover_response = client.post(
+        f"/api/v1/courses/{course['id']}/cover",
+        files={"file": ("cover.png", b"course-cover", "image/png")},
+        headers=teacher_headers,
+    )
+    assert cover_response.status_code == 200, cover_response.text
+    assert cover_response.json()["data"]["cover_url"]
+    student_courses_response = client.get("/api/v1/student/courses", headers=student_headers)
+    assert student_courses_response.status_code == 200, student_courses_response.text
+    assert student_courses_response.json()["data"][0]["cover_url"]
 
     home_response = client.get(f"/api/v1/teacher/courses/{course['id']}/home", headers=teacher_headers)
     assert home_response.status_code == 200, home_response.text
@@ -161,9 +172,26 @@ def test_teacher_console_aggregation_and_actions(client):
     assert detail_response.status_code == 200, detail_response.text
     assert detail_response.json()["data"]["student"]["id"] == student_id
 
-    remind_response = client.post(f"/api/v1/teacher/courses/{course['id']}/students/{student_id}/remind", headers=teacher_headers)
+    remind_response = client.post(
+        f"/api/v1/teacher/courses/{course['id']}/students/{student_id}/remind",
+        json={"title": "请完成第一章复习", "message": "请在今晚前完成网络概述课时，并整理一个问题。"},
+        headers=teacher_headers,
+    )
     assert remind_response.status_code == 200, remind_response.text
     assert remind_response.json()["data"]["sent"] is True
+    notifications_response = client.get("/api/v1/student/notifications", headers=student_headers)
+    assert notifications_response.status_code == 200, notifications_response.text
+    reminders = [item for item in notifications_response.json()["data"] if item["type"] == "teacher_reminder"]
+    assert reminders
+    assert reminders[0]["title"] == "请完成第一章复习"
+    assert reminders[0]["message"] == "请在今晚前完成网络概述课时，并整理一个问题。"
+    dashboard_notifications_response = client.get("/api/v1/student/dashboard", headers=student_headers)
+    assert dashboard_notifications_response.status_code == 200, dashboard_notifications_response.text
+    dashboard_reminders = [
+        item for item in dashboard_notifications_response.json()["data"]["notifications"] if item["type"] == "teacher_reminder"
+    ]
+    assert dashboard_reminders
+    assert dashboard_reminders[0]["title"] == "请完成第一章复习"
 
     chapter_response = client.patch(
         f"/api/v1/teacher/courses/{course['id']}/chapters/{chapter['id']}",
@@ -213,6 +241,26 @@ def test_teacher_console_aggregation_and_actions(client):
     ).json()["data"]
     delete_course_response = client.delete(f"/api/v1/teacher/courses/{temp_course['id']}", headers=teacher_headers)
     assert delete_course_response.status_code == 200, delete_course_response.text
+
+
+def test_teacher_can_delete_non_empty_chapter_without_deleting_content(client):
+    teacher_headers, _, course, chapter, _empty_chapter, material, lesson_id = prepare_teacher_course(client)
+
+    response = client.delete(f"/api/v1/teacher/courses/{course['id']}/chapters/{chapter['id']}", headers=teacher_headers)
+    assert response.status_code == 200, response.text
+
+    with db_session.SessionLocal() as db:
+        saved_material = db.get(CourseMaterial, material["id"])
+        saved_lesson = db.get(Lesson, lesson_id)
+        assert saved_material is not None
+        assert saved_lesson is not None
+        assert saved_material.chapter_id is None
+        assert saved_lesson.chapter_id is None
+
+    home_response = client.get(f"/api/v1/teacher/courses/{course['id']}/home", headers=teacher_headers)
+    assert home_response.status_code == 200, home_response.text
+    home = home_response.json()["data"]
+    assert all(item["id"] != chapter["id"] for item in home["chapters"])
 
 
 def test_teacher_profile_preferences(client):

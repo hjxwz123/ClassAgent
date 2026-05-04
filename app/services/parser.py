@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+import ast
+import hashlib
+import html
 import json
+import mimetypes
+import re
 import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
+import httpx
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.enums import MaterialType
 from app.core.errors import bad_request
 from app.services.runtime_config import RuntimeServiceConfig, get_enabled_service_config
+from app.services.storage import storage_service
 
 
 SERVICE_TYPE = "doc_parser"
@@ -19,6 +27,9 @@ DEFAULT_ENDPOINT = "docmind-api.cn-hangzhou.aliyuncs.com"
 DEFAULT_REGION = "cn-hangzhou"
 DEFAULT_LAYOUT_STEP_SIZE = 100
 SUPPORTED_MATERIAL_TYPES = {MaterialType.PPTX.value, MaterialType.PDF.value, MaterialType.DOCX.value, MaterialType.TXT.value}
+MARKDOWN_IMAGE_URL_PATTERN = re.compile(r"!\[[^\]]*]\(\s*(?:<(?P<angle>[^>]+)>|(?P<plain>[^)\s]+))(?:\s+['\"][^'\"]*['\"])?\s*\)")
+HTML_IMAGE_URL_PATTERN = re.compile(r"""<img\b[^>]*\bsrc=["'](?P<src>[^"']+)["'][^>]*>""", re.IGNORECASE)
+MAX_MARKDOWN_IMAGE_BYTES = 15 * 1024 * 1024
 
 
 def _normalize_page(title: str | None, content: str, page_number: int) -> dict:
@@ -115,16 +126,99 @@ def _output_formats(value: Any) -> list[str] | None:
     return formats or None
 
 
+TEXT_PAYLOAD_KEYS = ("markdownContent", "markdown_content", "llmResult", "llm_result", "page_text", "script_text", "content", "text")
+
+
+def _decode_serialized_payload(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text or text[0] not in "{[":
+        return text
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        try:
+            decoded = ast.literal_eval(text)
+        except (SyntaxError, ValueError):
+            return text
+        return decoded if isinstance(decoded, (dict, list, str)) else text
+
+
+def _extract_serialized_text_values(value: str) -> str:
+    key_pattern = re.compile(r"['\"](?:" + "|".join(TEXT_PAYLOAD_KEYS) + r")['\"]\s*:\s*")
+    pieces: list[str] = []
+    cursor = 0
+    while True:
+        match = key_pattern.search(value, cursor)
+        if match is None:
+            break
+        cursor = match.end()
+        while cursor < len(value) and value[cursor].isspace():
+            cursor += 1
+        if cursor >= len(value) or value[cursor] not in {"'", '"'}:
+            continue
+        quote = value[cursor]
+        cursor += 1
+        raw = ""
+        escaped = False
+        while cursor < len(value):
+            char = value[cursor]
+            cursor += 1
+            if escaped:
+                raw += f"\\{char}"
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == quote:
+                if raw.strip():
+                    pieces.append(raw)
+                break
+            raw += char
+        if escaped and raw.strip():
+            pieces.append(f"{raw}\\")
+    return "\n\n".join(pieces)
+
+
+def _extract_text_payload(value: Any) -> str:
+    value = _decode_serialized_payload(value)
+    if value is None:
+        return ""
+    if hasattr(value, "to_map"):
+        value = value.to_map()
+    if isinstance(value, str):
+        extracted = _extract_serialized_text_values(value) if value.lstrip().startswith(("{", "[")) else ""
+        text = extracted or value
+        return text.replace("\\n", "\n").replace("\\t", "\t").replace("\\'", "'").replace('\\"', '"').strip()
+    if isinstance(value, list):
+        pieces = [_extract_text_payload(item) for item in value]
+        return "\n\n".join(piece for piece in pieces if piece)
+    if isinstance(value, dict):
+        blocks = value.get("blocks")
+        if isinstance(blocks, list):
+            pieces = [_extract_text_payload(block) for block in blocks]
+            text = "\n".join(piece for piece in pieces if piece)
+            if text:
+                return text
+        for key in TEXT_PAYLOAD_KEYS:
+            if key in value:
+                text = _extract_text_payload(value.get(key))
+                if text:
+                    return text
+        pieces = [_extract_text_payload(item) for item in value.values()]
+        return "\n\n".join(piece for piece in pieces if piece)
+    return str(value).strip()
+
+
 def _layout_text(layout: dict) -> str:
-    for key in ("markdownContent", "markdown_content", "llmResult", "llm_result", "text"):
-        value = layout.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    blocks = layout.get("blocks")
-    if isinstance(blocks, list):
-        pieces = [str(block.get("text", "")).strip() for block in blocks if isinstance(block, dict)]
-        return "\n".join(piece for piece in pieces if piece)
-    return ""
+    for key in TEXT_PAYLOAD_KEYS:
+        if key in layout:
+            text = _extract_text_payload(layout.get(key))
+            if text:
+                return text
+    return _extract_text_payload(layout.get("blocks"))
 
 
 def _layout_title(layout: dict, fallback: str | None = None) -> str | None:
@@ -133,6 +227,98 @@ def _layout_title(layout: dict, fallback: str | None = None) -> str | None:
         content = _layout_text(layout)
         text = content.splitlines()[0].strip("# ").strip() if content else ""
     return text[:120] or None
+
+
+def _markdown_image_urls(content: str) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+    for pattern in (MARKDOWN_IMAGE_URL_PATTERN, HTML_IMAGE_URL_PATTERN):
+        for match in pattern.finditer(content):
+            raw = match.groupdict().get("angle") or match.groupdict().get("plain") or match.groupdict().get("src")
+            if not raw:
+                continue
+            value = raw.strip()
+            if value and value not in seen:
+                urls.append(value)
+                seen.add(value)
+    return urls
+
+
+def _is_remote_url(value: str) -> bool:
+    try:
+        parsed = urlsplit(html.unescape(value))
+    except ValueError:
+        return False
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _image_suffix(url: str, content_type: str | None) -> str:
+    suffix = Path(urlsplit(url).path).suffix.lower()
+    if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}:
+        return suffix
+    mime = str(content_type or "").split(";", 1)[0].strip().lower()
+    guessed = mimetypes.guess_extension(mime) if mime else None
+    if guessed == ".jpe":
+        return ".jpg"
+    return guessed if guessed in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"} else ".png"
+
+
+def _persist_markdown_image(
+    client: httpx.Client,
+    url: str,
+    *,
+    db: Session | None,
+    cache: dict[str, str | None],
+) -> str | None:
+    download_url = html.unescape(url)
+    if download_url in cache:
+        return cache[download_url]
+    cache[download_url] = None
+    if not _is_remote_url(download_url):
+        return None
+    try:
+        response = client.get(download_url)
+        response.raise_for_status()
+    except httpx.HTTPError:
+        return None
+    content_type = response.headers.get("content-type", "")
+    if not content_type.lower().startswith("image/"):
+        return None
+    content = response.content
+    if not content or len(content) > MAX_MARKDOWN_IMAGE_BYTES:
+        return None
+    digest = hashlib.sha256(download_url.encode("utf-8")).hexdigest()
+    suffix = _image_suffix(download_url, content_type)
+    relative_path = storage_service.save_bytes(
+        content,
+        folder=f"docmind_images/{digest[:2]}",
+        filename=f"{digest}{suffix}",
+        db=db,
+    )
+    public_url = storage_service.public_url(relative_path, db=db)
+    cache[download_url] = public_url
+    return public_url
+
+
+def _localize_markdown_images(content: str, db: Session | None, cache: dict[str, str | None]) -> str:
+    urls = _markdown_image_urls(content)
+    if not urls:
+        return content
+    rewritten = content
+    with httpx.Client(
+        timeout=httpx.Timeout(20.0, connect=8.0),
+        follow_redirects=True,
+        headers={"User-Agent": "class-agent-doc-parser/1.0"},
+    ) as client:
+        for raw_url in urls:
+            public_url = _persist_markdown_image(client, raw_url, db=db, cache=cache)
+            if not public_url:
+                continue
+            rewritten = rewritten.replace(raw_url, public_url)
+            escaped_url = html.escape(raw_url, quote=False)
+            if escaped_url != raw_url:
+                rewritten = rewritten.replace(escaped_url, public_url)
+    return rewritten
 
 
 class DocParserService:
@@ -342,6 +528,9 @@ class DocParserService:
         task_id = self._submit_job(path, filename or path.name, service.config)
         self._wait_for_success(task_id, service.config)
         pages = self._pages_from_layouts(self._collect_layouts(task_id, service.config))
+        image_cache: dict[str, str | None] = {}
+        for page in pages:
+            page["page_text"] = _localize_markdown_images(page.get("page_text") or "", db, image_cache)
         if not pages:
             raise bad_request("文档解析未返回有效内容")
         return pages

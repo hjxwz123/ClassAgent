@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -28,6 +28,7 @@ from app.services.courses import (
     list_course_members,
     list_joined_courses,
     list_teaching_courses,
+    upload_course_cover,
     update_course,
 )
 
@@ -76,6 +77,18 @@ def update_course_endpoint(
 ):
     course = update_course(db, user, course_id, payload)
     return success_response(data=CourseResponse.model_validate(course).model_dump(), request_id=request.state.request_id)
+
+
+@router.post("/{course_id}/cover")
+def upload_course_cover_endpoint(
+    course_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    file: UploadFile = File(...),
+):
+    course = upload_course_cover(db, user, course_id, file)
+    return success_response(data=CourseResponse.model_validate(course).model_dump(mode="json"), request_id=request.state.request_id)
 
 
 @router.post("/join")

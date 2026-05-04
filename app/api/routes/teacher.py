@@ -65,6 +65,11 @@ class NotificationSettingsRequest(BaseModel):
     settings: list[NotificationSettingItem] = Field(min_length=1)
 
 
+class StudentReminderRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=80)
+    message: str | None = Field(default=None, max_length=500)
+
+
 @router.get("/dashboard")
 def dashboard_endpoint(
     request: Request,
@@ -194,8 +199,17 @@ def remind_student_endpoint(
     request: Request,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    payload: StudentReminderRequest | None = None,
 ):
-    return success_response(data=remind_student(db, course_id=course_id, student_id=student_id, user=user), request_id=request.state.request_id)
+    data = remind_student(
+        db,
+        course_id=course_id,
+        student_id=student_id,
+        user=user,
+        title=payload.title if payload else None,
+        message=payload.message if payload else None,
+    )
+    return success_response(data=data, request_id=request.state.request_id)
 
 
 @router.delete("/courses/{course_id}/students/{student_id}")

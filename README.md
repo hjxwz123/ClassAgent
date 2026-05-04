@@ -147,7 +147,7 @@ Create `.env` from `.env.example`:
 
 ```env
 APP_ENV=development
-DATABASE_URL=sqlite:///./storage/app.db
+DATABASE_URL=mysql+pymysql://class_agent:class_agent_2026@127.0.0.1:3306/class_agent?charset=utf8mb4
 REDIS_URL=redis://localhost:6379/0
 CELERY_TASK_ALWAYS_EAGER=true
 EXTERNAL_AI_MODE=auto

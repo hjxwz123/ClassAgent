@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.enums import CourseStatus, LessonStatus, ProcessStatus, QuizStatus, UserRole
@@ -37,13 +37,19 @@ from app.services.storage import storage_service
 
 STUDENT_PROFILE_KEY = "student.profile"
 STUDENT_NOTICE_KEY = "student.notifications"
+STUDENT_REMINDER_KEY = "student.teacher_reminders"
 
 DEFAULT_STUDENT_NOTICES = [
     {"key": "lesson", "label": "新课时发布", "enabled": True},
     {"key": "quiz", "label": "测验发布提醒", "enabled": True},
     {"key": "qa", "label": "AI 问答完成", "enabled": True},
+    {"key": "teacher", "label": "教师提醒", "enabled": True},
     {"key": "plan", "label": "学习计划提醒", "enabled": True, "time": "20:00"},
 ]
+
+
+def _published_lesson_order():
+    return (case((Lesson.published_at.is_(None), 1), else_=0), Lesson.published_at.desc(), Lesson.created_at.desc())
 
 
 def _as_dict(item) -> dict:
@@ -53,6 +59,8 @@ def _as_dict(item) -> dict:
         data["preview_url"] = storage_service.normalize_public_url(data["preview_url"])
     if "audio_url" in data:
         data["audio_url"] = storage_service.normalize_public_url(data["audio_url"])
+    if "cover_url" in data:
+        data["cover_url"] = storage_service.normalize_public_url(data["cover_url"])
     return data
 
 
@@ -201,7 +209,7 @@ def _recent_lesson(db: Session, *, course_ids: list[int], user: User) -> dict | 
         select(Lesson, Course)
         .join(Course, Course.id == Lesson.course_id)
         .where(Lesson.course_id.in_(course_ids), Lesson.status == LessonStatus.PUBLISHED.value)
-        .order_by(Lesson.published_at.desc().nullslast(), Lesson.created_at.desc())
+        .order_by(*_published_lesson_order())
         .limit(1)
     ).first()
     if not lesson_row:
@@ -515,15 +523,63 @@ def update_student_notifications(db: Session, *, user: User, settings: list[dict
     return normalized
 
 
+def _notice_enabled(db: Session, *, user_id: int, key: str) -> bool:
+    settings = _preference(db, user_id=user_id, key=STUDENT_NOTICE_KEY) or DEFAULT_STUDENT_NOTICES
+    if not isinstance(settings, list):
+        return True
+    for item in settings:
+        if isinstance(item, dict) and item.get("key") == key:
+            return bool(item.get("enabled", True))
+    return True
+
+
+def _notification_sort_time(item: dict) -> float:
+    value = item.get("time") or item.get("created_at")
+    if isinstance(value, datetime):
+        normalized = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+        return normalized.timestamp()
+    if isinstance(value, str):
+        try:
+            normalized = value.replace("Z", "+00:00")
+            parsed = datetime.fromisoformat(normalized)
+            normalized_time = parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+            return normalized_time.timestamp()
+        except ValueError:
+            return 0
+    return 0
+
+
 def get_student_notifications(db: Session, user: User) -> list[dict]:
     _assert_student(user)
     course_ids = [course.id for course in _joined_courses(db, user)]
+    course_id_set = set(course_ids)
     notifications: list[dict] = []
     if course_ids:
+        if _notice_enabled(db, user_id=user.id, key="teacher"):
+            reminders = _preference(db, user_id=user.id, key=STUDENT_REMINDER_KEY)
+            if isinstance(reminders, list):
+                for item in reminders:
+                    if not isinstance(item, dict):
+                        continue
+                    if item.get("course_id") not in course_id_set:
+                        continue
+                    notifications.append(
+                        {
+                            "id": item.get("id"),
+                            "type": "teacher_reminder",
+                            "title": item.get("title") or "教师提醒",
+                            "message": item.get("message") or "",
+                            "course_id": item.get("course_id"),
+                            "course_name": item.get("course_name") or "",
+                            "teacher_name": item.get("teacher_name") or "教师",
+                            "time": item.get("time"),
+                            "unread": bool(item.get("unread", True)),
+                        }
+                    )
         for lesson in db.scalars(
             select(Lesson)
             .where(Lesson.course_id.in_(course_ids), Lesson.status == LessonStatus.PUBLISHED.value)
-            .order_by(Lesson.published_at.desc().nullslast(), Lesson.created_at.desc())
+            .order_by(*_published_lesson_order())
             .limit(4)
         ):
             notifications.append({"type": "lesson", "title": f"新课时：{lesson.title}", "time": lesson.published_at or lesson.created_at, "unread": True})
@@ -534,4 +590,5 @@ def get_student_notifications(db: Session, user: User) -> list[dict]:
         )
         if failed_material:
             notifications.append({"type": "material", "title": f"资料处理失败：{failed_material.title}", "time": failed_material.updated_at, "unread": True})
+    notifications.sort(key=_notification_sort_time, reverse=True)
     return notifications[:8]

@@ -19,11 +19,13 @@ storage/runtime/
 storage/backups/
 storage/uploads/
 storage/generated/
+storage/docmind_images/
 storage/vectors/
 storage/tmp_chroma_probe/
 storage/logs/
 coverage.xml
 .coverage
+.env
 frontend/node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo

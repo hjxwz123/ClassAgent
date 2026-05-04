@@ -5,7 +5,7 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from io import StringIO
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.enums import LessonStatus, ProcessStatus, UserRole
@@ -16,6 +16,7 @@ from app.db.models import (
     Course,
     CourseMaterial,
     CourseMembership,
+    KnowledgeChunk,
     KnowledgePoint,
     LearningProgress,
     Lesson,
@@ -37,6 +38,7 @@ from app.services.storage import storage_service
 
 TEACHER_PROFILE_KEY = "teacher.profile"
 TEACHER_NOTIFICATION_KEY = "teacher.notifications"
+STUDENT_REMINDER_KEY = "student.teacher_reminders"
 
 DEFAULT_NOTIFICATION_SETTINGS = [
     {"key": "join", "label": "学生加入课程", "enabled": True},
@@ -63,6 +65,8 @@ def _as_dict(item) -> dict:
         data["preview_url"] = storage_service.normalize_public_url(data["preview_url"])
     if "audio_url" in data:
         data["audio_url"] = storage_service.normalize_public_url(data["audio_url"])
+    if "cover_url" in data:
+        data["cover_url"] = storage_service.normalize_public_url(data["cover_url"])
     return data
 
 
@@ -558,14 +562,49 @@ def get_teacher_student_detail(db: Session, *, course_id: int, student_id: int, 
     }
 
 
-def remind_student(db: Session, *, course_id: int, student_id: int, user: User) -> dict:
-    _assert_course_access(db, course_id=course_id, user=user)
+def remind_student(db: Session, *, course_id: int, student_id: int, user: User, title: str | None = None, message: str | None = None) -> dict:
+    course = _assert_course_access(db, course_id=course_id, user=user)
     student = db.get(User, student_id)
-    if student is None:
+    membership = db.scalar(select(CourseMembership).where(CourseMembership.course_id == course_id, CourseMembership.user_id == student_id))
+    if student is None or student.role != UserRole.STUDENT.value or membership is None:
         raise not_found("学生不存在")
-    log_operation(db, user_id=user.id, action="teacher.student.remind", target_type="student", target_id=student_id, detail={"course_id": course_id})
+    reminder_title = (title or f"{course.name}学习提醒").strip()
+    reminder_message = (message or f"{user.nickname}老师提醒你查看《{course.name}》的学习进度，及时完成课时学习、练习或待办任务。").strip()
+    if not reminder_title:
+        raise bad_request("提醒标题不能为空")
+    if not reminder_message:
+        raise bad_request("提醒内容不能为空")
+    if len(reminder_title) > 80:
+        raise bad_request("提醒标题不能超过80字")
+    if len(reminder_message) > 500:
+        raise bad_request("提醒内容不能超过500字")
+    now = datetime.now(UTC)
+    reminder = {
+        "id": f"{int(now.timestamp() * 1000)}-{course_id}-{student_id}-{user.id}",
+        "type": "teacher_reminder",
+        "title": reminder_title,
+        "message": reminder_message,
+        "course_id": course_id,
+        "course_name": course.name,
+        "teacher_id": user.id,
+        "teacher_name": user.nickname,
+        "time": now.isoformat(),
+        "unread": True,
+    }
+    reminders = _get_preference(db, user_id=student_id, key=STUDENT_REMINDER_KEY)
+    if not isinstance(reminders, list):
+        reminders = []
+    _set_preference(db, user_id=student_id, key=STUDENT_REMINDER_KEY, value=[reminder, *reminders][:50])
+    log_operation(
+        db,
+        user_id=user.id,
+        action="teacher.student.remind",
+        target_type="student",
+        target_id=student_id,
+        detail={"course_id": course_id, "title": reminder_title, "message": reminder_message[:120]},
+    )
     db.commit()
-    return {"sent": True, "student_id": student_id}
+    return {"sent": True, "student_id": student_id, "reminder": reminder}
 
 
 def remove_student(db: Session, *, course_id: int, student_id: int, user: User) -> None:
@@ -645,10 +684,21 @@ def delete_chapter(db: Session, *, course_id: int, chapter_id: int, user: User) 
     chapter = db.get(Chapter, chapter_id)
     if chapter is None or chapter.course_id != course_id:
         raise not_found("章节不存在")
-    linked = db.scalar(select(func.count(CourseMaterial.id)).where(CourseMaterial.chapter_id == chapter_id)) or 0
-    if linked:
-        raise bad_request("章节已有资料")
+    db.execute(update(CourseMaterial).where(CourseMaterial.course_id == course_id, CourseMaterial.chapter_id == chapter_id).values(chapter_id=None))
+    db.execute(update(Lesson).where(Lesson.course_id == course_id, Lesson.chapter_id == chapter_id).values(chapter_id=None))
+    db.execute(update(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id, KnowledgeChunk.chapter_id == chapter_id).values(chapter_id=None))
+    db.execute(update(KnowledgePoint).where(KnowledgePoint.course_id == course_id, KnowledgePoint.chapter_id == chapter_id).values(chapter_id=None))
+    db.execute(update(Quiz).where(Quiz.course_id == course_id, Quiz.chapter_id == chapter_id).values(chapter_id=None))
+    db.execute(update(QuizQuestion).where(QuizQuestion.course_id == course_id, QuizQuestion.chapter_id == chapter_id).values(chapter_id=None))
     db.delete(chapter)
+    log_operation(
+        db,
+        user_id=user.id,
+        action="course.chapter.delete",
+        target_type="chapter",
+        target_id=chapter_id,
+        detail={"course_id": course_id, "title": chapter.title},
+    )
     db.commit()
 
 
@@ -733,6 +783,8 @@ def get_teacher_analysis(db: Session, *, course_id: int, user: User, days: int) 
     )
     average_score = round(sum(item.score for item in attempts) / max(len(attempts), 1), 2) if attempts else 0
     qa_total = db.scalar(select(func.count(QARecord.id)).where(QARecord.course_id == course_id)) or 0
+    period_study_seconds = int(base.get("period_study_seconds") or base.get("study_seconds") or 0)
+    total_study_seconds = int(base.get("study_seconds") or 0)
     return {
         **base,
         "metrics": {
@@ -741,6 +793,9 @@ def get_teacher_analysis(db: Session, *, course_id: int, user: User, days: int) 
             "qa_total": int(qa_total),
             "average_score": average_score,
             "weak_point_count": len(base["weak_points"]),
+            "study_hours": round(period_study_seconds / 3600, 1),
+            "total_study_hours": round(total_study_seconds / 3600, 1),
+            "avg_study_minutes": round(period_study_seconds / max(students["stats"]["total"], 1) / 60, 1) if students["stats"]["total"] else 0,
         },
         "lesson_completion": lesson_completion,
         "student_layers": {

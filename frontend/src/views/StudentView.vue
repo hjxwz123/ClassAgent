@@ -42,12 +42,12 @@
             <span class="page-badge">P{{ currentPage }}</span>
             <span class="knowledge-dot" aria-label="AI知识点"><Sparkles :size="14" /></span>
             <h1>{{ activePage?.page_title || `第${currentPage}页` }}</h1>
-            <p>{{ activePage?.page_text }}</p>
+            <div class="slide-content lesson-markdown" v-html="activePageHtml"></div>
           </article>
         </transition>
         <transition name="subtitle">
-          <div v-if="subtitleMode !== 'hide' && activePage?.subtitle_text" class="subtitle-line">
-            <strong>{{ subtitleLead }}</strong>{{ subtitleRest }}
+          <div v-if="subtitleMode !== 'hide' && activeSubtitleText" class="subtitle-line">
+            <div class="lesson-markdown" v-html="activeSubtitleHtml"></div>
           </div>
         </transition>
         <transition name="player-pop">
@@ -58,7 +58,7 @@
             <span class="time">{{ audioTime }}</span>
             <AppSlider v-model="audioProgress" class="range" :min="0" :max="100" @input="seekAudio" />
             <span class="time">{{ audioDuration }}</span>
-            <PopoverButton :items="speedItems" :label="`${playbackRate}x`" @select="setRate" />
+            <PopoverButton :items="speedItems" :label="`${playbackRate}x`" placement="top" @select="setRate" />
             <button class="round-btn ghost" @click="thumbOpen = !thumbOpen"><Grid2X2 :size="18" /></button>
             <button class="round-btn ghost"><Maximize :size="18" /></button>
             <audio v-if="activePage?.audio_url" ref="audioRef" :src="activePage.audio_url" @timeupdate="updateAudio" @loadedmetadata="updateAudio" @ended="handleAudioEnded" @play="audioPlaying = true" @pause="audioPlaying = false"></audio>
@@ -74,35 +74,43 @@
         </div>
         <transition name="fade-slide" mode="out-in">
           <section v-if="classroomTab === 'script'" key="script" class="script-view">
-            <div class="sticky-tools"><span>当前页 {{ currentPage }} / {{ classroomLesson?.pages.length || 1 }}</span><button @click="copyText(activePage?.script_text || '')"><Copy :size="14" />复制</button></div>
+            <div class="sticky-tools"><span>当前页 {{ currentPage }} / {{ classroomLesson?.pages.length || 1 }}</span><button @click="copyText(activeScriptText || activePageText)"><Copy :size="14" />复制</button></div>
             <h2>{{ activePage?.page_title || `第${currentPage}页` }}</h2>
-            <p class="reading">{{ activePage?.script_text || "暂无文稿" }}</p>
+            <div class="reading lesson-markdown" v-html="activeScriptHtml"></div>
           </section>
           <section v-else-if="classroomTab === 'qa'" key="qa" class="class-chat">
             <div class="context-bar"><Info :size="14" />第{{ currentPage }}页内容</div>
-            <ChatList :messages="classMessages" :thinking="classThinking" @toggle-thought="toggleThought" @copy="copyText" />
-            <div class="chat-disclaimer">AI 回答仅供学习参考</div>
-            <div v-if="classQaAttachments.length" class="qa-attachment-strip compact">
-              <div v-for="(item, index) in classQaAttachments" :key="`${item.url}-${index}`" class="qa-attachment-chip">
-                <img :src="item.url" alt="" />
-                <span>{{ item.filename || '图片' }}</span>
-                <button type="button" @click="removeQaAttachment('class', index)"><X :size="13" /></button>
-              </div>
+              <div class="class-chat-scroll">
+              <ChatList :messages="classMessages" :thinking="classThinking" @toggle-thought="toggleThought" @copy="copyText" />
             </div>
-            <form class="chat-input compact" @submit.prevent="askInClass">
-              <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
-              <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
-              <textarea v-model="classQuestion" placeholder="问问 AI 这一页..." rows="1"></textarea>
-              <button :disabled="(!classQuestion.trim() && !classQaAttachments.length) || classThinking || classQaImageUploading" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
-            </form>
-            <div class="quick-tags">
-              <button v-for="item in quickPageQuestions" :key="item" @click="sendQuickClass(item)">{{ item }}</button>
+            <div class="class-chat-dock">
+              <div v-if="classQaAttachments.length" class="qa-attachment-strip compact">
+                <div v-for="(item, index) in classQaAttachments" :key="`${item.url}-${index}`" class="qa-attachment-chip">
+                  <img :src="item.url" alt="" />
+                  <span>{{ item.filename || '图片' }}</span>
+                  <button type="button" @click="removeQaAttachment('class', index)"><X :size="13" /></button>
+                </div>
+              </div>
+              <form class="chat-input compact" @submit.prevent="askInClass">
+                <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
+                <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
+                <textarea v-model="classQuestion" placeholder="问问 AI 这一页..." rows="1"></textarea>
+                <button :disabled="(!classQuestion.trim() && !classQaAttachments.length) || classThinking || classQaImageUploading" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
+              </form>
+              <div class="quick-tags">
+                <button v-for="item in quickPageQuestions" :key="item" @click="sendQuickClass(item)">{{ item }}</button>
+              </div>
             </div>
           </section>
           <section v-else key="note" class="note-view">
-            <div class="note-tools"><button>B</button><button>I</button><button>标记</button><span>{{ noteState }}</span></div>
-            <textarea v-model="pageNote" placeholder="记录你对这一页的理解、疑问或总结..." @input="queueNoteSave"></textarea>
-            <footer><button class="btn btn-primary btn-sm" @click="saveCurrentNote">保存笔记</button><span>{{ noteSavedAt }}</span></footer>
+            <div class="note-tools" role="toolbar" aria-label="笔记格式工具">
+              <button type="button" title="加粗" @click="formatNote('bold')"><strong>B</strong></button>
+              <button type="button" title="斜体" @click="formatNote('italic')"><i>I</i></button>
+              <button type="button" title="标记重点" @click="formatNote('mark')"><Flag :size="14" />标记</button>
+              <span class="note-state" :class="{ dirty: noteState !== '已保存' }">{{ noteState }}</span>
+            </div>
+            <textarea ref="pageNoteArea" v-model="pageNote" class="note-editor" placeholder="记录你对这一页的理解、疑问或总结..." @input="queueNoteSave"></textarea>
+            <footer class="note-footer"><button class="btn btn-primary btn-sm" :data-loading="noteState === '保存中'" :disabled="noteState === '保存中'" @click="saveCurrentNote">保存笔记</button><span>{{ noteSavedAt }}</span></footer>
           </section>
         </transition>
       </aside>
@@ -156,7 +164,7 @@
       </nav>
       <div ref="topActionsRef" class="top-actions">
         <button class="top-icon" title="全局搜索" aria-label="全局搜索" @click="openSearch"><Search :size="19" /></button>
-        <button class="top-icon" title="通知中心" aria-label="通知中心" @click="noticeOpen = !noticeOpen"><Bell :size="19" /><em v-if="unreadCount">{{ unreadCount }}</em></button>
+        <button class="top-icon" title="通知中心" aria-label="通知中心" :data-loading="notificationLoading" @click="toggleNotifications"><Bell :size="19" /><em v-if="unreadCount">{{ unreadCount }}</em></button>
         <button class="avatar-btn" title="个人档案" aria-label="个人档案" @click="userMenuOpen = !userMenuOpen">
           <img v-if="currentAvatarUrl" :src="currentAvatarUrl" alt="" />
           <DefaultUserAvatar v-else />
@@ -164,7 +172,7 @@
       </div>
       <transition name="top-menu">
         <div v-if="noticeOpen" ref="noticePopRef" class="notice-pop top-menu-panel">
-          <div v-for="item in notifications" :key="`${item.type}-${item.title}`" class="notice-item"><Bell :size="15" /><div><strong>{{ item.title }}</strong><small>{{ relativeTime(item.time) }}</small></div><i v-if="item.unread"></i></div>
+          <div v-for="item in notifications" :key="item.id || `${item.type}-${item.title}`" class="notice-item"><Bell :size="15" /><div><strong>{{ item.title }}</strong><p v-if="item.message">{{ item.message }}</p><small>{{ item.course_name ? `${item.course_name} · ` : '' }}{{ relativeTime(item.time) }}</small></div><i v-if="item.unread"></i></div>
           <EmptyState v-if="!notifications.length" text="暂无通知" />
         </div>
       </transition>
@@ -172,7 +180,6 @@
         <div v-if="userMenuOpen" ref="userPopRef" class="user-pop top-menu-panel">
           <div class="user-card"><strong>{{ user.nickname }}</strong><small>{{ user.email }}</small></div>
           <button @click="go('studentProfile')"><User :size="15" />个人中心</button>
-          <button @click="go('studentProfile')"><BarChart2 :size="15" />学习档案</button>
           <button @click="go('studentWrongBook')"><BookMarked :size="15" />错题本</button>
           <button @click="go('studentPlans')"><CalendarCheck :size="15" />学习计划</button>
           <button @click="$emit('logout')"><LogOut :size="15" />退出登录</button>
@@ -193,7 +200,7 @@
               <CalendarCheck :size="20" /><div><strong>今日计划</strong><small>查看并打卡今天的学习任务</small></div><span>{{ doneTasks }}/{{ todayTasks.length }}</span><AppProgress :value="todayDoneRate" /><button @click="go('studentPlans')">查看</button>
             </article>
             <article class="continue-card">
-              <div class="continue-cover" :style="{ background: courseGradient(continueLesson?.course?.id || 1) }"><Presentation :size="32" /><span>P{{ continueProgressPage }}</span></div>
+              <div class="continue-cover" :style="courseCoverStyle(continueLesson?.course || activeCourse)"><Presentation :size="32" /><span>P{{ continueProgressPage }}</span></div>
               <section v-if="continueLesson">
                 <span class="tag tag-ai"><Sparkles :size="12" />接续上次</span>
                 <h2>{{ continueLesson.lesson.title }}</h2>
@@ -208,7 +215,7 @@
               <article class="panel-card">
                 <div class="section-head"><h2><BookOpen :size="18" />我的课程</h2><button @click="go('studentCourses')">查看全部</button></div>
                 <button v-for="course in courses.slice(0, 3)" :key="course.id" class="home-course" @click="openCourse(course.id)">
-                  <span :style="{ background: courseGradient(course.id) }"><BookOpen :size="21" /></span>
+                  <span :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><BookOpen v-if="!course.cover_url" :size="21" /></span>
                   <div><strong>{{ course.name }}</strong><small>{{ course.teacher?.nickname || '教师' }} · {{ course.term }}</small><AppProgress :value="course.progress_percent || 0" /><em>{{ course.progress_percent || 0 }}%</em></div>
                 </button>
                 <button class="join-dashed" @click="joinOpen = true"><Plus :size="16" />加入新课程</button>
@@ -306,7 +313,7 @@
             <div class="underline-tabs"><button :class="{ active: courseTab === 'active' }" @click="courseTab = 'active'"><BookOpen :size="16" />在学中({{ activeCourses.length }})</button><button :class="{ active: courseTab === 'done' }" @click="courseTab = 'done'"><CheckCircle :size="16" />已完成({{ doneCourses.length }})</button></div>
             <div class="student-course-grid">
               <article v-for="course in filteredCourses" :key="course.id" class="student-course-card">
-                <div class="course-art" :style="{ background: courseGradient(course.id) }"><BookOpen :size="56" /><span>{{ course.term }}</span><em><Check :size="12" />{{ course.progress_percent || 0 }}%</em><DropdownMenu :items="courseMenuItems" @select="handleCourseMenu($event, course)" /></div>
+                <div class="course-art" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><BookOpen v-if="!course.cover_url" :size="56" /><span>{{ course.term }}</span><em><Check :size="12" />{{ course.progress_percent || 0 }}%</em><DropdownMenu :items="courseMenuItems" @select="handleCourseMenu($event, course)" /></div>
                 <section><h2>{{ course.name }}</h2><p><User :size="14" />{{ course.teacher?.nickname || '教师' }} · {{ course.teacher?.bio || '课程教师' }}</p><AppProgress :value="course.progress_percent || 0" /><div class="course-meta"><span>已学 {{ course.studied_lessons || 0 }}/{{ course.lesson_total || 0 }}</span><span>{{ course.last_lesson ? relativeTime(course.last_progress?.updated_at) : '未开始' }}</span></div><div class="mini-data"><span><MessageCircle :size="14" />{{ course.qa_count || 0 }}</span><span><XCircle :size="14" />{{ course.wrong_count || 0 }}</span><span><Users :size="14" />{{ course.student_count || 0 }}</span></div><button class="btn btn-primary full" @click="openCourse(course.id)"><Play :size="16" />继续学习</button></section>
               </article>
             </div>
@@ -316,7 +323,7 @@
           <template v-else-if="active === 'studentCourseHome'">
             <CourseRequired v-if="!courseHome.course" />
             <template v-else>
-              <article class="course-hero-student" :style="{ background: courseGradient(courseHome.course.id) }">
+              <article class="course-hero-student" :class="{ 'has-image': courseHome.course.cover_url }" :style="courseHeroStyle(courseHome.course)">
                 <section><h1>{{ courseHome.course.name }}</h1><p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p><div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div></section>
                 <aside><div class="slide-mini">{{ latestLesson?.title?.slice(0, 8) || '课时' }}</div><button class="btn white-fill" @click="latestLesson && openLesson(Number(latestLesson.id))"><Play :size="16" />进入课时</button></aside>
               </article>
@@ -329,7 +336,7 @@
                 <aside>
                   <article class="panel-card"><div class="section-head"><h2><BarChart2 :size="18" />我的数据</h2></div><div class="data-grid"><MiniMetric :icon="Clock" label="学习时长" :value="`${courseHome.stats?.study_hours || 0}h`" /><MiniMetric :icon="CheckCircle" label="完成进度" :value="`${courseHome.stats?.completion_rate || 0}%`" tone="success" /><MiniMetric :icon="MessageCircle" label="问答次数" :value="courseHome.stats?.qa_count || 0" tone="ai" /><MiniMetric :icon="XCircle" label="错题数" :value="courseHome.stats?.wrong_count || 0" tone="danger" /><MiniMetric :icon="Star" label="正确率" :value="`${courseHome.stats?.accuracy || 0}%`" tone="warning" /><MiniMetric :icon="Zap" label="连续打卡" :value="`${courseHome.stats?.streak_days || 0}天`" tone="warning" /></div></article>
                   <article class="ask-card"><Sparkles :size="20" /><h2>向 AI 提问</h2><form @submit.prevent="askCourseQuick"><input v-model="quickCourseQuestion" placeholder="这节课有什么不懂的..." /><button><Send :size="16" /></button></form><div class="quick-tags"><button v-for="item in courseHome.quick_questions || []" :key="item" @click="sendCourseQuick(item)">{{ item }}</button></div></article>
-                  <article class="panel-card"><div class="section-head"><h2><MessageCircle :size="18" />最近提问</h2><button @click="go('studentQa')">全部</button></div><div v-for="item in courseHome.recent_qa || []" :key="item.id" class="qa-mini"><strong>{{ item.question }}</strong><p>{{ item.answer }}</p></div><EmptyState v-if="!(courseHome.recent_qa || []).length" text="暂无提问" /></article>
+                  <article class="panel-card recent-qa-card"><div class="section-head"><h2><MessageCircle :size="18" />最近提问</h2><button @click="go('studentQa')">全部</button></div><div v-for="item in courseHome.recent_qa || []" :key="item.id" class="qa-mini"><strong>{{ item.question }}</strong><p>{{ item.answer }}</p></div><EmptyState v-if="!(courseHome.recent_qa || []).length" text="暂无提问" /></article>
                 </aside>
               </div>
             </template>
@@ -343,24 +350,23 @@
                     <div class="qa-title-group">
                       <div class="qa-title-icon"><Sparkles :size="24" /></div>
                       <section class="qa-title">
-                        <h1>课程知识问答</h1>
-                        <p>与 AI 探讨课程问题，解答学术疑惑</p>
+                        <h1>《{{ courseScopeName }}》AI 问答</h1>
                       </section>
                     </div>
                     <div class="qa-header-actions">
                       <CourseSelect />
-                      <button class="action-circle-btn" title="问答历史" aria-label="问答历史" @click="historyOpen = true"><Clock :size="18" /></button>
-                      <button class="action-circle-btn" title="收藏夹" aria-label="收藏夹" @click="showFavorites = !showFavorites"><BookMarked :size="18" /></button>
+                      <button class="qa-tutoring-link" type="button" @click="go('studentTutoring')"><Pencil :size="13" />题目辅导</button>
+                      <button class="action-circle-btn" type="button" :class="{ active: historyOpen }" title="问答历史" aria-label="问答历史" @click="openQaHistory"><Clock :size="18" /></button>
                     </div>
                   </div>
-                  <div v-if="!globalMessages.length" class="qa-welcome"><Sparkles :size="48" /><h2>你好，我是 AI 学习助手</h2><p>基于课程资料为你解答疑问</p></div>
+                  <div v-if="!globalMessages.length" class="qa-welcome"><Sparkles :size="48" /><h2>{{ courseScopeName }}专属问答</h2></div>
                   <ChatList v-else :messages="globalMessages" :thinking="globalThinking" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
                   <div v-if="!globalMessages.length" class="prompt-grid"><button v-for="item in promptCards" :key="item.text" @click="sendGlobalQuick(item.text)"><component :is="item.icon" :size="18" />{{ item.text }}</button></div>
                 </div>
               </div>
               <form class="input-dock-container" @submit.prevent="askGlobal">
                 <div class="input-wrapper">
-                  <div class="context-badge"><BookOpen :size="14" />正在基于《{{ activeCourse?.name || '课程' }}》</div>
+                  <div class="context-badge"><BookOpen :size="14" />当前课程空间：《{{ courseScopeName }}》</div>
                   <div v-if="globalQaAttachments.length" class="qa-attachment-strip">
                     <div v-for="(item, index) in globalQaAttachments" :key="`${item.url}-${index}`" class="qa-attachment-chip">
                       <img :src="item.url" alt="" />
@@ -371,28 +377,100 @@
                   <section class="input-box">
                     <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
                     <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
-                    <textarea v-model="globalQuestion" placeholder="有什么不明白的？可以传图一起问我..." rows="1"></textarea>
+                    <textarea v-model="globalQuestion" placeholder="输入问题" rows="1"></textarea>
                     <button :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || globalThinking || globalQaImageUploading" :data-loading="globalThinking" class="send-btn"><Send :size="20" /></button>
                   </section>
-                  <small class="disclaimer">AI 回答仅供学习参考</small>
                 </div>
               </form>
-              <transition name="drawer"><aside v-if="historyOpen" class="history-drawer"><div class="drawer-head"><h2>问答历史</h2><button @click="historyOpen = false"><X :size="16" /></button></div><div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索历史问答" @keyup.enter="loadQaHistory" /></div><AppCheckbox v-model="showFavorites" label="仅看收藏" /><button v-for="item in filteredQaHistory" :key="item.id" class="history-row" @click="reuseHistory(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}</small></button></aside></transition>
+              <transition name="drawer"><aside v-if="historyOpen" class="history-drawer"><div class="drawer-head"><h2>{{ courseScopeName }}问答历史</h2><button type="button" @click="historyOpen = false"><X :size="16" /></button></div><div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索本课程历史问答" @keyup.enter="loadQaHistory" /></div><button type="button" class="history-favorite-toggle" :class="{ checked: showFavorites }" :aria-pressed="showFavorites" @click="showFavorites = !showFavorites"><span class="favorite-check-box" aria-hidden="true"></span><strong>仅看收藏</strong></button><button v-for="item in filteredQaHistory" :key="item.id" class="history-row" type="button" @click="reuseHistory(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}</small></button><EmptyState v-if="!filteredQaHistory.length" text="本课程暂无问答记录" /></aside></transition>
             </section>
           </template>
 
           <template v-else-if="active === 'studentTutoring'">
-            <PageTitle title="题目辅导" sub="AI 带你一步步理解"><span class="tag tag-ai">文字 · 图片</span></PageTitle>
-            <div class="tutoring-grid">
-              <section class="panel-card tutor-input"><div class="seg-tabs"><button :class="{ active: problemMode === 'text' }" @click="problemMode = 'text'"><Type :size="16" />文字输入</button><button :class="{ active: problemMode === 'image' }" @click="problemMode = 'image'"><Camera :size="16" />图片上传</button></div><textarea v-if="problemMode === 'text'" v-model="problemText" maxlength="500" placeholder="在这里粘贴或输入题目..." class="problem-text"></textarea><label v-else class="image-drop" :class="{ 'ocr-scanning': ocrScanning }"><Camera :size="36" /><span>{{ ocrScanning ? '正在识别' : '拍照或截图上传题目' }}</span><input ref="problemFile" type="file" accept="image/*" @change="createImageProblem" /></label><small>{{ problemText.length }} / 500字</small><div v-if="activeProblem" class="knowledge-box"><Sparkles :size="14" />识别到：<span v-for="item in activeProblem.knowledge_points || []" :key="item" class="tag tag-primary">{{ item }}</span></div><button class="btn btn-ai full" :data-loading="problemMode === 'image' && ocrScanning" :disabled="problemMode === 'image' && ocrScanning" @click="problemMode === 'text' ? createTextProblem() : problemFile?.click()"><Sparkles :size="16" />开始辅导</button></section>
-              <aside class="panel-card guide-card"><div class="section-head"><h2><Sparkles :size="18" />{{ activeProblem ? 'AI 辅导进行中' : '等待题目输入' }}</h2></div><EmptyGuide v-if="!activeProblem" /><GuideStep v-for="level in [1,2,3]" v-else :key="level" :level="level" :data="guidance[level]" :open="guideOpen[level]" @toggle="toggleGuide(level)" @load="loadGuidance(level)" /></aside>
-            </div>
-            <HistoryStrip title="历史辅导记录" :items="problemHistory" @pick="selectProblem" />
+            <section class="tutoring-page">
+              <PageTitle title="题目辅导">
+                <CourseSelect />
+                <span class="tag tag-ai"><Sparkles :size="12" />分步提示</span>
+              </PageTitle>
+
+              <div class="tutoring-grid">
+                <section class="panel-card tutor-input">
+                  <div class="tutor-card-head">
+                    <div>
+                      <span class="tutor-eyebrow"><BookOpen :size="14" />当前课程</span>
+                      <h2>{{ courseScopeName }}</h2>
+                    </div>
+                    <span class="tutor-status" :class="{ active: !!activeProblem }">{{ activeProblem ? '辅导中' : '待提交' }}</span>
+                  </div>
+
+                  <div class="seg-tabs tutor-mode-tabs">
+                    <button type="button" :class="{ active: problemMode === 'text' }" @click="problemMode = 'text'"><Type :size="16" />文字输入</button>
+                    <button type="button" :class="{ active: problemMode === 'image' }" @click="problemMode = 'image'"><Camera :size="16" />图片上传</button>
+                  </div>
+
+                  <div class="problem-editor-wrap">
+                    <textarea
+                      v-if="problemMode === 'text'"
+                      v-model="problemText"
+                      maxlength="500"
+                      placeholder="题目内容"
+                      class="problem-text"
+                    ></textarea>
+                    <label v-else class="image-drop" :class="{ 'ocr-scanning': ocrScanning }">
+                      <input ref="problemFile" type="file" accept="image/*" @change="createImageProblem" />
+                      <span class="upload-icon"><Camera :size="34" /></span>
+                      <strong>{{ ocrScanning ? '正在识别题目' : '上传题目截图' }}</strong>
+                    </label>
+                  </div>
+
+                  <div class="tutor-input-meta">
+                    <span>{{ problemMode === 'text' ? `${problemText.length} / 500字` : '图片模式' }}</span>
+                    <span>{{ selectedCourseId ? `《${courseScopeName}》` : '请先选择课程' }}</span>
+                  </div>
+
+                  <div v-if="activeProblem" class="knowledge-box">
+                    <Sparkles :size="14" />
+                    <strong>识别知识点</strong>
+                    <span v-for="item in activeProblem.knowledge_points || []" :key="item" class="tag tag-primary">{{ item }}</span>
+                    <span v-if="!(activeProblem.knowledge_points || []).length" class="tag">待分析</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="btn btn-ai full tutor-submit-btn"
+                    :data-loading="problemSubmitting || ocrScanning"
+                    :disabled="problemMode === 'text' ? (problemSubmitting || !selectedCourseId || !problemText.trim()) : (ocrScanning || !selectedCourseId)"
+                    @click="problemMode === 'text' ? createTextProblem() : problemFile?.click()"
+                  >
+                    <Sparkles :size="16" />{{ problemMode === 'text' ? '开始辅导' : '上传并识别' }}
+                  </button>
+                </section>
+
+                <aside class="panel-card guide-card">
+                  <div class="section-head">
+                    <h2><Sparkles :size="18" />{{ activeProblem ? 'AI 辅导进行中' : '等待题目输入' }}</h2>
+                    <span v-if="activeProblem" class="tag tag-success">3步引导</span>
+                  </div>
+
+                  <article v-if="activeProblem" class="active-problem-card">
+                    <span>当前题目</span>
+                    <p>{{ activeProblem.corrected_text || activeProblem.ocr_text || activeProblem.raw_text || problemText || '已提交题目' }}</p>
+                  </article>
+
+                  <EmptyGuide v-if="!activeProblem" />
+                  <div v-else class="guide-step-list">
+                    <GuideStep v-for="level in [1,2,3]" :key="level" :level="level" :data="guidance[level]" :open="guideOpen[level]" @toggle="toggleGuide(level)" @load="loadGuidance(level)" />
+                  </div>
+                </aside>
+              </div>
+
+              <HistoryStrip title="历史辅导记录" :items="problemHistory" @pick="selectProblem" />
+            </section>
           </template>
 
           <template v-else-if="active === 'studentKnowledge'">
-            <PageTitle title="知识点精讲" sub="按需深入学习"><CourseSelect /></PageTitle>
-            <div class="knowledge-layout"><aside class="knowledge-tree"><div class="pretty-input"><Search :size="15" /><input v-model="knowledgeKeyword" placeholder="搜索知识点" /></div><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" @click="selectedChapterId = chapter.id; loadKnowledge()"><ChevronRight :size="14" />{{ chapter.title }}</button><div class="weak-tags"><strong><Zap :size="14" />薄弱知识点</strong><span v-for="item in weakPoints.slice(0, 3)" :key="item.knowledge_point" class="tag tag-danger">{{ item.knowledge_point }}</span></div></aside><section class="knowledge-content"><article class="knowledge-head"><h1>{{ selectedKnowledge?.name || '选择知识点' }}</h1><p>所属：{{ chapterName(selectedKnowledge?.chapter_id) }}</p><span class="tag" :class="knowledgeMasteryClass">{{ knowledgeMasteryText }}</span><AppProgress :value="knowledgeMastery" :tone="knowledgeMastery >= 70 ? 'success' : knowledgeMastery >= 35 ? 'warning' : 'danger'" /></article><div class="segmented"><button v-for="item in levelItems" :key="item.value" type="button" :class="{ active: knowledgeLevel === item.value }" @click="knowledgeLevel = String(item.value)">{{ item.label }}</button></div><article class="knowledge-body"><KnowledgeBlock icon="Quote" title="定义" :content="knowledgeContent.definition" /><KnowledgeBlock icon="Layers" title="核心原理" :content="knowledgeContent.principle" ai /><KnowledgeBlock icon="Pencil" title="例题解析" :content="knowledgeContent.example" /><KnowledgeBlock icon="AlertTriangle" title="常见易错点" :content="knowledgeContent.common_mistake" warning /><div class="practice-cta"><Sparkles :size="16" />基于此知识点生成练习题<button @click="generateKnowledgeQuiz(5)">练习5题</button><button @click="generateKnowledgeQuiz(10)">练习10题</button></div></article></section></div>
+            <PageTitle title="知识点精讲"><CourseSelect /></PageTitle>
+            <div class="knowledge-layout"><aside class="knowledge-tree"><div class="pretty-input"><Search :size="15" /><input v-model="knowledgeKeyword" placeholder="搜索知识点" /></div><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" @click="selectedChapterId = chapter.id; loadKnowledge()"><ChevronRight :size="14" />{{ chapter.title }}</button><div class="weak-tags"><strong><Zap :size="14" />薄弱知识点</strong><span v-for="item in weakPoints.slice(0, 3)" :key="item.knowledge_point" class="tag tag-danger">{{ item.knowledge_point }}</span></div></aside><section class="knowledge-content"><article class="knowledge-head"><h1>{{ selectedKnowledge?.name || '选择知识点' }}</h1><p>所属：{{ chapterName(selectedKnowledge?.chapter_id) }}</p><span class="tag" :class="knowledgeMasteryClass">{{ knowledgeMasteryText }}</span><AppProgress :value="knowledgeMastery" :tone="knowledgeMastery >= 70 ? 'success' : knowledgeMastery >= 35 ? 'warning' : 'danger'" /></article><div class="segmented"><button v-for="item in levelItems" :key="item.value" type="button" :class="{ active: knowledgeLevel === item.value }" @click="knowledgeLevel = String(item.value)">{{ item.label }}</button></div><article class="knowledge-body"><KnowledgeBlock icon="Quote" title="定义" :content="knowledgeContent.definition" /><KnowledgeBlock icon="Layers" title="核心原理" :content="knowledgeContent.principle" ai /><KnowledgeBlock icon="Pencil" title="例题解析" :content="knowledgeContent.example" /><KnowledgeBlock icon="AlertTriangle" title="常见易错点" warning :content="knowledgeContent.common_mistake" /><div class="practice-cta"><Sparkles :size="16" />生成练习题<button @click="generateKnowledgeQuiz(5)">练习5题</button><button @click="generateKnowledgeQuiz(10)">练习10题</button></div></article></section></div>
           </template>
 
           <template v-else-if="active === 'studentQuizzes'">
@@ -467,7 +545,7 @@
                   >
                     <Sparkles :size="20" />智能生成练习
                   </button>
-                  <p class="practice-generate-hint">AI 将根据您的错题记录和所选章节智能组卷</p>
+                  <p class="practice-generate-hint"></p>
                 </article>
 
                 <article class="practice-modern-card">
@@ -481,7 +559,7 @@
                     <div>
                       <div class="practice-feature-icon"><BookMarked :size="24" /></div>
                       <h2>错题重练</h2>
-                      <p>{{ wrongQuestions.length ? '基于历史错题自动生成，攻克薄弱环节' : '暂无错题，完成练习后会自动归集' }}</p>
+                      <p>{{ wrongQuestions.length ? `${wrongQuestions.length} 道错题` : '暂无错题' }}</p>
                     </div>
                     <span><Play :size="16" />{{ wrongQuestions.length ? '开始' : '暂无' }}</span>
                   </button>
@@ -506,9 +584,51 @@
           </template>
 
           <template v-else-if="active === 'studentWrongBook'">
-            <PageTitle title="我的错题本" :sub="`共 ${wrongQuestions.length} 道`"><button class="btn btn-primary" :data-loading="wrongPracticeGenerating" :disabled="wrongPracticeGenerating || !wrongQuestions.length" @click="loadWrongPractice"><RefreshCw :size="16" />开始重练</button></PageTitle>
-            <article class="wrong-hero"><BookMarked :size="24" /><div><strong>{{ wrongQuestions.length }}</strong><span>错题总数</span></div><div><strong>{{ wrongQuestions.filter((w) => w.wrong_count > 1).length }}</strong><span>待重练</span></div><div><strong>{{ weeklyWrongCount }}</strong><span>本周新增</span></div></article>
-            <div class="wrong-layout"><aside class="wrong-tree"><button class="active"><Layers :size="16" />全部错题({{ wrongQuestions.length }})</button><strong>按知识点</strong><button v-for="item in weakPoints" :key="item.knowledge_point">{{ item.knowledge_point }}({{ item.wrong_count }})</button></aside><section class="wrong-list"><div class="wrong-tools"><div class="pretty-input"><Search :size="15" /><input v-model="wrongKeyword" placeholder="搜索题目关键词" /></div><SelectMenu v-model="wrongStatus" :items="wrongStatusOptions" /></div><WrongCard v-for="item in filteredWrongQuestions" :key="item.wrong_question_id" :item="item" @practice="practiceWrong(item)" /><EmptyState v-if="!filteredWrongQuestions.length" text="暂无错题" /></section></div>
+            <section class="wrong-book-page">
+              <header class="wrong-dashboard-head">
+                <div class="wrong-title-block">
+                  <span class="wrong-title-icon"><BookMarked :size="22" /></span>
+                  <div>
+                    <h1>错题本</h1>
+                    <p>《{{ courseScopeName }}》</p>
+                  </div>
+                </div>
+                <div class="wrong-head-actions">
+                  <CourseSelect />
+                  <button class="btn btn-primary" :data-loading="wrongPracticeGenerating" :disabled="wrongPracticeGenerating || !wrongQuestions.length" @click="loadWrongPractice"><RefreshCw :size="16" />开始重练</button>
+                </div>
+              </header>
+
+              <article class="wrong-hero">
+                <div><strong>{{ wrongQuestions.length }}</strong><span>历史错题</span></div>
+                <div><strong>{{ pendingWrongCount }}</strong><span>待重练</span></div>
+                <div><strong>{{ repeatedWrongCount }}</strong><span>多次错误</span></div>
+                <div><strong>{{ weeklyWrongCount }}</strong><span>本周新增</span></div>
+              </article>
+
+              <div class="wrong-layout">
+                <aside class="wrong-tree">
+                  <strong class="course-scope-label"><BookOpen :size="15" />{{ courseScopeName }}</strong>
+                  <button type="button" :class="{ active: !selectedWrongKnowledge }" @click="selectedWrongKnowledge = ''"><Layers :size="16" />全部错题 <em>{{ wrongQuestions.length }}</em></button>
+                  <strong>按知识点</strong>
+                  <button v-for="item in wrongKnowledgeFilters" :key="item.name" type="button" :class="{ active: selectedWrongKnowledge === item.name }" @click="selectedWrongKnowledge = item.name">
+                    <Zap :size="15" />{{ item.name }} <em>{{ item.count }}</em>
+                  </button>
+                </aside>
+                <section class="wrong-list">
+                  <div class="wrong-tools">
+                    <div class="pretty-input"><Search :size="15" /><input v-model="wrongKeyword" placeholder="搜索题干或解析" /></div>
+                    <SelectMenu v-model="wrongStatus" :items="wrongStatusOptions" />
+                  </div>
+                  <div v-if="selectedWrongKnowledge || wrongStatus || wrongKeyword" class="wrong-filter-state">
+                    <span>{{ wrongFilterSummary }}</span>
+                    <button type="button" @click="clearWrongFilters"><X :size="14" />清除</button>
+                  </div>
+                  <WrongCard v-for="item in filteredWrongQuestions" :key="item.wrong_question_id" :item="item" @practice="practiceWrong(item)" />
+                  <EmptyState v-if="!filteredWrongQuestions.length" text="本课程暂无错题" />
+                </section>
+              </div>
+            </section>
           </template>
 
           <template v-else-if="active === 'studentPlans'">
@@ -588,10 +708,9 @@
                         <Sparkles :size="40" />
                       </div>
                       <h3>今天还没有计划</h3>
-                      <p>一句话描述你想学的内容，让 AI 为你量身定制任务清单</p>
 
                       <div class="ai-prompt-bar">
-                        <input v-model="planForm.goal" type="text" placeholder="输入学习目标，如：复习第二章，重点看TCP协议..." @keyup.enter="createPlan" />
+                        <input v-model="planForm.goal" type="text" placeholder="学习目标" @keyup.enter="createPlan" />
                         <button type="button" class="btn-ai-gen" :data-loading="planCreating" :disabled="planCreating || !planForm.goal.trim()" @click="createPlan">
                           <Sparkles :size="18" />AI 生成
                         </button>
@@ -706,7 +825,7 @@
           </template>
 
           <template v-else-if="active === 'studentMaterials'">
-            <PageTitle title="课程资料" sub="课程文件与讲义"><CourseSelect /></PageTitle>
+            <PageTitle title="课程资料"><CourseSelect /></PageTitle>
             <article class="panel-card"><MaterialRow v-for="item in courseHome.materials || []" :key="item.id" :item="item" /><EmptyState v-if="!(courseHome.materials || []).length" text="暂无资料" /></article>
           </template>
         </section>
@@ -726,7 +845,7 @@
           <label>课程码</label>
           <div class="code-input" :class="{ ok: joinPreview && !joinPreview.already_joined, error: joinError }"><input v-model="joinCode" maxlength="12" @input="formatJoinCode" /><Loader2 v-if="joinChecking" :size="18" /><CheckCircle v-if="joinPreview && !joinChecking" :size="18" /><XCircle v-if="joinError" :size="18" /></div>
           <small class="field-error" v-if="joinError">{{ joinError }}</small>
-          <article v-if="joinPreview" class="preview-course"><span :style="{ background: courseGradient(joinPreview.course.id) }"><BookOpen :size="20" /></span><div><strong>{{ joinPreview.course.name }}</strong><small>{{ joinPreview.teacher?.nickname || '教师' }} · {{ joinPreview.course.term }} · {{ joinPreview.student_count }}人</small></div></article>
+          <article v-if="joinPreview" class="preview-course"><span :class="{ 'has-image': joinPreview.course.cover_url }" :style="courseCoverStyle(joinPreview.course)"><BookOpen v-if="!joinPreview.course.cover_url" :size="20" /></span><div><strong>{{ joinPreview.course.name }}</strong><small>{{ joinPreview.teacher?.nickname || '教师' }} · {{ joinPreview.course.term }} · {{ joinPreview.student_count }}人</small></div></article>
           <div class="hint-line"><Info :size="14" />加入后即可学习课程内容</div>
           <footer><button class="btn btn-ghost" @click="joinOpen = false">取消</button><button class="btn btn-primary" :data-loading="joinChecking" :disabled="joinChecking || !joinPreview || joinPreview.already_joined" @click="confirmJoin">确认加入</button></footer>
         </article>
@@ -737,9 +856,8 @@
       <div v-if="planModalOpen" class="modal-mask">
         <article class="join-modal">
           <div class="modal-head"><Sparkles :size="22" /><h2>AI 学习计划</h2><button @click="planModalOpen = false"><X :size="16" /></button></div>
-          <textarea v-model="planForm.goal" class="textarea" placeholder="描述你的学习目标"></textarea>
+          <textarea v-model="planForm.goal" class="textarea" placeholder="学习目标"></textarea>
           <div class="form-row"><input v-model.number="planForm.daily_minutes" class="input" type="number" /><input v-model.number="planForm.available_days" class="input" type="number" /></div>
-          <div class="stream-preview"><Sparkles :size="16" />AI 将生成今天的学习任务</div>
           <footer><button class="btn btn-ghost" @click="planModalOpen = false">取消</button><button class="btn btn-primary" @click="createPlan">采用计划</button></footer>
         </article>
       </div>
@@ -771,6 +889,7 @@ import PasswordField from "../components/PasswordField.vue";
 type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };
 type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: any[]; attachments?: QaAttachment[]; thought?: string; thoughtOpen?: boolean; record_id?: number; favorite?: boolean; outOfScope?: boolean; streaming?: boolean };
 const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const textPayloadKeys = ["markdownContent", "markdown_content", "page_text", "script_text", "content", "text"] as const;
 
 function renderMath(source: string, displayMode: boolean) {
   try {
@@ -785,7 +904,124 @@ function renderMath(source: string, displayMode: boolean) {
   }
 }
 
-function renderRichText(value?: string | null) {
+function extractStructuredText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.map(extractStructuredText).filter(Boolean).join("\n\n");
+  if (typeof value === "object") {
+    const payload = value as Record<string, unknown>;
+    for (const key of textPayloadKeys) {
+      const text = extractStructuredText(payload[key]);
+      if (text) return text;
+    }
+    return Object.values(payload)
+      .map(extractStructuredText)
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  let text = String(value).trim();
+  if (!text) return "";
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      return extractStructuredText(JSON.parse(text));
+    } catch {
+      text = extractSerializedTextValues(text) || text;
+    }
+  }
+  return text
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\'/g, "'")
+    .replace(/\\"/g, "\"")
+    .trim();
+}
+
+function extractSerializedTextValues(value: string) {
+  const keyPattern = new RegExp(String.raw`['"](?:${textPayloadKeys.join("|")})['"]\s*:\s*`, "g");
+  const pieces: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = keyPattern.exec(value))) {
+    let cursor = match.index + match[0].length;
+    while (/\s/.test(value[cursor] || "")) cursor += 1;
+    const quote = value[cursor];
+    if (quote !== "'" && quote !== "\"") continue;
+    cursor += 1;
+    let raw = "";
+    let escaped = false;
+    for (; cursor < value.length; cursor += 1) {
+      const char = value[cursor];
+      if (escaped) {
+        raw += `\\${char}`;
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) {
+        if (raw.trim()) pieces.push(raw);
+        keyPattern.lastIndex = cursor + 1;
+        break;
+      }
+      raw += char;
+    }
+    if (escaped && raw.trim()) pieces.push(`${raw}\\`);
+  }
+  return pieces.join("\n\n");
+}
+
+function normalizeLatexEscapes(value: string) {
+  if (!value.includes("\\")) return value;
+  return value.replace(/(^|[^\\])\\\\([A-Za-z])/g, (_match, prefix: string, command: string) => `${prefix}\\${command}`);
+}
+
+function wrapBareLatexBlocks(value: string) {
+  if (!value.includes("\\")) return value;
+  const command = String.raw`(?:frac|mathrm|mathbf|mathbb|sqrt|sum|int|lim|left|right|begin|end|cdot|times|leq|geq|neq|approx|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|Delta|Omega|infty)`;
+  const commandPattern = new RegExp(String.raw`\\${command}`, "g");
+  let inFence = false;
+  return value.split("\n").map((line) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("```")) {
+      inFence = !inFence;
+      return line;
+    }
+    if (
+      inFence ||
+      !trimmed ||
+      trimmed.includes("@@MATH_") ||
+      trimmed.startsWith("$$") ||
+      trimmed.endsWith("$$") ||
+      trimmed.startsWith("\\[") ||
+      trimmed.startsWith("\\(")
+    ) {
+      return line;
+    }
+    const commands = trimmed.match(commandPattern) || [];
+    const syntaxWeight = (trimmed.match(/[\\{}_^=&]/g) || []).length / Math.max(trimmed.length, 1);
+    const formulaLike = commands.length > 0 && (/\\begin\{|\\left|\\right|\\frac|\\mathbb|\\mathrm|[_^=]/.test(trimmed));
+    if (formulaLike && (trimmed.startsWith("\\") || syntaxWeight > 0.12 || trimmed.length > 32)) {
+      const leading = line.match(/^\s*/)?.[0] || "";
+      return `${leading}$$ ${trimmed} $$`;
+    }
+    return line;
+  }).join("\n");
+}
+
+function wrapInlineBareLatex(value: string) {
+  if (!value.includes("\\")) return value;
+  const command = String.raw`(?:frac|mathrm|mathbf|mathbb|sqrt|sum|int|lim|left|right|cdot|times|div|pm|leq|geq|neq|approx|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|Delta|Omega|infty)`;
+  const pattern = new RegExp(String.raw`(^|[\s：:，,（(])((?:\\${command}(?:\{[^{}]*\}|\[[^\]]*\]|[^\s。；;!?！？])*)+)`, "g");
+  return value.split("\n").map((line) => {
+    if (line.includes("@@MATH_") || line.includes("$$") || line.includes("\\[") || line.includes("\\(")) return line;
+    return line.replace(pattern, (match, prefix: string, expr: string) => {
+      if (!expr) return match;
+      return `${prefix}$${expr.trim()}$`;
+    });
+  }).join("\n");
+}
+
+function renderRichText(value?: unknown) {
   if (!value) return "";
   const mathParts: string[] = [];
   const stash = (html: string) => {
@@ -793,12 +1029,16 @@ function renderRichText(value?: string | null) {
     mathParts.push(html);
     return token;
   };
-  const text = value
-    .replace(/\$\$([\s\S]+?)\$\$/g, (_, expr: string) => stash(renderMath(expr.trim(), true)))
-    .replace(/\\\[([\s\S]+?)\\\]/g, (_, expr: string) => stash(renderMath(expr.trim(), true)))
-    .replace(/\\\(([\s\S]+?)\\\)/g, (_, expr: string) => stash(renderMath(expr.trim(), false)))
-    .replace(/(^|[^\\])\$([^$\n]+?)\$/g, (_, prefix: string, expr: string) => `${prefix}${stash(renderMath(expr.trim(), false))}`);
-  return markdownRenderer.render(text).replace(/@@MATH_(\d+)@@/g, (_, index: string) => mathParts[Number(index)] || "");
+  const renderDelimitedMath = (text: string) => text
+    .replace(/\$\$([\s\S]+?)\$\$/g, (_, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), true)))
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), true)))
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), false)))
+    .replace(/(^|[^\\])\$([^$\n]+?)\$/g, (_, prefix: string, expr: string) => `${prefix}${stash(renderMath(normalizeLatexEscapes(expr.trim()), false))}`);
+  const extracted = normalizeLatexEscapes(extractStructuredText(value));
+  const delimitedRendered = renderDelimitedMath(extracted);
+  const inferredMath = wrapInlineBareLatex(wrapBareLatexBlocks(delimitedRendered));
+  const textWithDelimitedMath = renderDelimitedMath(inferredMath);
+  return markdownRenderer.render(textWithDelimitedMath).replace(/@@MATH_(\d+)@@/g, (_, index: string) => mathParts[Number(index)] || "");
 }
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
@@ -820,6 +1060,7 @@ const searchOpen = ref(false);
 const globalSearch = ref("");
 const searchInput = ref<HTMLInputElement | null>(null);
 const noticeOpen = ref(false);
+const notificationLoading = ref(false);
 const userMenuOpen = ref(false);
 const topActionsRef = ref<HTMLElement | null>(null);
 const noticePopRef = ref<HTMLElement | null>(null);
@@ -830,6 +1071,7 @@ const joinPreview = ref<any | null>(null);
 const joinChecking = ref(false);
 const joinError = ref("");
 let joinTimer: number | undefined;
+let notificationTimer: number | undefined;
 
 const courseKeyword = ref("");
 const termFilter = ref("");
@@ -860,6 +1102,7 @@ const audioProgress = ref(0);
 const studySeconds = ref(0);
 const completeOpen = ref(false);
 const pageNote = ref("");
+const pageNoteArea = ref<HTMLTextAreaElement | null>(null);
 const noteState = ref("已保存");
 const noteSavedAt = ref("尚未保存");
 let chromeTimer: number | undefined;
@@ -881,6 +1124,7 @@ const showFavorites = ref(false);
 const problemMode = ref<"text" | "image">("text");
 const problemText = ref("");
 const problemFile = ref<HTMLInputElement | null>(null);
+const problemSubmitting = ref(false);
 const ocrScanning = ref(false);
 const activeProblem = ref<any | null>(null);
 const problemHistory = ref<any[]>([]);
@@ -910,6 +1154,7 @@ const quizSubmitting = ref(false);
 const wrongQuestions = ref<any[]>([]);
 const wrongKeyword = ref("");
 const wrongStatus = ref("");
+const selectedWrongKnowledge = ref("");
 
 const plans = ref<any[]>([]);
 const tasks = ref<any[]>([]);
@@ -941,7 +1186,7 @@ const topNavTabs = [
 const speedItems = ["0.5", "0.75", "1", "1.25", "1.5", "2"].map((value) => ({ label: `${value}x`, value }));
 const levelItems = [{ label: "入门", value: "beginner" }, { label: "标准", value: "standard" }, { label: "进阶", value: "advanced" }];
 const quizCountOptions = ["5题", "10题", "15题", "20题"];
-const wrongStatusOptions = [{ label: "全部状态", value: "" }, { label: "待重练", value: "todo" }, { label: "多次错误", value: "repeat" }];
+const wrongStatusOptions = [{ label: "全部状态", value: "" }, { label: "待重练", value: "todo" }, { label: "已掌握", value: "resolved" }, { label: "多次错误", value: "repeat" }];
 const courseMenuItems = [{ label: "课程详情", value: "detail" }, { label: "问答记录", value: "qa" }, { label: "分享课程码", value: "share" }, { label: "退出课程", value: "leave", danger: true }];
 
 const stats = computed(() => dashboard.value.stats || profilePayload.value.stats || {});
@@ -961,6 +1206,7 @@ const greeting = computed(() => { const hour = new Date().getHours(); if (hour <
 const todayText = computed(() => new Date().toLocaleDateString("zh-CN", { weekday: "long", month: "long", day: "numeric" }));
 const termLeftDays = computed(() => Math.max(1, Math.ceil((new Date(new Date().getFullYear(), 6, 15).getTime() - Date.now()) / 86400000)));
 const activeCourse = computed(() => courses.value.find((course) => course.id === selectedCourseId.value) || courses.value[0] || null);
+const courseScopeName = computed(() => activeCourse.value?.name || "当前课程");
 const currentAvatarUrl = computed(() => profileForm.avatar_url || props.user.avatar_url || "");
 const homeRecommendedLesson = computed(() => dashboard.value.recommendation?.lesson || continueLesson.value || null);
 const homeRecommendedLessonTitle = computed(() => {
@@ -995,8 +1241,19 @@ const filteredCourses = computed(() => (courseTab.value === "active" ? activeCou
 const latestLesson = computed(() => (courseHome.value.lessons || [])[0] || null);
 const visibleCourseMaterials = computed(() => materialsExpanded.value ? courseHome.value.materials || [] : (courseHome.value.materials || []).slice(0, 5));
 const activePage = computed(() => classroomLesson.value?.pages.find((page) => page.page_number === currentPage.value) || classroomLesson.value?.pages[0] || null);
-const subtitleLead = computed(() => (activePage.value?.subtitle_text || "").slice(0, 8));
-const subtitleRest = computed(() => (activePage.value?.subtitle_text || "").slice(8));
+const activePageText = computed(() => extractStructuredText(activePage.value?.page_text || "") || String(activePage.value?.page_text || "").trim());
+const activeScriptText = computed(() => extractStructuredText(activePage.value?.script_text || activePage.value?.page_text || "") || String(activePage.value?.script_text || activePage.value?.page_text || "").trim());
+const activeSubtitleText = computed(() => {
+  const text = extractStructuredText(activePage.value?.subtitle_text || activePage.value?.script_text || activePage.value?.page_text || "");
+  if (subtitleMode.value === "keyword") {
+    const firstSentence = text.match(/^[\s\S]*?[。！？!?]/)?.[0]?.trim() || text;
+    return firstSentence.slice(0, 140);
+  }
+  return text;
+});
+const activePageHtml = computed(() => renderRichText(activePageText.value || "暂无页面内容"));
+const activeScriptHtml = computed(() => renderRichText(activeScriptText.value || "暂无文稿"));
+const activeSubtitleHtml = computed(() => renderRichText(activeSubtitleText.value));
 const promptContext = computed(() => {
   const home = courseHome.value || {};
   const courseName = home.course?.name || activeCourse.value?.name || "";
@@ -1041,8 +1298,40 @@ const knowledgeMasteryClass = computed(() => knowledgeMastery.value > 75 ? "tag-
 const knowledgeContent = computed(() => selectedKnowledge.value?.content_by_level?.[knowledgeLevel.value] || {});
 const courseQuizzes = computed(() => quizzes.value.filter((quiz) => quiz.quiz_type === "course"));
 const practiceQuizzes = computed(() => quizzes.value.filter((quiz) => quiz.quiz_type !== "course"));
-const filteredWrongQuestions = computed(() => wrongQuestions.value.filter((item) => (!wrongKeyword.value || item.question.stem.includes(wrongKeyword.value)) && (!wrongStatus.value || (wrongStatus.value === "todo" ? item.wrong_count > 0 : item.wrong_count > 1))));
-const weeklyWrongCount = computed(() => wrongQuestions.value.filter((item) => (item.updated_at || item.created_at) && Date.now() - new Date(item.updated_at || item.created_at).getTime() < 7 * 86400000).length);
+const wrongKnowledgeFilters = computed(() => {
+  const counter = new Map<string, number>();
+  wrongQuestions.value.forEach((item: any) => {
+    const name = item.knowledge_point_name || "未标注知识点";
+    counter.set(name, (counter.get(name) || 0) + 1);
+  });
+  return Array.from(counter.entries()).map(([name, count]) => ({ name, count })).sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
+});
+const pendingWrongCount = computed(() => wrongQuestions.value.filter((item) => !item.is_resolved).length);
+const repeatedWrongCount = computed(() => wrongQuestions.value.filter((item) => Number(item.wrong_count || 0) > 1).length);
+const filteredWrongQuestions = computed(() => wrongQuestions.value.filter((item) => {
+  const keyword = wrongKeyword.value.trim();
+  const stem = item.question?.stem || "";
+  const explanation = item.question?.explanation || "";
+  const knowledgeName = item.knowledge_point_name || "未标注知识点";
+  const statusMatched = !wrongStatus.value
+    || (wrongStatus.value === "todo" && !item.is_resolved)
+    || (wrongStatus.value === "resolved" && item.is_resolved)
+    || (wrongStatus.value === "repeat" && Number(item.wrong_count || 0) > 1);
+  return (!keyword || stem.includes(keyword) || explanation.includes(keyword))
+    && (!selectedWrongKnowledge.value || knowledgeName === selectedWrongKnowledge.value)
+    && statusMatched;
+}));
+const wrongFilterSummary = computed(() => {
+  const parts = [];
+  if (selectedWrongKnowledge.value) parts.push(selectedWrongKnowledge.value);
+  if (wrongStatus.value) parts.push(String(wrongStatusOptions.find((item) => item.value === wrongStatus.value)?.label || ""));
+  if (wrongKeyword.value.trim()) parts.push(`关键词：${wrongKeyword.value.trim()}`);
+  return parts.filter(Boolean).join(" · ") || "全部错题";
+});
+const weeklyWrongCount = computed(() => wrongQuestions.value.filter((item) => {
+  const time = item.last_wrong_at || item.updated_at || item.created_at;
+  return time && Date.now() - new Date(time).getTime() < 7 * 86400000;
+}).length);
 const monthlyCheckins = computed(() => checkinDays.value.filter((day) => day.slice(0, 7) === new Date().toISOString().slice(0, 7)).length);
 const weeklyHours = computed(() => [0.8, 1.2, 1.6, 1.1, 2.2, 0.7, 1.4]);
 const totalWeeklyHours = computed(() => Number(weeklyHours.value.reduce((sum, value) => sum + Number(value || 0), 0).toFixed(1)));
@@ -1086,22 +1375,75 @@ const planAchievementSlots = computed(() => {
   return items;
 });
 
+function resetCourseScopedState() {
+  courseHome.value = {};
+  lessons.value = [];
+  globalMessages.value = [];
+  globalConversationId.value = null;
+  globalQuestion.value = "";
+  globalQaAttachments.value = [];
+  qaHistory.value = [];
+  qaKeyword.value = "";
+  historyOpen.value = false;
+  wrongQuestions.value = [];
+  weakPoints.value = [];
+  wrongKeyword.value = "";
+  wrongStatus.value = "";
+  selectedWrongKnowledge.value = "";
+  quizzes.value = [];
+  activeProblem.value = null;
+  problemText.value = "";
+  problemHistory.value = [];
+  Object.keys(guidance).forEach((key) => delete guidance[Number(key)]);
+  guideOpen[1] = true;
+  guideOpen[2] = false;
+  guideOpen[3] = false;
+}
+
 watch(() => props.pageKey, async (key) => { active.value = key || "studentHome"; await loadActive(); });
-watch(selectedCourseId, (id) => { if (id) localStorage.setItem("student_current_course_id", String(id)); });
+watch(selectedCourseId, async (id, previousId) => {
+  if (id) localStorage.setItem("student_current_course_id", String(id));
+  if (id === previousId) return;
+  resetCourseScopedState();
+  if (active.value === "studentQa") {
+    await loadCourseHome();
+    await loadQaHistory();
+  }
+  if (active.value === "studentWrongBook") await loadWrongBook();
+  if (active.value === "studentTutoring") await loadProblemHistory();
+  if (active.value === "studentKnowledge") await loadKnowledge();
+  if (active.value === "studentQuizzes") await loadQuizPage();
+});
 watch(activePage, async (page) => { if (page) await loadNote(page.id); }, { immediate: false });
 
 async function run<T>(task: () => Promise<T>, ok?: string) { try { const data = await task(); if (ok) emit("notice", "success", ok); return data; } catch (error) { emit("notice", "error", (error as Error).message); return null; } }
 async function go(key: string) { await router.push(routeByPage[key] || "/home"); }
 async function loadCourses() { courses.value = (await run<any[]>(() => api.get("/student/courses"))) || []; if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id; }
 async function loadDashboard() { dashboard.value = (await run(() => api.get("/student/dashboard"))) || {}; notifications.value = dashboard.value.notifications || []; courses.value = dashboard.value.courses || courses.value; if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id; }
+async function loadNotifications(silent = false) {
+  if (notificationLoading.value) return;
+  if (!silent) notificationLoading.value = true;
+  try {
+    notifications.value = (await api.get<any[]>("/student/notifications")) || [];
+  } catch (error) {
+    if (!silent) emit("notice", "error", (error as Error).message);
+  } finally {
+    if (!silent) notificationLoading.value = false;
+  }
+}
+async function toggleNotifications() {
+  noticeOpen.value = !noticeOpen.value;
+  userMenuOpen.value = false;
+  if (noticeOpen.value) await loadNotifications();
+}
 async function loadCourseHome() { if (!selectedCourseId.value) return; courseHome.value = (await run(() => api.get(`/student/courses/${selectedCourseId.value}/home`))) || {}; lessons.value = courseHome.value.lessons || []; }
 async function loadProfile() { profilePayload.value = (await run(() => api.get("/student/profile"))) || {}; Object.assign(profileForm, { nickname: profilePayload.value.user?.nickname || props.user.nickname, avatar_url: profilePayload.value.user?.avatar_url || "", school: profilePayload.value.student_profile?.school || "", bio: profilePayload.value.user?.bio || "" }); noticeSettings.splice(0, noticeSettings.length, ...(profilePayload.value.notification_settings || [])); }
 async function loadActive() {
   if (active.value === "studentHome") await loadDashboard();
   if (active.value === "studentCourses") await loadCourses();
+  if (["studentQa", "studentWrongBook", "studentTutoring", "studentKnowledge", "studentQuizzes"].includes(active.value) && !courses.value.length) await loadCourses();
   if (["studentCourseHome", "studentMaterials"].includes(active.value)) await loadCourseHome();
   if (active.value === "studentQa") {
-    if (!courses.value.length) await loadCourses();
     await loadCourseHome();
     await loadQaHistory();
   }
@@ -1142,6 +1484,26 @@ function isStudentNavActive(key: string) {
   return active.value === key;
 }
 function courseGradient(id = 1) { const items = ["linear-gradient(135deg,#4F46E5,#06B6D4)", "linear-gradient(135deg,#10B981,#3B82F6)", "linear-gradient(135deg,#F59E0B,#EF4444)", "linear-gradient(135deg,#8B5CF6,#EC4899)"]; return items[id % items.length]; }
+function courseCoverStyle(course?: any) {
+  if (course?.cover_url) {
+    return {
+      backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.06), rgba(15,23,42,0.42)), url(${course.cover_url})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+  return { background: course?.cover_color || courseGradient(Number(course?.id || 1)) };
+}
+function courseHeroStyle(course?: any) {
+  if (course?.cover_url) {
+    return {
+      backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.72), rgba(79,70,229,0.50)), url(${course.cover_url})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+  return { background: course?.cover_color || courseGradient(Number(course?.id || 1)) };
+}
 function normalizePercent(value: unknown) { const percent = Number.parseFloat(String(value ?? "").replace("%", "")); return Number.isFinite(percent) ? Math.max(0, Math.min(100, Math.round(percent))) : null; }
 function relativeTime(value?: string | null) { if (!value) return "刚刚"; const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
 function formatTime(value?: string | null) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
@@ -1171,6 +1533,21 @@ async function handleAudioEnded() { if (!classroomLesson.value) return; if (curr
 async function loadNote(pageId: number) { if (!pageId) return; const note = await run<any>(() => api.get(`/student/pages/${pageId}/note`)); pageNote.value = note?.content || ""; noteState.value = "已保存"; noteSavedAt.value = note?.updated_at ? `上次保存：${relativeTime(note.updated_at)}` : "尚未保存"; }
 function queueNoteSave() { noteState.value = "未保存"; if (noteTimer) window.clearTimeout(noteTimer); noteTimer = window.setTimeout(saveCurrentNote, 1200); }
 async function saveCurrentNote() { if (!activePage.value) return; noteState.value = "保存中"; const note = await run<any>(() => api.put(`/student/pages/${activePage.value!.id}/note`, { content: pageNote.value })); if (note) { noteState.value = "已保存"; noteSavedAt.value = `上次保存：${relativeTime(note.updated_at)}`; } }
+function formatNote(kind: "bold" | "italic" | "mark") {
+  const textarea = pageNoteArea.value;
+  if (!textarea) return;
+  const start = textarea.selectionStart ?? 0;
+  const end = textarea.selectionEnd ?? start;
+  const selected = pageNote.value.slice(start, end) || (kind === "mark" ? "重点" : "文字");
+  const [prefix, suffix] = kind === "bold" ? ["**", "**"] : kind === "italic" ? ["*", "*"] : ["==", "=="];
+  pageNote.value = `${pageNote.value.slice(0, start)}${prefix}${selected}${suffix}${pageNote.value.slice(end)}`;
+  const cursor = start + prefix.length + selected.length + suffix.length;
+  nextTick(() => {
+    textarea.focus();
+    textarea.setSelectionRange(cursor, cursor);
+  });
+  queueNoteSave();
+}
 function confettiStyle(n: number) { return { left: `${(n * 37) % 100}%`, background: ["#6366F1", "#06B6D4", "#10B981", "#F59E0B", "#EF4444"][n % 5], animationDelay: `${(n % 8) * 0.05}s` }; }
 function nextLessonAfterComplete() { const index = (courseHome.value.lessons || []).findIndex((item: any) => item.id === classroomLesson.value?.lesson.id); const next = (courseHome.value.lessons || [])[index + 1]; if (next) openLesson(next.id); else returnCourse(); }
 function returnCourse() { completeOpen.value = false; closeClassroom(); }
@@ -1309,15 +1686,39 @@ function sendGlobalQuick(text: string) { globalQuestion.value = text; askGlobal(
 async function sendCourseQuick(text: string) { quickCourseQuestion.value = text; await askCourseQuick(); }
 async function askCourseQuick() { if (!quickCourseQuestion.value.trim()) return; globalQuestion.value = quickCourseQuestion.value; quickCourseQuestion.value = ""; await go("studentQa"); await askGlobal(); }
 async function loadQaHistory() { if (!selectedCourseId.value) return; qaHistory.value = (await run<any[]>(() => api.get("/qa/history", { course_id: selectedCourseId.value, keyword: qaKeyword.value }))) || []; }
+async function openQaHistory() { showFavorites.value = false; historyOpen.value = true; await loadQaHistory(); }
 function reuseHistory(item: any) { historyOpen.value = false; globalMessages.value = [{ id: item.id * 2, role: "user", text: item.question, attachments: item.attachments || [] }, { id: item.id * 2 + 1, role: "ai", text: item.answer, sources: item.sources || [], attachments: item.attachments || [], thought: item.thinking_process || item.reasoning_content || item.thought || "", record_id: item.id, favorite: item.is_favorite }]; }
 function toggleThought(message: ChatMessage) { message.thoughtOpen = !message.thoughtOpen; }
 async function favoriteQaMessage(message: ChatMessage) { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/favorite`, { is_favorite: !message.favorite }), "已收藏"); message.favorite = !message.favorite; }
 async function feedbackQaMessage(message: ChatMessage, feedback = "positive") { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/feedback`, { feedback }), "已评价"); }
 
-async function createTextProblem() { if (!selectedCourseId.value || !problemText.value.trim()) return; activeProblem.value = await run<any>(() => api.post("/tutoring/problems/text", { course_id: selectedCourseId.value, text: problemText.value }), "已提交"); await loadProblemHistory(); if (activeProblem.value) await loadGuidance(1); }
+async function createTextProblem() {
+  if (problemSubmitting.value) return;
+  if (!selectedCourseId.value) {
+    emit("notice", "warning", "请先选择课程");
+    return;
+  }
+  if (!problemText.value.trim()) {
+    emit("notice", "warning", "请先输入题目");
+    return;
+  }
+  problemSubmitting.value = true;
+  try {
+    activeProblem.value = await run<any>(() => api.post("/tutoring/problems/text", { course_id: selectedCourseId.value, text: problemText.value }), "已提交");
+    await loadProblemHistory();
+    if (activeProblem.value) await loadGuidance(1);
+  } finally {
+    problemSubmitting.value = false;
+  }
+}
 async function createImageProblem(event: Event) {
   const file = ((event.target as HTMLInputElement).files || [])[0];
-  if (!file || !selectedCourseId.value) return;
+  if (!file) return;
+  if (!selectedCourseId.value) {
+    emit("notice", "warning", "请先选择课程");
+    (event.target as HTMLInputElement).value = "";
+    return;
+  }
   const form = new FormData();
   form.set("course_id", String(selectedCourseId.value));
   form.set("file", file);
@@ -1393,6 +1794,7 @@ async function loadWrongPractice() {
   }
 }
 function practiceWrong(_: any) { loadWrongPractice(); }
+function clearWrongFilters() { wrongKeyword.value = ""; wrongStatus.value = ""; selectedWrongKnowledge.value = ""; }
 
 async function loadPlans() { plans.value = (await run<any[]>(() => api.get("/learning/plans", { course_id: selectedCourseId.value || undefined }))) || []; if (plans.value[0]) tasks.value = (await run<any[]>(() => api.get(`/learning/plans/${plans.value[0].id}/tasks`))) || []; checkinDays.value = todayTasks.value.filter((task: any) => task.status === "done").map(() => new Date().toISOString().slice(0, 10)); await loadProfile(); }
 async function createPlan() {
@@ -1422,7 +1824,9 @@ function optionText(value: unknown, question?: any) {
   if (value === null || value === undefined || value === "") return "-";
   const options = Array.isArray(question?.options) ? question.options : [];
   const renderOne = (item: unknown) => {
-    const index = typeof item === "number" ? item : (typeof item === "string" && /^\d+$/.test(item) ? Number(item) : null);
+    const index = typeof item === "number"
+      ? item
+      : (typeof item === "string" && /^\d+$/.test(item) ? Number(item) : (typeof item === "string" && /^[A-Z]$/i.test(item.trim()) ? item.trim().toUpperCase().charCodeAt(0) - 65 : null));
     if (index !== null && options[index] !== undefined) {
       const raw = options[index];
       const text = typeof raw === "object" ? raw.text || raw.label || JSON.stringify(raw) : String(raw);
@@ -1610,10 +2014,12 @@ const DropdownMenu = defineComponent({
 const CourseSelect = defineComponent({
   setup() {
     async function updateCourse(value: string | number) {
-      selectedCourseId.value = Number(value);
-      courseHome.value = {};
-      await loadCourseHome();
-      await loadActive();
+      const nextId = Number(value);
+      if (nextId === selectedCourseId.value) {
+        await loadActive();
+        return;
+      }
+      selectedCourseId.value = nextId;
     }
     return () => courses.value.length
       ? h("div", { class: "course-select" }, [
@@ -1784,10 +2190,13 @@ const HistoryStrip = defineComponent({
   props: { title: { type: String, required: true }, items: { type: Array as PropType<any[]>, default: () => [] } },
   emits: ["pick"],
   setup(p, { emit: update }) {
-    return () => h("article", { class: "panel-card history-strip" }, [
-      h("div", { class: "section-head" }, [h("h2", [h(Clock, { size: 18 }), p.title]), h("span", { class: "tag" }, String(p.items.length))]),
-      p.items.length ? h("div", p.items.slice(0, 6).map((item) => h("button", { type: "button", key: item.id, onClick: () => update("pick", item) }, [
-        h("strong", (item.corrected_text || item.ocr_text || item.raw_text || "题目").slice(0, 48)),
+    return () => h("article", { class: "tutoring-history-card" }, [
+      h("header", { class: "tutoring-history-head" }, [
+        h("h2", [h(Clock, { size: 18 }), p.title]),
+        h("span", { class: "tag" }, `${p.items.length} 条`)
+      ]),
+      p.items.length ? h("div", { class: "tutoring-history-grid" }, p.items.slice(0, 6).map((item) => h("button", { type: "button", key: item.id, class: "tutoring-history-item", onClick: () => update("pick", item) }, [
+        h("strong", item.corrected_text || item.ocr_text || item.raw_text || "题目"),
         h("small", relativeTime(item.created_at))
       ]))) : h(EmptyState, { text: "暂无记录" })
     ]);
@@ -2058,10 +2467,18 @@ const WrongCard = defineComponent({
   emits: ["practice"],
   setup(p, { emit: update }) {
     return () => h("article", { class: "wrong-card" }, [
+      h("div", { class: "wrong-card-top" }, [
+        h("span", { class: ["wrong-state", p.item.is_resolved ? "resolved" : "pending"] }, p.item.is_resolved ? "已掌握" : "待重练"),
+        h("span", { class: "wrong-times" }, `错 ${p.item.wrong_count || 1} 次`)
+      ]),
       h("h2", p.item.question?.stem || "错题"),
       h("p", p.item.question?.explanation || "建议重新练习"),
-      h("div", [p.item.knowledge_point_name ? h("span", { class: "tag tag-warning" }, p.item.knowledge_point_name) : null, h("span", { class: "tag tag-danger" }, `错误 ${p.item.wrong_count}`)]),
-      h("footer", [h("button", { type: "button", class: "btn btn-primary btn-sm", onClick: () => update("practice") }, [h(RefreshCw, { size: 14 }), "重练"])])
+      h("div", { class: "wrong-card-tags" }, [
+        h("span", { class: "tag tag-warning" }, p.item.knowledge_point_name || "未标注知识点"),
+        p.item.last_wrong_at ? h("span", { class: "tag" }, `最近出错 ${relativeTime(p.item.last_wrong_at)}`) : null,
+        p.item.resolved_at ? h("span", { class: "tag tag-success" }, `掌握 ${relativeTime(p.item.resolved_at)}`) : null
+      ]),
+      h("footer", [h("button", { type: "button", class: "btn btn-primary btn-sm", onClick: () => update("practice") }, [h(RefreshCw, { size: 14 }), p.item.is_resolved ? "再练一次" : "重练"])])
     ]);
   }
 });
@@ -2069,7 +2486,8 @@ const WrongCard = defineComponent({
 const PopoverButton = defineComponent({
   props: {
     label: { type: String, required: true },
-    items: { type: Array as PropType<SelectOption[]>, default: () => [] }
+    items: { type: Array as PropType<SelectOption[]>, default: () => [] },
+    placement: { type: String as PropType<"top" | "bottom">, default: "bottom" }
   },
   emits: ["select"],
   setup(p, { emit: update }) {
@@ -2086,10 +2504,16 @@ const PopoverButton = defineComponent({
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeydown);
     });
-    return () => h("div", { ref: root, class: "popover-button select-menu" }, [
+    const popStyle = computed(() => p.placement === "top" ? {
+      top: "auto",
+      right: "0",
+      bottom: "calc(100% + 10px)",
+      transformOrigin: "bottom center"
+    } : undefined);
+    return () => h("div", { ref: root, class: ["popover-button select-menu", `placement-${p.placement}`] }, [
       h("button", { type: "button", onClick: () => { open.value = !open.value; } }, [p.label, h(ChevronDown, { size: 14 })]),
       h(Transition, { name: "popover" }, {
-        default: () => open.value ? h("div", { class: "select-pop" }, p.items.map((item) => h("button", { type: "button", key: item.value, onClick: () => { update("select", String(item.value)); open.value = false; } }, item.label))) : null
+        default: () => open.value ? h("div", { class: "select-pop", style: popStyle.value }, p.items.map((item) => h("button", { type: "button", key: item.value, onClick: () => { update("select", String(item.value)); open.value = false; } }, item.label))) : null
       })
     ]);
   }
@@ -2107,19 +2531,34 @@ function onStudentDocumentKeydown(event: KeyboardEvent) {
   userMenuOpen.value = false;
   settingsOpen.value = false;
 }
+function onStudentVisibilityChange() {
+  if (!document.hidden) void loadNotifications(true);
+}
+function onStudentWindowFocus() {
+  void loadNotifications(true);
+}
 
 onMounted(async () => {
   document.addEventListener("pointerdown", onStudentDocumentPointerDown);
   document.addEventListener("keydown", onStudentDocumentKeydown);
+  document.addEventListener("visibilitychange", onStudentVisibilityChange);
+  window.addEventListener("focus", onStudentWindowFocus);
   await loadCourses();
   await loadActive();
+  await loadNotifications(true);
+  notificationTimer = window.setInterval(() => {
+    if (!document.hidden) void loadNotifications(true);
+  }, 15000);
 });
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onStudentDocumentPointerDown);
   document.removeEventListener("keydown", onStudentDocumentKeydown);
+  document.removeEventListener("visibilitychange", onStudentVisibilityChange);
+  window.removeEventListener("focus", onStudentWindowFocus);
   stopStudyClock();
   if (chromeTimer) clearTimeout(chromeTimer);
   if (joinTimer) clearTimeout(joinTimer);
+  if (notificationTimer) clearInterval(notificationTimer);
   if (noteTimer) clearTimeout(noteTimer);
 });
 </script>
@@ -2143,6 +2582,7 @@ onBeforeUnmount(() => {
 .user-card { border-bottom: 1px solid var(--color-border-subtle); padding: 10px; }
 .user-card strong, .notice-item strong { color: var(--color-text-primary); }
 .user-card small, .notice-item small { color: var(--color-text-muted); }
+.notice-item p { margin: 3px 0; color: var(--color-text-secondary); font-size: 12px; line-height: 1.45; }
 .notice-item i { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary-600); }
 .student-main { max-width: 1100px; margin: 0 auto; padding: 24px 24px 16px; }
 .student-page { display: grid; gap: 16px; animation: fade-slide-up var(--duration-base) var(--ease-out); }
@@ -2234,6 +2674,7 @@ onBeforeUnmount(() => {
 .empty-guide { display: grid; gap: 12px; justify-items: center; color: var(--color-text-muted); text-align: center; padding: 32px 0; }.guide-step { border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); overflow: hidden; }.guide-step > button { width: 100%; display: flex; align-items: center; gap: 10px; border: 0; background: white; color: var(--color-text-primary); padding: 14px; text-align: left; }.guide-step b { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--color-primary-600); color: white; }.guide-body { display: grid; gap: 10px; border-top: 1px solid var(--color-border-subtle); padding: 14px; line-height: 1.7; }.guide-body p { margin: 0; }
 .history-strip { display: grid; gap: 10px; }.history-strip div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }.history-strip button { min-height: 80px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; text-align: left; padding: 12px; }
 .knowledge-layout, .wrong-layout { display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }.knowledge-tree, .wrong-tree { display: grid; gap: 8px; border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-sm); padding: 14px; }.knowledge-tree button, .wrong-tree button { display: flex; align-items: center; gap: 8px; min-height: 36px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-body); text-align: left; }.knowledge-tree button:hover, .wrong-tree button.active { background: var(--color-primary-50); color: var(--color-primary-700); }.weak-tags { display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--color-border-subtle); padding-top: 10px; }
+.course-scope-label { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-700); padding: 10px 12px; font-size: 13px; }
 .knowledge-content { display: grid; gap: 14px; }.knowledge-head h1 { margin: 0; color: var(--color-text-primary); font-size: 22px; }.knowledge-head p { color: var(--color-text-muted); }.knowledge-body { display: grid; gap: 16px; padding: 32px; }.knowledge-block h3 { display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); }.knowledge-block div { border-left: 4px solid var(--color-primary-600); border-radius: 14px; background: var(--color-primary-50); padding: 16px; line-height: 1.75; }.knowledge-block.ai div { border-left-color: #8B5CF6; background: var(--color-ai-light); }.knowledge-block.warning div { border-left-color: var(--color-warning-500); background: var(--color-warning-50); }.practice-cta { display: flex; align-items: center; gap: 10px; border-radius: var(--radius-lg); background: var(--color-ai-light); padding: 14px; }.practice-cta button { border: 0; border-radius: var(--radius-full); background: var(--color-primary-600); color: white; padding: 7px 12px; }
 .quiz-list, .wrong-list { display: grid; gap: 12px; }.quiz-card, .wrong-card { position: relative; display: grid; gap: 8px; border: 1px solid var(--color-border-default); border-left: 4px solid var(--color-success-500); border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-sm); padding: 16px; }.quiz-card h2, .wrong-card h2 { margin: 0; color: var(--color-text-primary); font-size: 17px; }.quiz-card p, .wrong-card p { color: var(--color-text-muted); }.quiz-card footer, .wrong-card footer { display: flex; gap: 8px; }
 .wrong-hero, .profile-hero { display: grid; grid-template-columns: auto repeat(3, 1fr) auto; align-items: center; gap: 20px; background: linear-gradient(135deg,#EF4444,#F59E0B); color: white; }.wrong-hero strong { display: block; font-size: 28px; }.wrong-tools { display: grid; grid-template-columns: 1fr 140px auto; gap: 10px; margin-bottom: 12px; }
@@ -2274,6 +2715,211 @@ onBeforeUnmount(() => {
 .slide-next-enter-from { opacity: 0; transform: translateX(30px); }.slide-next-leave-to { opacity: 0; transform: translateX(-30px); }.slide-prev-enter-from { opacity: 0; transform: translateX(-30px); }.slide-prev-leave-to { opacity: 0; transform: translateX(30px); }
 .search-expand-enter-active, .search-expand-leave-active { transition: all var(--duration-slow) var(--ease-out); }.search-expand-enter-from, .search-expand-leave-to { opacity: 0; transform: scaleX(.94); }
 .thumb-panel-enter-active, .thumb-panel-leave-active { transition: transform var(--duration-base) var(--ease-out), opacity var(--duration-base) var(--ease-out); }.thumb-panel-enter-from, .thumb-panel-leave-to { transform: translateX(-100%); opacity: 0; }
+
+/* Course detail study room: keep content, subtitles and controls in separate layers. */
+.study-main {
+  grid-template-columns: minmax(0, 1fr) 380px;
+  height: 100vh;
+  min-height: 100vh;
+  padding-top: 48px;
+}
+
+.slide-stage {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  overflow: auto;
+  padding: 24px 32px 28px;
+}
+
+.slide-card {
+  width: min(960px, 100%);
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 44px 52px 48px;
+}
+
+.slide-card h1 {
+  font-size: clamp(22px, 2.2vw, 30px);
+  line-height: 1.35;
+  padding-right: 56px;
+}
+
+.slide-content {
+  flex: 1;
+  min-height: 0;
+  max-height: calc(100vh - 360px);
+  overflow: auto;
+  padding-right: 8px;
+  color: var(--color-text-body);
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+.subtitle-line {
+  position: static;
+  z-index: 8;
+  width: min(760px, 100%);
+  max-width: min(760px, calc(100vw - 96px));
+  max-height: 118px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(10, 15, 30, 0.82);
+  color: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+  padding: 12px 18px;
+  backdrop-filter: blur(12px);
+}
+
+.subtitle-line strong {
+  color: #fff;
+}
+
+.player-bar {
+  position: sticky;
+  left: auto;
+  bottom: 0;
+  z-index: 12;
+  justify-self: center;
+  width: min(880px, 100%);
+  transform: none;
+  border-radius: 18px;
+}
+
+.lesson-ai {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.script-view,
+.class-chat,
+.note-view {
+  min-height: 0;
+  padding: 18px 18px 96px;
+}
+
+.class-chat {
+  height: 100%;
+  overflow: hidden;
+  padding-bottom: 18px;
+}
+
+.sticky-tools {
+  z-index: 2;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 0 0 12px;
+}
+
+.reading {
+  overflow: auto;
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+.lesson-markdown {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.lesson-markdown :deep(p),
+.lesson-markdown :deep(ul),
+.lesson-markdown :deep(ol),
+.lesson-markdown :deep(blockquote),
+.lesson-markdown :deep(pre),
+.lesson-markdown :deep(table) {
+  margin: 0 0 12px;
+}
+
+.lesson-markdown :deep(p:last-child),
+.lesson-markdown :deep(ul:last-child),
+.lesson-markdown :deep(ol:last-child),
+.lesson-markdown :deep(blockquote:last-child),
+.lesson-markdown :deep(pre:last-child) {
+  margin-bottom: 0;
+}
+
+.lesson-markdown :deep(ul),
+.lesson-markdown :deep(ol) {
+  padding-left: 1.4em;
+}
+
+.lesson-markdown :deep(li + li) {
+  margin-top: 6px;
+}
+
+.lesson-markdown :deep(code) {
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.08);
+  padding: 2px 5px;
+  font-family: var(--font-family-mono);
+  font-size: 0.92em;
+}
+
+.lesson-markdown :deep(pre) {
+  overflow: auto;
+  border-radius: 12px;
+  background: #0F172A;
+  color: #E2E8F0;
+  padding: 14px 16px;
+}
+
+.lesson-markdown :deep(pre code) {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.lesson-markdown :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.lesson-markdown :deep(th),
+.lesson-markdown :deep(td) {
+  border: 1px solid var(--color-border-default);
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.lesson-markdown :deep(th) {
+  background: var(--color-bg-muted);
+  color: var(--color-text-primary);
+}
+
+.lesson-markdown :deep(.katex-display) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 0;
+}
+
+.subtitle-line .lesson-markdown :deep(p) {
+  margin-bottom: 6px;
+}
+
+.subtitle-line .lesson-markdown :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.player-pop-enter-from,
+.player-pop-leave-to,
+.subtitle-enter-from,
+.subtitle-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 @media (max-width: 900px) {
   .home-grid, .course-layout, .tutoring-grid, .knowledge-layout, .wrong-layout, .student-course-grid { grid-template-columns: 1fr; }
   .quick-row, .achievement-row { grid-template-columns: repeat(2, 1fr); }
@@ -5025,7 +5671,8 @@ onBeforeUnmount(() => {
   gap: 8px;
   margin: 4px 6px 0;
   color: var(--s-muted);
-  word-break: break-all;
+  word-break: normal;
+  overflow-wrap: anywhere;
 }
 
 .profile-header-info aside {
@@ -6619,6 +7266,33 @@ onBeforeUnmount(() => {
   transform: translateY(-2px);
 }
 
+.qa-modern-page .qa-tutoring-link {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--qa-pill);
+  background: var(--qa-ai-gradient);
+  color: white;
+  box-shadow: 0 8px 18px rgba(139, 92, 246, 0.22);
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.qa-modern-page .qa-tutoring-link:hover {
+  filter: brightness(1.04);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(139, 92, 246, 0.30);
+}
+
+.qa-modern-page .qa-tutoring-link:active {
+  transform: translateY(0);
+}
+
 .qa-modern-page .history-drawer {
   position: fixed;
   top: 0;
@@ -6667,6 +7341,92 @@ onBeforeUnmount(() => {
   background: var(--qa-primary-50);
   color: var(--qa-primary-600);
   transform: translateY(-1px);
+}
+
+.qa-modern-page .history-favorite-toggle {
+  width: fit-content;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  border: 1px solid var(--qa-border);
+  border-radius: var(--qa-pill);
+  background: var(--qa-surface);
+  color: var(--qa-secondary);
+  box-shadow: var(--qa-shadow-sm);
+  padding: 0 13px 0 10px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.qa-modern-page .history-favorite-toggle .favorite-check-box {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  max-width: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--qa-border);
+  border-radius: 6px;
+  background: #FFFFFF;
+  color: transparent;
+  line-height: 0;
+  overflow-wrap: normal;
+  transition: all 0.2s ease;
+}
+
+.qa-modern-page .history-favorite-toggle .favorite-check-box::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  width: 8px;
+  height: 4px;
+  border-left: 2px solid #FFFFFF;
+  border-bottom: 2px solid #FFFFFF;
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  transform-origin: center;
+}
+
+.qa-modern-page .history-favorite-toggle strong {
+  display: inline-block;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+}
+
+.qa-modern-page .history-favorite-toggle:hover {
+  border-color: var(--qa-primary-500);
+  color: var(--qa-primary-600);
+  transform: translateY(-1px);
+}
+
+.qa-modern-page .history-favorite-toggle:active {
+  transform: translateY(0);
+}
+
+.qa-modern-page .history-favorite-toggle.checked {
+  border-color: var(--qa-primary-100);
+  background: var(--qa-primary-50);
+  color: var(--qa-primary-600);
+}
+
+.qa-modern-page .history-favorite-toggle.checked .favorite-check-box {
+  border-color: var(--qa-primary-600);
+  background: var(--qa-primary-600);
+  color: #FFFFFF;
+}
+
+.qa-modern-page .history-favorite-toggle.checked .favorite-check-box::after {
+  opacity: 1;
 }
 
 .qa-modern-page .history-row {
@@ -7178,6 +7938,271 @@ onBeforeUnmount(() => {
   animation-delay: 240ms;
 }
 
+.class-chat {
+  --class-chat-primary: #4F46E5;
+  --class-chat-primary-50: #EEF2FF;
+  --class-chat-border: #E2E8F0;
+  --class-chat-text: #1E293B;
+  --class-chat-muted: #64748B;
+  --class-chat-ai: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #FFFFFF;
+}
+
+.class-chat .context-bar {
+  flex: 0 0 auto;
+}
+
+.class-chat-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 4px 4px 0;
+  scrollbar-gutter: stable;
+}
+
+.class-chat-dock {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--class-chat-border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), #FFFFFF 34%);
+  box-shadow: 0 -12px 24px rgba(15, 23, 42, 0.04);
+  margin: 0 -2px;
+  padding: 12px 2px 0;
+}
+
+.class-chat-dock .qa-attachment-strip.compact {
+  max-height: 88px;
+  overflow-y: auto;
+}
+
+.class-chat-dock .quick-tags {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.class-chat-dock .quick-tags button {
+  flex: 0 0 auto;
+  border-color: var(--class-chat-border);
+  background: #FFFFFF;
+  color: var(--class-chat-muted);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.035);
+}
+
+.class-chat-dock .quick-tags button:hover {
+  background: var(--class-chat-primary-50);
+  color: var(--class-chat-primary);
+  transform: translateY(-1px);
+}
+
+.class-chat :deep(.chat-list) {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 180px;
+  padding: 14px 0 8px;
+}
+
+.class-chat :deep(.chat-msg) {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  animation: bubble-in 220ms ease-out both;
+}
+
+.class-chat :deep(.chat-msg.user) {
+  flex-direction: row-reverse;
+}
+
+.class-chat :deep(.chat-avatar) {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--class-chat-ai);
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.20);
+}
+
+.class-chat :deep(.chat-msg.user .chat-avatar) {
+  border: 1px solid var(--class-chat-border);
+  background: #F8FAFC;
+  color: var(--class-chat-muted);
+  box-shadow: none;
+}
+
+.class-chat :deep(.chat-bubble) {
+  position: relative;
+  max-width: calc(100% - 46px);
+  min-width: 0;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 8px 18px 18px 18px;
+  background: #FFFFFF;
+  color: var(--class-chat-text);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+  padding: 12px 14px;
+}
+
+.class-chat :deep(.chat-bubble::before) {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--class-chat-ai);
+}
+
+.class-chat :deep(.chat-msg.user .chat-bubble) {
+  border: 0;
+  border-radius: 18px 8px 18px 18px;
+  background: var(--class-chat-primary);
+  color: #FFFFFF;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.20);
+}
+
+.class-chat :deep(.chat-msg.user .chat-bubble::before) {
+  display: none;
+}
+
+.class-chat :deep(.chat-bubble p) {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.class-chat :deep(.ai-text) {
+  color: var(--class-chat-text);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.class-chat :deep(.thought-toggle) {
+  width: fit-content;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(221, 214, 254, 0.9);
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+  color: #6D28D9;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.class-chat :deep(.thought) {
+  overflow: hidden;
+  border: 1px solid rgba(221, 214, 254, 0.85);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+  color: #6D28D9;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.class-chat :deep(.source-tags) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-top: 1px dashed var(--class-chat-border);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.class-chat :deep(.source-label) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--class-chat-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.class-chat :deep(.source-tags .tag) {
+  min-height: 22px;
+  border-radius: 9999px;
+  background: var(--class-chat-primary-50);
+  color: var(--class-chat-primary);
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.class-chat :deep(.msg-actions) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  opacity: 1;
+}
+
+.class-chat :deep(.msg-actions button) {
+  width: auto;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--class-chat-muted);
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.class-chat :deep(.msg-actions button:hover:not(:disabled)) {
+  background: #F8FAFC;
+  color: var(--class-chat-text);
+}
+
+.class-chat :deep(.msg-actions button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.class-chat :deep(.thinking) {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(221, 214, 254, 0.9);
+  border-radius: 9999px;
+  background: #FFFFFF;
+  color: var(--class-chat-muted);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  padding: 10px 14px;
+}
+
+.class-chat :deep(.thinking i) {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--class-chat-ai);
+  animation: thinking var(--duration-slow) var(--ease-in-out) infinite;
+}
+
 .qa-modern-page .input-dock-container {
   position: fixed;
   left: 0;
@@ -7226,7 +8251,7 @@ onBeforeUnmount(() => {
 .qa-modern-page .input-box {
   min-height: 70px;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 16px;
   border: 1px solid rgba(226, 232, 240, 0.84);
   border-radius: var(--qa-radius-xl);
@@ -7335,7 +8360,7 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   background: var(--qa-muted-bg, var(--color-bg-muted));
   color: var(--qa-secondary, var(--color-text-secondary));
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .qa-modern-page .attach-btn:hover:not(:disabled),
@@ -7366,12 +8391,14 @@ onBeforeUnmount(() => {
 .qa-modern-page .send-btn {
   width: 44px;
   height: 44px;
+  display: inline-grid;
+  place-items: center;
   flex: 0 0 auto;
   border-radius: 14px;
   background: var(--qa-primary-600);
   color: white;
   box-shadow: 0 4px 12px rgba(79, 70, 229, 0.30);
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .qa-modern-page .send-btn:hover:not(:disabled) {
@@ -7466,6 +8493,1741 @@ onBeforeUnmount(() => {
   .qa-modern-page .history-drawer {
     width: min(360px, 92vw);
   }
+}
+
+/* Student UI audit overrides: final scoped layer for alignment, readability and feedback. */
+.student-shell,
+.student-shell *,
+.study-room,
+.study-room * {
+  box-sizing: border-box;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+}
+
+.student-shell {
+  --student-audit-focus: 0 0 0 4px rgba(99, 102, 241, 0.18);
+  --student-audit-error: #DC2626;
+  --student-audit-success: #059669;
+}
+
+.student-main {
+  width: min(1280px, 100%);
+  max-width: 1280px;
+  margin-inline: auto;
+  padding: 40px 32px 92px;
+}
+
+.student-page {
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+  gap: 32px;
+}
+
+.student-page > *,
+.student-shell section,
+.student-shell article,
+.student-shell aside,
+.student-shell form,
+.student-shell div {
+  min-width: 0;
+}
+
+.student-shell h1,
+.student-shell h2,
+.student-shell h3,
+.student-shell p,
+.student-shell strong,
+.student-shell span,
+.student-shell small,
+.student-shell em,
+.student-shell label,
+.student-shell button,
+.student-shell a,
+.student-shell input,
+.student-shell textarea,
+.student-shell .markdown-body,
+.student-shell .lesson-markdown {
+  letter-spacing: 0;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.student-shell button,
+.student-shell a,
+.student-shell input,
+.student-shell textarea,
+.student-shell .select-menu > button,
+.student-shell .dropdown-trigger,
+.student-shell .quick-tile,
+.student-shell .lesson-item,
+.student-shell .material-row,
+.student-shell .history-row,
+.student-shell .practice-feature-card,
+.student-shell .practice-history-item,
+.student-shell .home-action-task-card {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.student-shell button:focus-visible,
+.student-shell a:focus-visible,
+.student-shell input:focus-visible,
+.student-shell textarea:focus-visible,
+.student-shell select:focus-visible,
+.student-shell .select-menu > button:focus-visible,
+.student-shell .dropdown-trigger:focus-visible,
+.student-shell .quick-tile:focus-visible,
+.student-shell .lesson-item:focus-visible,
+.student-shell .material-row:focus-visible,
+.student-shell .home-action-task-card:focus-visible,
+.student-shell .history-row:focus-visible,
+.student-shell .practice-feature-card:focus-visible,
+.student-shell .practice-history-item:focus-visible,
+.student-shell .cal-day:focus-visible,
+.student-shell .plan-task-check:focus-visible {
+  outline: 0;
+  border-color: var(--s-primary-500, #6366F1) !important;
+  box-shadow: var(--student-audit-focus) !important;
+}
+
+.student-shell button:not(:disabled):active,
+.student-shell a:not([aria-disabled="true"]):active,
+.student-shell .quick-tile:active,
+.student-shell .lesson-item:active,
+.student-shell .material-row:active,
+.student-shell .home-action-task-card:active,
+.student-shell .practice-history-item:active,
+.student-shell .history-row:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.student-shell button:disabled,
+.student-shell input:disabled,
+.student-shell textarea:disabled,
+.student-shell [aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.56 !important;
+  transform: none !important;
+  box-shadow: none !important;
+  filter: grayscale(0.08);
+}
+
+.student-shell button[data-loading="true"],
+.student-shell .btn[data-loading="true"],
+.student-shell .practice-generate-btn[data-loading="true"],
+.student-shell .btn-ai-gen[data-loading="true"] {
+  position: relative;
+  pointer-events: none;
+  color: transparent !important;
+}
+
+.student-shell button[data-loading="true"]::before,
+.student-shell .btn[data-loading="true"]::before,
+.student-shell .practice-generate-btn[data-loading="true"]::before,
+.student-shell .btn-ai-gen[data-loading="true"]::before {
+  content: none !important;
+  display: none !important;
+}
+
+.student-shell button[data-loading="true"] > *,
+.student-shell .btn[data-loading="true"] > *,
+.student-shell .practice-generate-btn[data-loading="true"] > *,
+.student-shell .btn-ai-gen[data-loading="true"] > * {
+  opacity: 0 !important;
+  visibility: hidden;
+}
+
+.student-shell button[data-loading="true"]::after,
+.student-shell .btn[data-loading="true"]::after,
+.student-shell .practice-generate-btn[data-loading="true"]::after,
+.student-shell .btn-ai-gen[data-loading="true"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: student-audit-spin 0.8s linear infinite;
+}
+
+.student-shell .btn-secondary[data-loading="true"]::after,
+.student-shell .btn-ghost[data-loading="true"]::after,
+.student-shell .btn-outline[data-loading="true"]::after {
+  border-color: rgba(99, 102, 241, 0.22);
+  border-top-color: var(--s-primary-600, #4F46E5);
+}
+
+.student-shell input[aria-invalid="true"],
+.student-shell textarea[aria-invalid="true"],
+.student-shell .input.error,
+.student-shell .textarea.error,
+.student-shell .code-input.error,
+.student-shell .is-error {
+  border-color: var(--student-audit-error) !important;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.12) !important;
+}
+
+.student-shell .code-input.ok,
+.student-shell .is-success {
+  border-color: var(--student-audit-success) !important;
+  box-shadow: 0 0 0 4px rgba(5, 150, 105, 0.12) !important;
+}
+
+.student-top {
+  grid-template-columns: minmax(180px, 0.8fr) minmax(0, auto) minmax(160px, 0.8fr);
+}
+
+.student-nav-links {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.student-nav-links::-webkit-scrollbar,
+.quick-tags::-webkit-scrollbar,
+.quiz-modern-tabs::-webkit-scrollbar,
+.class-chat-dock .quick-tags::-webkit-scrollbar {
+  display: none;
+}
+
+.student-nav-link,
+.top-icon,
+.avatar-btn,
+.bottom-tabs button,
+.tag,
+.home-data-tag,
+.home-refresh-btn,
+.home-task-type,
+.home-ac-view-all,
+.course-meta span,
+.mini-data span,
+.student-plan-page .plan-task-tag,
+.student-plan-page .badge-name,
+.qa-modern-page .qa-tutoring-link,
+.qa-modern-page .action-circle-btn {
+  white-space: nowrap;
+}
+
+.home-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
+  align-items: start;
+}
+
+.student-course-grid {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 360px));
+  justify-content: start;
+  align-items: stretch;
+}
+
+.course-layout {
+  grid-template-columns: minmax(0, 1.35fr) minmax(420px, 0.95fr);
+  align-items: start;
+}
+
+.course-layout > aside {
+  min-width: 420px;
+}
+
+.quick-row {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.tutoring-grid,
+.practice-modern-grid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.85fr);
+  align-items: start;
+}
+
+.knowledge-layout,
+.wrong-layout {
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.profile-pc-layout {
+  grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+}
+
+.student-plan-page .plan-layout {
+  grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr);
+}
+
+.course-tools,
+.wrong-tools {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(180px, 240px);
+  align-items: center;
+  gap: 14px;
+}
+
+.course-tools .pretty-input,
+.course-tools .select-menu,
+.wrong-tools .pretty-input,
+.wrong-tools .select-menu {
+  width: 100%;
+}
+
+.panel-card,
+.student-course-card,
+.course-tools,
+.knowledge-head,
+.knowledge-body,
+.wrong-hero div,
+.profile-identity-card,
+.profile-main-card,
+.student-plan-page .card,
+.practice-modern-card,
+.qa-modern-page :deep(.ai-content-card),
+.empty {
+  border: 1px solid rgba(226, 232, 240, 0.72);
+}
+
+.page-title-row,
+.section-head,
+.home-ac-header,
+.student-plan-page .card-header,
+.quiz-modern-header,
+.profile-tabs,
+.modal-head,
+.drawer-head {
+  min-width: 0;
+}
+
+.page-title-row {
+  flex-wrap: wrap;
+}
+
+.page-title-actions,
+.home-ai-rec-footer,
+.home-ac-meta,
+.course-meta,
+.mini-data,
+.quick-tags,
+.practice-chapter-chips,
+.quiz-modern-tabs,
+.profile-tabs,
+.notice-settings-grid .toggle-line,
+.join-modal footer,
+.complete-modal footer {
+  flex-wrap: wrap;
+}
+
+.home-task-title,
+.home-course strong,
+.continue-card h2,
+.student-course-card h2,
+.student-course-card p,
+.lesson-item strong,
+.lesson-item small,
+.material-row strong,
+.material-row small,
+.qa-mini strong,
+.qa-mini p,
+.practice-history-left strong,
+.practice-history-left small,
+.student-plan-page .plan-task-body strong,
+.student-plan-page .plan-task-body small,
+.profile-header-info p,
+.notice-item strong,
+.notice-item p,
+.user-card small,
+.history-row span,
+.qa-attachment-chip span {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.home-task-info,
+.home-ac-content-wrap,
+.student-course-card section,
+.lesson-item > div,
+.material-row > div,
+.practice-history-left > div,
+.profile-header-info section,
+.notice-item > div,
+.qa-mini,
+.wrong-card,
+.quiz-card {
+  min-width: 0;
+}
+
+.student-course-card p,
+.course-hero-student p,
+.course-hero-student div,
+.home-ac-meta,
+.student-plan-page .card-header,
+.profile-header-info p {
+  align-items: flex-start;
+}
+
+.course-hero-student p,
+.course-hero-student div {
+  flex-wrap: wrap;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.course-art {
+  isolation: isolate;
+}
+
+.course-art .dropdown-menu {
+  z-index: calc(var(--z-popover, 1000) + 5);
+}
+
+.course-art .dropdown-pop,
+.select-pop,
+.dropdown-pop,
+.notice-pop,
+.user-pop,
+.settings-pop,
+.qa-modern-page .history-drawer {
+  z-index: calc(var(--z-popover, 1000) + 20);
+  overflow: visible;
+}
+
+.select-pop button,
+.dropdown-pop button,
+.user-pop button,
+.settings-pop button {
+  justify-content: flex-start;
+  min-height: 38px;
+  line-height: 1.35;
+}
+
+.select-pop button:hover,
+.select-pop button.active,
+.dropdown-pop button:hover,
+.dropdown-pop button.active,
+.user-pop button:hover,
+.settings-pop button:hover,
+.settings-pop button.active {
+  background: var(--s-primary-50, #EEF2FF);
+  color: var(--s-primary-600, #4F46E5);
+}
+
+.top-icon:hover,
+.avatar-btn:hover,
+.student-nav-link:hover,
+.underline-tabs button:hover:not(.active),
+.seg-tabs button:hover:not(.active),
+.profile-tabs button:hover:not(.active),
+.study-tabs button:hover:not(.active),
+.segmented button:hover:not(.active),
+.home-refresh-btn:hover,
+.home-ac-view-all:hover,
+.quick-tile:hover,
+.lesson-item:hover,
+.material-row:hover,
+.knowledge-tree button:hover,
+.wrong-tree button:hover,
+.student-plan-page .cal-day:hover:not(:disabled),
+.student-plan-page .plan-task-check:hover:not(:disabled),
+.practice-chip:hover:not(.active):not(:disabled),
+.practice-segmented-control button:hover:not(.active):not(:disabled) {
+  filter: none;
+}
+
+.bottom-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.bottom-tabs button {
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.bottom-tabs .ai span {
+  flex: 0 0 auto;
+}
+
+.empty,
+.home-activity-empty,
+.quiz-modern-page .empty,
+.exam-empty-shell .empty {
+  color: var(--s-muted, #64748B);
+  line-height: 1.55;
+}
+
+.qa-modern-page {
+  padding-bottom: 196px;
+}
+
+.qa-modern-page .qa-title p,
+.qa-modern-page .qa-welcome p {
+  color: var(--qa-secondary);
+}
+
+.qa-modern-page .qa-tutoring-link {
+  background: var(--qa-ai-gradient);
+}
+
+.qa-modern-page .history-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  border: 1px solid transparent;
+}
+
+.qa-modern-page .history-row:hover {
+  border-color: var(--qa-primary-100);
+}
+
+.qa-modern-page .history-row span {
+  white-space: normal;
+}
+
+.qa-modern-page .prompt-grid button {
+  justify-content: center;
+  min-width: min(240px, 100%);
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.45;
+  padding-block: 10px;
+}
+
+.qa-modern-page :deep(.message-row),
+.class-chat :deep(.chat-msg) {
+  min-width: 0;
+}
+
+.qa-modern-page :deep(.bubble-user),
+.qa-modern-page :deep(.bubble-ai),
+.class-chat :deep(.chat-bubble) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.qa-modern-page :deep(.ai-content-card) {
+  min-width: 0;
+  overflow: visible;
+}
+
+.qa-modern-page :deep(.markdown-body),
+.class-chat :deep(.markdown-body),
+.lesson-markdown {
+  color: inherit;
+  line-height: 1.75;
+}
+
+.qa-modern-page :deep(.markdown-body table),
+.class-chat :deep(.markdown-body table),
+.lesson-markdown :deep(table) {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.qa-modern-page :deep(.ai-action-bar),
+.qa-modern-page :deep(.msg-actions),
+.class-chat :deep(.msg-actions) {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.qa-modern-page :deep(.ai-action-btn),
+.qa-modern-page :deep(.msg-actions button),
+.class-chat :deep(.msg-actions button) {
+  width: auto;
+  min-width: 72px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: #F8FAFC;
+  color: #475569;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.qa-modern-page :deep(.ai-action-btn:hover:not(:disabled)),
+.qa-modern-page :deep(.msg-actions button:hover:not(:disabled)),
+.class-chat :deep(.msg-actions button:hover:not(:disabled)) {
+  border-color: #E0E7FF;
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+.qa-modern-page .input-box {
+  min-width: 0;
+}
+
+.qa-modern-page .input-box textarea {
+  min-width: 0;
+}
+
+.qa-attachment-strip {
+  max-width: 100%;
+}
+
+.qa-attachment-chip {
+  max-width: min(260px, 100%);
+}
+
+.qa-attachment-chip button {
+  min-width: 22px;
+}
+
+.class-chat {
+  min-height: 0;
+}
+
+.class-chat-scroll {
+  min-height: 180px;
+}
+
+.class-chat-dock .quick-tags button {
+  white-space: nowrap;
+}
+
+.student-plan-page .cal-weekdays,
+.student-plan-page .cal-grid {
+  align-items: center;
+}
+
+.student-plan-page .cal-grid {
+  grid-auto-rows: 48px;
+}
+
+.student-plan-page .cal-day-wrapper {
+  min-height: 48px;
+}
+
+.student-plan-page .plan-task-row {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+}
+
+.student-plan-page .plan-task-body strong {
+  white-space: normal;
+}
+
+.profile-page {
+  max-width: none;
+}
+
+.profile-header-info p {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.profile-form-grid label,
+.profile-form-grid .password-field,
+.notice-settings-grid .toggle-line {
+  min-width: 0;
+}
+
+.study-room button:focus-visible,
+.study-room input:focus-visible,
+.study-room textarea:focus-visible,
+.study-room .glass-btn:focus-visible,
+.study-room .icon-glass:focus-visible,
+.study-room .round-btn:focus-visible,
+.study-room .thumb-grid button:focus-visible,
+.study-room .study-tabs button:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.35);
+}
+
+.study-head {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.study-head > div,
+.study-head span,
+.study-head strong {
+  min-width: 0;
+}
+
+.study-head strong,
+.study-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slide-card {
+  max-height: calc(100vh - 204px);
+}
+
+.slide-content {
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.subtitle-line {
+  flex: 0 0 auto;
+  border-radius: 14px;
+}
+
+.player-bar {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+
+.player-bar button:hover:not(:disabled),
+.glass-btn:hover:not(:disabled),
+.icon-glass:hover:not(:disabled),
+.thumb-grid button:hover:not(:disabled),
+.settings-pop button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.lesson-ai {
+  min-width: 0;
+}
+
+.study-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.study-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.study-tabs button {
+  white-space: nowrap;
+}
+
+.script-view,
+.class-chat,
+.note-view {
+  scrollbar-gutter: stable;
+}
+
+.study-room .player-bar {
+  overflow: visible;
+}
+
+.study-room .player-bar .popover-button.select-menu {
+  width: 78px;
+  overflow: visible;
+}
+
+.study-room .player-bar .popover-button.select-menu > button {
+  min-height: 38px;
+  justify-content: center;
+  border-color: rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--color-text-primary);
+  font-weight: 700;
+  padding: 0 10px;
+}
+
+.study-room .player-bar .popover-button.select-menu > button:hover {
+  border-color: var(--color-primary-200);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.study-room .player-bar .popover-button.select-menu .select-pop {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 10px);
+  min-width: 96px;
+  transform-origin: bottom center;
+  border-radius: 14px;
+  padding: 8px;
+}
+
+.study-room .player-bar .popover-button.select-menu .select-pop::after {
+  content: "";
+  position: absolute;
+  right: 28px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid rgba(226, 232, 240, 0.9);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+  transform: rotate(45deg);
+}
+
+.study-room .study-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: auto;
+  gap: 6px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border-default);
+  border-radius: 0;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+  box-shadow: none;
+  padding: 10px 12px;
+}
+
+.study-room .study-tabs button {
+  min-width: 0;
+  min-height: 38px;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  padding: 0 10px;
+}
+
+.study-room .study-tabs button:hover:not(.active) {
+  border-color: var(--color-border-default);
+  background: white;
+  color: var(--color-text-primary);
+}
+
+.study-room .study-tabs button.active {
+  border-color: var(--color-primary-100);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.08);
+}
+
+.study-room .note-view {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  height: 100%;
+  overflow: hidden;
+  background: #F8FAFC;
+  padding: 18px;
+}
+
+.study-room .note-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border-default);
+  border-radius: 16px;
+  background: white;
+  box-shadow: var(--shadow-xs);
+  padding: 8px;
+}
+
+.study-room .note-tools button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--color-bg-muted);
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  padding: 0 12px;
+}
+
+.study-room .note-tools button:hover {
+  border-color: var(--color-primary-200);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.study-room .note-tools button:active {
+  transform: scale(0.96);
+}
+
+.study-room .note-state {
+  margin-left: auto;
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  border-radius: var(--radius-full);
+  background: var(--color-success-50);
+  color: var(--color-success-700);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.study-room .note-state.dirty {
+  background: var(--color-warning-50);
+  color: var(--color-warning-700);
+}
+
+.study-room .note-editor {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--color-border-default);
+  border-radius: 18px;
+  outline: none;
+  resize: none;
+  background: white;
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+  font-size: 15px;
+  line-height: 1.8;
+  padding: 18px;
+}
+
+.study-room .note-editor:focus {
+  border-color: var(--color-primary-300);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.14), var(--shadow-sm);
+}
+
+.study-room .note-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--color-text-muted);
+}
+
+.study-room .note-footer .btn-primary {
+  min-width: 104px;
+  border: 1px solid var(--color-primary-600) !important;
+  background: var(--color-primary-600) !important;
+  color: #fff !important;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.24);
+}
+
+.study-room .note-footer .btn-primary:hover:not(:disabled) {
+  border-color: var(--color-primary-500) !important;
+  background: var(--color-primary-500) !important;
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+
+.study-room .note-footer .btn-primary:disabled,
+.study-room .note-footer .btn-primary[data-loading="true"] {
+  border-color: var(--color-primary-300) !important;
+  background: var(--color-primary-300) !important;
+  color: #fff !important;
+  cursor: wait;
+  opacity: 0.9;
+}
+
+.study-room .note-footer > span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .student-top {
+    grid-template-columns: minmax(160px, 1fr) auto;
+  }
+
+  .student-nav-links {
+    display: none;
+  }
+
+  .home-grid,
+  .course-layout,
+  .tutoring-grid,
+  .knowledge-layout,
+  .wrong-layout,
+  .practice-modern-grid,
+  .profile-pc-layout,
+  .student-plan-page .plan-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .course-layout > aside {
+    min-width: 0;
+  }
+
+  .knowledge-tree,
+  .wrong-tree {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .student-main {
+    padding: 24px 16px 96px;
+  }
+
+  .student-course-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .student-page {
+    gap: 24px;
+  }
+
+  .hello-card,
+  .home-ai-recommend-card,
+  .home-activity-card,
+  .student-plan-page .plan-banner,
+  .student-plan-page .card,
+  .panel-card,
+  .profile-main-card,
+  .practice-modern-card {
+    padding: 22px;
+  }
+
+  .course-tools,
+  .wrong-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .today-plan,
+  .student-plan-page .plan-task-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .today-plan > .app-progress,
+  .today-plan > button,
+  .student-plan-page .plan-task-tag {
+    grid-column: 2;
+  }
+
+  .profile-tabs,
+  .underline-tabs,
+  .seg-tabs,
+  .quiz-modern-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .profile-tabs button,
+  .underline-tabs button,
+  .seg-tabs button,
+  .quiz-modern-tabs button {
+    flex: 1 0 auto;
+  }
+
+  .qa-modern-page .input-box {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .qa-modern-page .qa-header-actions {
+    width: 100%;
+  }
+
+  .qa-modern-page .qa-header-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .qa-modern-page .action-circle-btn {
+    flex: 0 0 40px;
+  }
+
+  .student-plan-page .ai-prompt-bar {
+    border-radius: var(--plan-radius-lg);
+  }
+}
+
+/* Tutoring page rebuild: clear hierarchy for problem input, OCR upload, guided hints and history. */
+.tutoring-page {
+  --tutor-primary-50: #EEF2FF;
+  --tutor-primary-100: #E0E7FF;
+  --tutor-primary-500: #6366F1;
+  --tutor-primary-600: #4F46E5;
+  --tutor-ai-main: linear-gradient(135deg, #06B6D4 0%, #8B5CF6 100%);
+  --tutor-ai-light: linear-gradient(135deg, #F0F9FF 0%, #F5F3FF 100%);
+  --tutor-success-50: #ECFDF5;
+  --tutor-success-600: #059669;
+  --tutor-warning-50: #FFFBEB;
+  --tutor-warning-600: #D97706;
+  --tutor-card: #FFFFFF;
+  --tutor-muted: #F8FAFC;
+  --tutor-border: #E2E8F0;
+  --tutor-text: #1E293B;
+  --tutor-secondary: #64748B;
+  --tutor-hint: #94A3B8;
+  --tutor-radius-lg: 16px;
+  --tutor-radius-xl: 24px;
+  --tutor-pill: 9999px;
+  --tutor-shadow-card: 0 12px 32px rgba(15, 23, 42, 0.05);
+  --tutor-shadow-focus: 0 0 0 4px rgba(79, 70, 229, 0.15);
+  display: grid;
+  gap: 28px;
+  width: 100%;
+  color: var(--tutor-text);
+}
+
+.tutoring-page .page-title-row {
+  margin-bottom: 0;
+}
+
+.tutoring-page .page-title-actions {
+  align-items: center;
+}
+
+.tutoring-page .course-select .select-menu > button,
+.tutoring-page .select-menu-empty {
+  min-height: 42px;
+  border: 1px solid var(--tutor-border);
+  border-radius: var(--tutor-pill);
+  background: white;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
+  padding: 0 16px;
+}
+
+.tutoring-page .tutoring-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(420px, 0.88fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.tutoring-page .tutor-input,
+.tutoring-page .guide-card {
+  border: 1px solid rgba(226, 232, 240, 0.78);
+  border-radius: var(--tutor-radius-xl);
+  background: var(--tutor-card);
+  box-shadow: var(--tutor-shadow-card);
+  padding: 30px;
+}
+
+.tutoring-page .tutor-input {
+  display: grid;
+  gap: 20px;
+}
+
+.tutor-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.tutor-card-head h2 {
+  margin: 4px 0 0;
+  color: var(--tutor-text);
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.tutor-eyebrow,
+.tutor-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--tutor-hint);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tutor-status {
+  flex: 0 0 auto;
+  border-radius: var(--tutor-pill);
+  background: var(--tutor-muted);
+  color: var(--tutor-secondary);
+  padding: 6px 12px;
+}
+
+.tutor-status.active {
+  background: var(--tutor-success-50);
+  color: var(--tutor-success-600);
+}
+
+.tutoring-page .tutor-mode-tabs {
+  width: fit-content;
+  display: inline-flex;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--tutor-pill);
+  background: var(--tutor-muted);
+  box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.8);
+  padding: 6px;
+}
+
+.tutoring-page .tutor-mode-tabs button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--tutor-pill);
+  background: transparent;
+  color: var(--tutor-secondary);
+  padding: 0 18px;
+  font-weight: 800;
+}
+
+.tutoring-page .tutor-mode-tabs button:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--tutor-primary-600);
+}
+
+.tutoring-page .tutor-mode-tabs button.active {
+  background: white;
+  color: var(--tutor-primary-600);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.problem-editor-wrap {
+  display: grid;
+  min-height: 260px;
+}
+
+.tutoring-page .problem-text {
+  width: 100%;
+  min-height: 260px;
+  border: 1px solid var(--tutor-border);
+  border-radius: var(--tutor-radius-lg);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.72), rgba(255, 255, 255, 1)),
+    white;
+  color: var(--tutor-text);
+  box-shadow: none;
+  padding: 18px 20px;
+  resize: vertical;
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.tutoring-page .problem-text::placeholder {
+  color: var(--tutor-hint);
+}
+
+.tutoring-page .problem-text:hover {
+  border-color: var(--tutor-primary-100);
+}
+
+.tutoring-page .problem-text:focus {
+  border-color: var(--tutor-primary-500);
+  box-shadow: var(--tutor-shadow-focus);
+}
+
+.tutoring-page .image-drop {
+  position: relative;
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  border: 2px dashed #CBD5E1;
+  border-radius: var(--tutor-radius-lg);
+  background:
+    radial-gradient(circle at 18% 18%, rgba(99, 102, 241, 0.08), transparent 32%),
+    linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+  color: var(--tutor-secondary);
+  cursor: pointer;
+  text-align: center;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.tutoring-page .image-drop:hover {
+  border-color: var(--tutor-primary-500);
+  background: #FFFFFF;
+  box-shadow: 0 12px 32px rgba(79, 70, 229, 0.10);
+  transform: translateY(-1px);
+}
+
+.tutoring-page .image-drop input {
+  display: none;
+}
+
+.tutoring-page .image-drop .upload-icon {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: var(--tutor-ai-light);
+  color: #8B5CF6;
+  box-shadow: 0 12px 24px rgba(139, 92, 246, 0.15);
+}
+
+.tutoring-page .image-drop strong {
+  color: var(--tutor-text);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.tutoring-page .image-drop small {
+  max-width: 320px;
+  color: var(--tutor-secondary);
+  line-height: 1.6;
+}
+
+.tutoring-page .image-drop.ocr-scanning {
+  pointer-events: none;
+  border-color: var(--tutor-primary-500);
+  background: var(--tutor-primary-50);
+}
+
+.tutoring-page .image-drop.ocr-scanning .upload-icon {
+  animation: tutor-pulse 1.2s ease-in-out infinite;
+}
+
+.tutor-input-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--tutor-hint);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tutoring-page .knowledge-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  border: 1px solid rgba(221, 214, 254, 0.82);
+  border-radius: var(--tutor-radius-lg);
+  background: var(--tutor-ai-light);
+  color: #6D28D9;
+  padding: 12px 14px;
+}
+
+.tutoring-page .knowledge-box strong {
+  margin-right: 2px;
+  font-size: 13px;
+}
+
+.tutoring-page .tutor-submit-btn {
+  min-height: 52px;
+  border-radius: var(--tutor-pill);
+  background: var(--tutor-ai-main);
+  color: white;
+  box-shadow: 0 8px 24px rgba(139, 92, 246, 0.28);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.tutoring-page .tutor-submit-btn:hover:not(:disabled) {
+  filter: brightness(1.04);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(139, 92, 246, 0.34);
+}
+
+.tutoring-page .guide-card {
+  display: grid;
+  gap: 18px;
+}
+
+.tutoring-page .guide-card .section-head {
+  margin: 0;
+}
+
+.tutoring-page .active-problem-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--tutor-border);
+  border-radius: var(--tutor-radius-lg);
+  background: var(--tutor-muted);
+  padding: 16px;
+}
+
+.tutoring-page .active-problem-card span {
+  color: var(--tutor-hint);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tutoring-page .active-problem-card p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  margin: 0;
+  color: var(--tutor-text);
+  line-height: 1.7;
+}
+
+.guide-step-list {
+  display: grid;
+  gap: 14px;
+}
+
+.tutoring-page .guide-step {
+  overflow: hidden;
+  border: 1px solid var(--tutor-border);
+  border-radius: var(--tutor-radius-lg);
+  background: white;
+  box-shadow: none;
+}
+
+.tutoring-page .guide-step:hover {
+  border-color: var(--tutor-primary-100);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.tutoring-page .guide-step > button {
+  width: 100%;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  border-radius: 0;
+  background: #FFFFFF;
+  color: var(--tutor-text);
+  padding: 0 16px;
+  text-align: left;
+}
+
+.tutoring-page .guide-step > button:hover {
+  background: var(--tutor-primary-50);
+}
+
+.tutoring-page .guide-step b {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--tutor-primary-600);
+  color: white;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.tutoring-page .guide-step strong {
+  flex: 1;
+  min-width: 0;
+  color: var(--tutor-text);
+  font-size: 15px;
+}
+
+.tutoring-page .guide-step svg:last-child {
+  color: var(--tutor-hint);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.tutoring-page .guide-step .rotate {
+  transform: rotate(180deg);
+}
+
+.tutoring-page .guide-body {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid var(--tutor-border);
+  background: var(--tutor-muted);
+  color: var(--tutor-secondary);
+  padding: 16px 18px;
+  line-height: 1.75;
+}
+
+.tutoring-page .guide-body p {
+  margin: 0;
+}
+
+.tutoring-page .guide-body ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.tutoring-page .guide-body strong {
+  display: block;
+  border-radius: 12px;
+  background: var(--tutor-success-50);
+  color: var(--tutor-success-600);
+  padding: 10px 12px;
+}
+
+.tutoring-page .empty-guide {
+  min-height: 330px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px dashed #CBD5E1;
+  border-radius: var(--tutor-radius-lg);
+  background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+  color: var(--tutor-secondary);
+  text-align: center;
+  padding: 32px;
+}
+
+.tutoring-page .empty-guide svg {
+  width: 68px;
+  height: 68px;
+  border-radius: 22px;
+  background: var(--tutor-ai-light);
+  color: #8B5CF6;
+  padding: 16px;
+}
+
+.tutoring-page .empty-guide strong {
+  color: var(--tutor-text);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.tutoring-page .empty-guide span {
+  color: var(--tutor-secondary);
+}
+
+/* Targeted fixes for QA, courses, course detail, and rebuilt tutoring history. */
+.qa-modern-page .qa-header-actions {
+  position: relative;
+  z-index: 6;
+}
+
+.qa-modern-page .qa-tutoring-link svg {
+  width: 13px !important;
+  height: 13px !important;
+  flex: 0 0 13px;
+  background: transparent !important;
+  color: currentColor;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.qa-modern-page .action-circle-btn {
+  pointer-events: auto;
+}
+
+.qa-modern-page .action-circle-btn.active {
+  border-color: var(--qa-primary-100);
+  background: var(--qa-primary-50);
+  color: var(--qa-primary-600);
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.14);
+}
+
+.qa-modern-page .history-drawer {
+  z-index: calc(var(--z-modal, 1200) + 10);
+}
+
+.course-art em {
+  top: 16px;
+  right: 16px;
+  bottom: auto;
+}
+
+.course-art .dropdown-menu {
+  top: auto;
+  right: 16px;
+  bottom: 16px;
+}
+
+.course-art .dropdown-pop {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 8px);
+}
+
+.course-layout > aside {
+  display: grid;
+  gap: 22px;
+}
+
+.course-layout > aside .ask-card,
+.course-layout > aside .recent-qa-card {
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.78);
+  border-left: 0;
+  border-radius: var(--s-radius-lg);
+  background: #FFFFFF;
+  box-shadow: var(--s-shadow-card);
+  padding: 24px;
+}
+
+.course-layout > aside .ask-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.course-layout > aside .ask-card > svg {
+  display: none;
+}
+
+.course-layout > aside .ask-card h2 {
+  margin: 0;
+  color: var(--s-text);
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 900;
+}
+
+.course-layout > aside .ask-card form {
+  min-height: 48px;
+  border-radius: 16px;
+}
+
+.course-layout > aside .ask-card .quick-tags {
+  margin: 0;
+}
+
+.course-layout > aside .recent-qa-card {
+  display: grid;
+  gap: 12px;
+}
+
+.course-layout > aside .recent-qa-card .section-head {
+  margin: 0 0 4px;
+}
+
+.course-layout > aside .qa-mini {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--s-border);
+  border-radius: 14px;
+  background: var(--s-bg);
+  padding: 12px 14px;
+}
+
+.course-layout > aside .qa-mini strong,
+.course-layout > aside .qa-mini p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.course-layout > aside .qa-mini p {
+  color: var(--s-muted);
+}
+
+.tutoring-page .tutor-card-head,
+.tutoring-page .guide-card .section-head {
+  min-height: 64px;
+}
+
+.tutoring-page .guide-card .section-head {
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.tutoring-history-card {
+  display: grid;
+  gap: 18px;
+  border: 1px solid rgba(226, 232, 240, 0.78);
+  border-radius: var(--tutor-radius-xl, 24px);
+  background: #FFFFFF;
+  box-shadow: var(--tutor-shadow-card, 0 12px 32px rgba(15, 23, 42, 0.05));
+  padding: 26px;
+}
+
+.tutoring-history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.tutoring-history-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--tutor-text, #1E293B);
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 900;
+}
+
+.tutoring-history-head svg {
+  color: var(--tutor-primary-600, #4F46E5);
+}
+
+.tutoring-history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.tutoring-history-item {
+  min-height: 112px;
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--tutor-border, #E2E8F0);
+  border-radius: var(--tutor-radius-lg, 16px);
+  background: var(--tutor-muted, #F8FAFC);
+  color: var(--tutor-text, #1E293B);
+  padding: 16px;
+  text-align: left;
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    background var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.tutoring-history-item:hover {
+  border-color: var(--tutor-primary-100, #E0E7FF);
+  background: #FFFFFF;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  transform: translateY(-2px);
+}
+
+.tutoring-history-item:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.tutoring-history-item strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  color: var(--tutor-text, #1E293B);
+  line-height: 1.55;
+}
+
+.tutoring-history-item small {
+  color: var(--tutor-hint, #94A3B8);
+  font-weight: 800;
+}
+
+.practice-generate-hint:empty {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .tutoring-page .tutoring-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .tutoring-page {
+    gap: 22px;
+  }
+
+  .tutoring-page .tutor-input,
+  .tutoring-page .guide-card {
+    padding: 22px;
+  }
+
+  .tutor-card-head,
+  .tutoring-page .guide-card .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tutoring-page .tutor-mode-tabs {
+    width: 100%;
+  }
+
+  .tutoring-page .tutor-mode-tabs button {
+    flex: 1;
+    padding: 0 10px;
+  }
+
+  .problem-editor-wrap,
+  .tutoring-page .problem-text,
+  .tutoring-page .image-drop {
+    min-height: 220px;
+  }
+
+  .tutoring-history-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes tutor-pulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 12px 24px rgba(139, 92, 246, 0.15); }
+  50% { transform: scale(1.04); box-shadow: 0 18px 32px rgba(139, 92, 246, 0.24); }
+}
+
+@keyframes student-audit-spin {
+  to { transform: rotate(360deg); }
 }
 </style>
 
@@ -8673,5 +11435,690 @@ onBeforeUnmount(() => {
     min-width: 0;
     padding: 0 14px;
   }
+}
+
+/* Render-function UI audit overrides: QuizCard, WrongCard and QuizAnswerView. */
+.quiz-modern-page,
+.quiz-modern-page *,
+.exam-answer-page,
+.exam-answer-page * {
+  box-sizing: border-box;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+}
+
+.quiz-modern-page h1,
+.quiz-modern-page h2,
+.quiz-modern-page p,
+.quiz-modern-page strong,
+.quiz-modern-page span,
+.quiz-modern-page small,
+.quiz-modern-page em,
+.quiz-modern-page button,
+.exam-answer-page h1,
+.exam-answer-page h2,
+.exam-answer-page p,
+.exam-answer-page strong,
+.exam-answer-page span,
+.exam-answer-page small,
+.exam-answer-page em,
+.exam-answer-page button,
+.exam-answer-page input,
+.exam-answer-page textarea {
+  letter-spacing: 0;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.quiz-modern-page {
+  width: 100%;
+  min-width: 0;
+  align-items: stretch;
+}
+
+.quiz-modern-page > *,
+.quiz-modern-list,
+.practice-modern-grid,
+.practice-modern-card,
+.practice-history-list {
+  min-width: 0;
+}
+
+.quiz-modern-header {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.quiz-modern-tabs {
+  flex-wrap: wrap;
+}
+
+.quiz-modern-tabs button,
+.practice-chip,
+.practice-segmented-control button,
+.practice-switch-wrapper,
+.practice-generate-btn,
+.practice-feature-card,
+.practice-history-item,
+.quiz-card,
+.wrong-card {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.quiz-modern-tabs button:focus-visible,
+.practice-chip:focus-visible,
+.practice-segmented-control button:focus-visible,
+.practice-switch-wrapper:focus-visible,
+.practice-generate-btn:focus-visible,
+.practice-feature-card:focus-visible,
+.practice-history-item:focus-visible,
+.quiz-card:focus-visible,
+.wrong-card:focus-visible,
+.exam-answer-page button:focus-visible,
+.exam-answer-page input:focus-visible,
+.exam-answer-page textarea:focus-visible,
+.exam-opt-input:focus-visible + .exam-opt-card {
+  outline: 0;
+  border-color: var(--quiz-primary-500, var(--exam-primary-500, #6366F1)) !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.16) !important;
+}
+
+.quiz-modern-page button:not(:disabled):active,
+.quiz-card:active,
+.wrong-card:active,
+.practice-history-item:active,
+.practice-feature-card:active,
+.exam-answer-page button:not(:disabled):active,
+.exam-opt-label:active .exam-opt-card {
+  transform: translateY(0) scale(0.985);
+}
+
+.quiz-modern-page button:disabled,
+.exam-answer-page button:disabled,
+.exam-answer-page input:disabled,
+.exam-answer-page textarea:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.56 !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.quiz-modern-page button[data-loading="true"],
+.exam-answer-page button[data-loading="true"] {
+  position: relative;
+  pointer-events: none;
+  color: transparent !important;
+}
+
+.quiz-modern-page button[data-loading="true"] > *,
+.exam-answer-page button[data-loading="true"] > * {
+  opacity: 0;
+}
+
+.quiz-modern-page button[data-loading="true"]::after,
+.exam-answer-page button[data-loading="true"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: render-audit-spin 0.8s linear infinite;
+}
+
+.exam-btn-outline[data-loading="true"]::after {
+  border-color: rgba(79, 70, 229, 0.22);
+  border-top-color: var(--exam-primary-600, #4F46E5);
+}
+
+.practice-modern-grid {
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.85fr);
+  align-items: start;
+}
+
+.practice-modern-card,
+.quiz-card,
+.wrong-card,
+.exam-nav-card,
+.exam-q-card,
+.exam-result-card,
+.exam-result-summary,
+.exam-analysis-card,
+.exam-confirm-card,
+.empty {
+  border: 1px solid rgba(226, 232, 240, 0.72);
+}
+
+.quiz-modern-list,
+.practice-history-list {
+  display: grid;
+  gap: 14px;
+}
+
+.quiz-card,
+.wrong-card,
+.practice-history-item {
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.quiz-card,
+.wrong-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px 18px;
+  overflow: visible;
+}
+
+.quiz-card h2,
+.wrong-card h2,
+.quiz-card p,
+.wrong-card p,
+.practice-history-left strong,
+.practice-history-left small {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.quiz-card h2,
+.wrong-card h2 {
+  line-height: 1.35;
+}
+
+.quiz-card p,
+.wrong-card p {
+  line-height: 1.55;
+}
+
+.quiz-card footer,
+.wrong-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.practice-history-left {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.practice-history-item em {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.practice-feature-card {
+  min-width: 0;
+}
+
+.practice-feature-card > div {
+  min-width: 0;
+}
+
+.practice-feature-card > span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.practice-settings-row,
+.practice-segmented-control,
+.practice-chapter-chips {
+  flex-wrap: wrap;
+}
+
+.practice-switch-wrapper {
+  min-height: 40px;
+  border-radius: var(--quiz-pill, 9999px);
+  padding: 0 8px;
+}
+
+.empty {
+  width: 100%;
+  color: #64748B;
+  line-height: 1.55;
+}
+
+.empty span {
+  max-width: 100%;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+
+.exam-answer-page {
+  overflow: hidden;
+}
+
+.exam-shell {
+  min-width: 0;
+}
+
+.exam-header {
+  gap: 16px;
+}
+
+.exam-title {
+  line-height: 1.35;
+}
+
+.exam-container {
+  min-width: 0;
+}
+
+.exam-nav-sidebar,
+.exam-question-area,
+.exam-q-card,
+.exam-result-main,
+.exam-analysis-card {
+  min-width: 0;
+}
+
+.exam-q-card {
+  overflow: visible;
+}
+
+.exam-q-meta-row,
+.exam-footer-container,
+.exam-footer-actions,
+.exam-confirm-card footer {
+  flex-wrap: wrap;
+}
+
+.exam-q-stem,
+.exam-opt-text,
+.exam-analysis-trigger span,
+.exam-analysis-body,
+.exam-result-summary p {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.exam-opt-card {
+  align-items: flex-start;
+}
+
+.exam-opt-text {
+  min-width: 0;
+  line-height: 1.6;
+}
+
+.exam-answer-input,
+.exam-answer-textarea {
+  min-width: 0;
+}
+
+.exam-analysis-trigger {
+  gap: 10px;
+  min-width: 0;
+}
+
+.exam-analysis-trigger span {
+  min-width: 0;
+  text-align: right;
+}
+
+.exam-modal-mask {
+  padding: 24px;
+}
+
+.exam-confirm-card p {
+  line-height: 1.65;
+}
+
+.wrong-book-page {
+  display: grid;
+  gap: 24px;
+}
+
+.wrong-dashboard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid rgba(226, 232, 240, 0.78);
+  border-radius: 20px;
+  background: #FFFFFF;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.05);
+  padding: 24px 28px;
+}
+
+.wrong-title-block {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.wrong-title-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #FEE2E2 0%, #FFF7ED 100%);
+  color: #DC2626;
+}
+
+.wrong-title-block h1 {
+  margin: 0;
+  color: #1E293B;
+  font-size: 26px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.wrong-title-block p {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: #64748B;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wrong-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wrong-book-page .wrong-hero {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  color: #1E293B;
+}
+
+.wrong-book-page .wrong-hero div {
+  min-height: 118px;
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.78);
+  border-radius: 18px;
+  background: #FFFFFF;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
+  padding: 22px 24px;
+}
+
+.wrong-book-page .wrong-hero div::before {
+  content: none;
+}
+
+.wrong-book-page .wrong-hero strong {
+  color: #1E293B;
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.wrong-book-page .wrong-hero span {
+  color: #64748B;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.wrong-book-page .wrong-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.wrong-book-page .wrong-tree {
+  position: sticky;
+  top: 92px;
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.78);
+  border-radius: 20px;
+  background: #FFFFFF;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.05);
+  padding: 16px;
+}
+
+.wrong-book-page .wrong-tree strong {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 8px 4px;
+  color: #94A3B8;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.wrong-book-page .wrong-tree button {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: #64748B;
+  padding: 0 12px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.wrong-book-page .wrong-tree button em {
+  min-width: 28px;
+  margin-left: auto;
+  border-radius: 999px;
+  background: #F1F5F9;
+  color: #64748B;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 22px;
+  text-align: center;
+}
+
+.wrong-book-page .wrong-tree button:hover,
+.wrong-book-page .wrong-tree button.active {
+  border-color: #E0E7FF;
+  background: #EEF2FF;
+  color: #4F46E5;
+  box-shadow: none;
+  transform: translateX(2px);
+}
+
+.wrong-book-page .wrong-tree button.active em {
+  background: #4F46E5;
+  color: #FFFFFF;
+}
+
+.wrong-book-page .wrong-list {
+  display: grid;
+  gap: 14px;
+}
+
+.wrong-book-page .wrong-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 12px;
+  margin: 0;
+}
+
+.wrong-filter-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  background: #F8FAFC;
+  padding: 10px 12px;
+  color: #64748B;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.wrong-filter-state button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: #4F46E5;
+  padding: 7px 12px;
+  font-weight: 800;
+}
+
+.wrong-filter-state button:hover {
+  background: #EEF2FF;
+}
+
+.wrong-card-top,
+.wrong-card-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wrong-card-top {
+  justify-content: space-between;
+}
+
+.wrong-state,
+.wrong-times {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.wrong-state.pending {
+  background: #FEF2F2;
+  color: #DC2626;
+}
+
+.wrong-state.resolved {
+  background: #ECFDF5;
+  color: #059669;
+}
+
+.wrong-times {
+  background: #F8FAFC;
+  color: #64748B;
+}
+
+.wrong-book-page .wrong-card {
+  border: 1px solid rgba(226, 232, 240, 0.78);
+  border-radius: 18px;
+  background: #FFFFFF;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
+  padding: 20px 22px;
+}
+
+.wrong-book-page .wrong-card::before {
+  background: linear-gradient(180deg, #EF4444, #F59E0B);
+}
+
+.top-icon[data-loading="true"] {
+  color: var(--s-muted) !important;
+}
+
+.top-icon[data-loading="true"] > * {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.top-icon[data-loading="true"]::after {
+  content: none !important;
+  display: none !important;
+}
+
+@media (max-width: 1180px) {
+  .practice-modern-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wrong-book-page .wrong-hero {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wrong-book-page .wrong-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .wrong-book-page .wrong-tree {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .wrong-dashboard-head,
+  .wrong-head-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .wrong-book-page .wrong-hero,
+  .wrong-book-page .wrong-tools {
+    grid-template-columns: 1fr;
+  }
+
+  .quiz-modern-header {
+    align-items: stretch;
+  }
+
+  .quiz-modern-tabs {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .quiz-modern-tabs button {
+    flex: 1 0 auto;
+  }
+
+  .quiz-card,
+  .wrong-card,
+  .practice-history-item,
+  .practice-feature-card {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .quiz-card footer,
+  .wrong-card footer {
+    justify-content: flex-start;
+  }
+
+  .exam-header {
+    align-items: stretch;
+  }
+
+  .exam-title {
+    white-space: normal;
+  }
+
+  .exam-footer-container {
+    align-items: center;
+  }
+}
+
+@keyframes render-audit-spin {
+  to { transform: rotate(360deg); }
 }
 </style>

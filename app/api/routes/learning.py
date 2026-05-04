@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.schemas.learning import (
     KnowledgePointResponse,
     LearningRecordResponse,
+    QuizEditRequest,
     QuizAttemptResponse,
     QuizDetailResponse,
     QuizGenerateRequest,
@@ -40,6 +41,7 @@ from app.services.learning import (
     list_wrong_questions,
     publish_quiz,
     submit_quiz,
+    update_quiz_content,
 )
 
 
@@ -148,6 +150,22 @@ def get_quiz_detail_endpoint(
     return success_response(data=payload.model_dump(mode="json"), request_id=request.state.request_id)
 
 
+@router.put("/quizzes/{quiz_id}")
+def update_quiz_endpoint(
+    quiz_id: int,
+    payload: QuizEditRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    quiz, questions = update_quiz_content(db, quiz_id=quiz_id, user=user, payload=payload)
+    response = QuizDetailResponse(
+        quiz=QuizResponse.model_validate(quiz),
+        questions=[QuizQuestionPayload.model_validate(item) for item in questions],
+    )
+    return success_response(data=response.model_dump(mode="json"), request_id=request.state.request_id)
+
+
 @router.post("/quizzes/{quiz_id}/submit")
 def submit_quiz_endpoint(
     quiz_id: int,
@@ -175,8 +193,14 @@ def get_wrong_questions_endpoint(
                 wrong_question_id=wrong.id,
                 question=QuizQuestionPayload.model_validate(question),
                 wrong_count=wrong.wrong_count,
+                history_count=wrong.wrong_count,
+                is_resolved=bool(wrong.is_resolved),
                 knowledge_point_id=wrong.knowledge_point_id,
                 knowledge_point_name=point.name if point else None,
+                last_attempt_id=wrong.last_attempt_id,
+                resolved_at=wrong.resolved_at,
+                last_wrong_at=wrong.last_wrong_at,
+                last_correct_at=wrong.last_correct_at,
                 created_at=wrong.created_at,
                 updated_at=wrong.updated_at,
             ).model_dump(mode="json")

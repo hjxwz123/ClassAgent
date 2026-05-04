@@ -57,16 +57,254 @@ def _is_generic_quiz_label(value: str) -> bool:
 
 
 def _quiz_source_sentences(source_text: str, *, limit: int = 8) -> list[str]:
-    clean = _clean_text(source_text)
+    clean = sanitize_quiz_source_text(source_text)
     sentences = [item.strip(" ：:，,") for item in re.split(r"[。！？!?；;\n]+", clean) if item.strip()]
-    return [item[:90] for item in sentences if len(item) >= 6][:limit]
+    return [item[:110] for item in sentences if _valid_quiz_sentence(item)][:limit]
+
+
+_QUIZ_NOISE_WORDS = {
+    "http",
+    "https",
+    "jpeg",
+    "jpg",
+    "png",
+    "gif",
+    "webp",
+    "classagent",
+    "oss",
+    "aliyuncs",
+    "beijing",
+    "docmind",
+    "docmind_images",
+    "com",
+    "cn",
+}
+
+_GENERIC_OPTION_PATTERNS = (
+    r"只需要记住结论",
+    r"无需理解",
+    r"不需要理解",
+    r"与本课程资料.*无关",
+    r"与课程内容无关",
+    r"可以跳过",
+    r"固定答案",
+    r"任何场景.*直接套用",
+)
+
+_DIRECT_SHORT_ANSWER_PATTERNS = (
+    r"何时",
+    r"什么时候",
+    r"在哪个阶段",
+    r"是什么",
+    r"什么是",
+    r"哪一(?:个|项|种)",
+    r"哪个",
+    r"下列",
+    r"是否",
+    r"对不对",
+    r"正确吗",
+    r"谁",
+    r"多少",
+    r"几年",
+    r"哪年",
+)
+
+_EXPLANATORY_SHORT_ANSWER_PATTERNS = (
+    r"简述",
+    r"说明",
+    r"解释",
+    r"阐述",
+    r"分析",
+    r"概括",
+    r"比较",
+    r"列举",
+    r"描述",
+    r"谈谈",
+    r"为什么",
+    r"原因",
+    r"作用",
+    r"关系",
+    r"区别",
+    r"联系",
+    r"特点",
+    r"步骤",
+    r"任务",
+)
+
+
+def _contains_quiz_noise(value: str) -> bool:
+    text = _clean_text(value)
+    lower = text.lower()
+    if re.search(r"https?://|!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\)", text, re.I):
+        return True
+    if re.search(r"\b[a-f0-9]{8,}\b", lower):
+        return True
+    if re.search(r"\b\w+\.(?:jpeg|jpg|png|gif|webp|bmp)\b", lower):
+        return True
+    return any(re.search(rf"\b{re.escape(word)}\b", lower) for word in _QUIZ_NOISE_WORDS)
+
+
+def _cjk_count(value: str) -> int:
+    return len(re.findall(r"[\u4e00-\u9fff]", value))
+
+
+def _has_formula_signal(value: str) -> bool:
+    return bool(re.search(r"(:=|->|→|=>|[A-Z]\.[A-Za-z]|[SL]-属性|[A-Z]\s*→)", value))
+
+
+def sanitize_quiz_source_text(source_text: str) -> str:
+    raw = str(source_text or "")
+    raw = re.sub(r"!\[[^\]]*\]\([^)]+\)", "\n", raw)
+    raw = re.sub(r"\[([^\]]*)\]\([^)]+\)", r"\1", raw)
+    raw = re.sub(r"https?://\S+", " ", raw, flags=re.I)
+    raw = re.sub(r"\b\S+\.(?:jpeg|jpg|png|gif|webp|bmp)\b", " ", raw, flags=re.I)
+    raw = re.sub(r"\b[a-f0-9]{8,}\b", " ", raw, flags=re.I)
+    raw = re.sub(r"\b(?:classagent|aliyuncs|docmind_images|docmind|oss-cn-[a-z-]+|oss|https?|jpeg|jpg|png|gif|webp|bmp)\b", " ", raw, flags=re.I)
+    pieces: list[str] = []
+    for line in raw.splitlines():
+        clean = _clean_text(line).strip(" ：:，,")
+        clean = re.sub(r"^第\s*\d+\s*页\s*[>：:、,，.\-—]*\s*", "", clean)
+        clean = re.sub(r"\b第\s*\d+\s*页\b", "", clean)
+        clean = _clean_text(clean).strip(" ：:，,")
+        if not clean:
+            continue
+        if _contains_quiz_noise(clean):
+            continue
+        if re.fullmatch(r"第\s*\d+\s*页", clean):
+            continue
+        if _cjk_count(clean) < 2 and not _has_formula_signal(clean):
+            continue
+        pieces.append(clean[:420])
+    return "\n".join(pieces)
+
+
+def _valid_quiz_sentence(value: str) -> bool:
+    text = _clean_text(value).strip(" ：:，,")
+    if len(text) < 6:
+        return False
+    if _contains_quiz_noise(text):
+        return False
+    if re.fullmatch(r"第\s*\d+\s*页", text):
+        return False
+    return _cjk_count(text) >= 4 or _has_formula_signal(text)
+
+
+def _valid_quiz_option(value: str) -> bool:
+    text = _clean_text(value).strip(" ：:，,")
+    if len(text) < 2:
+        return False
+    if _contains_quiz_noise(text):
+        return False
+    if re.fullmatch(r"第\s*\d+\s*页", text):
+        return False
+    if any(re.search(pattern, text) for pattern in _GENERIC_OPTION_PATTERNS):
+        return False
+    return _cjk_count(text) >= 2 or _has_formula_signal(text)
+
+
+def _valid_quiz_keyword(value: str) -> bool:
+    text = _clean_text(value).strip(" ：:，,._-")
+    if len(text) < 2 or len(text) > 28:
+        return False
+    if _is_generic_quiz_label(text) or _contains_quiz_noise(text):
+        return False
+    if re.fullmatch(r"第\s*\d+\s*页", text):
+        return False
+    if _cjk_count(text) == 0 and not re.search(r"[SL]-属性|[A-Z]\.[A-Za-z]|[A-Z]\s*→", text):
+        return False
+    return True
+
+
+def _valid_short_answer_stem(stem: str) -> bool:
+    text = _clean_text(stem)
+    if len(text) < 10:
+        return False
+    if any(re.search(pattern, text) for pattern in _DIRECT_SHORT_ANSWER_PATTERNS):
+        return False
+    return any(re.search(pattern, text) for pattern in _EXPLANATORY_SHORT_ANSWER_PATTERNS)
+
+
+def _quiz_answer_index(value: Any, *, options: list[str] | None = None, question_type: str = "single_choice") -> int | None:
+    if isinstance(value, bool):
+        return 0 if value else 1
+    if isinstance(value, int):
+        return value
+    text = _clean_text(str(value or ""))
+    if not text:
+        return None
+    if text.isdigit():
+        return int(text)
+    if len(text) == 1 and text.upper() in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+        return ord(text.upper()) - ord("A")
+    if question_type == "judge":
+        if text.lower() in {"true", "yes", "正确", "对", "是"}:
+            return 0
+        if text.lower() in {"false", "no", "错误", "错", "否"}:
+            return 1
+    if options:
+        for index, option in enumerate(options):
+            if _clean_text(option) == text:
+                return index
+    return None
+
+
+def _normalize_quiz_reference_answer(item: dict[str, Any], *, options: list[str] | None, question_type: str) -> dict[str, Any]:
+    raw = item.get("reference_answer")
+    if question_type in {"single_choice", "judge"}:
+        candidates: list[Any] = []
+        if isinstance(raw, dict):
+            for key in (
+                "value",
+                "answer",
+                "correct_answer",
+                "correct",
+                "option_index",
+                "index",
+                "key",
+                "text",
+                "choice",
+                "correct_option",
+                "judge",
+            ):
+                if key in raw:
+                    candidates.append(raw[key])
+        else:
+            candidates.append(raw)
+        for candidate in candidates:
+            index = _quiz_answer_index(candidate, options=options, question_type=question_type)
+            if index is not None and options and 0 <= index < len(options):
+                return {"value": index}
+        return {}
+    if isinstance(raw, dict) and isinstance(raw.get("keywords"), list):
+        keywords = [str(item).strip() for item in raw["keywords"] if _valid_quiz_keyword(str(item))]
+        return {"keywords": keywords} if keywords else {}
+    if isinstance(raw, list):
+        keywords = [str(item).strip() for item in raw if _valid_quiz_keyword(str(item))]
+        return {"keywords": keywords} if keywords else {}
+    if raw:
+        keywords = []
+        for item in re.findall(r"[\u4e00-\u9fffA-Za-z0-9]{2,12}", str(raw)):
+            if _valid_quiz_keyword(item) and item not in keywords:
+                keywords.append(item)
+            if len(keywords) >= 5:
+                break
+        return {"keywords": keywords} if keywords else {}
+    return {}
 
 
 def _invalid_quiz_stem(stem: str) -> bool:
     text = _clean_text(stem)
     if not text:
         return True
+    if _contains_quiz_noise(text):
+        return True
+    if re.search(r"“\s*第\s*\d+\s*页\s*”", text):
+        return True
     if "课程资料的是哪一项" in text:
+        return True
+    if "更接近下列哪种表述" in text:
+        return True
+    if any(re.search(pattern, text) for pattern in _GENERIC_OPTION_PATTERNS):
         return True
     return bool(re.search(r"关于[“\"']?(章节练习|薄弱点章节练习|错题重练|章节自练)[”\"']?", text))
 
@@ -75,11 +313,16 @@ RAG_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "你是课程知识问答助手。只能依据给定课程资料回答；如果资料不足，必须说明资料不足，不能编造。",
+            "你是课程知识问答助手。必须优先依据给定课程资料回答。"
+            "如果学生要求解释、举例或类比，可以围绕资料中的概念、公式和条件生成教学示例，"
+            "并明确这是用于说明资料内容的例子；不要因为资料里没有现成示例就直接说资料不足。"
+            "只有当给定资料与问题完全无关或缺少关键定义时，才说明资料不足，不能编造与资料矛盾的内容。",
         ),
         (
             "human",
-            "课程资料：\n{context}\n\n历史问题：\n{history}\n\n学生问题：{question}\n请用中文回答，并给出关键依据。",
+            "课程资料：\n{context}\n\n历史问题：\n{history}\n\n学生问题：{question}\n"
+            "请用中文回答。若问题提到某一页，优先使用资料中标注的当前页内容；"
+            "若要求“用例子解释”，请基于资料里的公式、条件或概念构造一个简短例子，并给出关键依据。",
         ),
     ]
 )
@@ -126,6 +369,9 @@ class AIService:
         system_prompt: str,
         user_prompt: str,
         json_mode: bool = False,
+        allow_fallback: bool = True,
+        max_tokens: int | None = None,
+        timeout_seconds: float | None = None,
     ) -> str | None:
         result = self._call_chat_with_meta(
             db,
@@ -133,6 +379,9 @@ class AIService:
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             json_mode=json_mode,
+            allow_fallback=allow_fallback,
+            max_tokens=max_tokens,
+            timeout_seconds=timeout_seconds,
         )
         return result.content if result else None
 
@@ -178,14 +427,17 @@ class AIService:
         system_prompt: str,
         user_prompt: str,
         json_mode: bool = False,
+        allow_fallback: bool = True,
+        max_tokens: int | None = None,
+        timeout_seconds: float | None = None,
     ) -> ChatResult | None:
         config = get_default_model_config(db, purpose)
         if config is None or config.provider == "mock":
-            if self._fallback_allowed():
+            if allow_fallback and self._fallback_allowed():
                 return None
             raise bad_request(f"缺少 {purpose} 模型配置，请先在管理员模型配置中启用模型")
         if not config.endpoint:
-            if self._fallback_allowed():
+            if allow_fallback and self._fallback_allowed():
                 return None
             raise bad_request(f"{purpose} 模型配置缺少 endpoint")
 
@@ -201,14 +453,20 @@ class AIService:
             ],
             "temperature": config.extra_config.get("temperature", 0.2),
         }
-        if config.extra_config.get("max_tokens"):
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        elif config.extra_config.get("max_tokens"):
             payload["max_tokens"] = config.extra_config["max_tokens"]
         if json_mode and config.extra_config.get("enable_response_format", True):
             payload["response_format"] = {"type": "json_object"}
 
         try:
-            with httpx.Client(timeout=self.settings.external_service_timeout_seconds) as client:
+            with httpx.Client(timeout=timeout_seconds or self.settings.external_service_timeout_seconds) as client:
                 response = client.post(self._chat_endpoint(config.endpoint), headers=headers, json=payload)
+                if response.status_code >= 400 and json_mode and "response_format" in payload:
+                    retry_payload = dict(payload)
+                    retry_payload.pop("response_format", None)
+                    response = client.post(self._chat_endpoint(config.endpoint), headers=headers, json=retry_payload)
             if response.status_code >= 400:
                 raise bad_request(f"模型调用失败: HTTP {response.status_code} {response.text[:300]}")
             body = response.json()
@@ -228,8 +486,12 @@ class AIService:
                     result.reasoning = self._reasoning_from_message(output) or result.reasoning
                     return result
             raise bad_request("模型响应格式不符合 OpenAI 兼容规范")
+        except httpx.HTTPError as exc:
+            if allow_fallback and self._fallback_allowed():
+                return None
+            raise bad_request(f"模型调用失败: {exc}") from exc
         except Exception:
-            if self._fallback_allowed():
+            if allow_fallback and self._fallback_allowed():
                 return None
             raise
 
@@ -345,11 +607,21 @@ class AIService:
         norm = math.sqrt(sum(value * value for value in vector)) or 1.0
         return [round(value / norm, 8) for value in vector]
 
+    def _configured_embedding_dimension(self, config: Any | None) -> int:
+        raw_dimension = None
+        if config is not None:
+            raw_dimension = (config.extra_config or {}).get("dimensions")
+        try:
+            dimension = int(raw_dimension) if raw_dimension else int(self.settings.embedding_dimension)
+        except (TypeError, ValueError):
+            dimension = int(self.settings.embedding_dimension)
+        return dimension if dimension > 0 else 1536
+
     def embed_texts(self, db: Session | None, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
             return []
-        dimension = self.settings.embedding_dimension
         config = get_default_model_config(db, "embedding")
+        dimension = self._configured_embedding_dimension(config)
         if config is None or config.provider == "mock" or config.purpose != "embedding":
             if self._fallback_allowed():
                 return [self._local_embedding(text, dimension=dimension) for text in texts]
@@ -379,19 +651,32 @@ class AIService:
             embeddings = [row.get("embedding") for row in rows if isinstance(row, dict)]
             if len(embeddings) != len(texts) or not all(isinstance(item, list) for item in embeddings):
                 raise bad_request("Embedding 响应格式不符合 OpenAI 兼容规范")
-            return [[float(value) for value in embedding] for embedding in embeddings]
+            vectors = [[float(value) for value in embedding] for embedding in embeddings]
+            if config.extra_config.get("dimensions") and any(len(vector) != dimension for vector in vectors):
+                actual = len(vectors[0]) if vectors else 0
+                raise bad_request(f"Embedding 维度不一致：期望 {dimension}，实际 {actual}")
+            return vectors
         except Exception:
             if self._fallback_allowed():
                 return [self._local_embedding(text, dimension=dimension) for text in texts]
             raise
 
-    def _call_json(self, db: Session | None, *, purpose: str, system_prompt: str, user_prompt: str) -> Any | None:
+    def _call_json(
+        self,
+        db: Session | None,
+        *,
+        purpose: str,
+        system_prompt: str,
+        user_prompt: str,
+        allow_fallback: bool = True,
+    ) -> Any | None:
         content = self._call_chat(
             db,
             purpose=purpose,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             json_mode=True,
+            allow_fallback=allow_fallback,
         )
         if content is None:
             return None
@@ -412,6 +697,68 @@ class AIService:
             if len(keywords) >= limit:
                 break
         return keywords or ["课程内容"]
+
+    def classify_qa_question_scope(
+        self,
+        *,
+        question: str,
+        course_name: str,
+        chapters: Sequence[dict],
+        db: Session | None = None,
+    ) -> dict[str, Any]:
+        chapter_lines = "\n".join(
+            f"- id={item.get('id')}, order={item.get('order_index')}, title={item.get('title')}"
+            for item in chapters[:30]
+        )
+        try:
+            payload = self._call_json(
+                db,
+                purpose="qa",
+                system_prompt=(
+                    "你是课程问答检索意图分类器。只判断问题应该检索的范围，不回答问题。"
+                    "必须只返回 JSON。scope 只能是 specific、chapter_overview、course_overview。"
+                    "specific 表示询问具体概念、公式、例题、定义或单点疑问；"
+                    "chapter_overview 表示要求总结某一章/某个章节的重点、提纲、框架、复习内容；"
+                    "course_overview 表示要求总结整门课/当前课程/全部内容的重点、提纲、框架、复习内容。"
+                ),
+                user_prompt=(
+                    f"课程名称：{course_name}\n"
+                    f"章节列表：\n{chapter_lines or '无'}\n"
+                    f"学生问题：{question}\n"
+                    "返回格式："
+                    "{\"scope\":\"specific|chapter_overview|course_overview\","
+                    "\"chapter_id\":数字或null,"
+                    "\"confidence\":0到1,"
+                    "\"reason\":\"简短原因\"}"
+                ),
+            )
+        except Exception:
+            payload = None
+        if not isinstance(payload, dict):
+            return {"scope": "specific", "chapter_id": None, "confidence": 0, "reason": "classifier_unavailable"}
+        scope = str(payload.get("scope") or "specific").strip()
+        if scope not in {"specific", "chapter_overview", "course_overview"}:
+            scope = "specific"
+        chapter_id = payload.get("chapter_id")
+        try:
+            chapter_id = int(chapter_id) if chapter_id is not None else None
+        except (TypeError, ValueError):
+            chapter_id = None
+        try:
+            confidence = float(payload.get("confidence", 0) or 0)
+        except (TypeError, ValueError):
+            confidence = 0
+        valid_chapter_ids = {int(item["id"]) for item in chapters if item.get("id") is not None}
+        if chapter_id not in valid_chapter_ids:
+            chapter_id = None
+        if scope == "chapter_overview" and chapter_id is None:
+            scope = "specific"
+        return {
+            "scope": scope,
+            "chapter_id": chapter_id,
+            "confidence": max(0, min(confidence, 1)),
+            "reason": str(payload.get("reason") or ""),
+        }
 
     def generate_page_script(self, *, title: str | None, content: str, db: Session | None = None) -> str:
         result = self._call_chat(
@@ -635,96 +982,96 @@ class AIService:
         }
 
     def generate_quiz_questions(self, *, topic: str, source_text: str, count: int, db: Session | None = None) -> list[dict]:
-        clean_source = _clean_text(source_text)
-        payload = self._call_json(
+        clean_source = sanitize_quiz_source_text(source_text)
+        if not clean_source.strip():
+            raise bad_request("课程资料清洗后没有足够文本，无法调用 AI 出题")
+        source_limit = max(1600, min(4200, 320 * max(count, 1)))
+        completion_limit = max(2200, min(5000, 280 * max(count, 1) + 1600))
+        content = self._call_chat(
             db,
             purpose="quiz",
-            system_prompt="你是课程测验题生成助手。请只返回 JSON，不要输出解释文字。",
+            system_prompt="你是课程测验题生成助手。请只返回一个 JSON 对象，不要输出解释文字，不要使用 Markdown 代码块。",
             user_prompt=(
-                f"考查主题：{topic}\n课程资料：{clean_source[:8000]}\n题目数量：{count}\n"
+                f"考查主题：{topic}\n课程资料：{clean_source[:source_limit]}\n题目数量：{count}\n"
                 "要求：只能依据课程资料出题；题干必须包含资料中的具体概念、定义、公式、案例或事实；"
                 "禁止把“章节练习、薄弱点章节练习、错题重练、测验”等练习名称当作考点；"
+                "禁止把第几页、图片名、URL、OSS域名、文件hash、文件扩展名当作考点或选项；"
+                "选择题必须有 4 个选项，判断题必须只有“正确/错误”两个选项；"
+                "reference_answer 对选择题和判断题必须使用 {\"value\": 0} 这种 0 基选项下标；"
+                "直接事实题（例如问“何时、哪个阶段、是什么、哪一项”）必须生成选择题或判断题，不能生成简答题；"
+                "简答题只能用于“简述、说明、解释、分析、比较、作用、关系、步骤”等需要展开回答的题，"
+                "reference_answer 必须使用 {\"keywords\":[\"关键词\"]}；"
                 "如果资料不足以出题，返回 {\"items\":[]}。\n"
                 "返回格式：{\"items\":[{\"question_type\":\"single_choice|judge|short_answer\","
                 "\"stem\":\"\",\"options\":[\"\"],\"reference_answer\":{},\"explanation\":\"\",\"score\":10,\"difficulty\":\"standard\"}]}"
             ),
+            json_mode=False,
+            allow_fallback=False,
+            max_tokens=completion_limit,
+            timeout_seconds=max(self.settings.external_service_timeout_seconds, 90),
         )
+        if content is None:
+            raise bad_request("AI 出题失败：模型未返回题目内容")
+        try:
+            payload = _parse_json_payload(content)
+        except Exception as exc:
+            raise bad_request("AI 出题失败：模型未返回合法 JSON 题目") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            raise bad_request("AI 出题失败：模型未返回有效 JSON 题目")
         if isinstance(payload, dict) and isinstance(payload.get("items"), list):
             questions = [item for item in payload["items"] if isinstance(item, dict)]
             normalized: list[dict] = []
-            for item in questions[:count]:
+            for item in questions:
                 stem = str(item.get("stem") or "")
                 if _invalid_quiz_stem(stem):
                     continue
+                explanation = _clean_text(str(item.get("explanation") or ""))
+                if _contains_quiz_noise(explanation):
+                    continue
+                question_type = item.get("question_type") or "short_answer"
+                options = item.get("options")
+                if question_type in {"single_choice", "multiple_choice", "judge"}:
+                    if not isinstance(options, list):
+                        continue
+                    if question_type == "judge":
+                        clean_options = ["正确", "错误"]
+                    else:
+                        clean_options = []
+                        for option in options:
+                            clean_option = _clean_text(str(option))[:90]
+                            if clean_option and _valid_quiz_option(clean_option) and clean_option not in clean_options:
+                                clean_options.append(clean_option)
+                        if question_type == "single_choice" and len(clean_options) != 4:
+                            continue
+                        if len(clean_options) < 2:
+                            continue
+                    options = clean_options[:4]
+                else:
+                    options = None
+                reference_answer = _normalize_quiz_reference_answer(item, options=options, question_type=question_type)
+                if question_type in {"single_choice", "judge"} and "value" not in reference_answer:
+                    continue
+                if question_type == "short_answer":
+                    if not _valid_short_answer_stem(stem):
+                        continue
+                    if "keywords" not in reference_answer or len(reference_answer["keywords"]) < 2:
+                        continue
                 normalized.append(
                     {
-                        "question_type": item.get("question_type") or "short_answer",
-                        "stem": stem,
-                        "options": item.get("options"),
-                        "reference_answer": item.get("reference_answer") or {},
-                        "explanation": str(item.get("explanation") or ""),
+                        "question_type": question_type,
+                        "stem": _clean_text(stem),
+                        "options": options,
+                        "reference_answer": reference_answer,
+                        "explanation": explanation,
                         "score": float(item.get("score") or 10),
                         "difficulty": item.get("difficulty") or "standard",
                     }
                 )
+                if len(normalized) >= count:
+                    break
             if len(normalized) >= count:
                 return normalized
-        sentences = _quiz_source_sentences(clean_source)
-        if not sentences:
-            raise bad_request("课程资料不足，无法生成有效题目")
-        keywords = [item for item in self.extract_keywords(clean_source, limit=12) if not _is_generic_quiz_label(item)]
-        if not keywords and not _is_generic_quiz_label(topic):
-            keywords = [topic]
-        if not keywords:
-            keywords = [sentences[0][:18]]
-        questions: list[dict] = []
-        while len(questions) < count:
-            index = len(questions)
-            concept = keywords[index % len(keywords)]
-            evidence = sentences[index % len(sentences)]
-            mode = index % 3
-            if mode == 0:
-                questions.append(
-                    {
-                        "question_type": "single_choice",
-                        "stem": f"根据课程资料，“{concept}”更接近下列哪种表述？",
-                        "options": [
-                            evidence[:64],
-                            "只需要记住结论，不需要理解条件",
-                            "与本课程资料中的核心内容无关",
-                            "在任何场景下都可以直接套用固定答案",
-                        ],
-                        "reference_answer": {"value": 0},
-                        "explanation": f"资料中的依据是：{evidence}",
-                        "score": 10,
-                        "difficulty": "standard",
-                    }
-                )
-            elif mode == 1:
-                questions.append(
-                    {
-                        "question_type": "judge",
-                        "stem": f"判断：理解“{concept}”时应结合课程资料中的具体条件或语境。",
-                        "options": ["正确", "错误"],
-                        "reference_answer": {"value": 0},
-                        "explanation": f"课程资料相关表述：{evidence}",
-                        "score": 10,
-                        "difficulty": "standard",
-                    }
-                )
-            else:
-                questions.append(
-                    {
-                        "question_type": "short_answer",
-                        "stem": f"请结合课程资料，简述“{concept}”的含义或作用。",
-                        "options": None,
-                        "reference_answer": {"keywords": self.extract_keywords(evidence, limit=3)},
-                        "explanation": f"答题时应围绕资料中的关键依据展开：{evidence}",
-                        "score": 20,
-                        "difficulty": "advanced",
-                    }
-                )
-        return questions
+        raise bad_request(f"AI 出题失败：模型返回的有效题目不足 {count} 道，请重新生成")
 
     def score_subjective_answer(
         self,
