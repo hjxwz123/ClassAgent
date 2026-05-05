@@ -248,28 +248,67 @@ def _quiz_answer_index(value: Any, *, options: list[str] | None = None, question
     return None
 
 
+def _quiz_answer_values(value: Any) -> list[Any]:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    text = _clean_text(str(value or ""))
+    if not text:
+        return []
+    if re.fullmatch(r"[A-Za-z]{2,}", text):
+        return list(text)
+    if re.search(r"[,，、;；\s]+", text):
+        return [item for item in re.split(r"[,，、;；\s]+", text) if item]
+    return [value]
+
+
 def _normalize_quiz_reference_answer(item: dict[str, Any], *, options: list[str] | None, question_type: str) -> dict[str, Any]:
-    raw = item.get("reference_answer")
-    if question_type in {"single_choice", "judge"}:
+    raw = _quiz_item_value(
+        item,
+        "reference_answer",
+        "answer",
+        "correct_answer",
+        "correctAnswer",
+        "correct",
+        "答案",
+        "正确答案",
+    )
+    if question_type in {"single_choice", "multiple_choice", "judge"}:
         candidates: list[Any] = []
         if isinstance(raw, dict):
             for key in (
                 "value",
+                "values",
                 "answer",
                 "correct_answer",
+                "correctAnswer",
                 "correct",
                 "option_index",
+                "option_indexes",
                 "index",
+                "indexes",
                 "key",
                 "text",
                 "choice",
                 "correct_option",
+                "correct_options",
                 "judge",
+                "答案",
+                "正确答案",
             ):
                 if key in raw:
                     candidates.append(raw[key])
         else:
             candidates.append(raw)
+        if question_type == "multiple_choice":
+            indexes: list[int] = []
+            for candidate in candidates:
+                for value in _quiz_answer_values(candidate):
+                    index = _quiz_answer_index(value, options=options, question_type=question_type)
+                    if index is not None and options and 0 <= index < len(options) and index not in indexes:
+                        indexes.append(index)
+            return {"value": indexes} if indexes else {}
         for candidate in candidates:
             index = _quiz_answer_index(candidate, options=options, question_type=question_type)
             if index is not None and options and 0 <= index < len(options):
@@ -290,6 +329,120 @@ def _normalize_quiz_reference_answer(item: dict[str, Any], *, options: list[str]
                 break
         return {"keywords": keywords} if keywords else {}
     return {}
+
+
+def _quiz_item_value(item: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in item and item[key] is not None:
+            return item[key]
+    return None
+
+
+def _normalize_quiz_question_type(value: Any) -> str:
+    raw = _clean_text(str(value or "")).strip()
+    text = raw.lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "single_choice": "single_choice",
+        "single": "single_choice",
+        "choice": "single_choice",
+        "select": "single_choice",
+        "multiple_choice": "multiple_choice",
+        "multi_choice": "multiple_choice",
+        "multiple": "multiple_choice",
+        "judge": "judge",
+        "judgement": "judge",
+        "judgment": "judge",
+        "true_false": "judge",
+        "truefalse": "judge",
+        "short_answer": "short_answer",
+        "shortanswer": "short_answer",
+        "short": "short_answer",
+        "blank": "blank",
+        "fill_blank": "blank",
+        "essay": "essay",
+    }
+    if text in aliases:
+        return aliases[text]
+    if any(label in raw for label in ("单选", "单项选择", "选择题")):
+        return "single_choice"
+    if any(label in raw for label in ("多选", "多项选择")):
+        return "multiple_choice"
+    if "判断" in raw or "正误" in raw:
+        return "judge"
+    if any(label in raw for label in ("简答", "问答")):
+        return "short_answer"
+    if "填空" in raw:
+        return "blank"
+    if "论述" in raw:
+        return "essay"
+    return "short_answer"
+
+
+def _normalize_quiz_questions_from_payload(payload: Any, *, count: int, seen_stems: set[str] | None = None) -> list[dict]:
+    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+        raise bad_request("AI 出题失败：模型未返回有效 JSON 题目")
+    seen = seen_stems if seen_stems is not None else set()
+    normalized: list[dict] = []
+    questions = [item for item in payload["items"] if isinstance(item, dict)]
+    for item in questions:
+        stem = str(_quiz_item_value(item, "stem", "question", "title", "题干", "问题") or "")
+        if _invalid_quiz_stem(stem):
+            continue
+        clean_stem = _clean_text(stem)
+        if clean_stem in seen:
+            continue
+        explanation = _clean_text(str(_quiz_item_value(item, "explanation", "analysis", "解析", "说明") or ""))
+        if _contains_quiz_noise(explanation):
+            continue
+        question_type = _normalize_quiz_question_type(_quiz_item_value(item, "question_type", "type", "题型"))
+        options = _quiz_item_value(item, "options", "choices", "选项")
+        if question_type in {"single_choice", "multiple_choice", "judge"}:
+            if question_type == "judge":
+                clean_options = ["正确", "错误"]
+            else:
+                if not isinstance(options, list):
+                    continue
+                clean_options = []
+                for option in options:
+                    clean_option = _clean_text(str(option))[:90]
+                    if clean_option and _valid_quiz_option(clean_option) and clean_option not in clean_options:
+                        clean_options.append(clean_option)
+                if question_type == "single_choice" and len(clean_options) < 4:
+                    continue
+                if len(clean_options) < 2:
+                    continue
+            options = clean_options[:4]
+        else:
+            options = None
+        reference_answer = _normalize_quiz_reference_answer(item, options=options, question_type=question_type)
+        if question_type in {"single_choice", "judge"} and "value" not in reference_answer:
+            continue
+        if question_type == "multiple_choice":
+            values = reference_answer.get("value") if isinstance(reference_answer, dict) else None
+            if not isinstance(values, list) or not values:
+                continue
+        if question_type == "short_answer":
+            if not _valid_short_answer_stem(clean_stem):
+                continue
+            if "keywords" not in reference_answer or len(reference_answer["keywords"]) < 2:
+                continue
+        if question_type not in {"single_choice", "multiple_choice", "judge", "short_answer"}:
+            continue
+        normalized.append(
+            {
+                "question_type": question_type,
+                "stem": clean_stem,
+                "options": options,
+                "reference_answer": reference_answer,
+                "explanation": explanation,
+                "score": float(item.get("score") or 10),
+                "difficulty": item.get("difficulty") or "standard",
+            }
+        )
+        seen.add(clean_stem)
+        if len(normalized) >= count:
+            break
+    return normalized
 
 
 def _invalid_quiz_stem(stem: str) -> bool:
@@ -992,26 +1145,31 @@ class AIService:
         clean_source = sanitize_quiz_source_text(source_text)
         if not clean_source.strip():
             raise bad_request("课程资料清洗后没有足够文本，无法调用 AI 出题")
-        source_limit = max(1600, min(4200, 320 * max(count, 1)))
-        completion_limit = max(2200, min(5000, 280 * max(count, 1) + 1600))
+        candidate_count = min(20, max(count + 4, math.ceil(count * 1.8)))
+        source_limit = max(1800, min(5200, 360 * max(candidate_count, 1)))
+        completion_limit = max(2800, min(6500, 340 * max(candidate_count, 1) + 1900))
+        base_prompt = (
+            f"考查主题：{topic}\n课程资料：{clean_source[:source_limit]}\n"
+            f"目标题目数量：{count}\n候选题数量：{candidate_count}\n"
+            "要求：只能依据课程资料出题；候选题可以多于目标数量，便于教师从有效题中筛选；"
+            "题干必须包含资料中的具体概念、定义、公式、案例或事实；"
+            "禁止把“章节练习、薄弱点章节练习、错题重练、测验”等练习名称当作考点；"
+            "禁止把第几页、图片名、URL、OSS域名、文件hash、文件扩展名当作考点或选项；"
+            "选择题必须有 4 个选项，判断题必须只有“正确/错误”两个选项；"
+            "question_type 只能使用 single_choice、judge、short_answer；"
+            "reference_answer 对选择题和判断题必须使用 {\"value\": 0} 这种 0 基选项下标；"
+            "直接事实题（例如问“何时、哪个阶段、是什么、哪一项”）必须生成选择题或判断题，不能生成简答题；"
+            "简答题只能用于“简述、说明、解释、分析、比较、作用、关系、步骤”等需要展开回答的题，"
+            "reference_answer 必须使用 {\"keywords\":[\"关键词\"]}；"
+            "如果资料不足以出题，返回 {\"items\":[]}。\n"
+            "返回格式：{\"items\":[{\"question_type\":\"single_choice|judge|short_answer\","
+            "\"stem\":\"\",\"options\":[\"\"],\"reference_answer\":{},\"explanation\":\"\",\"score\":10,\"difficulty\":\"standard\"}]}"
+        )
         content = self._call_chat(
             db,
             purpose="quiz",
             system_prompt="你是课程测验题生成助手。请只返回一个 JSON 对象，不要输出解释文字，不要使用 Markdown 代码块。",
-            user_prompt=(
-                f"考查主题：{topic}\n课程资料：{clean_source[:source_limit]}\n题目数量：{count}\n"
-                "要求：只能依据课程资料出题；题干必须包含资料中的具体概念、定义、公式、案例或事实；"
-                "禁止把“章节练习、薄弱点章节练习、错题重练、测验”等练习名称当作考点；"
-                "禁止把第几页、图片名、URL、OSS域名、文件hash、文件扩展名当作考点或选项；"
-                "选择题必须有 4 个选项，判断题必须只有“正确/错误”两个选项；"
-                "reference_answer 对选择题和判断题必须使用 {\"value\": 0} 这种 0 基选项下标；"
-                "直接事实题（例如问“何时、哪个阶段、是什么、哪一项”）必须生成选择题或判断题，不能生成简答题；"
-                "简答题只能用于“简述、说明、解释、分析、比较、作用、关系、步骤”等需要展开回答的题，"
-                "reference_answer 必须使用 {\"keywords\":[\"关键词\"]}；"
-                "如果资料不足以出题，返回 {\"items\":[]}。\n"
-                "返回格式：{\"items\":[{\"question_type\":\"single_choice|judge|short_answer\","
-                "\"stem\":\"\",\"options\":[\"\"],\"reference_answer\":{},\"explanation\":\"\",\"score\":10,\"difficulty\":\"standard\"}]}"
-            ),
+            user_prompt=base_prompt,
             json_mode=False,
             allow_fallback=False,
             max_tokens=completion_limit,
@@ -1023,61 +1181,40 @@ class AIService:
             payload = _parse_json_payload(content)
         except Exception as exc:
             raise bad_request("AI 出题失败：模型未返回合法 JSON 题目") from exc
-        if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
-            raise bad_request("AI 出题失败：模型未返回有效 JSON 题目")
-        if isinstance(payload, dict) and isinstance(payload.get("items"), list):
-            questions = [item for item in payload["items"] if isinstance(item, dict)]
-            normalized: list[dict] = []
-            for item in questions:
-                stem = str(item.get("stem") or "")
-                if _invalid_quiz_stem(stem):
-                    continue
-                explanation = _clean_text(str(item.get("explanation") or ""))
-                if _contains_quiz_noise(explanation):
-                    continue
-                question_type = item.get("question_type") or "short_answer"
-                options = item.get("options")
-                if question_type in {"single_choice", "multiple_choice", "judge"}:
-                    if not isinstance(options, list):
-                        continue
-                    if question_type == "judge":
-                        clean_options = ["正确", "错误"]
-                    else:
-                        clean_options = []
-                        for option in options:
-                            clean_option = _clean_text(str(option))[:90]
-                            if clean_option and _valid_quiz_option(clean_option) and clean_option not in clean_options:
-                                clean_options.append(clean_option)
-                        if question_type == "single_choice" and len(clean_options) != 4:
-                            continue
-                        if len(clean_options) < 2:
-                            continue
-                    options = clean_options[:4]
-                else:
-                    options = None
-                reference_answer = _normalize_quiz_reference_answer(item, options=options, question_type=question_type)
-                if question_type in {"single_choice", "judge"} and "value" not in reference_answer:
-                    continue
-                if question_type == "short_answer":
-                    if not _valid_short_answer_stem(stem):
-                        continue
-                    if "keywords" not in reference_answer or len(reference_answer["keywords"]) < 2:
-                        continue
-                normalized.append(
-                    {
-                        "question_type": question_type,
-                        "stem": _clean_text(stem),
-                        "options": options,
-                        "reference_answer": reference_answer,
-                        "explanation": explanation,
-                        "score": float(item.get("score") or 10),
-                        "difficulty": item.get("difficulty") or "standard",
-                    }
-                )
-                if len(normalized) >= count:
-                    break
+        seen_stems: set[str] = set()
+        normalized = _normalize_quiz_questions_from_payload(payload, count=count, seen_stems=seen_stems)
+        if len(normalized) >= count:
+            return normalized[:count]
+
+        missing = count - len(normalized)
+        retry_count = min(20, max(missing + 4, math.ceil(missing * 2.4)))
+        retry_content = self._call_chat(
+            db,
+            purpose="quiz",
+            system_prompt="你是课程测验题生成助手。请只返回一个 JSON 对象，不要输出解释文字，不要使用 Markdown 代码块。",
+            user_prompt=(
+                f"考查主题：{topic}\n课程资料：{clean_source[:source_limit]}\n"
+                f"已有有效题干：{[item['stem'] for item in normalized]}\n"
+                f"还缺少 {missing} 道有效题，请再生成 {retry_count} 道不同候选题。\n"
+                "要求同前：只能依据课程资料出题；题干避开已有题干；"
+                "question_type 只能使用 single_choice、judge、short_answer；"
+                "选择题 4 个选项，判断题使用正确/错误，reference_answer 使用 0 基下标或 keywords。"
+                "返回格式：{\"items\":[{\"question_type\":\"single_choice|judge|short_answer\","
+                "\"stem\":\"\",\"options\":[\"\"],\"reference_answer\":{},\"explanation\":\"\",\"score\":10,\"difficulty\":\"standard\"}]}"
+            ),
+            json_mode=False,
+            allow_fallback=False,
+            max_tokens=max(2400, min(5200, 340 * retry_count + 1600)),
+            timeout_seconds=max(self.settings.external_service_timeout_seconds, 180),
+        )
+        if retry_content:
+            try:
+                retry_payload = _parse_json_payload(retry_content)
+            except Exception as exc:
+                raise bad_request("AI 出题失败：模型未返回合法 JSON 题目") from exc
+            normalized.extend(_normalize_quiz_questions_from_payload(retry_payload, count=missing, seen_stems=seen_stems))
             if len(normalized) >= count:
-                return normalized
+                return normalized[:count]
         raise bad_request(f"AI 出题失败：模型返回的有效题目不足 {count} 道，请重新生成")
 
     def score_subjective_answer(

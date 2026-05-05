@@ -443,6 +443,60 @@ def test_quiz_generation_normalizes_ai_reference_answer(monkeypatch):
     assert questions[0]["reference_answer"] == {"value": 1}
 
 
+def test_quiz_generation_accepts_chinese_ai_field_aliases(monkeypatch):
+    def ai_content(*args, **kwargs):
+        return (
+            '{"items":[{"题型":"单选题",'
+            '"题干":"属性文法三元组 A=(G,C,F) 中，F 表示什么？",'
+            '"选项":["上下文无关文法","属性的计算规则","属性的有穷集","词法分析规则"],'
+            '"正确答案":"B",'
+            '"解析":"资料中说明 F 是关于属性的计算规则。",'
+            '"score":10,"difficulty":"standard"}]}'
+        )
+
+    monkeypatch.setattr(ai_service, "_call_chat", ai_content)
+    questions = ai_service.generate_quiz_questions(
+        topic="属性文法",
+        source_text="属性文法定义为 A=(G,C,F)，其中 F 是关于属性的计算规则。",
+        count=1,
+    )
+    assert questions[0]["question_type"] == "single_choice"
+    assert questions[0]["reference_answer"] == {"value": 1}
+    assert questions[0]["explanation"] == "资料中说明 F 是关于属性的计算规则。"
+
+
+def test_quiz_generation_retries_ai_when_valid_questions_are_insufficient(monkeypatch):
+    calls = iter(
+        [
+            (
+                '{"items":[{"question_type":"short_answer",'
+                '"stem":"在自底向上的语法分析中，语义动作在何时执行？",'
+                '"options":null,'
+                '"reference_answer":{"keywords":["归约","产生式","语义动作"]},'
+                '"explanation":"资料中说明自底向上分析在规约时执行语义动作。",'
+                '"score":10,"difficulty":"standard"}]}'
+            ),
+            (
+                '{"items":[{"question_type":"single_choice",'
+                '"stem":"在自底向上的语法分析中，语义动作在什么时机执行？",'
+                '"options":["进行派生时","进行归约时","语法分析开始前","语法分析结束后"],'
+                '"reference_answer":{"value":1},'
+                '"explanation":"资料中说明自底向上分析在归约时执行语义动作。",'
+                '"score":10,"difficulty":"standard"}]}'
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(ai_service, "_call_chat", lambda *args, **kwargs: next(calls))
+    questions = ai_service.generate_quiz_questions(
+        topic="语法制导翻译",
+        source_text="自底向上的分析中，语义动作和产生式关联，当用产生式进行归约时执行。",
+        count=1,
+    )
+    assert questions[0]["question_type"] == "single_choice"
+    assert questions[0]["reference_answer"] == {"value": 1}
+
+
 def test_quiz_generation_rejects_direct_fact_short_answer(monkeypatch):
     def ai_content(*args, **kwargs):
         return (

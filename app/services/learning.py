@@ -436,8 +436,9 @@ def extract_reference_answer_value(reference_answer):
         for key in ("values", "answers", "correct_answers"):
             if key in reference_answer:
                 return reference_answer[key]
-        if "keywords" in reference_answer:
-            return reference_answer["keywords"]
+        for key in ("keywords", "key_points"):
+            if key in reference_answer:
+                return reference_answer[key]
         return None
     return reference_answer
 
@@ -649,7 +650,7 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
         else:
             expected_keywords = []
             if isinstance(question.reference_answer, dict):
-                expected_keywords = question.reference_answer.get("keywords", [])
+                expected_keywords = question.reference_answer.get("keywords") or question.reference_answer.get("key_points") or []
             score, feedback = ai_service.score_subjective_answer(
                 reference_keywords=expected_keywords,
                 user_answer=str(user_answer or ""),
