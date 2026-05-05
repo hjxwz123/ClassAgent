@@ -452,6 +452,62 @@ def list_quizzes(db: Session, *, course_id: int, user: User) -> list[Quiz]:
     return list(db.scalars(statement.order_by(Quiz.created_at.desc())))
 
 
+def quiz_attempt_summary(db: Session, attempt: QuizAttempt) -> dict:
+    total_count = int(db.scalar(select(func.count(QuizAnswer.id)).where(QuizAnswer.attempt_id == attempt.id)) or 0)
+    correct_count = int(
+        db.scalar(
+            select(func.count(QuizAnswer.id)).where(
+                QuizAnswer.attempt_id == attempt.id,
+                QuizAnswer.is_correct.is_(True),
+            )
+        )
+        or 0
+    )
+    return {
+        "id": attempt.id,
+        "quiz_id": attempt.quiz_id,
+        "user_id": attempt.user_id,
+        "score": attempt.score,
+        "total_score": attempt.total_score,
+        "accuracy": attempt.accuracy,
+        "correct_count": correct_count,
+        "total_count": total_count,
+        "ai_feedback": attempt.ai_feedback,
+        "submitted_at": attempt.submitted_at,
+        "created_at": attempt.created_at,
+        "updated_at": attempt.updated_at,
+    }
+
+
+def list_student_quiz_attempts(db: Session, *, quiz_id: int, user: User) -> list[QuizAttempt]:
+    quiz = db.get(Quiz, quiz_id)
+    if quiz is None:
+        raise not_found("测验不存在")
+    if user.role != UserRole.STUDENT.value:
+        raise forbidden("仅学生可查看自己的作答记录")
+    _assert_student_course_access(db, course_id=quiz.course_id, user=user)
+    return list(
+        db.scalars(
+            select(QuizAttempt)
+            .where(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == user.id)
+            .order_by(QuizAttempt.submitted_at.desc(), QuizAttempt.created_at.desc())
+        )
+    )
+
+
+def get_student_quiz_attempt(db: Session, *, attempt_id: int, user: User) -> QuizAttempt:
+    attempt = db.get(QuizAttempt, attempt_id)
+    if attempt is None:
+        raise not_found("作答记录不存在")
+    if user.role != UserRole.STUDENT.value or attempt.user_id != user.id:
+        raise forbidden("仅可查看自己的作答记录")
+    quiz = db.get(Quiz, attempt.quiz_id)
+    if quiz is None:
+        raise not_found("测验不存在")
+    _assert_student_course_access(db, course_id=quiz.course_id, user=user)
+    return attempt
+
+
 def _assert_teacher_course_access(db: Session, *, course_id: int, user: User):
     course = _get_course_or_404(db, course_id)
     if user.role == UserRole.ADMIN.value:
@@ -885,6 +941,13 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
     quiz, questions = get_quiz_detail(db, quiz_id=quiz_id, user=user)
     if user.role != UserRole.STUDENT.value:
         raise forbidden("仅学生可提交测验")
+    existing_attempt = db.scalar(
+        select(QuizAttempt)
+        .where(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == user.id)
+        .order_by(QuizAttempt.submitted_at.desc(), QuizAttempt.created_at.desc())
+    )
+    if existing_attempt is not None:
+        raise bad_request("这套练习你已提交过，每名学生只能作答一次，请在练习记录中查看解析。")
     answer_map = _answer_map(answers)
     attempt = QuizAttempt(quiz_id=quiz_id, user_id=user.id, total_score=quiz.total_score, submitted_at=datetime.now(UTC))
     db.add(attempt)

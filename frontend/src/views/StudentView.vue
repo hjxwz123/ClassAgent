@@ -125,7 +125,7 @@
           <p>{{ classroomLesson?.lesson.title }}</p>
           <div class="done-stats"><span>本次 {{ Math.max(1, Math.round(studySeconds / 60)) }} 分钟</span><span>{{ classroomLesson?.pages.length || 0 }} 页</span><span>{{ classMessages.filter((m) => m.role === 'user').length }} 次提问</span></div>
           <div class="ai-summary"><Sparkles :size="16" />{{ completionSummary }}</div>
-          <footer><button class="btn btn-primary" @click="nextLessonAfterComplete">下一课时</button><button class="btn btn-secondary" @click="returnCourse">回课程</button><button class="btn btn-ghost" @click="go('studentQuizzes')">做练习</button></footer>
+          <footer><button class="btn btn-primary" @click="nextLessonAfterComplete">下一课时</button><button class="btn btn-secondary" @click="returnCourse">回课程</button><button class="btn btn-ghost" @click="openQuizSelection('practice')">做练习</button></footer>
         </article>
       </div>
     </transition>
@@ -156,7 +156,7 @@
           type="button"
           class="student-nav-link"
           :class="{ active: isStudentNavActive(item.key), ai: item.key === 'studentQa' }"
-          @click="go(item.key)"
+          @click="handleStudentNav(item.key)"
         >
           <component :is="item.icon" :size="16" />
           {{ item.label }}
@@ -329,7 +329,7 @@
                 <section><h1>{{ courseHome.course.name }}</h1><p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p><div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div></section>
                 <aside><div class="slide-mini course-hero-cover-text">{{ courseCoverText(courseHome.course) }}</div><button class="btn white-fill" @click="latestLesson && openLesson(Number(latestLesson.id))"><Play :size="16" />进入课时</button></aside>
               </article>
-              <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="go('studentQuizzes')" /></div>
+              <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="openQuizSelection('practice')" /></div>
               <div class="course-layout">
                 <section>
                   <article id="lesson-list" class="panel-card"><div class="section-head"><h2><Presentation :size="18" />课时列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div><LessonItem v-for="(lesson, index) in courseHome.lessons || []" :key="lesson.id" :lesson="lesson" :index="Number(index)" @open="openLesson(Number(lesson.id))" /></article>
@@ -477,7 +477,7 @@
           </template>
 
           <template v-else-if="active === 'studentQuizzes'">
-            <div v-if="answeringQuiz" class="exam-answer-page"><QuizAnswerView :quiz="quizDetail" :answers="quizAnswers" :attempt="attempt" :submitting="quizSubmitting" @answer="setQuizAnswer" @submit="submitQuiz" @exit="answeringQuiz = false" /></div>
+            <div v-if="answeringQuiz" class="exam-answer-page"><QuizAnswerView :quiz="quizDetail" :answers="quizAnswers" :attempt="attempt" :submitting="quizSubmitting" @answer="setQuizAnswer" @submit="submitQuiz" @exit="closeQuizWorkspace" /></div>
             <section v-else class="quiz-modern-page">
               <header class="quiz-modern-header quiz-hero-card">
                 <div class="quiz-hero-copy">
@@ -507,7 +507,7 @@
               </div>
 
               <section v-if="quizTab === 'course'" class="quiz-list quiz-modern-list">
-                <QuizCard v-for="quiz in courseQuizzes" :key="quiz.id" :quiz="quiz" @open="startQuiz(quiz.id)" />
+                <QuizCard v-for="quiz in courseQuizzes" :key="quiz.id" :quiz="quiz" @open="openQuiz(quiz)" @review="viewQuizAttempt" />
                 <EmptyState v-if="!courseQuizzes.length" text="暂无测验" />
               </section>
 
@@ -583,7 +583,7 @@
 
                   <div class="practice-history-title"><History :size="18" />最近练习记录</div>
                   <div class="practice-history-list">
-                    <button v-for="quiz in practiceQuizzes.slice(0, 5)" :key="quiz.id" type="button" class="practice-history-item" @click="startQuiz(quiz.id)">
+                    <button v-for="quiz in practiceQuizzes.slice(0, 5)" :key="quiz.id" type="button" class="practice-history-item" @click="openQuiz(quiz)">
                       <div class="practice-history-left">
                         <span class="practice-history-icon"><Layers :size="20" /></span>
                         <div>
@@ -850,7 +850,7 @@
     </main>
 
     <nav class="bottom-tabs">
-      <button v-for="item in bottomTabs" :key="item.key" :class="{ active: isStudentNavActive(item.key), ai: item.key === 'studentQa' }" @click="go(item.key)">
+      <button v-for="item in bottomTabs" :key="item.key" :class="{ active: isStudentNavActive(item.key), ai: item.key === 'studentQa' }" @click="handleStudentNav(item.key)">
         <span><component :is="item.icon" :size="item.key === 'studentQa' ? 24 : 22" /></span>{{ item.label }}<i></i>
       </button>
     </nav>
@@ -888,7 +888,7 @@ import { useRouter } from "vue-router";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Award, BarChart2, Bell, BookMarked, BookOpen, CalendarCheck, Camera, Check,
   CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Cpu, Download, FileText, Flame, FolderOpen, GitBranch, Grid2X2,
-  History, IdCard, Info, Flag, Layers, ListChecks, Loader2, LogOut, Mail, Maximize, MessageCircle, PanelRight,
+  Eye, History, IdCard, Info, Flag, Layers, ListChecks, Loader2, LogOut, Mail, Maximize, MessageCircle, PanelRight,
   Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings, SkipBack,
   Shield, SkipForward, Sparkles, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
 } from "lucide-vue-next";
@@ -1298,6 +1298,13 @@ watch(activePage, async (page) => { if (page) await loadNote(page.id); }, { imme
 
 async function run<T>(task: () => Promise<T>, ok?: string) { try { const data = await task(); if (ok) emit("notice", "success", ok); return data; } catch (error) { emit("notice", "error", (error as Error).message); return null; } }
 async function go(key: string) { await router.push(routeByPage[key] || "/home"); }
+async function handleStudentNav(key: string) {
+  if (key === "studentQuizzes") {
+    await openQuizSelection("practice");
+    return;
+  }
+  await go(key);
+}
 async function loadCourses() { courses.value = (await run<any[]>(() => api.get("/student/courses"))) || []; if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id; }
 async function loadDashboard() { dashboard.value = (await run(() => api.get("/student/dashboard"))) || {}; notifications.value = dashboard.value.notifications || []; courses.value = dashboard.value.courses || courses.value; if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id; }
 async function loadNotifications(silent = false) {
@@ -1343,6 +1350,24 @@ async function openHomeRecommendedLesson() {
 }
 async function openHomeRecommendedPractice() {
   if (!hasJoinedCourses.value) { joinOpen.value = true; return; }
+  await openQuizSelection("practice");
+}
+function resetQuizWorkspace() {
+  Object.keys(quizAnswers).forEach((key) => delete quizAnswers[Number(key)]);
+  quizDetail.value = null;
+  attempt.value = null;
+  answeringQuiz.value = false;
+}
+function closeQuizWorkspace() {
+  resetQuizWorkspace();
+}
+async function openQuizSelection(tab: "course" | "practice" = "practice") {
+  quizTab.value = tab;
+  resetQuizWorkspace();
+  if (active.value === "studentQuizzes") {
+    await loadQuizPage();
+    return;
+  }
   await go("studentQuizzes");
 }
 function scrollToLessons() { document.getElementById("lesson-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
@@ -1647,7 +1672,7 @@ async function loadGuidance(level: number) { if (!activeProblem.value) return; g
 async function toggleGuide(level: number) { if (!guidance[level]) await loadGuidance(level); else guideOpen[level] = !guideOpen[level]; }
 
 async function loadKnowledge() { if (!selectedCourseId.value) return; knowledge.value = (await run<any[]>(() => api.get("/learning/knowledge-points", { course_id: selectedCourseId.value, chapter_id: selectedChapterId.value || undefined }))) || []; if (!selectedKnowledgeId.value && knowledge.value[0]) selectedKnowledgeId.value = knowledge.value[0].id; weakPoints.value = (await run<any[]>(() => api.get("/learning/weak-points", { course_id: selectedCourseId.value }))) || []; if (!courseHome.value.course) await loadCourseHome(); }
-async function generateKnowledgeQuiz(count: number) { if (!selectedCourseId.value) return; await run(() => api.post("/learning/quizzes/generate", { course_id: selectedCourseId.value, chapter_id: selectedKnowledge.value?.chapter_id || undefined, title: `${selectedKnowledge.value?.name || '知识点'}练习`, quiz_type: "practice", question_count: count }), "已生成"); await go("studentQuizzes"); }
+async function generateKnowledgeQuiz(count: number) { if (!selectedCourseId.value) return; await run(() => api.post("/learning/quizzes/generate", { course_id: selectedCourseId.value, chapter_id: selectedKnowledge.value?.chapter_id || undefined, title: `${selectedKnowledge.value?.name || '知识点'}练习`, quiz_type: "practice", question_count: count }), "已生成"); await openQuizSelection("practice"); }
 
 async function loadQuizPage() { if (!selectedCourseId.value) return; quizzes.value = (await run<Quiz[]>(() => api.get("/learning/quizzes", { course_id: selectedCourseId.value }))) || []; if (!courseHome.value.course) await loadCourseHome(); await loadWrongBook(); }
 async function generateQuiz() {
@@ -1671,7 +1696,40 @@ async function generateQuiz() {
     quizGenerating.value = false;
   }
 }
-async function startQuiz(id: number) { quizDetail.value = await run(() => api.get(`/learning/quizzes/${id}`)); Object.keys(quizAnswers).forEach((key) => delete quizAnswers[Number(key)]); attempt.value = null; answeringQuiz.value = true; }
+function latestQuizAttempt(quiz: any) {
+  return quiz?.latest_attempt || quiz?.last_attempt || quiz?.best_attempt || (Array.isArray(quiz?.attempts) ? quiz.attempts[0] : null);
+}
+async function openQuiz(quiz: any) {
+  const latest = latestQuizAttempt(quiz);
+  if (latest?.id) {
+    await viewQuizAttempt(latest.id);
+    return;
+  }
+  await startQuiz(quiz.id);
+}
+async function startQuiz(id: number) {
+  const attempts = await run<any[]>(() => api.get(`/learning/quizzes/${id}/attempts`));
+  if (attempts?.length) {
+    await viewQuizAttempt(attempts[0].id);
+    return;
+  }
+  quizDetail.value = await run(() => api.get(`/learning/quizzes/${id}`));
+  if (!quizDetail.value) return;
+  Object.keys(quizAnswers).forEach((key) => delete quizAnswers[Number(key)]);
+  attempt.value = null;
+  answeringQuiz.value = true;
+}
+async function viewQuizAttempt(attemptId: number) {
+  const detail = await run<any>(() => api.get(`/learning/attempts/${attemptId}`));
+  if (!detail) return;
+  Object.keys(quizAnswers).forEach((key) => delete quizAnswers[Number(key)]);
+  quizDetail.value = {
+    quiz: detail.quiz || detail.attempt?.quiz || {},
+    questions: (detail.answers || []).map((row: any) => row.question).filter(Boolean),
+  };
+  attempt.value = detail;
+  answeringQuiz.value = true;
+}
 function setQuizAnswer(questionId: number, answer: any) { quizAnswers[questionId] = answer; }
 async function submitQuiz() {
   if (!quizDetail.value || quizSubmitting.value) return;
@@ -1679,6 +1737,7 @@ async function submitQuiz() {
   try {
     const answers = Object.entries(quizAnswers).map(([question_id, answer]) => ({ question_id: Number(question_id), answer }));
     attempt.value = await run(() => api.post(`/learning/quizzes/${quizDetail.value.quiz.id}/submit`, { answers }), "已提交");
+    await loadQuizPage();
     await loadWrongBook();
   } finally {
     quizSubmitting.value = false;
@@ -1697,7 +1756,7 @@ async function loadWrongPractice() {
       return;
     }
     const quiz = await run<Quiz>(() => api.post("/learning/wrong-questions/practice", undefined, { course_id: selectedCourseId.value }), "已生成");
-    if (quiz) { await loadQuizPage(); await startQuiz(quiz.id); await go("studentQuizzes"); }
+    if (quiz) { await go("studentQuizzes"); await loadQuizPage(); await startQuiz(quiz.id); }
   } finally {
     wrongPracticeGenerating.value = false;
   }
@@ -2006,6 +2065,7 @@ const QuizAnswerView = defineComponent({
     const current = ref(0);
     const marked = ref<number[]>([]);
     const confirming = ref(false);
+    const exitConfirming = ref(false);
     const elapsed = ref(0);
     const analysisOpen = ref<Record<string, boolean>>({});
     let timer: number | undefined;
@@ -2154,7 +2214,7 @@ const QuizAnswerView = defineComponent({
       const unanswered = questions.value.filter((entry: any) => !hasAnswer(entry)).map((entry: any, index: number) => index + 1);
       return h("section", { class: "exam-shell" }, [
         h("header", { class: "exam-header" }, [
-          h("button", { type: "button", class: "exam-exit-btn", onClick: () => update("exit") }, [h(ArrowLeft, { size: 18 }), "退出练习"]),
+          h("button", { type: "button", class: "exam-exit-btn", onClick: () => { exitConfirming.value = true; } }, [h(ArrowLeft, { size: 18 }), "退出练习"]),
           h("div", { class: "exam-title" }, quizMeta.value.title || "章节练习"),
           h("div", { class: "timer-widget" }, [h(Clock, { size: 16 }), h("span", { class: "timer-text" }, timeLabel(elapsed.value))])
         ]),
@@ -2213,6 +2273,18 @@ const QuizAnswerView = defineComponent({
               h("footer", [h("button", { type: "button", class: "exam-btn exam-btn-outline", disabled: p.submitting, onClick: () => { confirming.value = false; } }, "继续作答"), h("button", { type: "button", class: "exam-btn exam-btn-primary", disabled: p.submitting, "data-loading": p.submitting, onClick: submit }, "确认交卷")])
             ])
           ]) : null
+        }),
+        h(Transition, { name: "modal-pop" }, {
+          default: () => exitConfirming.value ? h("div", { class: "exam-modal-mask" }, [
+            h("article", { class: "exam-confirm-card" }, [
+              h("div", { class: "exam-modal-head" }, [h(AlertTriangle, { size: 22 }), h("h2", "退出练习？"), h("button", { type: "button", onClick: () => { exitConfirming.value = false; } }, [h(X, { size: 16 })])]),
+              h("p", "当前作答不会自动保存，确认退出后会回到习题选择页。"),
+              h("footer", [
+                h("button", { type: "button", class: "exam-btn exam-btn-outline", onClick: () => { exitConfirming.value = false; } }, "继续作答"),
+                h("button", { type: "button", class: "exam-btn exam-btn-primary", onClick: () => update("exit") }, "退出到选择页")
+              ])
+            ])
+          ]) : null
         })
       ]);
     };
@@ -2221,12 +2293,28 @@ const QuizAnswerView = defineComponent({
 
 const QuizCard = defineComponent({
   props: { quiz: { type: Object as PropType<any>, required: true } },
-  emits: ["open"],
+  emits: ["open", "review"],
   setup(p, { emit: update }) {
+    const attempts = computed(() => Array.isArray(p.quiz.attempts) ? p.quiz.attempts : []);
+    const latestAttempt = computed(() => p.quiz.latest_attempt || p.quiz.last_attempt || p.quiz.best_attempt || attempts.value[0] || null);
+    const attempted = computed(() => Boolean(latestAttempt.value?.id));
+    const attemptLabel = (item: any, index: number) => {
+      const order = attempts.value.length - index;
+      const score = item?.score !== undefined ? `${Math.round(Number(item.score))}分` : "解析";
+      return attempts.value.length > 1 ? `第${order}次 ${score}` : `查看解析 ${score}`;
+    };
     return () => h("article", { class: "quiz-card" }, [
       h("h2", p.quiz.title),
       h("p", p.quiz.description || `${p.quiz.total_score || 0} 分 · ${statusText(p.quiz.status || "published")}`),
-      h("footer", [h("span", { class: "tag" }, p.quiz.quiz_type || "practice"), h("button", { type: "button", class: "btn btn-primary btn-sm", onClick: () => update("open") }, [h(Play, { size: 14 }), "开始"])])
+      h("footer", [
+        h("span", { class: "tag" }, attempted.value ? "已完成" : (p.quiz.quiz_type || "practice")),
+        attempts.value.slice(0, 3).map((item: any, index: number) => h("button", {
+          type: "button",
+          class: "btn btn-secondary btn-sm",
+          onClick: () => update("review", item.id),
+        }, [h(Eye, { size: 14 }), attemptLabel(item, index)])),
+        h("button", { type: "button", class: ["btn", attempted.value ? "btn-secondary" : "btn-primary", "btn-sm"], onClick: () => update("open") }, [attempted.value ? h(Eye, { size: 14 }) : h(Play, { size: 14 }), attempted.value ? "查看最近解析" : "开始"])
+      ])
     ]);
   }
 });

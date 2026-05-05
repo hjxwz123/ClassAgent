@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.core.responses import success_response
-from app.db.models import KnowledgePoint, QuizAnswer, QuizQuestion, User
+from app.db.models import KnowledgePoint, Quiz, QuizAnswer, QuizQuestion, User
 from app.db.session import get_db
 from app.schemas.learning import (
     KnowledgePointResponse,
@@ -37,13 +37,16 @@ from app.services.learning import (
     get_learning_records,
     get_plan_tasks,
     get_quiz_detail,
+    get_student_quiz_attempt,
     get_teacher_quiz_attempts,
     get_weak_points,
+    list_student_quiz_attempts,
     list_teacher_weak_quizzes,
     list_quizzes,
     list_study_plans,
     list_wrong_questions,
     publish_quiz,
+    quiz_attempt_summary,
     submit_quiz,
     update_quiz_content,
 )
@@ -57,6 +60,7 @@ def _reference_answer(question: QuizQuestion):
 
 
 def _attempt_detail(db: Session, attempt) -> dict:
+    quiz = db.get(Quiz, attempt.quiz_id)
     rows = list(
         db.execute(
             select(QuizAnswer, QuizQuestion)
@@ -69,6 +73,7 @@ def _attempt_detail(db: Session, attempt) -> dict:
     return {
         **attempt_payload,
         "attempt": attempt_payload,
+        "quiz": QuizResponse.model_validate(quiz).model_dump(mode="json") if quiz else None,
         "answers": [
             {
                 "id": answer.id,
@@ -118,7 +123,16 @@ def list_quizzes_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    items = [QuizResponse.model_validate(item).model_dump(mode="json") for item in list_quizzes(db, course_id=course_id, user=user)]
+    items = []
+    for item in list_quizzes(db, course_id=course_id, user=user):
+        payload = QuizResponse.model_validate(item).model_dump(mode="json")
+        if user.role == "student":
+            attempts = [quiz_attempt_summary(db, attempt) for attempt in list_student_quiz_attempts(db, quiz_id=item.id, user=user)]
+            payload["attempts"] = attempts
+            payload["latest_attempt"] = attempts[0] if attempts else None
+            payload["attempt_count"] = len(attempts)
+            payload["has_attempted"] = bool(attempts)
+        items.append(payload)
     return success_response(data=items, request_id=request.state.request_id)
 
 
@@ -183,6 +197,28 @@ def get_quiz_detail_endpoint(
         questions=[QuizQuestionPayload(**item) for item in serialized_questions],
     )
     return success_response(data=payload.model_dump(mode="json"), request_id=request.state.request_id)
+
+
+@router.get("/quizzes/{quiz_id}/attempts")
+def list_student_quiz_attempts_endpoint(
+    quiz_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    attempts = [quiz_attempt_summary(db, attempt) for attempt in list_student_quiz_attempts(db, quiz_id=quiz_id, user=user)]
+    return success_response(data=attempts, request_id=request.state.request_id)
+
+
+@router.get("/attempts/{attempt_id}")
+def get_student_quiz_attempt_endpoint(
+    attempt_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    attempt = get_student_quiz_attempt(db, attempt_id=attempt_id, user=user)
+    return success_response(data=_attempt_detail(db, attempt), request_id=request.state.request_id)
 
 
 @router.put("/quizzes/{quiz_id}")
