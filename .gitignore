@@ -1,9 +1,5 @@
-AGENT.md
-teacher.md
-admin.md
-user.md
-suggest.md
-UI.md
+*.md
+!/README.md
 .venv/
 __pycache__/
 .pytest_cache/

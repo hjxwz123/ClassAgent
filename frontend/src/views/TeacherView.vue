@@ -176,7 +176,24 @@
             <div class="form-section"><div class="section-head"><h2><Layers :size="18" />课程章节</h2><button class="btn btn-ghost btn-sm" :disabled="courseForm.chapters.length >= 30" @click="addDraftChapter"><Plus :size="14" />添加章节</button></div><TransitionGroup name="chapter-list" tag="div" class="chapter-edit-list"><div v-for="(chapter, index) in courseForm.chapters" :key="chapter.local_id" class="chapter-edit" :class="{ 'just-added': freshChapterId === chapter.local_id }"><GripVertical :size="15" /><input v-model="chapter.title" class="input" /><input v-model.number="chapter.order_index" class="input order-input" type="number" /><button class="icon-action danger" :disabled="courseForm.chapters.length <= 1" @click="removeDraftChapter(index)"><Trash2 :size="15" />删除</button></div></TransitionGroup></div>
             <div class="advanced" :class="{ open: advancedOpen }"><button type="button" class="advanced-trigger" @click="advancedOpen = !advancedOpen"><Settings :size="16" />高级设置<ChevronDown :size="14" /></button><Transition name="accordion"><div v-if="advancedOpen" class="advanced-body"><AppCheckbox v-model="courseForm.allow_leave" label="学生退出" /><AppCheckbox v-model="courseForm.ai_qa" label="AI 问答" /><AppCheckbox v-model="courseForm.quiz_enabled" label="测验发布" /></div></Transition></div>
           </article>
-          <aside class="panel-card preview-card"><div class="panel-head"><h2><Eye :size="18" />卡片预览</h2></div><article class="course-card preview"><div class="course-cover" :class="{ 'has-image': courseCoverPreview || courseForm.cover_url }" :style="courseCoverPreviewStyle()"><BookOpen v-if="!(courseCoverPreview || courseForm.cover_url)" :size="44" /></div><section><h2>{{ courseForm.name || '课程名称' }}</h2><code>{{ courseForm.id ? currentCourse?.course_code : 'A8K3Z' }}</code><div class="course-stats"><span><Layers :size="15" />{{ courseForm.chapters.length }}</span><span><Users :size="15" />0</span></div></section></article></aside>
+          <aside class="course-preview-panel">
+            <div class="panel-head"><h2><Eye :size="18" />卡片预览</h2><small>学生端展示</small></div>
+            <article class="course-preview-frame">
+              <div class="course-preview-cover" :class="{ 'has-image': courseCoverPreview || courseForm.cover_url }" :style="courseCoverPreviewStyle()">
+                <BookOpen v-if="!(courseCoverPreview || courseForm.cover_url)" :size="38" />
+                <span>{{ courseForm.term || '2026春' }}</span>
+              </div>
+              <section class="course-preview-body">
+                <h3>{{ courseForm.name || '课程名称' }}</h3>
+                <p>{{ courseForm.description || '课程简介会显示在课程卡片中。' }}</p>
+                <div class="course-preview-meta">
+                  <code>{{ courseForm.id ? currentCourse?.course_code : 'A8K3Z' }}</code>
+                  <span><Layers :size="14" />{{ courseForm.chapters.length }} 章</span>
+                  <span><Users :size="14" />0 人</span>
+                </div>
+              </section>
+            </article>
+          </aside>
         </section>
         <div class="fixed-actions"><span><Edit2 :size="15" />有未保存的更改</span><div><button class="btn btn-ghost" @click="go('teacherCourses')">取消</button><button v-if="courseForm.id" class="btn btn-danger" :data-loading="isPending('delete-course')" :disabled="isPending('delete-course')" @click="deleteCourse">删除课程</button><button class="btn btn-secondary" :data-loading="isPending('save-course')" :disabled="isPending('save-course')" @click="saveCourse">保存草稿</button><button class="btn btn-primary" :data-loading="isPending('save-course')" :disabled="isPending('save-course')" @click="saveCourse">{{ courseForm.id ? '保存修改' : '创建课程' }}</button></div></div>
       </section>

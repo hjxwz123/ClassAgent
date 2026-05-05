@@ -53,8 +53,10 @@
 
 <script setup lang="ts">
 import { reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import { AlertCircle, Bot, KeyRound, LogIn, UserPlus } from "lucide-vue-next";
 import { api } from "../api/client";
+import { defaultRouteForRole } from "../router";
 import { useSessionStore } from "../stores/session";
 import PasswordField from "../components/PasswordField.vue";
 import type { User } from "../types";
@@ -69,6 +71,7 @@ const registerForm = reactive({ email: "", password: "", nickname: "" });
 const studentNo = ref("");
 const resetForm = reactive({ email: "", code: "", new_password: "" });
 const session = useSessionStore();
+const router = useRouter();
 
 function setMode(value: "login" | "register" | "reset") {
   mode.value = value;
@@ -91,6 +94,7 @@ async function login() {
     session.setSession(data.access_token, data.user);
     emit("authed", data.user);
     emit("notice", "success", "已登录");
+    await router.replace(defaultRouteForRole(data.user.role));
   } catch (error) {
     formError.value = (error as Error).message;
     emit("notice", "error", (error as Error).message);

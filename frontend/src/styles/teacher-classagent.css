@@ -478,7 +478,7 @@
 .mini-cover,
 .lesson-thumb,
 .course-cover {
-  background: var(--ca-color-slate) !important;
+  background-color: var(--ca-color-slate);
   color: var(--ca-color-chalk);
 }
 
@@ -495,6 +495,174 @@
 
 .recent-course {
   grid-template-columns: 48px minmax(0, 1fr) auto;
+}
+
+.course-grid {
+  grid-template-columns: repeat(auto-fit, minmax(252px, 1fr));
+  gap: 16px;
+}
+
+.course-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border-radius: var(--ca-radius-md);
+}
+
+.course-card .course-cover {
+  min-height: 118px;
+  aspect-ratio: 2.25 / 1;
+}
+
+.course-card section {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 12px 14px 10px;
+}
+
+.course-card h2 {
+  min-height: 0;
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.course-card code {
+  font-size: 12px;
+}
+
+.course-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.course-stats span {
+  min-width: 0;
+}
+
+.course-card footer {
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+}
+
+.course-card footer .btn,
+.course-card footer .icon-action {
+  min-height: 32px;
+}
+
+.course-form-layout {
+  max-width: 1080px;
+  grid-template-columns: minmax(0, 640px) 320px;
+  align-items: start;
+  gap: 18px;
+}
+
+.course-preview-panel {
+  position: sticky;
+  top: 76px;
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-md);
+  background: var(--ca-color-paper-card);
+  box-shadow: var(--ca-shadow-paper);
+  padding: 16px;
+}
+
+.course-preview-frame {
+  overflow: hidden;
+  border: 1px solid var(--ca-color-paper-border-strong);
+  border-radius: var(--ca-radius-md);
+  background: var(--ca-color-paper-bg);
+}
+
+.course-preview-cover {
+  position: relative;
+  min-height: 136px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+  color: var(--ca-color-chalk);
+}
+
+.course-preview-cover svg {
+  color: var(--ca-role-teacher-primary);
+}
+
+.course-preview-cover span {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  border-radius: var(--ca-radius-sm);
+  background: rgba(255,255,255,.88);
+  color: var(--ca-color-paper-ink);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 8px;
+}
+
+.course-preview-body {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+}
+
+.course-preview-body h3 {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--ca-color-paper-ink);
+  font-size: 17px;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.course-preview-body p {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 38px;
+  margin: 0;
+  color: var(--ca-color-paper-sub);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.course-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  padding-top: 2px;
+  color: var(--ca-color-paper-sub);
+  font-size: 12px;
+}
+
+.course-preview-meta code {
+  flex-basis: 100%;
+  color: var(--ca-role-teacher-primary);
+  font-weight: 800;
+}
+
+.course-preview-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .recent-course strong,
@@ -767,6 +935,15 @@
     margin-left: 64px;
   }
 
+  .course-form-layout {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 720px;
+  }
+
+  .course-preview-panel {
+    position: static;
+  }
+
   .teacher-sidebar .nav-group > span,
   .teacher-sidebar .nav-group button span,
   .teacher-sidebar .course-title,
@@ -858,6 +1035,14 @@
 
   .teacher-content {
     padding: 0 16px 48px;
+  }
+
+  .course-card .course-cover {
+    min-height: 110px;
+  }
+
+  .course-card footer {
+    flex-wrap: wrap;
   }
 
   .header-actions {

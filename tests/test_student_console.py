@@ -272,6 +272,7 @@ def test_student_console_endpoints_and_multiple_courses(client):
     assert alias_result["answers"][0]["correct_answer"] == "可靠传输"
     assert extract_reference_answer_value({"key": "A"}) == "A"
     assert extract_reference_answer_value({"text": "格式奖励是二值设计"}) == "格式奖励是二值设计"
+    assert extract_reference_answer_value({"key_points": ["归约", "产生式"]}) == ["归约", "产生式"]
 
     wrong_first_response = client.get("/api/v1/learning/wrong-questions", params={"course_id": first_course["id"]}, headers=student_headers)
     assert wrong_first_response.status_code == 200, wrong_first_response.text

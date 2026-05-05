@@ -1170,6 +1170,7 @@ def list_error_logs(
     end_at: datetime | None = None,
 ) -> list[SystemErrorLog]:
     statement = select(SystemErrorLog)
+    statement = statement.where(SystemErrorLog.detail["resolved"].as_boolean().is_not(True))
     if level:
         statement = statement.where(SystemErrorLog.level == level)
     if source:
@@ -1309,7 +1310,11 @@ def mark_error_log_resolved(db: Session, *, error_id: int, resolved: bool = True
     db.add(record)
     db.commit()
     db.refresh(record)
-    return _model_dict(record)
+    payload = _model_dict(record)
+    if resolved:
+        db.delete(record)
+        db.commit()
+    return payload
 
 
 def restore_backup(db: Session, *, backup_id: int) -> dict:
