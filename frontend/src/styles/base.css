@@ -242,6 +242,52 @@ svg { display: block; flex-shrink: 0; }
   transform: translateY(8px);
 }
 
+.route-zoom-enter-active,
+.route-home-auth-enter-active,
+.route-auth-home-enter-active {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #121614;
+  transition: opacity 980ms linear;
+  transform: none;
+  filter: none;
+  will-change: opacity;
+}
+.route-zoom-leave-active,
+.route-home-auth-leave-active,
+.route-auth-home-leave-active {
+  position: fixed;
+  inset: 0;
+  z-index: 101;
+  width: 100%;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #121614;
+  pointer-events: none;
+  transition: opacity 980ms linear;
+  transform: none;
+  filter: none;
+  will-change: opacity;
+}
+.route-zoom-enter-from,
+.route-home-auth-enter-from,
+.route-auth-home-enter-from {
+  opacity: .999;
+  filter: none;
+  transform: none;
+}
+.route-zoom-leave-to,
+.route-home-auth-leave-to,
+.route-auth-home-leave-to {
+  opacity: .999;
+  filter: none;
+  transform: none;
+}
+
 .select-popover,
 .menu-popover,
 .popover-card {

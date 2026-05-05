@@ -42,6 +42,56 @@ def fake_quiz_questions(*, topic, source_text, count, db=None):
     return items[:count]
 
 
+def fake_quiz_questions_with_types(*, topic, source_text, count, type_counts=None, db=None):
+    typed_items = {
+        "single_choice": {
+            "question_type": "single_choice",
+            "stem": f"{topic} 中，矩阵可以表示什么？",
+            "options": ["线性变换", "图片文件名", "课程编号", "无关文本"],
+            "reference_answer": {"value": 0},
+            "explanation": "课程资料说明矩阵可以表示线性变换。",
+            "score": 10,
+            "difficulty": "standard",
+        },
+        "judge": {
+            "question_type": "judge",
+            "stem": f"判断：{topic} 与线性变换有关。",
+            "options": ["正确", "错误"],
+            "reference_answer": {"value": 0},
+            "explanation": "课程资料围绕矩阵和线性变换展开。",
+            "score": 10,
+            "difficulty": "standard",
+        },
+        "blank": {
+            "question_type": "blank",
+            "stem": f"{topic} 可以表示____。",
+            "options": None,
+            "reference_answer": {"keywords": ["线性变换"]},
+            "explanation": "填入线性变换。",
+            "score": 10,
+            "difficulty": "standard",
+        },
+        "short_answer": {
+            "question_type": "short_answer",
+            "stem": f"请简述 {topic} 与线性变换的关系。",
+            "options": None,
+            "reference_answer": {"keywords": ["矩阵", "线性", "变换"]},
+            "explanation": "应围绕矩阵表示线性变换展开。",
+            "score": 20,
+            "difficulty": "advanced",
+        },
+    }
+    if type_counts:
+        items = []
+        for question_type, type_count in type_counts.items():
+            for index in range(int(type_count)):
+                item = {**typed_items[question_type]}
+                item["stem"] = f"{item['stem']}（{index + 1}）"
+                items.append(item)
+        return items[:count]
+    return fake_quiz_questions(topic=topic, source_text=source_text, count=count, db=db)
+
+
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
     payload = {
         "email": email,
@@ -408,6 +458,80 @@ def test_learning_core_flow(client, monkeypatch):
     assert records["recent_attempts"]
 
 
+def test_teacher_weak_quiz_management_flow(client, monkeypatch):
+    monkeypatch.setattr(ai_service, "generate_quiz_questions", fake_quiz_questions_with_types)
+    course, chapter, _lesson_id, teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    base_quiz_resp = client.post(
+        "/api/v1/learning/quizzes/generate",
+        json={
+            "course_id": course["id"],
+            "chapter_id": chapter["id"],
+            "title": "薄弱点来源测验",
+            "quiz_type": "course",
+            "question_count": 1,
+        },
+        headers=teacher_headers,
+    )
+    assert base_quiz_resp.status_code == 200, base_quiz_resp.text
+    base_quiz = base_quiz_resp.json()["data"]
+    publish_resp = client.post(f"/api/v1/learning/quizzes/{base_quiz['id']}/publish", headers=teacher_headers)
+    assert publish_resp.status_code == 200, publish_resp.text
+    detail_resp = client.get(f"/api/v1/learning/quizzes/{base_quiz['id']}", headers=student_headers)
+    assert detail_resp.status_code == 200, detail_resp.text
+    source_question = detail_resp.json()["data"]["questions"][0]
+    submit_resp = client.post(
+        f"/api/v1/learning/quizzes/{base_quiz['id']}/submit",
+        json={"answers": [{"question_id": source_question["id"], "answer": 1}]},
+        headers=student_headers,
+    )
+    assert submit_resp.status_code == 200, submit_resp.text
+
+    weak_list_resp = client.get("/api/v1/learning/teacher/weak-quizzes", params={"course_id": course["id"]}, headers=teacher_headers)
+    assert weak_list_resp.status_code == 200, weak_list_resp.text
+    weak_payload = weak_list_resp.json()["data"]
+    assert weak_payload["stats"]["weak_point_count"] >= 1
+    weak_point = weak_payload["weak_points"][0]
+
+    generate_resp = client.post(
+        "/api/v1/learning/teacher/weak-quizzes/generate",
+        json={
+            "course_id": course["id"],
+            "weak_point_id": weak_point["knowledge_point_id"],
+            "title": "矩阵薄弱点专项",
+            "question_count": 2,
+            "question_type_counts": {"single_choice": 1, "judge": 1},
+        },
+        headers=teacher_headers,
+    )
+    assert generate_resp.status_code == 200, generate_resp.text
+    weak_quiz = generate_resp.json()["data"]
+    assert weak_quiz["metadata_json"]["weak_quiz"] is True
+    assert weak_quiz["metadata_json"]["question_type_counts"] == {"single_choice": 1, "judge": 1}
+
+    attempts_empty_resp = client.get(f"/api/v1/learning/teacher/weak-quizzes/{weak_quiz['id']}/attempts", headers=teacher_headers)
+    assert attempts_empty_resp.status_code == 200, attempts_empty_resp.text
+    assert len(attempts_empty_resp.json()["data"]["questions"]) == 2
+
+    publish_weak_resp = client.post(f"/api/v1/learning/quizzes/{weak_quiz['id']}/publish", headers=teacher_headers)
+    assert publish_weak_resp.status_code == 200, publish_weak_resp.text
+    weak_detail_resp = client.get(f"/api/v1/learning/quizzes/{weak_quiz['id']}", headers=student_headers)
+    assert weak_detail_resp.status_code == 200, weak_detail_resp.text
+    weak_questions = weak_detail_resp.json()["data"]["questions"]
+    weak_submit_resp = client.post(
+        f"/api/v1/learning/quizzes/{weak_quiz['id']}/submit",
+        json={"answers": [{"question_id": item["id"], "answer": 0} for item in weak_questions]},
+        headers=student_headers,
+    )
+    assert weak_submit_resp.status_code == 200, weak_submit_resp.text
+
+    attempts_resp = client.get(f"/api/v1/learning/teacher/weak-quizzes/{weak_quiz['id']}/attempts", headers=teacher_headers)
+    assert attempts_resp.status_code == 200, attempts_resp.text
+    attempts_payload = attempts_resp.json()["data"]
+    assert attempts_payload["quiz"]["attempt_count"] == 1
+    assert attempts_payload["attempts"][0]["correct_count"] == 2
+
+
 def test_quiz_generation_requires_ai_questions(monkeypatch):
     monkeypatch.setattr(ai_service, "_call_chat", lambda *args, **kwargs: None)
     clean = sanitize_quiz_source_text(
@@ -495,6 +619,35 @@ def test_quiz_generation_retries_ai_when_valid_questions_are_insufficient(monkey
     )
     assert questions[0]["question_type"] == "single_choice"
     assert questions[0]["reference_answer"] == {"value": 1}
+
+
+def test_quiz_generation_respects_question_type_counts(monkeypatch):
+    def ai_content(*args, **kwargs):
+        return (
+            '{"items":['
+            '{"question_type":"single_choice",'
+            '"stem":"矩阵可以表示线性变换，下列说法正确的是？",'
+            '"options":["矩阵可以表示线性变换","矩阵只能表示图片","矩阵与变换无关","矩阵是文件名"],'
+            '"reference_answer":{"value":0},'
+            '"explanation":"资料中说明矩阵可以表示线性变换。",'
+            '"score":10,"difficulty":"standard"},'
+            '{"question_type":"blank",'
+            '"stem":"矩阵可以表示____。",'
+            '"options":null,'
+            '"reference_answer":{"keywords":["线性变换"]},'
+            '"explanation":"填入线性变换。",'
+            '"score":10,"difficulty":"standard"}]}'
+        )
+
+    monkeypatch.setattr(ai_service, "_call_chat", ai_content)
+    questions = ai_service.generate_quiz_questions(
+        topic="矩阵",
+        source_text="矩阵可以表示线性变换，行列式反映缩放系数。",
+        count=2,
+        type_counts={"single_choice": 1, "blank": 1},
+    )
+    assert [item["question_type"] for item in questions] == ["single_choice", "blank"]
+    assert questions[1]["reference_answer"] == {"keywords": ["线性变换"]}
 
 
 def test_quiz_generation_rejects_direct_fact_short_answer(monkeypatch):

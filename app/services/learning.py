@@ -28,7 +28,7 @@ from app.db.models import (
     WrongQuestion,
     LearningProgress,
 )
-from app.schemas.learning import QuizEditRequest, QuizGenerateRequest, StudyPlanCreateRequest
+from app.schemas.learning import QuizEditRequest, QuizGenerateRequest, StudyPlanCreateRequest, WeakQuizGenerateRequest
 from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.knowledge import ensure_knowledge_points
@@ -186,6 +186,44 @@ def _knowledge_points_for_quiz(db: Session, *, course_id: int, chapter_ids: list
     return points
 
 
+def _knowledge_points_by_ids(db: Session, *, course_id: int, point_ids: list[int]) -> list[KnowledgePoint]:
+    unique_ids = list(dict.fromkeys(int(point_id) for point_id in point_ids if int(point_id or 0) > 0))
+    if not unique_ids:
+        return []
+    points = list(
+        db.scalars(
+            select(KnowledgePoint)
+            .where(KnowledgePoint.course_id == course_id, KnowledgePoint.id.in_(unique_ids))
+        )
+    )
+    by_id = {point.id: point for point in points}
+    if len(by_id) != len(unique_ids):
+        raise bad_request("知识点不属于当前课程")
+    return [by_id[point_id] for point_id in unique_ids]
+
+
+def _normalize_question_type_counts(raw: dict[str, int] | None) -> dict[str, int] | None:
+    if not raw:
+        return None
+    allowed = {
+        QuestionType.SINGLE_CHOICE.value,
+        QuestionType.MULTIPLE_CHOICE.value,
+        QuestionType.JUDGE.value,
+        QuestionType.BLANK.value,
+        QuestionType.SHORT_ANSWER.value,
+    }
+    normalized: dict[str, int] = {}
+    for question_type, value in raw.items():
+        if question_type not in allowed:
+            raise bad_request("题型不合法")
+        count = int(value or 0)
+        if count < 0:
+            raise bad_request("题型数量不能为负数")
+        if count:
+            normalized[question_type] = count
+    return normalized or None
+
+
 def _prioritize_weak_points(db: Session, *, points: list[KnowledgePoint], course_id: int, user: User, enabled: bool) -> list[KnowledgePoint]:
     if not enabled or not points:
         return points
@@ -214,6 +252,9 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
     course = _get_course_or_404(db, payload.course_id)
     if payload.quiz_type not in {item.value for item in QuizType}:
         raise bad_request("测验类型不合法")
+    question_type_counts = _normalize_question_type_counts(payload.question_type_counts)
+    if question_type_counts and sum(question_type_counts.values()) != payload.question_count:
+        raise bad_request("题型数量合计必须等于总题量")
     if user.role == UserRole.STUDENT.value and payload.quiz_type == QuizType.COURSE.value:
         raise forbidden("学生不能直接生成课程测验")
     if user.role == UserRole.TEACHER.value:
@@ -221,7 +262,11 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
     if user.role == UserRole.STUDENT.value:
         _assert_student_course_access(db, course_id=payload.course_id, user=user)
     chapter_ids = _chapter_ids_for_quiz(payload)
-    points = _knowledge_points_for_quiz(db, course_id=payload.course_id, chapter_ids=chapter_ids)
+    points = (
+        _knowledge_points_by_ids(db, course_id=payload.course_id, point_ids=payload.knowledge_point_ids)
+        if payload.knowledge_point_ids
+        else _knowledge_points_for_quiz(db, course_id=payload.course_id, chapter_ids=chapter_ids)
+    )
     points = _prioritize_weak_points(
         db,
         points=points,
@@ -233,12 +278,15 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
     if not source_text.strip():
         source_text = _course_context_text_for_quiz(course=course, points=points)
     quiz_topic = _quiz_topic_for_generation(course_name=course.name, points=points, source_text=source_text)
-    question_dicts = ai_service.generate_quiz_questions(
-        topic=quiz_topic,
-        source_text=source_text,
-        count=payload.question_count,
-        db=db,
-    )
+    question_kwargs = {
+        "topic": quiz_topic,
+        "source_text": source_text,
+        "count": payload.question_count,
+        "db": db,
+    }
+    if question_type_counts:
+        question_kwargs["type_counts"] = question_type_counts
+    question_dicts = ai_service.generate_quiz_questions(**question_kwargs)
     quiz = Quiz(
         course_id=payload.course_id,
         chapter_id=chapter_ids[0] if len(chapter_ids) == 1 else None,
@@ -250,6 +298,9 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         metadata_json={
             "generated": True,
             "chapter_ids": chapter_ids,
+            "knowledge_point_ids": [point.id for point in points],
+            "knowledge_point_names": [point.name for point in points],
+            "question_type_counts": question_type_counts,
             "prefer_weak_points": payload.prefer_weak_points,
             "source_topic": quiz_topic,
             "source_chars": len(source_text),
@@ -399,6 +450,236 @@ def list_quizzes(db: Session, *, course_id: int, user: User) -> list[Quiz]:
         course = _get_course_or_404(db, course_id)
         _assert_course_owner(course, user)
     return list(db.scalars(statement.order_by(Quiz.created_at.desc())))
+
+
+def _assert_teacher_course_access(db: Session, *, course_id: int, user: User):
+    course = _get_course_or_404(db, course_id)
+    if user.role == UserRole.ADMIN.value:
+        return course
+    if user.role != UserRole.TEACHER.value:
+        raise forbidden("仅教师可管理薄弱题目")
+    _assert_course_owner(course, user)
+    return course
+
+
+def _weak_point_rows(db: Session, *, course_id: int) -> list[dict]:
+    rows = db.execute(
+        select(
+            KnowledgePoint.id,
+            KnowledgePoint.name,
+            KnowledgePoint.description,
+            func.sum(WrongQuestion.wrong_count),
+            func.count(func.distinct(WrongQuestion.user_id)),
+            func.max(WrongQuestion.updated_at),
+        )
+        .join(WrongQuestion, WrongQuestion.knowledge_point_id == KnowledgePoint.id)
+        .where(WrongQuestion.course_id == course_id, KnowledgePoint.course_id == course_id)
+        .group_by(KnowledgePoint.id, KnowledgePoint.name, KnowledgePoint.description)
+        .order_by(func.sum(WrongQuestion.wrong_count).desc(), KnowledgePoint.id.asc())
+    )
+    return [
+        {
+            "knowledge_point_id": point_id,
+            "knowledge_point": name,
+            "description": description,
+            "wrong_count": int(wrong_count or 0),
+            "student_count": int(student_count or 0),
+            "last_wrong_at": last_wrong_at,
+        }
+        for point_id, name, description, wrong_count, student_count, last_wrong_at in rows
+    ]
+
+
+def _quiz_question_type_counts(db: Session, quiz_id: int) -> dict[str, int]:
+    rows = db.execute(
+        select(QuizQuestion.question_type, func.count(QuizQuestion.id))
+        .where(QuizQuestion.quiz_id == quiz_id)
+        .group_by(QuizQuestion.question_type)
+    )
+    return {question_type: int(count or 0) for question_type, count in rows}
+
+
+def _weak_quiz_summary(db: Session, quiz: Quiz) -> dict:
+    attempt_count = int(db.scalar(select(func.count(QuizAttempt.id)).where(QuizAttempt.quiz_id == quiz.id)) or 0)
+    avg_score = db.scalar(select(func.avg(QuizAttempt.score)).where(QuizAttempt.quiz_id == quiz.id))
+    avg_accuracy = db.scalar(select(func.avg(QuizAttempt.accuracy)).where(QuizAttempt.quiz_id == quiz.id))
+    last_attempt_at = db.scalar(select(func.max(QuizAttempt.submitted_at)).where(QuizAttempt.quiz_id == quiz.id))
+    question_count = int(db.scalar(select(func.count(QuizQuestion.id)).where(QuizQuestion.quiz_id == quiz.id)) or 0)
+    metadata = quiz.metadata_json if isinstance(quiz.metadata_json, dict) else {}
+    return {
+        "id": quiz.id,
+        "course_id": quiz.course_id,
+        "chapter_id": quiz.chapter_id,
+        "creator_id": quiz.creator_id,
+        "title": quiz.title,
+        "description": quiz.description,
+        "quiz_type": quiz.quiz_type,
+        "status": quiz.status,
+        "total_score": quiz.total_score,
+        "metadata_json": metadata,
+        "published_at": quiz.published_at,
+        "created_at": quiz.created_at,
+        "updated_at": quiz.updated_at,
+        "question_count": question_count,
+        "question_type_counts": _quiz_question_type_counts(db, quiz.id),
+        "attempt_count": attempt_count,
+        "average_score": round(float(avg_score or 0), 2),
+        "average_accuracy": round(float(avg_accuracy or 0), 2),
+        "last_attempt_at": last_attempt_at,
+    }
+
+
+def list_teacher_weak_quizzes(db: Session, *, course_id: int, user: User) -> dict:
+    _assert_teacher_course_access(db, course_id=course_id, user=user)
+    weak_points = _weak_point_rows(db, course_id=course_id)
+    weak_by_id = {item["knowledge_point_id"]: {**item, "quiz_sets": []} for item in weak_points}
+    all_sets: list[dict] = []
+    quizzes = list(db.scalars(select(Quiz).where(Quiz.course_id == course_id).order_by(Quiz.created_at.desc())))
+    for quiz in quizzes:
+        metadata = quiz.metadata_json if isinstance(quiz.metadata_json, dict) else {}
+        if not metadata.get("weak_quiz"):
+            continue
+        summary = _weak_quiz_summary(db, quiz)
+        scope = metadata.get("weak_quiz_scope")
+        point_ids = [int(point_id) for point_id in metadata.get("weak_point_ids", []) if str(point_id).isdigit()]
+        if scope == "all":
+            all_sets.append(summary)
+            continue
+        for point_id in point_ids:
+            if point_id in weak_by_id:
+                weak_by_id[point_id]["quiz_sets"].append(summary)
+    return {
+        "weak_points": list(weak_by_id.values()),
+        "all_sets": all_sets,
+        "stats": {
+            "weak_point_count": len(weak_points),
+            "quiz_set_count": len(all_sets) + sum(len(item["quiz_sets"]) for item in weak_by_id.values()),
+            "wrong_count": sum(item["wrong_count"] for item in weak_points),
+        },
+    }
+
+
+def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGenerateRequest) -> Quiz:
+    course = _assert_teacher_course_access(db, course_id=payload.course_id, user=user)
+    if payload.weak_point_id:
+        point_ids = [payload.weak_point_id]
+        scope = "single"
+    elif payload.weak_point_ids:
+        point_ids = list(dict.fromkeys(payload.weak_point_ids))
+        scope = "all" if payload.all_weak_points or len(point_ids) > 1 else "single"
+    else:
+        point_ids = [item["knowledge_point_id"] for item in _weak_point_rows(db, course_id=payload.course_id)]
+        scope = "all"
+    points = _knowledge_points_by_ids(db, course_id=payload.course_id, point_ids=point_ids)
+    if not points:
+        raise bad_request("暂无可生成题目的薄弱知识点")
+    type_counts = _normalize_question_type_counts(payload.question_type_counts)
+    if type_counts and sum(type_counts.values()) != payload.question_count:
+        raise bad_request("题型数量合计必须等于总题量")
+    title = payload.title or (
+        f"{points[0].name}薄弱点专项测验" if scope == "single" and len(points) == 1 else "薄弱知识点综合测验"
+    )
+    quiz = generate_quiz(
+        db,
+        user=user,
+        payload=QuizGenerateRequest(
+            course_id=payload.course_id,
+            title=title,
+            quiz_type=QuizType.COURSE.value,
+            question_count=payload.question_count,
+            question_type_counts=type_counts,
+            prefer_weak_points=True,
+            knowledge_point_ids=[point.id for point in points],
+        ),
+    )
+    metadata = quiz.metadata_json if isinstance(quiz.metadata_json, dict) else {}
+    quiz.metadata_json = {
+        **metadata,
+        "weak_quiz": True,
+        "weak_quiz_scope": scope,
+        "weak_point_ids": [point.id for point in points],
+        "weak_point_names": [point.name for point in points],
+        "course_name": course.name,
+    }
+    db.add(quiz)
+    db.commit()
+    db.refresh(quiz)
+    return quiz
+
+
+def get_teacher_quiz_attempts(db: Session, *, quiz_id: int, user: User) -> dict:
+    quiz = db.get(Quiz, quiz_id)
+    if quiz is None:
+        raise not_found("测验不存在")
+    _assert_teacher_course_access(db, course_id=quiz.course_id, user=user)
+    questions = list(db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id).order_by(QuizQuestion.id.asc())))
+    question_by_id = {question.id: question for question in questions}
+    rows = list(
+        db.execute(
+            select(QuizAttempt, User)
+            .join(User, User.id == QuizAttempt.user_id)
+            .where(QuizAttempt.quiz_id == quiz_id)
+            .order_by(QuizAttempt.submitted_at.desc(), QuizAttempt.created_at.desc())
+        )
+    )
+    attempt_ids = [attempt.id for attempt, _student in rows]
+    answers_by_attempt: dict[int, list[QuizAnswer]] = {attempt_id: [] for attempt_id in attempt_ids}
+    if attempt_ids:
+        for answer in db.scalars(select(QuizAnswer).where(QuizAnswer.attempt_id.in_(attempt_ids)).order_by(QuizAnswer.id.asc())):
+            answers_by_attempt.setdefault(answer.attempt_id, []).append(answer)
+    attempts = []
+    for attempt, student in rows:
+        answers = answers_by_attempt.get(attempt.id, [])
+        correct_count = sum(1 for answer in answers if answer.is_correct)
+        attempts.append(
+            {
+                "id": attempt.id,
+                "quiz_id": attempt.quiz_id,
+                "user_id": attempt.user_id,
+                "student": {
+                    "id": student.id,
+                    "nickname": student.nickname,
+                    "email": student.email,
+                    "student_no": student.student_no,
+                },
+                "score": attempt.score,
+                "total_score": attempt.total_score,
+                "accuracy": attempt.accuracy,
+                "ai_feedback": attempt.ai_feedback,
+                "submitted_at": attempt.submitted_at,
+                "created_at": attempt.created_at,
+                "updated_at": attempt.updated_at,
+                "answer_count": len(answers),
+                "correct_count": correct_count,
+                "answers": [
+                    {
+                        "id": answer.id,
+                        "question_id": answer.question_id,
+                        "stem": question_by_id.get(answer.question_id).stem if answer.question_id in question_by_id else "",
+                        "question_type": question_by_id.get(answer.question_id).question_type if answer.question_id in question_by_id else "",
+                        "user_answer": answer.user_answer,
+                        "is_correct": answer.is_correct,
+                        "score": answer.score,
+                        "feedback": answer.feedback,
+                    }
+                    for answer in answers
+                ],
+            }
+        )
+    return {
+        "quiz": _weak_quiz_summary(db, quiz),
+        "questions": [
+            {
+                "id": question.id,
+                "question_type": question.question_type,
+                "stem": question.stem,
+                "score": question.score,
+                "difficulty": question.difficulty,
+            }
+            for question in questions
+        ],
+        "attempts": attempts,
+    }
 
 
 def get_quiz_detail(db: Session, *, quiz_id: int, user: User) -> tuple[Quiz, list[QuizQuestion]]:

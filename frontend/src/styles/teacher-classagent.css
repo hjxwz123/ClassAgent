@@ -599,6 +599,12 @@
   color: var(--ca-role-teacher-primary);
 }
 
+.course-cover-title,
+.course-hero-cover-title {
+  font-family: var(--ca-font-chalk);
+  color: var(--ca-color-chalk);
+}
+
 .course-preview-cover span {
   position: absolute;
   top: 10px;
@@ -889,6 +895,38 @@
 .weak-row button:disabled {
   opacity: .7;
   cursor: wait;
+}
+
+.weak-quiz-page .weak-quiz-hero span,
+.weak-point-card header b {
+  background: var(--ca-role-teacher-light);
+  color: var(--ca-role-teacher-primary);
+}
+
+.weak-config-card,
+.weak-detail-card,
+.weak-point-card,
+.weak-set-section {
+  border-color: var(--ca-color-paper-border);
+  background: var(--ca-color-paper-card);
+  box-shadow: var(--ca-shadow-paper);
+}
+
+.weak-set-card {
+  border-color: var(--ca-color-paper-border);
+  background: var(--ca-color-paper-card);
+}
+
+.weak-set-card:hover,
+.weak-set-card.active {
+  border-color: rgba(217, 73, 37, .28);
+  background: var(--ca-role-teacher-light);
+}
+
+.weak-question-preview div,
+.weak-empty-line {
+  border-color: var(--ca-color-paper-border);
+  background: var(--ca-color-paper-bg);
 }
 
 .preview-tabs button,

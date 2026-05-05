@@ -386,7 +386,7 @@
 .continue-cover {
   min-height: 190px;
   border-radius: var(--ca-radius-lg);
-  background: var(--ca-color-slate) !important;
+  background-color: var(--ca-color-slate);
   color: var(--ca-role-student-glow);
 }
 
@@ -503,7 +503,7 @@
 }
 
 .course-art {
-  background: var(--ca-color-slate) !important;
+  background-color: var(--ca-color-slate);
 }
 
 .course-art > svg {

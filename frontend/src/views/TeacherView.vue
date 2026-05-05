@@ -66,6 +66,7 @@
           <button :disabled="!currentCourse" :class="{ active: active === 'teacherLessons' }" @click="go('teacherLessons')"><Presentation :size="16" />课时管理</button>
           <button :disabled="!currentCourse" :class="{ active: active === 'teacherStudents' }" @click="go('teacherStudents')"><Users :size="16" />学生管理</button>
           <button :disabled="!currentCourse" :class="{ active: active === 'teacherAnalytics' }" @click="go('teacherAnalytics')"><BarChart2 :size="16" />教学分析</button>
+          <button :disabled="!currentCourse" :class="{ active: active === 'teacherWeakQuizzes' }" @click="go('teacherWeakQuizzes')"><AlertTriangle :size="16" />薄弱题目</button>
         </div>
         <div class="nav-group">
           <span>个人</span>
@@ -159,12 +160,12 @@
         <Transition name="fade-slide" mode="out-in">
           <TransitionGroup v-if="courseView === 'grid'" key="grid" name="card-list" tag="div" class="course-grid">
             <article v-for="course in filteredCourses" :key="course.id" class="course-card" :class="{ inactive: course.status !== 'active' }">
-              <div class="course-cover" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><span class="tag">{{ course.term }}</span><span class="tag" :class="statusClass(course.status)">{{ statusText(course.status) }}</span><BookOpen v-if="!course.cover_url" :size="48" /></div>
+              <div class="course-cover" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><span class="tag">{{ course.term }}</span><span class="tag" :class="statusClass(course.status)">{{ statusText(course.status) }}</span><strong v-if="!course.cover_url" class="course-cover-title">{{ courseCoverText(course) }}</strong></div>
               <section><h2>{{ course.name }}</h2><code>{{ course.course_code }}</code><div class="course-stats"><span><Users :size="15" />{{ course.student_count || 0 }}</span><span><Presentation :size="15" />{{ course.published_lesson_count || 0 }}/{{ course.lesson_count || 0 }}</span><span><File :size="15" />{{ course.material_count || 0 }}</span><span><Check :size="15" />{{ course.published_rate || 0 }}%</span></div></section>
               <footer><button class="btn btn-primary btn-sm" :data-loading="isPending(`select-course-${course.id}`)" :disabled="isPending(`select-course-${course.id}`)" @click="selectCourse(course.id, 'teacherCourseHome')">进入课程</button><button class="icon-action" :data-loading="isPending(`edit-course-${course.id}`)" :disabled="isPending(`edit-course-${course.id}`)" @click="editCourse(course)"><Pencil :size="15" />编辑</button></footer>
             </article>
           </TransitionGroup>
-          <article v-else key="list" class="table-card"><table class="teacher-table"><thead><tr><th>课程名称</th><th>学期</th><th>学生数</th><th>课时数</th><th>资料数</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead><TransitionGroup name="row-list" tag="tbody"><tr v-for="course in filteredCourses" :key="course.id"><td><span class="mini-cover"></span><strong>{{ course.name }}</strong><code>{{ course.course_code }}</code></td><td>{{ course.term }}</td><td><Users :size="14" />{{ course.student_count || 0 }}</td><td><Presentation :size="14" />{{ course.published_lesson_count || 0 }}/{{ course.lesson_count || 0 }}</td><td><File :size="14" />{{ course.material_count || 0 }}</td><td><span class="tag" :class="statusClass(course.status)">{{ statusText(course.status) }}</span></td><td>{{ relativeTime(course.updated_at) }}</td><td><button class="btn btn-primary btn-sm" :data-loading="isPending(`select-course-${course.id}`)" :disabled="isPending(`select-course-${course.id}`)" @click="selectCourse(course.id, 'teacherCourseHome')">进入课程</button><button class="icon-action" :data-loading="isPending(`edit-course-${course.id}`)" :disabled="isPending(`edit-course-${course.id}`)" @click="editCourse(course)"><Pencil :size="15" />编辑</button></td></tr></TransitionGroup></table></article>
+          <article v-else key="list" class="table-card"><table class="teacher-table"><thead><tr><th>课程名称</th><th>学期</th><th>学生数</th><th>课时数</th><th>资料数</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead><TransitionGroup name="row-list" tag="tbody"><tr v-for="course in filteredCourses" :key="course.id"><td><span class="mini-cover" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)">{{ course.cover_url ? '' : courseCoverText(course).slice(0, 2) }}</span><strong>{{ course.name }}</strong><code>{{ course.course_code }}</code></td><td>{{ course.term }}</td><td><Users :size="14" />{{ course.student_count || 0 }}</td><td><Presentation :size="14" />{{ course.published_lesson_count || 0 }}/{{ course.lesson_count || 0 }}</td><td><File :size="14" />{{ course.material_count || 0 }}</td><td><span class="tag" :class="statusClass(course.status)">{{ statusText(course.status) }}</span></td><td>{{ relativeTime(course.updated_at) }}</td><td><button class="btn btn-primary btn-sm" :data-loading="isPending(`select-course-${course.id}`)" :disabled="isPending(`select-course-${course.id}`)" @click="selectCourse(course.id, 'teacherCourseHome')">进入课程</button><button class="icon-action" :data-loading="isPending(`edit-course-${course.id}`)" :disabled="isPending(`edit-course-${course.id}`)" @click="editCourse(course)"><Pencil :size="15" />编辑</button></td></tr></TransitionGroup></table></article>
         </Transition>
         <EmptyState v-if="!filteredCourses.length" text="还没有课程"><button class="btn btn-primary" @click="newCourse"><Plus :size="16" />创建课程</button></EmptyState>
       </section>
@@ -172,7 +173,7 @@
       <section v-if="active === 'teacherCourseForm'" key="teacherCourseForm" class="teacher-content form-content">
         <section class="course-form-layout">
           <article class="panel-card form-panel">
-            <div class="form-section"><h2>基本信息</h2><label>课程名称<input v-model="courseForm.name" class="input" maxlength="50" /></label><label>课程简介<textarea v-model="courseForm.description" class="textarea" maxlength="500"></textarea><small>{{ courseForm.description.length }} / 500</small></label><label>学期<input v-model="courseForm.term" class="input" /></label><label>课程封面<div class="cover-upload-field"><div class="cover-upload-preview" :style="courseCoverPreviewStyle()"><Image v-if="!(courseCoverPreview || courseForm.cover_url)" :size="28" /></div><div class="cover-upload-actions"><button type="button" class="btn btn-secondary btn-sm" @click="courseCoverInput?.click()"><Upload :size="14" />上传图片</button><button v-if="courseCoverPreview || courseForm.cover_url" type="button" class="btn btn-ghost btn-sm" @click="courseForm.cover_url = ''; resetCourseCoverSelection()">清除</button><small>{{ courseCoverFile?.name || '建议 16:9，最大 8MB' }}</small><input ref="courseCoverInput" type="file" accept="image/*" hidden @change="pickCourseCover" /></div></div></label><label>封面底色<div class="color-row"><button v-for="color in palette" :key="color" type="button" :style="{ background: color }" :class="{ active: courseForm.cover_color === color }" @click="courseForm.cover_color = color"></button></div></label></div>
+            <div class="form-section"><h2>基本信息</h2><label>课程名称<input v-model="courseForm.name" class="input" maxlength="50" /></label><label>课程简介<textarea v-model="courseForm.description" class="textarea" maxlength="500"></textarea><small>{{ courseForm.description.length }} / 500</small></label><label>学期<input v-model="courseForm.term" class="input" /></label><label>课程封面<div class="cover-upload-field"><div class="cover-upload-preview" :style="courseCoverPreviewStyle()"><strong v-if="!(courseCoverPreview || courseForm.cover_url)" class="course-cover-title">{{ courseCoverText(courseForm) }}</strong></div><div class="cover-upload-actions"><button type="button" class="btn btn-secondary btn-sm" @click="courseCoverInput?.click()"><Upload :size="14" />上传图片</button><button v-if="courseCoverPreview || courseForm.cover_url" type="button" class="btn btn-ghost btn-sm" @click="courseForm.cover_url = ''; resetCourseCoverSelection()">清除</button><small>{{ courseCoverFile?.name || '未上传图片时显示课程名前四字和底色' }}</small><input ref="courseCoverInput" type="file" accept="image/*" hidden @change="pickCourseCover" /></div></div></label><label>封面底色<div class="color-row"><button v-for="color in palette" :key="color" type="button" :style="{ background: color }" :class="{ active: courseForm.cover_color === color }" @click="courseForm.cover_color = color"></button></div></label></div>
             <div class="form-section"><div class="section-head"><h2><Layers :size="18" />课程章节</h2><button class="btn btn-ghost btn-sm" :disabled="courseForm.chapters.length >= 30" @click="addDraftChapter"><Plus :size="14" />添加章节</button></div><TransitionGroup name="chapter-list" tag="div" class="chapter-edit-list"><div v-for="(chapter, index) in courseForm.chapters" :key="chapter.local_id" class="chapter-edit" :class="{ 'just-added': freshChapterId === chapter.local_id }"><GripVertical :size="15" /><input v-model="chapter.title" class="input" /><input v-model.number="chapter.order_index" class="input order-input" type="number" /><button class="icon-action danger" :disabled="courseForm.chapters.length <= 1" @click="removeDraftChapter(index)"><Trash2 :size="15" />删除</button></div></TransitionGroup></div>
             <div class="advanced" :class="{ open: advancedOpen }"><button type="button" class="advanced-trigger" @click="advancedOpen = !advancedOpen"><Settings :size="16" />高级设置<ChevronDown :size="14" /></button><Transition name="accordion"><div v-if="advancedOpen" class="advanced-body"><AppCheckbox v-model="courseForm.allow_leave" label="学生退出" /><AppCheckbox v-model="courseForm.ai_qa" label="AI 问答" /><AppCheckbox v-model="courseForm.quiz_enabled" label="测验发布" /></div></Transition></div>
           </article>
@@ -180,7 +181,7 @@
             <div class="panel-head"><h2><Eye :size="18" />卡片预览</h2><small>学生端展示</small></div>
             <article class="course-preview-frame">
               <div class="course-preview-cover" :class="{ 'has-image': courseCoverPreview || courseForm.cover_url }" :style="courseCoverPreviewStyle()">
-                <BookOpen v-if="!(courseCoverPreview || courseForm.cover_url)" :size="38" />
+                <strong v-if="!(courseCoverPreview || courseForm.cover_url)" class="course-cover-title">{{ courseCoverText(courseForm) }}</strong>
                 <span>{{ courseForm.term || '2026春' }}</span>
               </div>
               <section class="course-preview-body">
@@ -201,7 +202,7 @@
       <section v-if="active === 'teacherCourseHome'" key="teacherCourseHome" class="teacher-content">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
-          <article class="course-hero" :class="{ 'has-image': currentCourse.cover_url }" :style="courseHeroStyle(currentCourse)"><span><BookOpen :size="36" /></span><div><h1>{{ courseHome.course?.name || currentCourse.name }}</h1><p>{{ currentCourse.term }} · {{ currentCourse.course_code }}</p><small><Users :size="15" />{{ courseHome.quick_counts?.student_count || 0 }} 学生 <Presentation :size="15" />{{ courseHome.quick_counts?.lesson_count || 0 }} 课时 <File :size="15" />{{ courseHome.quick_counts?.material_count || 0 }} 资料</small></div><section><button class="btn ghost-white" @click="editCourse(currentCourse)"><Pencil :size="16" />编辑课程</button><button class="btn ghost-white" @click="copyText(currentCourse.course_code)"><Share2 :size="16" />分享课程码</button></section></article>
+          <article class="course-hero" :class="{ 'has-image': currentCourse.cover_url }" :style="courseHeroStyle(currentCourse)"><span><BookOpen v-if="currentCourse.cover_url" :size="36" /><strong v-else class="course-hero-cover-title">{{ courseCoverText(currentCourse) }}</strong></span><div><h1>{{ courseHome.course?.name || currentCourse.name }}</h1><p>{{ currentCourse.term }} · {{ currentCourse.course_code }}</p><small><Users :size="15" />{{ courseHome.quick_counts?.student_count || 0 }} 学生 <Presentation :size="15" />{{ courseHome.quick_counts?.lesson_count || 0 }} 课时 <File :size="15" />{{ courseHome.quick_counts?.material_count || 0 }} 资料</small></div><section><button class="btn ghost-white" @click="editCourse(currentCourse)"><Pencil :size="16" />编辑课程</button><button class="btn ghost-white" @click="copyText(currentCourse.course_code)"><Share2 :size="16" />分享课程码</button></section></article>
           <div class="quick-grid"><QuickAction :icon="Upload" label="上传资料" sub="PPT/PDF/Word/TXT" @click="go('teacherMaterials')" /><QuickAction :icon="Presentation" label="管理课时" sub="课时发布" @click="go('teacherLessons')" /><QuickAction :icon="UserPlus" label="邀请学生" sub="课程码" @click="copyText(currentCourse.course_code)" /><QuickAction :icon="BarChart2" label="教学分析" sub="课程数据" @click="go('teacherAnalytics')" /></div>
           <div class="course-home-grid">
             <article class="panel-card home-lesson-card">
@@ -279,10 +280,83 @@
           <article class="ai-suggestion" :class="{ thinking: pageLoading || isPending('refresh-analysis') }"><span><Sparkles :size="20" /></span><div><h2>教学建议</h2><p>{{ analysis.suggestion || '暂无建议' }}</p></div><button class="btn btn-ghost btn-sm" :data-loading="isPending('refresh-analysis')" :disabled="isPending('refresh-analysis')" @click="refreshAnalysis"><RefreshCw :size="14" />刷新</button><span class="tag tag-ai">{{ analysisRange }}</span></article>
           <div class="metric-grid six compact"><MetricCard :icon="Activity" label="活跃率" :value="`${analysis.metrics?.active_rate || 0}%`" sub="近7天" /><MetricCard :icon="Clock" label="学习时长" :value="`${analysis.metrics?.study_hours || 0}h`" sub="期间" /><MetricCard :icon="Presentation" label="完成率" :value="`${analysis.metrics?.completion_rate || 0}%`" sub="课时" /><MetricCard :icon="MessageCircle" label="问答总量" :value="analysis.metrics?.qa_total || 0" sub="期间" /><MetricCard :icon="ClipboardList" label="平均分" :value="analysis.metrics?.average_score || 0" sub="/100" /><MetricCard :icon="AlertTriangle" label="薄弱点" :value="analysis.metrics?.weak_point_count || 0" sub="数量" :danger="(analysis.metrics?.weak_point_count || 0) > 0" /></div>
           <div class="analysis-grid two"><article class="panel-card"><div class="panel-head"><h2><Presentation :size="18" />课时完成率</h2></div><AdminChart type="hbar" :labels="lessonAnalysisLabels" :series="lessonAnalysisSeries" :height="260" /></article><article class="panel-card"><div class="panel-head"><h2><Clock :size="18" />学习时长</h2></div><AdminChart type="line" :labels="analysisTimeLabels" :series="analysisTimeSeries" :height="260" /></article></div>
-          <div class="analysis-grid knowledge"><article class="panel-card"><div class="panel-head"><h2><Layers :size="18" />章节掌握</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="260" /></article><article class="panel-card weak-list"><div class="panel-head weak-head"><div><h2><TrendingDown :size="18" />薄弱知识点</h2><small>{{ weakQuizStatus || '可从薄弱点生成待审核测验' }}</small></div><button class="btn btn-ai btn-sm weak-create-all" :data-loading="weakQuizGenerating && weakQuizGenerationMode === 'all'" :disabled="weakQuizGenerating || !(analysis.weak_points || []).length" @click="generateWeakQuiz()"><Sparkles :size="14" />{{ weakQuizGenerating && weakQuizGenerationMode === 'all' ? '整套生成中' : '生成整套测验' }}</button></div><div v-if="weakQuizGenerating" class="weak-generating"><span class="spinner"></span><span>{{ weakQuizStatus }}</span></div><TransitionGroup name="motion-list" tag="div" class="weak-row-list"><div v-for="(item, index) in analysis.weak_points || []" :key="item.knowledge_point" class="weak-row" :class="{ generating: weakQuizGeneratingTopic === item.knowledge_point }"><b>{{ rankNumber(index) }}</b><span>{{ item.knowledge_point }}</span><AppProgress :value="item.wrong_count" :max="weakMax" tone="danger" /><strong>{{ item.wrong_count }}</strong><button type="button" class="weak-point-action" :aria-label="`根据${item.knowledge_point}生成专项题`" :data-loading="weakQuizGeneratingTopic === item.knowledge_point" :disabled="weakQuizGenerating" @click="generateWeakQuiz(item)">{{ weakQuizGeneratingTopic === item.knowledge_point ? '专项生成中' : '生成专项题' }}</button></div></TransitionGroup><EmptyState v-if="!(analysis.weak_points || []).length" text="暂无薄弱点" /></article></div>
+          <div class="analysis-grid knowledge"><article class="panel-card"><div class="panel-head"><h2><Layers :size="18" />章节掌握</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="260" /></article><article class="panel-card weak-list"><div class="panel-head weak-head"><div><h2><TrendingDown :size="18" />薄弱知识点</h2><small>专项题生成与作答管理已移至薄弱题目页面</small></div><button class="btn btn-secondary btn-sm weak-create-all" @click="go('teacherWeakQuizzes')"><ClipboardList :size="14" />管理题目</button></div><TransitionGroup name="motion-list" tag="div" class="weak-row-list"><div v-for="(item, index) in analysis.weak_points || []" :key="item.knowledge_point" class="weak-row weak-row-readonly"><b>{{ rankNumber(index) }}</b><span>{{ item.knowledge_point }}</span><AppProgress :value="item.wrong_count" :max="weakMax" tone="danger" /><strong>{{ item.wrong_count }}</strong><em>错题数</em></div></TransitionGroup><EmptyState v-if="!(analysis.weak_points || []).length" text="暂无薄弱点" /></article></div>
           <article class="panel-card"><div class="panel-head"><h2><MessageCircle :size="18" />学生高频问题</h2><small>{{ analysisRange }}</small></div><div class="question-layout"><TransitionGroup name="cloud-list" tag="div" class="word-cloud"><span v-for="item in analysis.high_frequency_questions || []" :key="item.question" :style="{ fontSize: cloudSize(item.count) }">{{ item.question.slice(0, 12) }}</span></TransitionGroup><TransitionGroup name="motion-list" tag="div"><div v-for="(item, index) in analysis.high_frequency_questions || []" :key="item.question" class="question-row"><b>{{ rankPlain(index) }}</b><span>{{ item.question }}</span><strong>{{ item.count }}次</strong></div></TransitionGroup></div></article>
           <div class="analysis-grid three"><article class="panel-card"><div class="panel-head"><h2><ClipboardList :size="18" />成绩分布</h2></div><AdminChart type="bar" :labels="scoreLabels" :series="scoreSeries" :height="220" /></article><article class="panel-card"><div class="panel-head"><h2><CheckCircle :size="18" />测验完成</h2></div><AdminChart type="hbar" :labels="lessonAnalysisLabels" :series="lessonAnalysisSeries" :height="220" /></article><article class="panel-card"><div class="panel-head"><h2><XCircle :size="18" />错题分布</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="220" /></article></div>
           <article class="panel-card"><div class="panel-head"><h2><Users :size="18" />学生活跃度</h2><button class="btn btn-ghost btn-sm" :disabled="!filteredStudents.length" @click="batchRemind"><Bell :size="14" />批量提醒</button></div><div class="activity-layers"><LayerCard label="高度活跃" :value="analysis.student_layers?.high || 0" tone="success" /><LayerCard label="正常活跃" :value="analysis.student_layers?.normal || 0" /><LayerCard label="低活跃" :value="analysis.student_layers?.low || 0" tone="warning" /><LayerCard label="长期未活跃" :value="analysis.student_layers?.inactive || 0" tone="danger" /></div></article>
+        </template>
+      </section>
+
+      <section v-if="active === 'teacherWeakQuizzes'" key="teacherWeakQuizzes" class="teacher-content weak-quiz-page">
+        <CourseRequired v-if="!currentCourse" />
+        <template v-else>
+          <article class="ai-suggestion weak-quiz-hero" :class="{ thinking: weakQuizGenerating }">
+            <span><AlertTriangle :size="20" /></span>
+            <div><h2>薄弱题目管理</h2><p>按薄弱知识点生成多套专项测验，审核题目后发布，并追踪学生作答情况。</p></div>
+            <button class="btn btn-ai btn-sm" :data-loading="weakQuizGenerating && weakQuizGenerationMode === 'all'" :disabled="weakQuizGenerating || !weakQuizFormValid || !weakQuizPoints.length" @click="generateTeacherWeakQuiz()"><Sparkles :size="14" />生成综合测验</button>
+          </article>
+          <div class="metric-grid four compact"><MetricCard :icon="AlertTriangle" label="薄弱知识点" :value="weakQuizData.stats?.weak_point_count || 0" sub="当前课程" :danger="(weakQuizData.stats?.weak_point_count || 0) > 0" /><MetricCard :icon="XCircle" label="错题累计" :value="weakQuizData.stats?.wrong_count || 0" sub="学生错题" tone="warning" /><MetricCard :icon="ClipboardList" label="题目套数" :value="weakQuizData.stats?.quiz_set_count || 0" sub="已生成" tone="success" /><MetricCard :icon="CheckCircle" label="题型合计" :value="weakQuizTypeTotal" :sub="weakQuizFormValid ? '配置有效' : '需等于总题量'" :danger="!weakQuizFormValid" /></div>
+          <div class="weak-quiz-layout">
+            <aside class="panel-card weak-config-card">
+              <div class="panel-head rich-head"><div><h2><Settings :size="18" />生成设置</h2><small>一次生成一套测验，可重复生成多套</small></div></div>
+              <label>题目总数<input v-model.number="weakQuizForm.question_count" class="input" type="number" min="1" max="20" /></label>
+              <div class="weak-type-grid">
+                <label v-for="item in weakQuestionTypes" :key="item.value">{{ item.label }}<input v-model.number="weakQuizForm.question_type_counts[item.value]" class="input" type="number" min="0" max="20" /></label>
+              </div>
+              <div class="weak-type-status" :class="{ invalid: !weakQuizFormValid }"><strong>{{ weakQuizTypeTotal }}</strong><span>题型合计 / 总题量 {{ weakQuizForm.question_count }}</span></div>
+              <button class="btn btn-primary full" :data-loading="weakQuizGenerating && weakQuizGenerationMode === 'all'" :disabled="weakQuizGenerating || !weakQuizFormValid || !weakQuizPoints.length" @click="generateTeacherWeakQuiz()"><Sparkles :size="15" />按全部薄弱点生成</button>
+              <button class="btn btn-ghost full" :data-loading="isPending('load-weak-quizzes')" :disabled="isPending('load-weak-quizzes')" @click="loadWeakQuizzes(true)"><RefreshCw :size="15" />刷新列表</button>
+            </aside>
+            <section class="weak-quiz-main">
+              <article v-if="weakQuizAllSets.length" class="panel-card weak-set-section">
+                <div class="panel-head rich-head"><div><h2><ClipboardList :size="18" />综合测验</h2><small>覆盖全部薄弱知识点的测验套卷</small></div></div>
+                <div class="weak-set-grid">
+                  <button v-for="quiz in weakQuizAllSets" :key="quiz.id" type="button" class="weak-set-card" :class="{ active: weakQuizSelectedSetId === quiz.id }" @click="selectWeakQuizSet(quiz)">
+                    <strong>{{ quiz.title }}</strong><span class="tag" :class="statusClass(quiz.status)">{{ statusText(quiz.status) }}</span><small>{{ quiz.question_count }}题 · {{ quiz.attempt_count }}次作答 · 平均 {{ quiz.average_accuracy }}%</small>
+                  </button>
+                </div>
+              </article>
+              <TransitionGroup name="card-list" tag="div" class="weak-point-card-list">
+                <article v-for="(point, index) in weakQuizPoints" :key="point.knowledge_point_id" class="panel-card weak-point-card">
+                  <header>
+                    <b>{{ rankNumber(index) }}</b>
+                    <div><h2>{{ point.knowledge_point }}</h2><p>{{ point.description || '暂无知识点说明' }}</p></div>
+                    <span class="tag tag-danger">{{ point.wrong_count }} 错题</span>
+                    <button class="btn btn-secondary btn-sm" :data-loading="weakQuizGeneratingTopic === point.knowledge_point" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(point)"><Sparkles :size="14" />生成新套题</button>
+                  </header>
+                  <div v-if="point.quiz_sets?.length" class="weak-set-grid">
+                    <button v-for="quiz in point.quiz_sets" :key="quiz.id" type="button" class="weak-set-card" :class="{ active: weakQuizSelectedSetId === quiz.id }" @click="selectWeakQuizSet(quiz)">
+                      <strong>{{ quiz.title }}</strong><span class="tag" :class="statusClass(quiz.status)">{{ statusText(quiz.status) }}</span><small>{{ quiz.question_count }}题 · {{ quiz.attempt_count }}次作答 · 平均 {{ quiz.average_accuracy }}%</small>
+                    </button>
+                  </div>
+                  <div v-else class="weak-empty-line"><span>还没有为这个薄弱点生成题目</span><button class="link-btn" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(point)">立即生成</button></div>
+                </article>
+              </TransitionGroup>
+              <EmptyState v-if="!weakQuizPoints.length" text="暂无薄弱知识点" />
+            </section>
+            <aside class="panel-card weak-detail-card">
+              <div class="panel-head rich-head"><div><h2><Eye :size="18" />题目与作答</h2><small>{{ weakQuizAttemptDetail?.quiz?.title || '选择一套题查看详情' }}</small></div></div>
+              <template v-if="weakQuizAttemptDetail">
+                <div class="weak-detail-actions"><button class="btn btn-secondary btn-sm" @click="openWeakQuizEditor"><Eye :size="14" />查看题目</button><button v-if="weakQuizAttemptDetail.quiz?.status !== 'published'" class="btn btn-primary btn-sm" @click="openWeakQuizEditor"><Check :size="14" />审核发布</button></div>
+                <div class="weak-question-preview"><div v-for="(question, index) in weakQuizAttemptDetail.questions || []" :key="question.id"><b>{{ rankPlain(index) }}</b><span>{{ question.stem }}</span><em>{{ questionTypeText(question.question_type) }}</em></div></div>
+                <div class="weak-attempt-list">
+                  <article v-for="attempt in weakQuizAttemptDetail.attempts || []" :key="attempt.id" class="weak-attempt-row">
+                    <span class="avatar mini">{{ firstChar(attempt.student?.nickname) }}</span>
+                    <div><strong>{{ attempt.student?.nickname || '学生' }}</strong><small>{{ formatTime(attempt.submitted_at) }}</small></div>
+                    <b>{{ attempt.score }}/{{ attempt.total_score }}</b>
+                    <em>{{ attempt.correct_count }}/{{ attempt.answer_count }}</em>
+                    <div v-if="attempt.answers?.length" class="weak-answer-mini">
+                      <span v-for="(answer, index) in attempt.answers" :key="answer.id" :class="{ correct: answer.is_correct }">
+                        <b>{{ rankPlain(index) }}</b><strong>{{ answer.is_correct ? '正确' : '错误' }}</strong><small>{{ answer.user_answer ?? '未作答' }}</small>
+                      </span>
+                    </div>
+                  </article>
+                  <EmptyState v-if="!(weakQuizAttemptDetail.attempts || []).length" text="暂无学生作答" />
+                </div>
+              </template>
+              <EmptyState v-else text="请选择一套薄弱题目" />
+            </aside>
+          </div>
         </template>
       </section>
 
@@ -485,7 +559,7 @@ import { useRouter } from "vue-router";
 import {
   Activity, AlertCircle, AlertTriangle, ArrowLeft, BarChart2, Bell, BookOpen, Camera, Check, CheckCircle,
   ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Database, Download, Edit2, Eye, File,
-  FileEdit, FileText, FolderOpen, GripVertical, Grid2X2, HelpCircle, Home, IdCard, Image, Inbox, Layers, LayoutDashboard,
+  FileEdit, FileText, FolderOpen, GripVertical, Grid2X2, HelpCircle, Home, IdCard, Inbox, Layers, LayoutDashboard,
   Lock, LogOut, Mail, Maximize, MessageCircle, Pencil, Plus, PlusCircle, Presentation, RefreshCw,
   Save, Search, Settings, Share2, SkipBack, SkipForward, Sparkles, Trash2, TrendingDown, Upload, User, UserPlus, UserX,
   Users, Volume2, Wand2, X, XCircle, ZoomIn
@@ -575,6 +649,9 @@ const weakQuizGenerating = ref(false);
 const weakQuizGeneratingTopic = ref("");
 const weakQuizGenerationMode = ref<"all" | "single" | "">("");
 const weakQuizStatus = ref("");
+const weakQuizData = ref<any>({ stats: {}, weak_points: [], all_sets: [] });
+const weakQuizSelectedSetId = ref(0);
+const weakQuizAttemptDetail = ref<any | null>(null);
 const quizEditor = reactive({ id: 0, status: "", title: "", description: "", questions: [] as any[] });
 let freshChapterTimer = 0;
 let freshMaterialChapterTimer = 0;
@@ -585,6 +662,16 @@ const materialFilter = reactive({ keyword: "", type: "", status: "" });
 const lessonFilter = reactive({ keyword: "", chapter_id: 0, status: "" });
 const studentFilter = reactive({ keyword: "", progress: "", active: "" });
 const courseForm = reactive({ id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] as any[] });
+const weakQuizForm = reactive({
+  question_count: 5,
+  question_type_counts: {
+    single_choice: 2,
+    multiple_choice: 1,
+    judge: 1,
+    blank: 0,
+    short_answer: 1,
+  } as Record<string, number>,
+});
 const reminderForm = reactive({ title: "", message: "" });
 const profileForm = reactive({ nickname: props.user.nickname, organization: "", department: "", bio: props.user.bio || "" });
 const passwordForm = reactive({ old_password: "", new_password: "" });
@@ -592,7 +679,7 @@ const noticeSettings = reactive([{ key: "join", label: "学生加入课程", ena
 
 const palette = ["#121614", "#D94925", "#00B8D4", "#2E7D32", "#D9A05B", "#C62828"];
 const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-const pageTitleMap: Record<string, string> = { teacherDashboard: "工作台首页", teacherCourses: "我的课程", teacherCourseForm: "创建课程", teacherCourseHome: "课程主页", teacherMaterials: "资料管理", teacherPpt: "PPT 工作台", teacherLessons: "课时管理", teacherStudents: "学生管理", teacherAnalytics: "教学分析", teacherProfile: "个人中心" };
+const pageTitleMap: Record<string, string> = { teacherDashboard: "工作台首页", teacherCourses: "我的课程", teacherCourseForm: "创建课程", teacherCourseHome: "课程主页", teacherMaterials: "资料管理", teacherPpt: "PPT 工作台", teacherLessons: "课时管理", teacherStudents: "学生管理", teacherAnalytics: "教学分析", teacherWeakQuizzes: "薄弱题目", teacherProfile: "个人中心" };
 const courseStatusOptions = [{ label: "全部", value: "" }, { label: "进行中", value: "active" }, { label: "已停用", value: "inactive" }];
 const materialTypeOptions = [{ label: "全部", value: "" }, { label: "PPT", value: "pptx" }, { label: "PDF", value: "pdf" }, { label: "Word", value: "docx" }, { label: "TXT/Markdown", value: "txt" }];
 const materialStatusOptions = [{ label: "全部", value: "" }, { label: "已解析", value: "ready" }, { label: "解析中", value: "processing" }, { label: "解析失败", value: "failed" }];
@@ -602,6 +689,13 @@ const lessonStatusOptions = [{ label: "全部", value: "" }, { label: "已发布
 const lessonSortOptions = [{ label: "创建时间", value: "created" }, { label: "发布时间", value: "published" }, { label: "学习人数", value: "students" }];
 const studentProgressOptions = [{ label: "全部进度", value: "" }, { label: "未开始", value: "none" }, { label: "学习中", value: "learning" }, { label: "已完成", value: "done" }];
 const studentActiveOptions = [{ label: "全部状态", value: "" }, { label: "活跃", value: "active" }, { label: "近期不活跃", value: "inactive" }, { label: "长期未活跃", value: "long" }];
+const weakQuestionTypes = [
+  { label: "单选题", value: "single_choice" },
+  { label: "多选题", value: "multiple_choice" },
+  { label: "判断题", value: "judge" },
+  { label: "填空题", value: "blank" },
+  { label: "简答题", value: "short_answer" },
+];
 
 const currentCourse = computed(() => courses.value.find((course) => course.id === currentCourseId.value) || courses.value[0] || null);
 const pageTitle = computed(() => pageTitleMap[active.value] || "教师端");
@@ -705,6 +799,10 @@ const analysisTimeSeries = computed(() => [{ name: "分钟", data: (analysis.val
 const weakLabels = computed(() => (analysis.value.weak_points || []).map((item: any) => item.knowledge_point));
 const weakSeries = computed(() => [{ name: "错题", data: (analysis.value.weak_points || []).map((item: any) => item.wrong_count), color: "#EF4444" }]);
 const weakMax = computed(() => Math.max(1, ...(analysis.value.weak_points || []).map((item: any) => item.wrong_count || 0)));
+const weakQuizPoints = computed(() => weakQuizData.value.weak_points || []);
+const weakQuizAllSets = computed(() => weakQuizData.value.all_sets || []);
+const weakQuizTypeTotal = computed(() => weakQuestionTypes.reduce((sum, item) => sum + Number(weakQuizForm.question_type_counts[item.value] || 0), 0));
+const weakQuizFormValid = computed(() => Number(weakQuizForm.question_count || 0) > 0 && weakQuizTypeTotal.value === Number(weakQuizForm.question_count || 0));
 const scoreLabels = computed(() => (analysis.value.score_distribution || []).map((item: any) => item.range));
 const scoreSeries = computed(() => [{ name: "人数", data: (analysis.value.score_distribution || []).map((item: any) => item.count), color: "#06B6D4" }]);
 const registeredDays = computed(() => props.user.created_at ? Math.max(1, Math.floor((Date.now() - new Date(props.user.created_at).getTime()) / 86400000)) : 1);
@@ -791,6 +889,7 @@ async function loadActive() {
     if (active.value === "teacherLessons") await loadLessons();
     if (active.value === "teacherStudents") await loadStudents();
     if (active.value === "teacherAnalytics") await loadAnalysis();
+    if (active.value === "teacherWeakQuizzes") await loadWeakQuizzes();
     if (active.value === "teacherProfile") await loadTeacherProfile();
   } finally {
     pageLoading.value = false;
@@ -1060,45 +1159,82 @@ async function publishQuizEditor() {
     if (quiz) {
       quizEditor.status = quiz.status;
       quizEditorOpen.value = false;
-      await loadAnalysis(true);
+      if (active.value === "teacherWeakQuizzes") await loadWeakQuizzes(true);
+      else await loadAnalysis(true);
     }
   } finally {
     quizEditorPublishing.value = false;
   }
 }
-async function generateWeakQuiz(item?: any) {
+async function loadWeakQuizzes(force = false) {
+  if (!currentCourse.value) return;
+  if (!force && weakQuizData.value.course_id === currentCourse.value.id && weakQuizData.value.loaded) return;
+  await withAction("load-weak-quizzes", async () => {
+    const data = await run<any>(() => api.get("/learning/teacher/weak-quizzes", { course_id: currentCourse.value!.id }));
+    weakQuizData.value = { ...(data || { stats: {}, weak_points: [], all_sets: [] }), course_id: currentCourse.value!.id, loaded: true };
+    if (weakQuizSelectedSetId.value) {
+      const exists = [...weakQuizAllSets.value, ...weakQuizPoints.value.flatMap((point: any) => point.quiz_sets || [])].some((quiz: any) => quiz.id === weakQuizSelectedSetId.value);
+      if (!exists) {
+        weakQuizSelectedSetId.value = 0;
+        weakQuizAttemptDetail.value = null;
+      }
+    }
+  });
+}
+function weakQuizTypeCountsPayload() {
+  const counts: Record<string, number> = {};
+  for (const item of weakQuestionTypes) {
+    const count = Number(weakQuizForm.question_type_counts[item.value] || 0);
+    if (count > 0) counts[item.value] = count;
+  }
+  return counts;
+}
+async function generateTeacherWeakQuiz(point?: any) {
   if (!currentCourse.value) return emit("notice", "warning", "请先选择课程");
+  if (!weakQuizFormValid.value) return emit("notice", "warning", "题型数量合计必须等于总题量");
   if (weakQuizGenerating.value) return emit("notice", "info", "正在生成测验，请稍候");
-  const weakRows = analysis.value.weak_points || [];
-  if (!item && !weakRows.length) return emit("notice", "warning", "暂无薄弱知识点，无法生成综合练习");
-  const topic = item?.knowledge_point || weakRows.slice(0, 3).map((row: any) => row.knowledge_point).filter(Boolean).join("、") || "薄弱知识点";
-  const mode: "all" | "single" = item ? "single" : "all";
-  const title = item ? `${topic}专项测验` : "薄弱知识点综合测验";
+  const mode: "all" | "single" = point ? "single" : "all";
+  const title = point ? `${point.knowledge_point}薄弱点专项测验` : "薄弱知识点综合测验";
   weakQuizGenerating.value = true;
-  weakQuizGeneratingTopic.value = item?.knowledge_point || "";
+  weakQuizGeneratingTopic.value = point?.knowledge_point || "";
   weakQuizGenerationMode.value = mode;
-  weakQuizStatus.value = item ? `正在围绕“${topic}”生成待审核测验...` : "正在根据全部薄弱知识点生成综合测验...";
+  weakQuizStatus.value = point ? `正在生成“${point.knowledge_point}”专项题...` : "正在生成全部薄弱知识点综合测验...";
   emit("notice", "info", weakQuizStatus.value);
   try {
-    const quiz = await run<any>(() => api.post("/learning/quizzes/generate", {
+    const quiz = await run<any>(() => api.post("/learning/teacher/weak-quizzes/generate", {
       course_id: currentCourse.value!.id,
+      weak_point_id: point?.knowledge_point_id || undefined,
+      all_weak_points: !point,
       title,
-      quiz_type: "course",
-      question_count: item ? 5 : 8,
-      prefer_weak_points: true,
+      question_count: Number(weakQuizForm.question_count || 0),
+      question_type_counts: weakQuizTypeCountsPayload(),
     }));
     if (!quiz) return;
-    weakQuizStatus.value = "测验已生成，正在打开编辑器...";
+    await loadWeakQuizzes(true);
+    await selectWeakQuizSet(quiz);
     const detail = await run<any>(() => api.get(`/learning/quizzes/${quiz.id}`));
-    if (!detail) return;
-    openQuizEditor(detail);
-    emit("notice", "success", "测验已生成，请审核题目后发布给学生");
+    if (detail) openQuizEditor(detail);
+    emit("notice", "success", "薄弱题目已生成，请审核后发布");
   } finally {
     weakQuizGenerating.value = false;
     weakQuizGeneratingTopic.value = "";
     weakQuizGenerationMode.value = "";
     weakQuizStatus.value = "";
   }
+}
+async function selectWeakQuizSet(quiz: any) {
+  if (!quiz?.id) return;
+  weakQuizSelectedSetId.value = quiz.id;
+  weakQuizAttemptDetail.value = await run<any>(() => api.get(`/learning/teacher/weak-quizzes/${quiz.id}/attempts`));
+}
+async function openWeakQuizEditor() {
+  const quizId = weakQuizAttemptDetail.value?.quiz?.id || weakQuizSelectedSetId.value;
+  if (!quizId) return;
+  const detail = await run<any>(() => api.get(`/learning/quizzes/${quizId}`));
+  if (detail) openQuizEditor(detail);
+}
+function questionTypeText(type?: string) {
+  return weakQuestionTypes.find((item) => item.value === type)?.label || String(type || "-");
 }
 async function refreshMaterials() { await withAction("filter-materials", loadMaterials); }
 async function openUploadModal() {
@@ -1358,6 +1494,10 @@ function relativeTime(value?: string | null) { if (!value) return "从未"; cons
 function statusClass(status?: string) { if (["ready", "published", "active", "success"].includes(String(status))) return "tag-success"; if (["pending", "processing", "review"].includes(String(status))) return "tag-warning"; if (["failed", "inactive", "disabled"].includes(String(status))) return "tag-danger"; return ""; }
 function statusText(status?: string) { return { ready: "已解析", published: "已发布", active: "进行中", inactive: "已停用", pending: "待处理", processing: "处理中", failed: "失败", draft: "草稿", review: "待发布", closed: "已关闭" }[String(status)] || String(status || "-"); }
 function courseColor(id: number) { return `linear-gradient(135deg, ${palette[id % palette.length]}, #0F172A)`; }
+function courseCoverText(course?: any) {
+  const text = String(course?.name || "课程名称").replace(/\s+/g, "");
+  return text.slice(0, 4) || "课程";
+}
 function courseCoverStyle(course: any) {
   if (course?.cover_url) return { backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.38)), url(${course.cover_url})` };
   return { background: course?.cover_color || courseColor(Number(course?.id || 1)) };

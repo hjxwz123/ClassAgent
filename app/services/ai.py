@@ -378,6 +378,33 @@ def _normalize_quiz_question_type(value: Any) -> str:
     return "short_answer"
 
 
+_QUIZ_GENERATION_TYPES = {"single_choice", "multiple_choice", "judge", "blank", "short_answer"}
+
+
+def _select_quiz_questions_by_type_counts(
+    questions: list[dict],
+    type_counts: dict[str, int] | None,
+) -> tuple[list[dict], dict[str, int]]:
+    if not type_counts:
+        return questions, {}
+    selected: list[dict] = []
+    missing: dict[str, int] = {}
+    used_indexes: set[int] = set()
+    for question_type, expected_count in type_counts.items():
+        picked = 0
+        for index, question in enumerate(questions):
+            if index in used_indexes or question.get("question_type") != question_type:
+                continue
+            selected.append(question)
+            used_indexes.add(index)
+            picked += 1
+            if picked >= expected_count:
+                break
+        if picked < expected_count:
+            missing[question_type] = expected_count - picked
+    return selected, missing
+
+
 def _normalize_quiz_questions_from_payload(payload: Any, *, count: int, seen_stems: set[str] | None = None) -> list[dict]:
     if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
         raise bad_request("AI 出题失败：模型未返回有效 JSON 题目")
@@ -421,12 +448,14 @@ def _normalize_quiz_questions_from_payload(payload: Any, *, count: int, seen_ste
             values = reference_answer.get("value") if isinstance(reference_answer, dict) else None
             if not isinstance(values, list) or not values:
                 continue
-        if question_type == "short_answer":
+        if question_type in {"short_answer", "blank"}:
             if not _valid_short_answer_stem(clean_stem):
+                if question_type == "short_answer":
+                    continue
+            min_keywords = 1 if question_type == "blank" else 2
+            if "keywords" not in reference_answer or len(reference_answer["keywords"]) < min_keywords:
                 continue
-            if "keywords" not in reference_answer or len(reference_answer["keywords"]) < 2:
-                continue
-        if question_type not in {"single_choice", "multiple_choice", "judge", "short_answer"}:
+        if question_type not in _QUIZ_GENERATION_TYPES:
             continue
         normalized.append(
             {
@@ -1141,28 +1170,53 @@ class AIService:
             "common_mistake": f"常见错误：对 {name} 的适用范围理解不清。",
         }
 
-    def generate_quiz_questions(self, *, topic: str, source_text: str, count: int, db: Session | None = None) -> list[dict]:
+    def generate_quiz_questions(
+        self,
+        *,
+        topic: str,
+        source_text: str,
+        count: int,
+        type_counts: dict[str, int] | None = None,
+        db: Session | None = None,
+    ) -> list[dict]:
         clean_source = sanitize_quiz_source_text(source_text)
         if not clean_source.strip():
             raise bad_request("课程资料清洗后没有足够文本，无法调用 AI 出题")
+        normalized_type_counts = {
+            key: int(value)
+            for key, value in (type_counts or {}).items()
+            if key in _QUIZ_GENERATION_TYPES and int(value or 0) > 0
+        }
+        if normalized_type_counts and sum(normalized_type_counts.values()) != count:
+            raise bad_request("题型数量合计必须等于总题量")
         candidate_count = min(20, max(count + 4, math.ceil(count * 1.8)))
         source_limit = max(1800, min(5200, 360 * max(candidate_count, 1)))
         completion_limit = max(2800, min(6500, 340 * max(candidate_count, 1) + 1900))
+        type_instruction = (
+            "题型分布必须严格满足："
+            + "、".join(f"{key} {value} 道" for key, value in normalized_type_counts.items())
+            + "；"
+            if normalized_type_counts
+            else ""
+        )
         base_prompt = (
             f"考查主题：{topic}\n课程资料：{clean_source[:source_limit]}\n"
             f"目标题目数量：{count}\n候选题数量：{candidate_count}\n"
             "要求：只能依据课程资料出题；候选题可以多于目标数量，便于教师从有效题中筛选；"
+            f"{type_instruction}"
             "题干必须包含资料中的具体概念、定义、公式、案例或事实；"
             "禁止把“章节练习、薄弱点章节练习、错题重练、测验”等练习名称当作考点；"
             "禁止把第几页、图片名、URL、OSS域名、文件hash、文件扩展名当作考点或选项；"
-            "选择题必须有 4 个选项，判断题必须只有“正确/错误”两个选项；"
-            "question_type 只能使用 single_choice、judge、short_answer；"
+            "单选题和多选题必须有 4 个选项，判断题必须只有“正确/错误”两个选项；"
+            "question_type 只能使用 single_choice、multiple_choice、judge、blank、short_answer；"
             "reference_answer 对选择题和判断题必须使用 {\"value\": 0} 这种 0 基选项下标；"
+            "多选题 reference_answer 使用 {\"value\":[0,2]} 这种 0 基选项下标数组；"
+            "填空题和简答题 reference_answer 必须使用 {\"keywords\":[\"关键词\"]}；"
             "直接事实题（例如问“何时、哪个阶段、是什么、哪一项”）必须生成选择题或判断题，不能生成简答题；"
             "简答题只能用于“简述、说明、解释、分析、比较、作用、关系、步骤”等需要展开回答的题，"
             "reference_answer 必须使用 {\"keywords\":[\"关键词\"]}；"
             "如果资料不足以出题，返回 {\"items\":[]}。\n"
-            "返回格式：{\"items\":[{\"question_type\":\"single_choice|judge|short_answer\","
+            "返回格式：{\"items\":[{\"question_type\":\"single_choice|multiple_choice|judge|blank|short_answer\","
             "\"stem\":\"\",\"options\":[\"\"],\"reference_answer\":{},\"explanation\":\"\",\"score\":10,\"difficulty\":\"standard\"}]}"
         )
         content = self._call_chat(
@@ -1182,11 +1236,19 @@ class AIService:
         except Exception as exc:
             raise bad_request("AI 出题失败：模型未返回合法 JSON 题目") from exc
         seen_stems: set[str] = set()
-        normalized = _normalize_quiz_questions_from_payload(payload, count=count, seen_stems=seen_stems)
-        if len(normalized) >= count:
+        normalized = _normalize_quiz_questions_from_payload(
+            payload,
+            count=candidate_count if normalized_type_counts else count,
+            seen_stems=seen_stems,
+        )
+        if normalized_type_counts:
+            selected, missing_by_type = _select_quiz_questions_by_type_counts(normalized, normalized_type_counts)
+            if not missing_by_type:
+                return selected[:count]
+        elif len(normalized) >= count:
             return normalized[:count]
 
-        missing = count - len(normalized)
+        missing = sum(missing_by_type.values()) if normalized_type_counts else count - len(normalized)
         retry_count = min(20, max(missing + 4, math.ceil(missing * 2.4)))
         retry_content = self._call_chat(
             db,
@@ -1196,10 +1258,11 @@ class AIService:
                 f"考查主题：{topic}\n课程资料：{clean_source[:source_limit]}\n"
                 f"已有有效题干：{[item['stem'] for item in normalized]}\n"
                 f"还缺少 {missing} 道有效题，请再生成 {retry_count} 道不同候选题。\n"
+                f"{'缺少题型：' + '、'.join(f'{key} {value} 道' for key, value in missing_by_type.items()) + '。' if normalized_type_counts else ''}"
                 "要求同前：只能依据课程资料出题；题干避开已有题干；"
-                "question_type 只能使用 single_choice、judge、short_answer；"
-                "选择题 4 个选项，判断题使用正确/错误，reference_answer 使用 0 基下标或 keywords。"
-                "返回格式：{\"items\":[{\"question_type\":\"single_choice|judge|short_answer\","
+                "question_type 只能使用 single_choice、multiple_choice、judge、blank、short_answer；"
+                "单选/多选 4 个选项，判断题使用正确/错误，reference_answer 使用 0 基下标、下标数组或 keywords。"
+                "返回格式：{\"items\":[{\"question_type\":\"single_choice|multiple_choice|judge|blank|short_answer\","
                 "\"stem\":\"\",\"options\":[\"\"],\"reference_answer\":{},\"explanation\":\"\",\"score\":10,\"difficulty\":\"standard\"}]}"
             ),
             json_mode=False,
@@ -1212,9 +1275,22 @@ class AIService:
                 retry_payload = _parse_json_payload(retry_content)
             except Exception as exc:
                 raise bad_request("AI 出题失败：模型未返回合法 JSON 题目") from exc
-            normalized.extend(_normalize_quiz_questions_from_payload(retry_payload, count=missing, seen_stems=seen_stems))
-            if len(normalized) >= count:
+            normalized.extend(
+                _normalize_quiz_questions_from_payload(
+                    retry_payload,
+                    count=retry_count if normalized_type_counts else missing,
+                    seen_stems=seen_stems,
+                )
+            )
+            if normalized_type_counts:
+                selected, missing_by_type = _select_quiz_questions_by_type_counts(normalized, normalized_type_counts)
+                if not missing_by_type:
+                    return selected[:count]
+            elif len(normalized) >= count:
                 return normalized[:count]
+        if normalized_type_counts and missing_by_type:
+            detail = "、".join(f"{key} 缺 {value} 道" for key, value in missing_by_type.items())
+            raise bad_request(f"AI 出题失败：模型返回的有效题型不足（{detail}），请重新生成")
         raise bad_request(f"AI 出题失败：模型返回的有效题目不足 {count} 道，请重新生成")
 
     def score_subjective_answer(

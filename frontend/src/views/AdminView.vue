@@ -1,28 +1,26 @@
 <template>
-  <section class="admin-shell" :class="{ collapsed, 'sidebar-scrollable': sidebarScrollable }">
+  <section class="admin-shell" :class="{ collapsed, 'sidebar-collapsed': collapsed, 'sidebar-scrollable': sidebarScrollable }">
     <aside class="admin-sidebar">
-      <div class="sidebar-header">
-        <button class="menu-btn" @click="collapsed = !collapsed"><Menu :size="20" />{{ collapsed ? '展开' : '收起' }}</button>
-        <span class="logo-mark"><Sparkles :size="17" /></span>
-        <strong class="logo-text">系统管理后台</strong>
-      </div>
-
-      <nav ref="sidebarNavRef" class="sidebar-nav">
+      <button
+        type="button"
+        class="teacher-sidebar-toggle"
+        :aria-label="collapsed ? '展开侧边栏' : '折叠侧边栏'"
+        :title="collapsed ? '展开侧边栏' : '折叠侧边栏'"
+        @click="collapsed = !collapsed"
+      >
+        <ChevronRight v-if="collapsed" :size="17" />
+        <ChevronLeft v-else :size="17" />
+        <span>{{ collapsed ? '展开' : '收起' }}</span>
+      </button>
+      <nav ref="sidebarNavRef">
         <div v-for="group in navGroups" :key="group.title" class="nav-group">
-          <span class="nav-title">{{ group.title }}</span>
-          <button v-for="item in group.items" :key="item.key" class="nav-link" :class="{ active: active === item.key }" @click="go(item.key)">
+          <span>{{ group.title }}</span>
+          <button v-for="item in group.items" :key="item.key" :class="{ active: active === item.key }" @click="go(item.key)">
             <component :is="item.icon" :size="18" />
             <span>{{ item.label }}</span>
           </button>
         </div>
       </nav>
-
-      <div class="sidebar-footer">
-        <div class="side-user">
-          <span class="avatar">管</span>
-          <div><strong>{{ user.nickname }}</strong><span class="tag tag-ai">Super Admin</span></div>
-        </div>
-      </div>
     </aside>
 
     <header class="admin-topbar">
@@ -55,6 +53,7 @@
           <button v-if="active === 'adminDashboard'" class="btn btn-ghost" @click="go('adminLogs')">日志</button>
           <button v-if="active === 'adminUsers'" class="btn btn-primary" @click="adminModalOpen = true"><Plus :size="16" />创建</button>
           <button v-if="active === 'adminCourses'" class="btn btn-danger" :disabled="!selectedCourses.length" @click="batchDeactivateCourses">下架</button>
+          <button v-if="active === 'adminCourses'" class="btn btn-secondary" :disabled="!selectedCourses.length" @click="batchActivateCourses">上架</button>
           <button v-if="active === 'adminMaterials'" class="btn btn-danger" :disabled="!selectedMaterials.length" @click="batchDeleteMaterials">删除</button>
           <button v-if="active === 'adminModels'" class="btn btn-primary" @click="saveAllModels"><Save :size="16" />保存</button>
           <button v-if="active === 'adminServices'" class="btn btn-secondary" @click="testAllServices"><RefreshCw :size="16" />测试</button>
@@ -138,7 +137,9 @@
                       <span v-for="course in (item.courses || []).slice(0, 2)" :key="`${course.relation}-${course.id}`" class="course-chip" :title="course.name">
                         <BookOpen :size="13" />{{ course.name }}<em>{{ course.role }}</em>
                       </span>
-                      <span v-if="item.course_count > 2" class="course-more">+{{ item.course_count - 2 }}</span>
+                      <button v-if="item.course_count > 2" type="button" class="course-more" :title="`查看全部 ${item.course_count} 门课程`" @click="openUserCoursesModal(item)">
+                        <MoreHorizontal :size="15" />
+                      </button>
                     </div>
                     <span v-else class="muted-cell">暂无</span>
                   </td>
@@ -177,7 +178,12 @@
                   <td><span class="avatar mini">{{ firstChar(item.teacher_name) }}</span>{{ item.teacher_name || item.teacher_id }}</td>
                   <td>{{ item.term }}</td><td><Users :size="14" />{{ item.student_count || 0 }}</td><td><FileText :size="14" />{{ item.material_count || 0 }}</td>
                   <td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td><td>{{ shortDate(item.created_at) }}</td>
-                  <td class="row-actions"><button class="icon-action" @click="openCourseDetail(item.id)"><Eye :size="15" />详情</button><button class="icon-action" @click="openTakeover(item)"><UserCheck :size="15" />接管</button><button class="icon-action danger" @click="deactivateCourse(item.id)"><Ban :size="15" />下架</button></td>
+                  <td class="row-actions">
+                    <button class="icon-action" @click="openCourseDetail(item.id)"><Eye :size="15" />详情</button>
+                    <button class="icon-action" @click="openTakeover(item)"><UserCheck :size="15" />接管</button>
+                    <button v-if="item.status === 'active'" class="icon-action danger" @click="deactivateCourse(item.id)"><Ban :size="15" />下架</button>
+                    <button v-else class="icon-action" @click="activateCourse(item.id)"><CheckCircle :size="15" />上架</button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -187,7 +193,11 @@
               <div><strong>{{ item.name }}</strong><span class="tag mono">{{ item.course_code }}</span></div>
               <p>{{ item.teacher_name }} · {{ item.term }}</p>
               <div class="mini-metrics"><span><Users :size="14" />{{ item.student_count || 0 }}</span><span><FileText :size="14" />{{ item.material_count || 0 }}</span></div>
-              <button class="icon-action" @click="openCourseDetail(item.id)"><Eye :size="15" />详情</button>
+              <div class="course-card-actions">
+                <button class="icon-action" @click="openCourseDetail(item.id)"><Eye :size="15" />详情</button>
+                <button v-if="item.status === 'active'" class="icon-action danger" @click="deactivateCourse(item.id)"><Ban :size="15" />下架</button>
+                <button v-else class="icon-action" @click="activateCourse(item.id)"><CheckCircle :size="15" />上架</button>
+              </div>
             </article>
           </div>
         </section>
@@ -484,8 +494,37 @@
       <aside v-if="courseDrawer" class="drawer wide">
         <div class="drawer-head"><h2>{{ courseDrawer.course.name }}</h2><span class="tag" :class="statusClass(courseDrawer.course.status)">{{ statusText(courseDrawer.course.status) }}</span><button class="icon-action" @click="courseDrawer = null"><X :size="16" />关闭</button></div>
         <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="课程码" :value="courseDrawer.course.course_code" /><InfoRow label="教师" :value="String(courseDrawer.course.teacher_id)" /><InfoRow label="学生" :value="String(courseDrawer.student_count)" /><InfoRow label="资料" :value="String(courseDrawer.material_count)" /></section><section><h3>学生列表</h3><div v-for="item in courseDrawer.students" :key="item.membership_id" class="row-card"><span>{{ item.user.nickname }}</span><span class="tag">{{ item.user.email }}</span></div></section><section><h3>课程资料</h3><div v-for="item in courseDrawer.materials" :key="item.id" class="row-card"><span>{{ item.title }}</span><button class="link-btn" @click="deleteMaterial(item.id)">删除</button></div></section><section><h3>课时列表</h3><div v-for="item in courseDrawer.lessons" :key="item.id" class="row-card"><span>{{ item.title }}</span><span class="tag">{{ item.status }}</span></div></section></div>
-        <div class="drawer-foot"><input v-model.number="takeoverTeacherId" class="input" type="number" placeholder="教师ID" /><button class="btn btn-secondary" @click="takeoverCourse(courseDrawer.course.id)">接管</button><button class="btn btn-danger" @click="deactivateCourse(courseDrawer.course.id)">下架</button></div>
+        <div class="drawer-foot">
+          <input v-model.number="takeoverTeacherId" class="input" type="number" placeholder="教师ID" />
+          <button class="btn btn-secondary" @click="takeoverCourse(courseDrawer.course.id)">接管</button>
+          <button v-if="courseDrawer.course.status === 'active'" class="btn btn-danger" @click="deactivateCourse(courseDrawer.course.id)">下架</button>
+          <button v-else class="btn btn-primary" @click="activateCourse(courseDrawer.course.id)">上架</button>
+        </div>
       </aside>
+    </Transition>
+
+    <Transition name="modal-pop">
+      <div v-if="userCoursesModal" class="modal-mask">
+        <article class="modal user-courses-modal">
+          <div class="modal-head">
+            <BookOpen :size="20" />
+            <h2>{{ userCoursesModal.user.nickname }}的所属课程</h2>
+            <button class="icon-action" @click="userCoursesModal = null"><X :size="16" />关闭</button>
+          </div>
+          <div class="course-modal-list">
+            <div v-for="item in userCoursesModal.courses" :key="`${item.relation}-${item.id}`" class="course-modal-row">
+              <span class="course-modal-icon"><BookOpen :size="16" /></span>
+              <div>
+                <strong>{{ item.name }}</strong>
+                <small>{{ item.term }} · {{ item.course_code }} · {{ item.role }}</small>
+              </div>
+              <span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span>
+            </div>
+            <EmptyState v-if="!userCoursesModal.courses.length" text="暂无关联课程" />
+          </div>
+          <footer><button class="btn btn-secondary" @click="userCoursesModal = null">关闭</button></footer>
+        </article>
+      </div>
     </Transition>
 
     <Transition name="modal-pop">
@@ -550,8 +589,8 @@ import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, rea
 import { useRouter } from "vue-router";
 import {
   Activity, AlertCircle, AlertTriangle, Ban, BarChart2, Bell, BookOpen, CheckCircle, CheckSquare, ChevronDown,
-  ChevronRight, Clock, Cloud, Database, Download, Eye, File, FileCheck, FileText, GraduationCap, Grid2X2,
-  Inbox, KeyRound, Layers, LayoutDashboard, List, LogOut, Menu, Pencil, Plus, RefreshCw,
+  ChevronLeft, ChevronRight, Clock, Cloud, Database, Download, Eye, File, FileCheck, FileText, GraduationCap, Grid2X2,
+  Inbox, KeyRound, Layers, LayoutDashboard, List, LogOut, MoreHorizontal, Pencil, Plus, RefreshCw,
   Save, Scan, Search, Server, Settings, Shield, ShieldCheck, Sparkles, Trash2, Upload, User, UserCheck,
   Users, Volume2, X, XCircle
 } from "lucide-vue-next";
@@ -570,7 +609,7 @@ const router = useRouter();
 
 type ServiceKey = "oss" | "ocr" | "doc_parser" | "tts" | "email";
 
-const collapsed = ref(false);
+const collapsed = ref(localStorage.getItem("admin_sidebar_collapsed") !== "0");
 const userMenuOpen = ref(false);
 const sidebarNavRef = ref<HTMLElement | null>(null);
 const userMenuRef = ref<HTMLElement | null>(null);
@@ -599,6 +638,7 @@ const backups = ref<any[]>([]);
 const backupSummary = ref<any>({});
 const userDrawer = ref<any | null>(null);
 const courseDrawer = ref<any | null>(null);
+const userCoursesModal = ref<any | null>(null);
 const previewItem = ref<any | null>(null);
 const logDetail = ref<any | null>(null);
 const adminModalOpen = ref(false);
@@ -1027,6 +1067,13 @@ async function createAdmin() {
   }
 }
 async function openUserDetail(id: number) { userDrawer.value = await run(() => api.get(`/admin/users/${id}`)); }
+async function openUserCoursesModal(item: any) {
+  const detail = await run<any>(() => api.get(`/admin/users/${item.id}`));
+  userCoursesModal.value = {
+    user: detail?.user || item,
+    courses: detail?.courses || item.courses || [],
+  };
+}
 function generateTempPassword() {
   const random = Math.random().toString(36).slice(2, 8);
   return `Agent${random}9`;
@@ -1118,8 +1165,18 @@ function clearUserFilter() { Object.assign(userFilter, { keyword: "", role: "", 
 async function openCourseDetail(id: number) { courseDrawer.value = await run(() => api.get(`/admin/courses/${id}`)); }
 function openTakeover(item: any) { courseDrawer.value = { course: item, student_count: item.student_count, material_count: item.material_count, students: [], materials: [], lessons: [] }; }
 async function takeoverCourse(id: number) { if (!takeoverTeacherId.value) return; await run(() => api.post(`/admin/courses/${id}/takeover`, { teacher_id: takeoverTeacherId.value }), "已接管"); await loadCourses(); }
-async function deactivateCourse(id: number) { await run(() => api.post(`/admin/courses/${id}/deactivate`), "已下架"); await loadCourses(); }
+async function deactivateCourse(id: number) {
+  await run(() => api.post(`/admin/courses/${id}/deactivate`), "已下架");
+  if (courseDrawer.value?.course?.id === id) courseDrawer.value.course.status = "inactive";
+  await loadCourses();
+}
+async function activateCourse(id: number) {
+  await run(() => api.post(`/admin/courses/${id}/activate`), "已上架");
+  if (courseDrawer.value?.course?.id === id) courseDrawer.value.course.status = "active";
+  await loadCourses();
+}
 async function batchDeactivateCourses() { for (const id of selectedCourses.value) await deactivateCourse(id); selectedCourses.value = []; }
+async function batchActivateCourses() { for (const id of selectedCourses.value) await activateCourse(id); selectedCourses.value = []; }
 function toggleAllCourses(value: boolean | Event) { selectedCourses.value = checkedValue(value) ? filteredCourses.value.map((item) => item.id) : []; }
 function clearCourseFilter() { Object.assign(courseFilter, { keyword: "", status: "" }); courseTerm.value = ""; loadCourses(); }
 function previewMaterial(item: any) { previewItem.value = item; }
@@ -1191,7 +1248,10 @@ async function deleteBackup(id: number) { await run(() => api.delete(`/admin/bac
 async function restoreBackupAction() { if (restoreConfirm.value !== "CONFIRM" || !restoreBackupId.value) return; await run(() => api.post(`/admin/backups/${restoreBackupId.value}/restore`), "已恢复"); restoreConfirm.value = ""; }
 
 watch(() => props.pageKey, (key) => { active.value = key || "adminDashboard"; loadActive(); updateSidebarOverflow(); });
-watch(collapsed, updateSidebarOverflow);
+watch(collapsed, (value) => {
+  localStorage.setItem("admin_sidebar_collapsed", value ? "1" : "0");
+  updateSidebarOverflow();
+});
 watch(logType, loadLogs);
 watch(adminModalOpen, (open) => { if (open) adminFormError.value = ""; });
 watch(autoRefresh, (enabled) => {
@@ -1206,6 +1266,7 @@ function onAdminDocumentKeydown(event: KeyboardEvent) {
   userMenuOpen.value = false;
   userDrawer.value = null;
   courseDrawer.value = null;
+  userCoursesModal.value = null;
   adminModalOpen.value = false;
   resetPasswordModalOpen.value = false;
   resetPasswordResult.value = "";

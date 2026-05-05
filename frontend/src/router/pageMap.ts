@@ -32,6 +32,7 @@ export const routeByPage: Record<string, string> = {
   teacherLessons: "/teacher/lessons",
   teacherStudents: "/teacher/students",
   teacherAnalytics: "/teacher/analytics",
+  teacherWeakQuizzes: "/teacher/weak-quizzes",
   teacherProfile: "/teacher/profile",
   adminDashboard: "/admin",
   adminUsers: "/admin/users",

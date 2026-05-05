@@ -22,6 +22,7 @@ from app.schemas.learning import (
     StudyPlanResponse,
     StudyPlanTaskResponse,
     TaskCheckinRequest,
+    WeakQuizGenerateRequest,
     WeakPointResponse,
     WrongQuestionResponse,
 )
@@ -30,12 +31,15 @@ from app.services.learning import (
     create_study_plan,
     extract_reference_answer_value,
     generate_quiz,
+    generate_teacher_weak_quiz,
     generate_wrong_book_practice,
     get_knowledge_points,
     get_learning_records,
     get_plan_tasks,
     get_quiz_detail,
+    get_teacher_quiz_attempts,
     get_weak_points,
+    list_teacher_weak_quizzes,
     list_quizzes,
     list_study_plans,
     list_wrong_questions,
@@ -116,6 +120,37 @@ def list_quizzes_endpoint(
 ):
     items = [QuizResponse.model_validate(item).model_dump(mode="json") for item in list_quizzes(db, course_id=course_id, user=user)]
     return success_response(data=items, request_id=request.state.request_id)
+
+
+@router.get("/teacher/weak-quizzes")
+def list_teacher_weak_quizzes_endpoint(
+    request: Request,
+    course_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    return success_response(data=list_teacher_weak_quizzes(db, course_id=course_id, user=user), request_id=request.state.request_id)
+
+
+@router.post("/teacher/weak-quizzes/generate")
+def generate_teacher_weak_quiz_endpoint(
+    payload: WeakQuizGenerateRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    quiz = generate_teacher_weak_quiz(db, user=user, payload=payload)
+    return success_response(data=QuizResponse.model_validate(quiz).model_dump(mode="json"), request_id=request.state.request_id)
+
+
+@router.get("/teacher/weak-quizzes/{quiz_id}/attempts")
+def get_teacher_weak_quiz_attempts_endpoint(
+    quiz_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    return success_response(data=get_teacher_quiz_attempts(db, quiz_id=quiz_id, user=user), request_id=request.state.request_id)
 
 
 @router.post("/quizzes/{quiz_id}/publish")

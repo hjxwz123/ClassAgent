@@ -19,5 +19,6 @@ export const teacherRoutes: RouteRecordRaw[] = [
   teacherRoute("/teacher/lessons", "teacherLessons"),
   teacherRoute("/teacher/students", "teacherStudents"),
   teacherRoute("/teacher/analytics", "teacherAnalytics"),
+  teacherRoute("/teacher/weak-quizzes", "teacherWeakQuizzes"),
   teacherRoute("/teacher/profile", "teacherProfile")
 ];

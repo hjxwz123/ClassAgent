@@ -21,6 +21,8 @@
     <div ref="trackRef" class="scroll-track">
       <div ref="stageRef" class="home-stage">
         <section ref="sceneBlackboardRef" class="scene-blackboard">
+          <canvas ref="formulaCanvasRef" class="formula-writing-canvas" aria-hidden="true"></canvas>
+
           <div class="formula-corner left">
             <svg width="250" height="250" viewBox="0 0 250 250" class="chalk-svg" aria-hidden="true">
               <circle cx="100" cy="100" r="50" class="draw-path" />
@@ -83,12 +85,14 @@
         <div id="book-section" ref="sceneBookRef" class="scene-book">
           <div class="book">
             <div class="paper-texture"></div>
+            <div class="book-spine"></div>
 
             <div class="book-base-left">
               <div class="book-final-left">
                 <div class="book-icon-circle"><BookOpen :size="34" /></div>
                 <h2>知识的重构</h2>
-                <p>The Next Generation of Learning.</p>
+                <p>The Next Generation of Learning</p>
+                <span class="page-footer-number left">Preface / IV</span>
               </div>
             </div>
 
@@ -146,16 +150,17 @@
               <div class="page-front">
                 <div ref="shadow1FrontRef" class="page-shadow-front"></div>
                 <span class="page-no right">01</span>
-                <div class="chapter-label">Chapter I. The Past</div>
-                <h3>曾经，学习是一座孤岛。</h3>
+                <div class="chapter-label">CHAPTER I. THE PAST</div>
+                <h3>曾经，<br />学习是一座孤岛。</h3>
                 <p class="book-copy">
                   面对厚重的印刷讲义，跳跃的公式步骤总让人在深夜抓狂。不会做的错题，即使看了答案依然一知半解。在题海中盲目地刷着重复的卷子，却不知真正的薄弱点藏在哪里。
                 </p>
                 <div class="wrong-paper">
-                  <div class="tape"></div>
-                  <div class="wrong-text">“这道几何题到底怎么做...”</div>
-                  <div class="wrong-rule"></div>
-                  <div class="wrong-x">X</div>
+                  <p class="wrong-text">“这道几何题到底怎么做...”</p>
+                  <div class="wrong-footer">
+                    <span>Student Reflection Card</span>
+                    <div class="wrong-x">X</div>
+                  </div>
                 </div>
               </div>
 
@@ -237,6 +242,7 @@ const trackRef = ref<HTMLElement | null>(null);
 const stageRef = ref<HTMLElement | null>(null);
 const sceneBlackboardRef = ref<HTMLElement | null>(null);
 const sceneBookRef = ref<HTMLElement | null>(null);
+const formulaCanvasRef = ref<HTMLCanvasElement | null>(null);
 const page1Ref = ref<HTMLElement | null>(null);
 const page2Ref = ref<HTMLElement | null>(null);
 const shadow1FrontRef = ref<HTMLElement | null>(null);
@@ -245,6 +251,166 @@ const shadow2FrontRef = ref<HTMLElement | null>(null);
 const shadow2BackRef = ref<HTMLElement | null>(null);
 
 let frameId = 0;
+let formulaFrameId = 0;
+let formulaCycleStart = 0;
+const homeActiveClass = "product-home-active";
+
+const dynamicFormulas = [
+  { text: "lim(x→0)  sin x / x = 1", x: 0.66, y: 0.82, size: 30, rotate: -4 },
+  { text: "F = m · a", x: 0.68, y: 0.26, size: 42, rotate: 4 },
+  { text: "a² + b² = c²", x: 0.16, y: 0.72, size: 38, rotate: 3 },
+  { text: "∫ f(x) dx = F(x) + C", x: 0.56, y: 0.68, size: 34, rotate: -4 },
+  { text: "E = hν = mc²", x: 0.62, y: 0.42, size: 36, rotate: 2 },
+  { text: "pV = nRT", x: 0.18, y: 0.46, size: 40, rotate: -3 },
+];
+
+function prepareFormulaCanvas(canvas: HTMLCanvasElement) {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const width = Math.max(1, Math.floor(rect.width));
+  const height = Math.max(1, Math.floor(rect.height));
+  const targetWidth = Math.floor(width * dpr);
+  const targetHeight = Math.floor(height * dpr);
+  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+  }
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.clearRect(0, 0, width, height);
+  return { context, width, height };
+}
+
+function formulaFont(size: number) {
+  return `${size}px "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai", "华文行楷", "PingFang SC", serif`;
+}
+
+function drawChalkBackground(context: CanvasRenderingContext2D, width: number, height: number, now: number) {
+  context.save();
+  context.globalAlpha = 0.055;
+  context.strokeStyle = "rgba(244,244,240,.13)";
+  context.lineWidth = 1;
+  for (let index = 0; index < 7; index += 1) {
+    const y = ((index * 117 + (now / 70)) % (height + 120)) - 60;
+    context.beginPath();
+    context.moveTo(width * 0.08, y);
+    context.quadraticCurveTo(width * 0.44, y + 12, width * 0.9, y - 6);
+    context.stroke();
+  }
+  context.globalAlpha = 0.035;
+  context.fillStyle = "#f4f4f0";
+  context.font = formulaFont(Math.max(16, Math.min(24, width * 0.022)));
+  dynamicFormulas.forEach((formula, index) => {
+    const x = width * formula.x;
+    const y = height * formula.y + Math.sin(now / 2600 + index) * 4;
+    context.save();
+    context.translate(x, y);
+    context.rotate((formula.rotate * Math.PI) / 180);
+    context.fillText(formula.text, 0, 0);
+    context.restore();
+  });
+  context.restore();
+}
+
+function drawWritingFormula(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  now: number,
+) {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const cycleMs = reduceMotion ? 1 : 7600;
+  const elapsed = reduceMotion ? 0 : now - formulaCycleStart;
+  const cycleIndex = Math.floor(elapsed / cycleMs) % dynamicFormulas.length;
+  const cycleTime = reduceMotion ? 3200 : elapsed % cycleMs;
+  const writeMs = 3100;
+  const holdMs = 1500;
+  const eraseMs = 1900;
+  const formula = dynamicFormulas[cycleIndex];
+  const text = Array.from(formula.text);
+  const size = Math.max(24, Math.min(formula.size, width * 0.05));
+  const x = width * formula.x;
+  const y = height * formula.y;
+  const rotate = (formula.rotate * Math.PI) / 180;
+  const writeProgress = reduceMotion ? 1 : Math.min(1, cycleTime / writeMs);
+  const eraseProgress = reduceMotion || cycleTime < writeMs + holdMs ? 0 : Math.min(1, (cycleTime - writeMs - holdMs) / eraseMs);
+  const visibleCount = eraseProgress > 0 ? text.length : Math.max(1, Math.ceil(text.length * writeProgress));
+
+  context.save();
+  context.translate(x, y);
+  context.rotate(rotate);
+  context.font = formulaFont(size);
+  context.textBaseline = "middle";
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  let cursor = 0;
+  for (let index = 0; index < visibleCount; index += 1) {
+    const char = text[index];
+    const jitterX = Math.sin(index * 1.7 + now / 110) * 0.35;
+    const jitterY = Math.cos(index * 1.3 + now / 130) * 0.45;
+    context.globalAlpha = 0.46;
+    context.fillStyle = "rgba(244,244,240,.82)";
+    context.fillText(char, cursor + jitterX, jitterY);
+    context.globalAlpha = 0.08;
+    context.fillText(char, cursor + jitterX + 1.1, jitterY + 0.8);
+    cursor += context.measureText(char).width;
+    if (!reduceMotion && index === visibleCount - 1 && eraseProgress === 0 && writeProgress < 1) {
+      context.save();
+      context.globalAlpha = 0.32;
+      context.strokeStyle = "rgba(244,244,240,.58)";
+      context.beginPath();
+      context.moveTo(cursor + 8, -size * 0.35);
+      context.lineTo(cursor + 18, size * 0.25);
+      context.stroke();
+      context.restore();
+    }
+  }
+
+  if (eraseProgress > 0) {
+    const easedEraseProgress = 1 - Math.pow(1 - eraseProgress, 3);
+    const eraseWidth = (cursor + size * 1.2) * easedEraseProgress;
+    context.save();
+    context.globalCompositeOperation = "destination-out";
+    context.fillStyle = "rgba(0,0,0,1)";
+    context.fillRect(-size * 0.72, -size * 1.08, eraseWidth, size * 2.16);
+    context.restore();
+
+    context.save();
+    context.globalAlpha = 0.88;
+    context.fillStyle = "#121614";
+    context.fillRect(-size * 0.72, -size * 1.08, eraseWidth, size * 2.16);
+    context.globalAlpha = 0.24 * (1 - eraseProgress * 0.45);
+    context.fillStyle = "rgba(244,244,240,.72)";
+    context.fillRect(eraseWidth - size * 0.5, -size * 0.82, size * 0.34, size * 1.64);
+    context.globalAlpha = 0.18 * (1 - eraseProgress);
+    for (let index = 0; index < 18; index += 1) {
+      const dustX = eraseWidth - size * 0.28 + Math.sin(index * 2.1) * size * 0.46;
+      const dustY = -size * 0.72 + ((index * 17) % Math.max(1, size * 1.44));
+      context.fillRect(dustX, dustY, 1.4, 1.4);
+    }
+    context.restore();
+  }
+
+  context.restore();
+}
+
+function renderFormulaCanvas(now: number) {
+  const canvas = formulaCanvasRef.value;
+  if (!canvas) {
+    formulaFrameId = requestAnimationFrame(renderFormulaCanvas);
+    return;
+  }
+  const prepared = prepareFormulaCanvas(canvas);
+  if (!prepared) {
+    formulaFrameId = requestAnimationFrame(renderFormulaCanvas);
+    return;
+  }
+  drawChalkBackground(prepared.context, prepared.width, prepared.height, now);
+  drawWritingFormula(prepared.context, prepared.width, prepared.height, now);
+  formulaFrameId = requestAnimationFrame(renderFormulaCanvas);
+}
 
 function handleHeroMouseMove(event: MouseEvent) {
   const heroText = heroTextRef.value;
@@ -340,15 +506,36 @@ function renderScrollScene() {
 }
 
 onMounted(() => {
+  document.documentElement.classList.add(homeActiveClass);
+  document.body.classList.add(homeActiveClass);
+  document.getElementById("app")?.classList.add(homeActiveClass);
+  formulaCycleStart = performance.now();
+  formulaFrameId = requestAnimationFrame(renderFormulaCanvas);
   frameId = requestAnimationFrame(renderScrollScene);
 });
 
 onBeforeUnmount(() => {
+  document.documentElement.classList.remove(homeActiveClass);
+  document.body.classList.remove(homeActiveClass);
+  document.getElementById("app")?.classList.remove(homeActiveClass);
   if (frameId) cancelAnimationFrame(frameId);
+  if (formulaFrameId) cancelAnimationFrame(formulaFrameId);
 });
 </script>
 
 <style scoped>
+:global(html.product-home-active),
+:global(body.product-home-active),
+:global(#app.product-home-active) {
+  min-height: 100%;
+  background: #121614 !important;
+  overscroll-behavior-y: none;
+}
+
+:global(body.product-home-active) {
+  overflow-x: hidden;
+}
+
 /* ====== 全局 & 字体变量 ====== */
 .product-home {
   --ca-font-chalk: "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai",
@@ -358,6 +545,12 @@ onBeforeUnmount(() => {
     "Microsoft YaHei", "Helvetica Neue", sans-serif;
   --ca-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
     monospace;
+  --shared-title-left: max(24px, calc((100vw - 1040px) / 2));
+  --shared-title-top: clamp(190px, calc(50vh - 190px), 290px);
+  --home-logo-left: max(24px, calc((100vw - 1280px) / 2 + 24px));
+  --home-logo-top: 16px;
+  --logo-to-title-x: calc(var(--shared-title-left) - var(--home-logo-left));
+  --logo-to-title-y: calc(var(--shared-title-top) - var(--home-logo-top));
 
   min-height: 100vh;
   overflow-x: hidden;
@@ -414,8 +607,11 @@ onBeforeUnmount(() => {
 }
 .product-logo {
   color: #f4f4f0;
+  font-family: var(--ca-font-chalk);
   font-size: 20px;
-  font-weight: 800;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: .9;
 }
 .product-logo span {
   color: #00e5ff;
@@ -468,6 +664,7 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 2;
   height: 800vh;
+  background: #121614;
 }
 .home-stage {
   position: fixed;
@@ -481,6 +678,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   perspective: 1800px;
+  background: #121614;
 }
 
 /* ====== 场景 1：黑板 ====== */
@@ -494,11 +692,22 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding-top: 40px;
   transform-origin: center;
+  background: #121614;
   /* 已删去导致 3D 渲染黑屏的 will-change */
+}
+.formula-writing-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  opacity: .62;
+  pointer-events: none;
 }
 .formula-corner {
   position: absolute;
-  opacity: 0.3;
+  z-index: 2;
+  opacity: 0.14;
   pointer-events: none;
 }
 .formula-corner.left {
@@ -678,7 +887,7 @@ onBeforeUnmount(() => {
   background: linear-gradient(to bottom, #8c948f, transparent);
 }
 
-/* ====== 场景 2：3D 书籍 ====== */
+/* ====== 场景 2：图书展示 ====== */
 .scene-book {
   position: absolute;
   inset: 0;
@@ -692,21 +901,29 @@ onBeforeUnmount(() => {
   perspective: 1800px;
   padding: 92px 24px 48px;
   box-sizing: border-box;
+  background: #121614;
   /* 已删去导致 3D 渲染黑屏的 will-change */
 }
 .book {
+  --book-paper: #fcfaf2;
+  --book-ink: #2c2c2c;
+  --book-muted: #4a4a4a;
+  --book-accent: #a63d2d;
+
   isolation: isolate;
   position: relative;
-  width: 90vw;
-  max-width: 1000px;
-  height: 60vh;
-  max-height: min(650px, calc(100svh - 160px));
-  min-height: 420px;
-  border-radius: 4px;
-  background: #f4f1ea;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(0, 0, 0, 0.4);
+  width: min(1100px, calc(100vw - 56px));
+  height: min(720px, calc(100svh - 168px));
+  min-height: 520px;
+  border-radius: 4px 8px 8px 4px;
+  background: var(--book-paper);
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.7),
+    0 18px 36px -18px rgba(0, 0, 0, 0.5), 0 5px 0 -1px #e5e0d5,
+    0 5px 0 0 #d1ccc0, 0 10px 0 -2px #e5e0d5,
+    0 10px 0 -1px #d1ccc0, 0 15px 20px rgba(0, 0, 0, 0.3);
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
+  animation: book-float 6s ease-in-out infinite;
 }
 .book::before {
   content: "";
@@ -714,12 +931,38 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, #f4f1ea 0 49.6%, #d1cbb5 49.6% 50.4%, #f4f1ea 50.4% 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0 49.2%,
+    rgba(0, 0, 0, 0.08) 49.2% 49.8%,
+    rgba(255, 255, 255, 0.35) 49.8% 50.2%,
+    rgba(0, 0, 0, 0.08) 50.2% 50.8%,
+    rgba(0, 0, 0, 0) 50.8% 100%
+  );
+  pointer-events: none;
+}
+.book-spine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  z-index: 10;
+  width: 60px;
+  pointer-events: none;
+  transform: translateX(-50%) translateZ(4px);
+  background: linear-gradient(
+    to right,
+    rgba(0, 0, 0, 0.12) 0%,
+    rgba(0, 0, 0, 0.05) 15%,
+    rgba(255, 255, 255, 0.4) 50%,
+    rgba(0, 0, 0, 0.05) 85%,
+    rgba(0, 0, 0, 0.12) 100%
+  );
 }
 .paper-texture {
   position: absolute;
   inset: 0;
-  z-index: 8;
+  z-index: 12;
   pointer-events: none;
   background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="1.5" numOctaves="2" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noise)" opacity="0.03"/%3E%3C/svg%3E');
 }
@@ -735,104 +978,112 @@ onBeforeUnmount(() => {
   z-index: 1;
   width: 50%;
   overflow: hidden;
-  background: #f4f1ea;
+  background: var(--book-paper);
+  color: var(--book-ink);
 }
 .book-base-left {
   left: 0;
   border-radius: 4px 0 0 4px;
-  box-shadow: inset -20px 0 40px rgba(0, 0, 0, 0.06), -1px 1px 0 #e6e2d6,
-    -2px 2px 0 #d1cbb5, -3px 3px 0 #d1cbb5;
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: inset -28px 0 48px rgba(0, 0, 0, 0.07);
 }
 .book-base-right {
   right: 0;
   border-radius: 0 4px 4px 0;
-  box-shadow: inset 20px 0 40px rgba(0, 0, 0, 0.06), 1px 1px 0 #e6e2d6,
-    2px 2px 0 #d1cbb5, 3px 3px 0 #d1cbb5;
+  box-shadow: inset 28px 0 48px rgba(0, 0, 0, 0.07);
 }
 
-/* 封底左 */
 .book-final-left {
   position: absolute;
   inset: 0;
-  padding: 48px;
-  opacity: 0.4;
+  padding: 80px 70px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   font-family: var(--ca-font-serif);
+  color: var(--book-ink);
 }
 .book-icon-circle {
-  width: 64px;
-  height: 64px;
+  width: 96px;
+  height: 96px;
   display: grid;
   place-items: center;
-  border: 1px solid #2c2b29;
+  border: 2px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  margin-bottom: 16px;
-  color: #2c2b29;
+  margin-bottom: 48px;
+  color: var(--book-ink);
+  opacity: 0.42;
+}
+.book-icon-circle svg {
+  width: 42px;
+  height: 42px;
 }
 .book-final-left h2 {
-  margin: 0 0 8px;
-  font-size: 24px;
+  margin: 0 0 16px;
+  color: #1a1a1a;
+  font-size: 30px;
   font-weight: 700;
-  color: #2c2b29;
+  letter-spacing: 0.18em;
 }
 .book-final-left p {
   margin: 0;
-  font-size: 14px;
+  color: #9a9a9a;
   font-family: var(--ca-font-sans);
-  color: #2c2b29;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
 }
 
-/* 封底右 */
 .book-final-right {
   position: absolute;
   inset: 0;
-  padding: 40px 64px;
+  padding: 80px 70px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   font-family: var(--ca-font-serif);
+  color: var(--book-ink);
 }
 .book-final-right .page-label {
   position: absolute;
-  top: 32px;
-  right: 32px;
-  color: #9ca3af;
+  top: 40px;
+  right: 40px;
+  color: #999;
   font-family: var(--ca-font-mono);
   font-size: 12px;
 }
 .book-final-right h2 {
-  margin: 0 0 24px;
-  font-size: 36px;
+  margin: 0 0 32px;
+  color: #1a1a1a;
+  font-size: 42px;
   font-weight: 900;
-  color: #2c2b29;
+  line-height: 1.2;
 }
 .book-final-right > p {
-  margin: 0 0 40px;
-  font-family: var(--ca-font-sans);
-  font-size: 15px;
-  color: #4b5563;
-  line-height: 1.625;
+  margin: 0 0 48px;
+  color: var(--book-muted);
+  font-family: var(--ca-font-serif);
+  font-size: 17px;
+  line-height: 1.8;
   text-align: justify;
 }
 .book-final-right footer {
   margin-top: auto;
-  border-top: 1px solid #d1d5db;
+  border-top: 1px solid rgba(166, 61, 45, 0.18);
   padding-top: 24px;
 }
 .book-final-right footer p {
   margin: 0 0 16px;
-  color: #6b7280;
+  color: #777;
   font-family: var(--ca-font-sans);
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  font-size: 11px;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 .bounce-arrow {
-  color: #2c2b29;
+  color: var(--book-ink);
   animation: bounce-down 1.4s infinite;
 }
 
@@ -841,7 +1092,7 @@ onBeforeUnmount(() => {
   left: 50%;
   width: 50%;
   z-index: 3;
-  border-radius: 0 4px 4px 0;
+  border-radius: 0 8px 8px 0;
   transform-origin: left center;
   transform-style: preserve-3d;
   -webkit-transform-style: preserve-3d;
@@ -860,9 +1111,11 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #f4f1ea;
-  color: #2c2b29;
-  padding: 40px 64px;
+  display: flex;
+  flex-direction: column;
+  background: var(--book-paper);
+  color: var(--book-ink);
+  padding: 80px 70px;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   transform-style: preserve-3d;
@@ -877,16 +1130,28 @@ onBeforeUnmount(() => {
 }
 .page-no {
   position: absolute;
-  top: 32px;
-  color: #9ca3af;
-  font-family: var(--ca-font-mono);
-  font-size: 12px;
+  bottom: 40px;
+  color: #999;
+  font-family: var(--ca-font-serif);
+  font-size: 14px;
+  font-style: italic;
 }
 .page-no.right {
-  right: 32px;
+  right: 40px;
 }
 .page-no.left {
-  left: 32px;
+  left: 40px;
+}
+.page-footer-number {
+  position: absolute;
+  bottom: 40px;
+  color: #999;
+  font-family: var(--ca-font-serif);
+  font-size: 14px;
+  font-style: italic;
+}
+.page-footer-number.left {
+  left: 40px;
 }
 .page-shadow-front,
 .page-shadow-back {
@@ -896,71 +1161,83 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-/* 翻页 1 内容 */
 .chapter-label {
-  margin-bottom: 24px;
-  color: #c23a22;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.2em;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+  color: var(--book-accent);
+  font-family: var(--ca-font-serif);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
   text-transform: uppercase;
 }
+.chapter-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(166, 61, 45, 0.2);
+}
 .book-page h3 {
-  margin: 0 0 24px;
+  margin: 0 0 40px;
+  color: #1a1a1a;
   font-family: var(--ca-font-serif);
-  font-size: 30px;
+  font-size: clamp(34px, 3.1vw, 48px);
   font-weight: 900;
+  line-height: 1.2;
 }
 .book-copy {
   margin: 0;
-  color: #4b5563;
+  color: var(--book-muted);
   font-family: var(--ca-font-serif);
-  font-size: 15px;
-  line-height: 2;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  line-height: 1.8;
   text-align: justify;
-  text-indent: 2rem;
 }
 .wrong-paper {
   position: relative;
-  margin-top: 32px;
-  padding: 24px;
-  border: 1px solid #e5e7eb;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transform: rotate(1deg);
-}
-.tape {
-  position: absolute;
-  top: -12px;
-  left: 50%;
-  width: 32px;
-  height: 12px;
-  background: rgba(209, 213, 219, 0.5);
-  transform: translateX(-50%) rotate(-2deg);
+  margin-top: auto;
+  border-left: 4px solid var(--book-accent);
+  border-radius: 2px;
+  background: #ffffff;
+  padding: 30px;
+  box-shadow: 2px 5px 15px rgba(0, 0, 0, 0.05);
+  transform: rotate(-1deg);
 }
 .wrong-text {
-  color: #6b7280;
-  font-family: var(--ca-font-chalk);
-  font-size: 20px;
+  margin: 0;
+  color: #666;
+  font-family: var(--ca-font-serif);
+  font-size: 18px;
+  font-style: italic;
 }
-.wrong-rule {
-  width: 100%;
-  height: 80px;
-  margin-top: 8px;
-  border-bottom: 2px dashed #d1d5db;
+.wrong-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+  border-top: 1px dashed #e5e7eb;
+  padding-top: 14px;
+}
+.wrong-footer span {
+  color: #c8c8c8;
+  font-family: var(--ca-font-sans);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .wrong-x {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  color: #c23a22;
-  font-family: var(--ca-font-chalk);
-  font-size: 48px;
-  font-weight: normal;
-  opacity: 0.7;
+  color: #7f1d1d;
+  font-family: var(--ca-font-sans);
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 0.6;
 }
 
-/* 翻页 1 背面 */
 .turn-hint {
   height: 100%;
   display: flex;
@@ -969,7 +1246,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   text-align: center;
   opacity: 0.3;
-  color: #2c2b29;
+  color: var(--book-ink);
 }
 .turn-hint strong {
   font-family: var(--ca-font-serif);
@@ -977,40 +1254,39 @@ onBeforeUnmount(() => {
   margin-top: 16px;
 }
 
-/* 翻页 2 正面 */
 .living-book-title {
-  margin-top: 16px;
+  margin-top: 0;
   border-left: 4px solid #00e5ff;
-  padding-left: 16px;
+  padding-left: 18px;
 }
 .paper-note {
   position: relative;
-  margin-bottom: 24px;
+  margin: auto 0 24px;
   border: 1px solid #e5e7eb;
-  border-radius: 4px;
-  background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  padding: 24px;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 2px 5px 15px rgba(0, 0, 0, 0.05);
+  padding: 30px;
   font-family: var(--ca-font-serif);
-  font-size: 15px;
-  color: #2c2b29;
-  line-height: 2;
+  font-size: 17px;
+  color: var(--book-ink);
+  line-height: 1.8;
   text-align: justify;
 }
 .formula-span {
   display: inline-block;
   margin: 8px 0;
   padding: 0 8px;
-  border: 1px solid #f3f4f6;
-  background: #f9fafb;
+  border: 1px solid rgba(166, 61, 45, 0.1);
+  background: #fcfaf2;
   font-family: var(--ca-font-mono);
   font-size: 18px;
 }
 .ai-sticker {
   position: absolute;
-  bottom: -24px;
-  left: -24px;
-  width: 110%;
+  bottom: -28px;
+  left: -20px;
+  width: calc(100% + 40px);
   border-radius: 4px;
   background: #0a1118;
   color: white;
@@ -1036,10 +1312,9 @@ onBeforeUnmount(() => {
   line-height: 1.625;
 }
 
-/* 翻页 2 背面 */
 .dark-page {
-  background: #1b1d1c;
-  color: #f4f4f0;
+  background: var(--book-paper);
+  color: var(--book-ink);
 }
 .data-network {
   height: 100%;
@@ -1048,17 +1323,18 @@ onBeforeUnmount(() => {
   justify-content: center;
 }
 .data-network h3 {
-  color: #f4f4f0;
-  font-size: 24px;
+  color: #1a1a1a;
+  font-family: var(--ca-font-serif);
+  font-size: 34px;
   font-weight: 900;
   margin-bottom: 24px;
 }
 .data-network p {
   margin: 0 0 32px;
-  color: #9ca3af;
-  font-family: var(--ca-font-sans);
-  font-size: 14px;
-  line-height: 1.625;
+  color: var(--book-muted);
+  font-family: var(--ca-font-serif);
+  font-size: 17px;
+  line-height: 1.8;
 }
 .radar-demo {
   position: relative;
@@ -1068,14 +1344,14 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(166, 61, 45, 0.12);
+  border-radius: 2px;
+  background: #ffffff;
 }
 .radar-demo svg {
   width: 96px;
   height: 96px;
-  opacity: 0.5;
+  opacity: 0.7;
   stroke: #00e5ff;
   fill: rgba(0, 229, 255, 0.2);
 }
@@ -1272,6 +1548,158 @@ onBeforeUnmount(() => {
     transform: translateY(8px);
   }
 }
+@keyframes book-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* ====== /auth 转场：公式收向左侧，左上标题下落承接登录页 ====== */
+.product-home.route-home-auth-leave-active,
+.product-home.route-home-auth-leave-active .scroll-track,
+.product-home.route-home-auth-leave-active .home-stage,
+.product-home.route-home-auth-leave-active .scene-blackboard {
+  background: transparent;
+}
+.product-home.route-home-auth-leave-active .formula-corner.left {
+  animation: home-leave-corner-left 940ms cubic-bezier(.55, .06, .68, .19) forwards;
+}
+.product-home.route-home-auth-leave-active .formula-corner.right {
+  animation: home-leave-corner-right 940ms cubic-bezier(.55, .06, .68, .19) forwards;
+}
+.product-home.route-home-auth-leave-active .classic-quote {
+  animation: home-leave-quote 720ms cubic-bezier(.55, .06, .68, .19) forwards;
+}
+.product-home.route-home-auth-leave-active .hero-center {
+  animation: home-leave-hero 760ms cubic-bezier(.55, .06, .68, .19) forwards;
+}
+.product-home.route-home-auth-leave-active .formula-writing-canvas {
+  animation: home-leave-canvas 760ms cubic-bezier(.55, .06, .68, .19) forwards;
+}
+.product-home.route-home-auth-leave-active .product-nav {
+  animation: home-leave-nav-surface 620ms cubic-bezier(.55, .06, .68, .19) forwards;
+}
+.product-home.route-home-auth-leave-active .product-nav-links,
+.product-home.route-home-auth-leave-active .product-nav-actions {
+  animation: home-leave-nav-items 520ms cubic-bezier(.55, .06, .68, .19) forwards;
+}
+.product-home.route-home-auth-leave-active .product-logo {
+  transform-origin: left center;
+  animation: home-logo-to-auth-title 940ms cubic-bezier(.22, .61, .36, 1) forwards;
+}
+.product-home.route-home-auth-leave-active .product-logo span {
+  animation: home-logo-dot-out 220ms ease-out forwards;
+}
+.product-home.route-auth-home-enter-active .formula-corner.left {
+  animation: home-enter-corner-left 760ms cubic-bezier(.22, .61, .36, 1) both;
+}
+.product-home.route-auth-home-enter-active .formula-corner.right {
+  animation: home-enter-corner-right 760ms cubic-bezier(.22, .61, .36, 1) both;
+}
+.product-home.route-auth-home-enter-active .classic-quote {
+  animation: home-enter-quote 760ms cubic-bezier(.22, .61, .36, 1) both;
+}
+.product-home.route-auth-home-enter-active .hero-center {
+  animation: home-enter-hero 760ms cubic-bezier(.22, .61, .36, 1) both;
+}
+.product-home.route-auth-home-enter-active .hero-copy,
+.product-home.route-auth-home-enter-active .hero-actions,
+.product-home.route-auth-home-enter-active .scroll-hint {
+  opacity: 1;
+  animation: none;
+}
+.product-home.route-auth-home-enter-active .formula-writing-canvas {
+  animation: home-enter-canvas 760ms cubic-bezier(.22, .61, .36, 1) both;
+}
+.product-home.route-auth-home-enter-active .product-nav {
+  animation: home-enter-nav-surface 620ms cubic-bezier(.22, .61, .36, 1) both;
+}
+.product-home.route-auth-home-enter-active .product-nav-links,
+.product-home.route-auth-home-enter-active .product-nav-actions {
+  animation: home-enter-nav-items 620ms cubic-bezier(.22, .61, .36, 1) both;
+}
+.product-home.route-auth-home-enter-active .product-logo {
+  transform-origin: left center;
+  animation: home-auth-title-to-logo 940ms cubic-bezier(.22, .61, .36, 1) both;
+}
+.product-home.route-auth-home-enter-active .product-logo span {
+  animation: home-logo-dot-in 220ms ease-out 720ms both;
+}
+
+@keyframes home-leave-corner-left {
+  0% { transform: translate(0, 0) rotate(0); opacity: .14; }
+  60% { opacity: .12; }
+  100% { transform: translate(calc(-100% - 12vw), 72px) rotate(-16deg); opacity: 0; }
+}
+@keyframes home-enter-corner-left {
+  from { transform: translate(calc(-100% - 12vw), 72px) rotate(-16deg); opacity: 0; }
+  to { transform: translate(0, 0) rotate(0); opacity: .14; }
+}
+@keyframes home-leave-corner-right {
+  0% { transform: translate(0, 0) rotate(0); opacity: .14; }
+  60% { opacity: .12; }
+  100% { transform: translate(calc(-100vw - 100%), 48px) rotate(14deg); opacity: 0; }
+}
+@keyframes home-enter-corner-right {
+  from { transform: translate(calc(-100vw - 100%), 48px) rotate(14deg); opacity: 0; }
+  to { transform: translate(0, 0) rotate(0); opacity: .14; }
+}
+@keyframes home-leave-quote {
+  to { transform: translateX(-110px); opacity: 0; }
+}
+@keyframes home-enter-quote {
+  from { transform: translateX(-110px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes home-leave-hero {
+  to { transform: translateY(-22px) scale(.94); opacity: 0; }
+}
+@keyframes home-enter-hero {
+  from { transform: translateY(-22px) scale(.94); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes home-leave-canvas {
+  to { transform: translateX(-28vw) scale(.94); opacity: .34; }
+}
+@keyframes home-enter-canvas {
+  from { transform: translateX(-28vw) scale(.94); opacity: .34; }
+  to { transform: translateX(0) scale(1); opacity: .62; }
+}
+@keyframes home-leave-nav-surface {
+  to { border-bottom-color: transparent; background: rgba(18, 22, 20, 0); backdrop-filter: blur(0); }
+}
+@keyframes home-enter-nav-surface {
+  from { border-bottom-color: transparent; background: rgba(18, 22, 20, 0); backdrop-filter: blur(0); }
+  to { border-bottom-color: rgba(244, 244, 240, 0.05); background: rgba(18, 22, 20, 0.8); backdrop-filter: blur(16px); }
+}
+@keyframes home-leave-nav-items {
+  to { opacity: 0; transform: translateY(-12px); }
+}
+@keyframes home-enter-nav-items {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes home-logo-to-auth-title {
+  0% { transform: translate(0, 0); font-size: 20px; opacity: 1; }
+  78% { transform: translate(var(--logo-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 1; }
+  100% { transform: translate(var(--logo-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 1; }
+}
+@keyframes home-auth-title-to-logo {
+  0% { transform: translate(var(--logo-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 0; }
+  84% { transform: translate(var(--logo-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 0; }
+  100% { transform: translate(0, 0); font-size: 20px; opacity: 1; }
+}
+@keyframes home-logo-dot-out {
+  to { opacity: 0; }
+}
+@keyframes home-logo-dot-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 /* ====== 响应式 ====== */
 @media (min-width: 640px) {
@@ -1303,18 +1731,50 @@ onBeforeUnmount(() => {
   .role-grid {
     grid-template-columns: 1fr;
   }
+  .book {
+    width: min(920px, calc(100vw - 32px));
+    height: min(640px, calc(100svh - 148px));
+    min-height: 460px;
+  }
+  .book-spine {
+    width: 48px;
+  }
+  .book-final-left,
+  .book-final-right,
   .page-front,
   .page-back {
-    padding: 40px 28px;
+    padding: 48px 34px;
   }
-  .book-final-right {
-    padding: 32px 24px;
+  .book-icon-circle {
+    width: 72px;
+    height: 72px;
+    margin-bottom: 28px;
   }
+  .book-icon-circle svg {
+    width: 32px;
+    height: 32px;
+  }
+  .book-final-left h2,
   .book-final-right h2 {
     font-size: 24px;
   }
+  .book-final-left p {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
   .book-page h3 {
-    font-size: 24px;
+    margin-bottom: 24px;
+    font-size: 26px;
+  }
+  .book-copy,
+  .paper-note,
+  .data-network p {
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  .wrong-paper,
+  .paper-note {
+    padding: 22px;
   }
   .ai-sticker {
     position: static;
@@ -1347,22 +1807,92 @@ onBeforeUnmount(() => {
   .scroll-hint {
     display: none;
   }
-  .book {
-    max-height: none;
-    height: 68vh;
+  .scene-book {
+    padding: 82px 10px 36px;
   }
+  .book {
+    width: calc(100vw - 20px);
+    height: min(68vh, 520px);
+    min-height: 390px;
+  }
+  .book-spine {
+    width: 34px;
+  }
+  .book-final-left,
+  .book-final-right,
   .page-front,
   .page-back {
-    padding: 24px 16px;
+    padding: 28px 14px 38px;
+  }
+  .book-icon-circle {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+  }
+  .book-icon-circle svg {
+    width: 22px;
+    height: 22px;
+  }
+  .book-final-left h2 {
+    margin-bottom: 10px;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+  }
+  .book-final-right h2,
+  .data-network h3 {
+    font-size: 20px;
+  }
+  .book-final-left p {
+    font-size: 8px;
+    letter-spacing: 0.08em;
+  }
+  .chapter-label {
+    gap: 6px;
+    margin-bottom: 14px;
+    font-size: 8px;
+    letter-spacing: 0.14em;
   }
   .book-page h3 {
-    font-size: 22px;
+    margin-bottom: 18px;
+    font-size: 20px;
   }
   .paper-note,
   .book-copy,
   .data-network p {
-    font-size: 13px;
-    line-height: 1.65;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .wrong-paper,
+  .paper-note {
+    padding: 14px;
+  }
+  .wrong-text {
+    font-size: 12px;
+  }
+  .wrong-footer {
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+  .wrong-footer span {
+    max-width: 80px;
+    font-size: 8px;
+  }
+  .book-final-right > p,
+  .ai-sticker p {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .page-no,
+  .page-footer-number {
+    bottom: 16px;
+    font-size: 10px;
+  }
+  .page-no.right {
+    right: 16px;
+  }
+  .page-no.left,
+  .page-footer-number.left {
+    left: 16px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
