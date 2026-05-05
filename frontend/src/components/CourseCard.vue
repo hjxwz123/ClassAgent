@@ -8,8 +8,8 @@
     @keydown.enter="$emit('open')"
     @keydown.space.prevent="$emit('open')"
   >
-    <div class="cover">
-      <BookOpen :size="24" />
+    <div class="cover" :class="{ 'has-image': course.cover_url }" :style="coverStyle">
+      <strong v-if="!course.cover_url" class="cover-title">{{ coverText }}</strong>
       <span class="tag tag-primary">{{ course.status }}</span>
     </div>
     <div class="body">
@@ -24,11 +24,24 @@
 </template>
 
 <script setup lang="ts">
-import { BookOpen, Clock, Users } from "lucide-vue-next";
+import { computed } from "vue";
+import { Clock, Users } from "lucide-vue-next";
 import type { Course } from "../types";
 
-defineProps<{ course: Course; count?: number | string }>();
+const props = defineProps<{ course: Course; count?: number | string }>();
 defineEmits<{ open: [] }>();
+
+const coverText = computed(() => (props.course.name || "课程").replace(/\s+/g, "").slice(0, 4) || "课程");
+const coverStyle = computed(() => {
+  if (props.course.cover_url) {
+    return {
+      backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.06), rgba(15,23,42,0.42)), url(${props.course.cover_url})`,
+      backgroundSize: "cover",
+      backgroundPosition: "center",
+    };
+  }
+  return { background: props.course.cover_color || "linear-gradient(135deg,#121614,#00B8D4)" };
+});
 </script>
 
 <style scoped>
@@ -51,11 +64,21 @@ defineEmits<{ open: [] }>();
   color: var(--color-text-inverse);
   background: var(--ca-color-slate);
 }
-.cover svg {
-  color: var(--ca-role-student-glow);
+.cover-title {
+  display: grid;
+  place-items: center;
+  min-width: 96px;
+  min-height: 58px;
+  border: 1px solid rgba(255,255,255,.34);
+  border-radius: 14px;
+  background: rgba(255,255,255,.2);
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-shadow: 0 2px 10px rgba(0,0,0,.2);
 }
-.cover svg { transition: transform var(--duration-base) var(--ease-out); }
-.course-card:hover .cover svg { transform: scale(1.05); }
+.cover-title { transition: transform var(--duration-base) var(--ease-out); }
+.course-card:hover .cover-title { transform: scale(1.05); }
 .cover .tag {
   position: absolute;
   top: var(--space-3);

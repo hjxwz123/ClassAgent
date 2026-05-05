@@ -20,10 +20,22 @@ class QuizGenerateRequest(BaseModel):
     course_id: int
     chapter_id: int | None = None
     chapter_ids: list[int] | None = None
+    knowledge_point_ids: list[int] | None = None
     title: str = Field(min_length=2, max_length=255)
     quiz_type: str = "course"
     question_count: int = Field(default=5, ge=1, le=20)
+    question_type_counts: dict[str, int] | None = None
     prefer_weak_points: bool = False
+
+
+class WeakQuizGenerateRequest(BaseModel):
+    course_id: int
+    weak_point_id: int | None = None
+    weak_point_ids: list[int] | None = None
+    all_weak_points: bool = False
+    title: str | None = Field(default=None, min_length=2, max_length=255)
+    question_count: int = Field(default=5, ge=1, le=20)
+    question_type_counts: dict[str, int] | None = None
 
 
 class QuizQuestionPayload(ORMModel):

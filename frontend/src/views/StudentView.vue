@@ -215,7 +215,9 @@
               <article class="panel-card">
                 <div class="section-head"><h2><BookOpen :size="18" />我的课程</h2><button @click="go('studentCourses')">查看全部</button></div>
                 <button v-for="course in courses.slice(0, 3)" :key="course.id" class="home-course" @click="openCourse(course.id)">
-                  <span :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><BookOpen v-if="!course.cover_url" :size="21" /></span>
+                  <span :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)">
+                    <strong v-if="!course.cover_url" class="course-cover-mini-text">{{ courseCoverText(course) }}</strong>
+                  </span>
                   <div><strong>{{ course.name }}</strong><small>{{ course.teacher?.nickname || '教师' }} · {{ course.term }}</small><AppProgress :value="course.progress_percent || 0" /><em>{{ course.progress_percent || 0 }}%</em></div>
                 </button>
                 <button class="join-dashed" @click="joinOpen = true"><Plus :size="16" />加入新课程</button>
@@ -313,7 +315,7 @@
             <div class="underline-tabs"><button :class="{ active: courseTab === 'active' }" @click="courseTab = 'active'"><BookOpen :size="16" />在学中({{ activeCourses.length }})</button><button :class="{ active: courseTab === 'done' }" @click="courseTab = 'done'"><CheckCircle :size="16" />已完成({{ doneCourses.length }})</button></div>
             <div class="student-course-grid">
               <article v-for="course in filteredCourses" :key="course.id" class="student-course-card">
-                <div class="course-art" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><BookOpen v-if="!course.cover_url" :size="56" /><span>{{ course.term }}</span><em><Check :size="12" />{{ course.progress_percent || 0 }}%</em><DropdownMenu :items="courseMenuItems" @select="handleCourseMenu($event, course)" /></div>
+                <div class="course-art" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><strong v-if="!course.cover_url" class="course-cover-text">{{ courseCoverText(course) }}</strong><span>{{ course.term }}</span><em><Check :size="12" />{{ course.progress_percent || 0 }}%</em><DropdownMenu :items="courseMenuItems" @select="handleCourseMenu($event, course)" /></div>
                 <section><h2>{{ course.name }}</h2><p><User :size="14" />{{ course.teacher?.nickname || '教师' }} · {{ course.teacher?.bio || '课程教师' }}</p><AppProgress :value="course.progress_percent || 0" /><div class="course-meta"><span>已学 {{ course.studied_lessons || 0 }}/{{ course.lesson_total || 0 }}</span><span>{{ course.last_lesson ? relativeTime(course.last_progress?.updated_at) : '未开始' }}</span></div><div class="mini-data"><span><MessageCircle :size="14" />{{ course.qa_count || 0 }}</span><span><XCircle :size="14" />{{ course.wrong_count || 0 }}</span><span><Users :size="14" />{{ course.student_count || 0 }}</span></div><button class="btn btn-primary full" @click="openCourse(course.id)"><Play :size="16" />继续学习</button></section>
               </article>
             </div>
@@ -325,7 +327,7 @@
             <template v-else>
               <article class="course-hero-student" :class="{ 'has-image': courseHome.course.cover_url }" :style="courseHeroStyle(courseHome.course)">
                 <section><h1>{{ courseHome.course.name }}</h1><p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p><div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div></section>
-                <aside><div class="slide-mini">{{ latestLesson?.title?.slice(0, 8) || '课时' }}</div><button class="btn white-fill" @click="latestLesson && openLesson(Number(latestLesson.id))"><Play :size="16" />进入课时</button></aside>
+                <aside><div class="slide-mini course-hero-cover-text">{{ courseCoverText(courseHome.course) }}</div><button class="btn white-fill" @click="latestLesson && openLesson(Number(latestLesson.id))"><Play :size="16" />进入课时</button></aside>
               </article>
               <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="go('studentQuizzes')" /></div>
               <div class="course-layout">
@@ -860,7 +862,7 @@
           <label>课程码</label>
           <div class="code-input" :class="{ ok: joinPreview && !joinPreview.already_joined, error: joinError }"><input v-model="joinCode" maxlength="12" @input="formatJoinCode" /><Loader2 v-if="joinChecking" :size="18" /><CheckCircle v-if="joinPreview && !joinChecking" :size="18" /><XCircle v-if="joinError" :size="18" /></div>
           <small class="field-error" v-if="joinError">{{ joinError }}</small>
-          <article v-if="joinPreview" class="preview-course"><span :class="{ 'has-image': joinPreview.course.cover_url }" :style="courseCoverStyle(joinPreview.course)"><BookOpen v-if="!joinPreview.course.cover_url" :size="20" /></span><div><strong>{{ joinPreview.course.name }}</strong><small>{{ joinPreview.teacher?.nickname || '教师' }} · {{ joinPreview.course.term }} · {{ joinPreview.student_count }}人</small></div></article>
+          <article v-if="joinPreview" class="preview-course"><span :class="{ 'has-image': joinPreview.course.cover_url }" :style="courseCoverStyle(joinPreview.course)"><strong v-if="!joinPreview.course.cover_url" class="course-cover-mini-text">{{ courseCoverText(joinPreview.course) }}</strong></span><div><strong>{{ joinPreview.course.name }}</strong><small>{{ joinPreview.teacher?.nickname || '教师' }} · {{ joinPreview.course.term }} · {{ joinPreview.student_count }}人</small></div></article>
           <div class="hint-line"><Info :size="14" />加入后即可学习课程内容</div>
           <footer><button class="btn btn-ghost" @click="joinOpen = false">取消</button><button class="btn btn-primary" :data-loading="joinChecking" :disabled="joinChecking || !joinPreview || joinPreview.already_joined" @click="confirmJoin">确认加入</button></footer>
         </article>
@@ -1378,6 +1380,10 @@ function isStudentNavActive(key: string) {
   return active.value === key;
 }
 function courseGradient(id = 1) { const items = ["linear-gradient(135deg,#121614,#00B8D4)", "linear-gradient(135deg,#121614,#2E7D32)", "linear-gradient(135deg,#121614,#D9A05B)", "linear-gradient(135deg,#121614,#D94925)"]; return items[id % items.length]; }
+function courseCoverText(course?: any) {
+  const text = String(course?.name || "课程").replace(/\s+/g, "");
+  return text.slice(0, 4) || "课程";
+}
 function courseCoverStyle(course?: any) {
   if (course?.cover_url) {
     return {

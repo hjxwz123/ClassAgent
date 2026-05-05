@@ -465,6 +465,17 @@ def deactivate_course_admin(db: Session, *, course_id: int) -> Course:
     return course
 
 
+def activate_course_admin(db: Session, *, course_id: int) -> Course:
+    course = db.get(Course, course_id)
+    if course is None or course.deleted_at is not None:
+        raise not_found("课程不存在")
+    course.status = CourseStatus.ACTIVE.value
+    db.add(course)
+    db.commit()
+    db.refresh(course)
+    return course
+
+
 def list_materials_admin(
     db: Session,
     *,

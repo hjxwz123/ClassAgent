@@ -281,6 +281,13 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
     assert teacher2_detail_resp.status_code == 200, teacher2_detail_resp.text
     assert any(item["name"] == "高阶线代" and item["role"] == "授课教师" for item in teacher2_detail_resp.json()["data"]["courses"])
 
+    deactivate_course_resp = client.post(f"/api/v1/admin/courses/{course['id']}/deactivate", headers=admin_headers)
+    assert deactivate_course_resp.status_code == 200, deactivate_course_resp.text
+    assert deactivate_course_resp.json()["data"]["status"] == "inactive"
+    activate_course_resp = client.post(f"/api/v1/admin/courses/{course['id']}/activate", headers=admin_headers)
+    assert activate_course_resp.status_code == 200, activate_course_resp.text
+    assert activate_course_resp.json()["data"]["status"] == "active"
+
     materials_resp = client.get("/api/v1/admin/materials", headers=admin_headers)
     assert materials_resp.status_code == 200, materials_resp.text
     assert len(materials_resp.json()["data"]) >= 1

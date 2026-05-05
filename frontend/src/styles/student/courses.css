@@ -11,6 +11,9 @@
 .student-course-card{overflow:hidden;padding:0;transition:transform var(--duration-base) var(--ease-out),box-shadow var(--duration-base) var(--ease-out)}
 .course-art{position:relative;aspect-ratio:16/9;display:grid;place-items:center;color:#fff}
 .course-art svg{transition:transform var(--duration-base) var(--ease-out)}
+.course-cover-text{position:relative;z-index:1;display:grid;place-items:center;min-width:112px;min-height:72px;border:1px solid rgba(255,255,255,.36);border-radius:20px;background:#ffffff30;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#fff;font-size:26px;font-weight:900;letter-spacing:0;text-shadow:0 2px 10px rgba(0,0,0,.22)}
+.course-cover-mini-text{position:relative;z-index:1;display:grid;place-items:center;width:100%;height:100%;color:#fff;font-size:13px;font-weight:900;letter-spacing:0;text-align:center}
+.course-hero-cover-text{display:grid;place-items:center;min-height:98px;border:1px solid rgba(255,255,255,.32);background:#ffffff2e;color:#fff;font-size:28px;font-weight:900;letter-spacing:0;text-shadow:0 2px 10px rgba(0,0,0,.22)}
 .student-course-card:hover .course-art>svg{transform:scale(1.05)}
 .course-art span,.course-art em{position:absolute;bottom:12px;border-radius:var(--radius-full);background:#ffffff38;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;padding:4px 8px;font-style:normal}
 .course-art span{left:12px}
@@ -96,6 +99,8 @@
 .course-art{overflow:visible;height:160px;aspect-ratio:auto;padding:24px;border-radius:var(--s-radius-xl) var(--s-radius-xl) 0 0}
 .course-art:after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 24% 20%,rgba(255,255,255,.22),transparent 34%)}
 .course-art>svg{z-index:1;width:64px;height:64px;padding:14px;border-radius:20px;background:#fff3;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.course-art>.course-cover-text{transition:transform var(--duration-base) var(--ease-out)}
+.student-course-card:hover .course-art>.course-cover-text{transform:scale(1.05) rotate(-1deg)}
 .student-course-card:hover .course-art>svg{transform:scale(1.08) rotate(-2deg)}
 .course-art span,.course-art em{z-index:1;bottom:auto;top:16px;background:#ffffffeb;color:var(--s-primary-600);font-weight:800}
 .course-art span{left:16px}

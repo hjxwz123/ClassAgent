@@ -22,6 +22,7 @@ from app.schemas.admin import (
 )
 from app.schemas.common import UserSummary
 from app.services.admin import (
+    activate_course_admin,
     assert_admin,
     create_admin_user,
     create_backup,
@@ -245,6 +246,19 @@ def deactivate_course_admin_endpoint(
 ):
     assert_admin(user)
     course = deactivate_course_admin(db, course_id=course_id)
+    payload = sa_dict(course)
+    return success_response(data=payload, request_id=request.state.request_id)
+
+
+@router.post("/courses/{course_id}/activate")
+def activate_course_admin_endpoint(
+    course_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    assert_admin(user)
+    course = activate_course_admin(db, course_id=course_id)
     payload = sa_dict(course)
     return success_response(data=payload, request_id=request.state.request_id)
 
