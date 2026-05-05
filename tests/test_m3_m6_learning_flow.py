@@ -150,6 +150,43 @@ def bootstrap_course_with_material(client):
     return course, chapter, lesson_id, teacher_headers, student_headers
 
 
+def test_quiz_generation_calls_ai_with_course_context_without_material(client, monkeypatch):
+    register_user(
+        client,
+        email="teacher-no-material@example.com",
+        password="Teacher123",
+        nickname="无资料老师",
+        role="teacher",
+        employee_no="T2026099",
+    )
+    teacher_login = login_user(client, email="teacher-no-material@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "离散数学", "description": "图论与集合基础", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+    captured = {}
+
+    def fake_ai_quiz_questions(*, topic, source_text, count, db=None):
+        captured["topic"] = topic
+        captured["source_text"] = source_text
+        return fake_quiz_questions(topic=topic, source_text=source_text, count=count, db=db)
+
+    monkeypatch.setattr(ai_service, "generate_quiz_questions", fake_ai_quiz_questions)
+    quiz_resp = client.post(
+        "/api/v1/learning/quizzes/generate",
+        json={"course_id": course["id"], "title": "课程基础测验", "quiz_type": "course", "question_count": 1},
+        headers=teacher_headers,
+    )
+    assert quiz_resp.status_code == 200, quiz_resp.text
+    assert captured["topic"] == "离散数学"
+    assert "课程名称：离散数学" in captured["source_text"]
+    assert "课程简介：图论与集合基础" in captured["source_text"]
+
+
 def test_learning_core_flow(client, monkeypatch):
     monkeypatch.setattr(ai_service, "generate_quiz_questions", fake_quiz_questions)
     course, chapter, lesson_id, teacher_headers, student_headers = bootstrap_course_with_material(client)

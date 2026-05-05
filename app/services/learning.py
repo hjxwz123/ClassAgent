@@ -143,10 +143,22 @@ def _course_source_text_for_quiz(
     return "\n\n".join(pieces)[:10000]
 
 
+def _course_context_text_for_quiz(*, course, points: list[KnowledgePoint]) -> str:
+    pieces = [f"课程名称：{course.name}"]
+    if getattr(course, "description", None):
+        pieces.append(f"课程简介：{course.description}")
+    point_names = [point.name for point in points if point.name]
+    if point_names:
+        pieces.append(f"相关知识点：{'、'.join(dict.fromkeys(point_names[:12]))}")
+    return "\n".join(pieces)
+
+
 def _quiz_topic_for_generation(*, course_name: str, points: list[KnowledgePoint], source_text: str) -> str:
     names = [point.name for point in points if point.name and "练习" not in point.name and "测验" not in point.name]
     if names:
         return "、".join(dict.fromkeys(names[:4]))
+    if source_text.startswith("课程名称："):
+        return course_name
     keywords = [item for item in ai_service.extract_keywords(source_text, limit=6) if item not in {"课程内容", "章节练习", "薄弱点章节练习"}]
     return "、".join(keywords[:4]) if keywords else course_name
 
@@ -219,8 +231,7 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
     )
     source_text = _course_source_text_for_quiz(db, course_id=payload.course_id, chapter_ids=chapter_ids, points=points)
     if not source_text.strip():
-        target = "所选章节" if chapter_ids else "当前课程"
-        raise bad_request(f"{target}暂无可用课程资料，无法生成练习。请先上传并解析课件或发布课时。")
+        source_text = _course_context_text_for_quiz(course=course, points=points)
     quiz_topic = _quiz_topic_for_generation(course_name=course.name, points=points, source_text=source_text)
     question_dicts = ai_service.generate_quiz_questions(
         topic=quiz_topic,
