@@ -356,7 +356,7 @@
                     <div class="qa-header-actions">
                       <CourseSelect />
                       <button class="qa-tutoring-link" type="button" @click="go('studentTutoring')"><Pencil :size="13" />题目辅导</button>
-                      <button class="action-circle-btn" type="button" :class="{ active: historyOpen }" title="问答历史" aria-label="问答历史" @click="openQaHistory"><Clock :size="18" /></button>
+                      <button class="action-circle-btn" type="button" :class="{ active: historyOpen }" title="问答历史" aria-label="问答历史" @click="toggleQaHistory"><Clock :size="18" /></button>
                     </div>
                   </div>
                   <div v-if="!globalMessages.length" class="qa-welcome"><Sparkles :size="48" /><h2>{{ courseScopeName }}专属问答</h2></div>
@@ -382,7 +382,8 @@
                   </section>
                 </div>
               </form>
-              <transition name="drawer"><aside v-if="historyOpen" class="history-drawer"><div class="drawer-head"><h2>{{ courseScopeName }}问答历史</h2><button type="button" @click="historyOpen = false"><X :size="16" /></button></div><div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索本课程历史问答" @keyup.enter="loadQaHistory" /></div><button type="button" class="history-favorite-toggle" :class="{ checked: showFavorites }" :aria-pressed="showFavorites" @click="showFavorites = !showFavorites"><span class="favorite-check-box" aria-hidden="true"></span><strong>仅看收藏</strong></button><button v-for="item in filteredQaHistory" :key="item.id" class="history-row" type="button" @click="reuseHistory(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}</small></button><EmptyState v-if="!filteredQaHistory.length" text="本课程暂无问答记录" /></aside></transition>
+              <transition name="fade-slide"><button v-if="historyOpen" type="button" class="history-drawer-backdrop" aria-label="关闭问答历史" @click="closeQaHistory"></button></transition>
+              <transition name="drawer"><aside v-if="historyOpen" class="history-drawer"><div class="drawer-head"><h2>{{ courseScopeName }}问答历史</h2><button type="button" @click="closeQaHistory"><X :size="16" /></button></div><div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索本课程历史问答" @keyup.enter="loadQaHistory" /></div><button type="button" class="history-favorite-toggle" :class="{ checked: showFavorites }" :aria-pressed="showFavorites" @click="showFavorites = !showFavorites"><span class="favorite-check-box" aria-hidden="true"></span><strong>仅看收藏</strong></button><button v-for="item in filteredQaHistory" :key="item.id" class="history-row" type="button" @click="reuseHistory(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}</small></button><EmptyState v-if="!filteredQaHistory.length" text="本课程暂无问答记录" /></aside></transition>
             </section>
           </template>
 
@@ -476,13 +477,27 @@
           <template v-else-if="active === 'studentQuizzes'">
             <div v-if="answeringQuiz" class="exam-answer-page"><QuizAnswerView :quiz="quizDetail" :answers="quizAnswers" :attempt="attempt" :submitting="quizSubmitting" @answer="setQuizAnswer" @submit="submitQuiz" @exit="answeringQuiz = false" /></div>
             <section v-else class="quiz-modern-page">
-              <div class="quiz-modern-header">
-                <div class="quiz-modern-title">
-                  <h1>练习与测验</h1>
-                  <p>课程配套测验与自定义章节练习</p>
+              <header class="quiz-modern-header quiz-hero-card">
+                <div class="quiz-hero-copy">
+                  <div class="quiz-hero-icon"><ClipboardList :size="26" /></div>
+                  <div class="quiz-modern-title">
+                    <h1>练习与测验</h1>
+                    <p>课程配套测验、自定义章节练习与错题重练集中管理</p>
+                    <div class="quiz-hero-pills">
+                      <span><BookOpen :size="14" />《{{ courseScopeName }}》</span>
+                      <span><Sparkles :size="14" />AI 智能组卷</span>
+                    </div>
+                  </div>
                 </div>
-                <CourseSelect />
-              </div>
+                <div class="quiz-hero-side">
+                  <CourseSelect />
+                  <div class="quiz-hero-stats">
+                    <div><strong>{{ courseQuizzes.length }}</strong><span>课程测验</span></div>
+                    <div><strong>{{ practiceQuizzes.length }}</strong><span>章节练习</span></div>
+                    <div><strong>{{ pendingWrongCount }}</strong><span>待重练错题</span></div>
+                  </div>
+                </div>
+              </header>
 
               <div class="quiz-modern-tabs">
                 <button type="button" :class="{ active: quizTab === 'course' }" @click="quizTab = 'course'"><ClipboardList :size="18" />课程测验</button>
@@ -675,7 +690,7 @@
                         <button
                           type="button"
                           class="cal-day"
-                          :class="{ empty: cell.empty, checked: cell.checked, today: cell.today }"
+                          :class="{ 'cal-empty': cell.empty, checked: cell.checked, today: cell.today }"
                           :disabled="cell.empty"
                         >
                           {{ cell.label }}
@@ -1047,7 +1062,12 @@ const wrongStatusOptions = [{ label: "全部状态", value: "" }, { label: "待�
 const courseMenuItems = [{ label: "课程详情", value: "detail" }, { label: "问答记录", value: "qa" }, { label: "分享课程码", value: "share" }, { label: "退出课程", value: "leave", danger: true }];
 
 const stats = computed(() => dashboard.value.stats || profilePayload.value.stats || {});
-const todayTasks = computed(() => dashboard.value.today_tasks || tasks.value || []);
+const planTodayTasks = computed(() => tasks.value.filter((task: any) => taskDateKey(task) === todayTaskKey()));
+const todayTasks = computed(() => {
+  if (active.value === "studentPlans") return planTodayTasks.value;
+  const dashboardTasks = Array.isArray(dashboard.value.today_tasks) ? dashboard.value.today_tasks : [];
+  return dashboardTasks.length ? dashboardTasks : planTodayTasks.value;
+});
 const doneTasks = computed(() => todayTasks.value.filter((task: any) => task.status === "done").length);
 const todayDoneRate = computed(() => todayTasks.value.length ? Math.round(doneTasks.value / todayTasks.value.length * 100) : 0);
 const continueLesson = computed(() => dashboard.value.continue_learning || null);
@@ -1270,6 +1290,7 @@ watch(selectedCourseId, async (id, previousId) => {
   if (active.value === "studentTutoring") await loadProblemHistory();
   if (active.value === "studentKnowledge") await loadKnowledge();
   if (active.value === "studentQuizzes") await loadQuizPage();
+  if (active.value === "studentPlans") await loadPlans();
 });
 watch(activePage, async (page) => { if (page) await loadNote(page.id); }, { immediate: false });
 
@@ -1330,6 +1351,22 @@ function localDateKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+function todayTaskKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+function taskDateKey(task: any) {
+  const raw = task?.task_date || task?.date || task?.due_date || task?.scheduled_date;
+  if (!raw) return "";
+  if (typeof raw === "string") {
+    const match = raw.match(/^\d{4}-\d{2}-\d{2}/);
+    if (match) return match[0];
+  }
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+function completedTaskDateKeys(items: any[]) {
+  return Array.from(new Set(items.filter((task: any) => task.status === "done").map(taskDateKey).filter(Boolean)));
 }
 function shiftPlanMonth(offset: number) {
   const current = planCalendarDate.value;
@@ -1543,7 +1580,16 @@ function sendGlobalQuick(text: string) { globalQuestion.value = text; askGlobal(
 async function sendCourseQuick(text: string) { quickCourseQuestion.value = text; await askCourseQuick(); }
 async function askCourseQuick() { if (!quickCourseQuestion.value.trim()) return; globalQuestion.value = quickCourseQuestion.value; quickCourseQuestion.value = ""; await go("studentQa"); await askGlobal(); }
 async function loadQaHistory() { if (!selectedCourseId.value) return; qaHistory.value = (await run<any[]>(() => api.get("/qa/history", { course_id: selectedCourseId.value, keyword: qaKeyword.value }))) || []; }
-async function openQaHistory() { showFavorites.value = false; historyOpen.value = true; await loadQaHistory(); }
+function closeQaHistory() { historyOpen.value = false; }
+async function toggleQaHistory() {
+  if (historyOpen.value) {
+    closeQaHistory();
+    return;
+  }
+  showFavorites.value = false;
+  historyOpen.value = true;
+  await loadQaHistory();
+}
 function reuseHistory(item: any) { historyOpen.value = false; globalMessages.value = [{ id: item.id * 2, role: "user", text: item.question, attachments: item.attachments || [] }, { id: item.id * 2 + 1, role: "ai", text: item.answer, sources: item.sources || [], attachments: item.attachments || [], thought: item.thinking_process || item.reasoning_content || item.thought || "", record_id: item.id, favorite: item.is_favorite }]; }
 function toggleThought(message: ChatMessage) { message.thoughtOpen = !message.thoughtOpen; }
 async function favoriteQaMessage(message: ChatMessage) { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/favorite`, { is_favorite: !message.favorite }), "已收藏"); message.favorite = !message.favorite; }
@@ -1653,7 +1699,12 @@ async function loadWrongPractice() {
 function practiceWrong(_: any) { loadWrongPractice(); }
 function clearWrongFilters() { wrongKeyword.value = ""; wrongStatus.value = ""; selectedWrongKnowledge.value = ""; }
 
-async function loadPlans() { plans.value = (await run<any[]>(() => api.get("/learning/plans", { course_id: selectedCourseId.value || undefined }))) || []; if (plans.value[0]) tasks.value = (await run<any[]>(() => api.get(`/learning/plans/${plans.value[0].id}/tasks`))) || []; checkinDays.value = todayTasks.value.filter((task: any) => task.status === "done").map(() => new Date().toISOString().slice(0, 10)); await loadProfile(); }
+async function loadPlans() {
+  plans.value = (await run<any[]>(() => api.get("/learning/plans", { course_id: selectedCourseId.value || undefined }))) || [];
+  tasks.value = plans.value[0] ? ((await run<any[]>(() => api.get(`/learning/plans/${plans.value[0].id}/tasks`))) || []) : [];
+  checkinDays.value = completedTaskDateKeys(tasks.value);
+  await loadProfile();
+}
 async function createPlan() {
   if (planCreating.value) return;
   if (!selectedCourseId.value) { emit("notice", "warning", "请先加入或选择课程"); return; }
@@ -1664,6 +1715,7 @@ async function createPlan() {
   if (data) {
     planModalOpen.value = false;
     tasks.value = data.tasks || [];
+    checkinDays.value = completedTaskDateKeys(tasks.value);
     await loadDashboard();
   }
 }

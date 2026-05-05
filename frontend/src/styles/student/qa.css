@@ -42,6 +42,7 @@
 .qa-modern-page .action-circle-btn{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:1px solid var(--qa-border);border-radius:50%;background:var(--qa-surface);color:var(--qa-secondary);box-shadow:var(--qa-shadow-sm)}
 .qa-modern-page .action-circle-btn:hover{background:var(--qa-muted-bg);color:var(--qa-primary-600);transform:translateY(-2px)}
 .qa-modern-page .history-drawer{position:fixed;top:0;right:0;bottom:0;z-index:var(--z-modal);width:360px;display:grid;align-content:start;gap:14px;border:1px solid rgba(255,255,255,.74);border-radius:24px 0 0 24px;background:#fffffff5;box-shadow:0 12px 32px #0f172a14;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);padding:24px}
+.qa-modern-page .history-drawer-backdrop{position:fixed;inset:0;z-index:calc(var(--z-modal, 1200) + 8);border:0;background:rgba(15,23,42,.18);cursor:default}
 .qa-modern-page .drawer-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .qa-modern-page .drawer-head h2{margin:0;color:var(--qa-text);font-size:18px;font-weight:800}
 .qa-modern-page .drawer-head button{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:50%;background:var(--qa-muted-bg);color:var(--qa-secondary)}
