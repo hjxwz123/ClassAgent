@@ -53,9 +53,9 @@
 .student-plan-page .cal-grid{grid-auto-rows:44px;gap:12px 8px}
 .student-plan-page .cal-header-day{height:22px;display:flex;align-items:center;justify-content:center;color:var(--plan-hint);font-size:14px;font-weight:600}
 .student-plan-page .cal-day-wrapper{display:flex;align-items:center;justify-content:center;min-height:44px}
-.student-plan-page .cal-day{position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;color:var(--plan-secondary);font-size:16px;font-weight:500}
+.student-plan-page .cal-day{position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:0;border-radius:50%;background:transparent;box-shadow:none;color:var(--plan-secondary);padding:0;font-size:16px;font-weight:500}
 .student-plan-page .cal-day:hover:not(:disabled){background:var(--plan-muted-bg)}
-.student-plan-page .cal-day.empty{color:transparent;pointer-events:none}
+.student-plan-page .cal-day.cal-empty{visibility:hidden;color:transparent;pointer-events:none}
 .student-plan-page .cal-day.checked{background:var(--plan-success-50);color:var(--plan-success-500);font-weight:700}
 .student-plan-page .cal-day.today{border:2px solid var(--plan-primary-500);color:var(--plan-primary-600);font-weight:700;box-shadow:0 4px 12px #0097a726}
 .student-plan-page .cal-day.today.checked{border-color:var(--plan-primary-500);background:var(--plan-primary-500);color:#fff}
