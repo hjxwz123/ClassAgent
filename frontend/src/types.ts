@@ -112,7 +112,12 @@ export type Quiz = {
   quiz_type: string;
   status: string;
   total_score: number;
+  metadata_json?: Record<string, unknown> | null;
   published_at?: string | null;
+  attempts?: Array<Record<string, any>>;
+  latest_attempt?: Record<string, any> | null;
+  attempt_count?: number;
+  has_attempted?: boolean;
   created_at: string;
   updated_at: string;
 };

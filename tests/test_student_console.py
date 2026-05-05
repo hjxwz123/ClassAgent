@@ -227,6 +227,32 @@ def test_student_console_endpoints_and_multiple_courses(client):
     assert result["answers"][0]["correct_answer"] == 1
     assert result["answers"][1]["feedback"] == "本题未作答。"
 
+    duplicate_submit_response = client.post(
+        f"/api/v1/learning/quizzes/{quiz_id}/submit",
+        json={"answers": [{"question_id": question_id, "answer": 1}]},
+        headers=student_headers,
+    )
+    assert duplicate_submit_response.status_code == 400, duplicate_submit_response.text
+    assert "只能作答一次" in duplicate_submit_response.json()["message"]
+
+    quiz_list_response = client.get("/api/v1/learning/quizzes", params={"course_id": first_course["id"]}, headers=student_headers)
+    assert quiz_list_response.status_code == 200, quiz_list_response.text
+    listed_quiz = next(item for item in quiz_list_response.json()["data"] if item["id"] == quiz_id)
+    assert listed_quiz["has_attempted"] is True
+    assert listed_quiz["latest_attempt"]["id"] == result["attempt"]["id"]
+    assert listed_quiz["latest_attempt"]["correct_count"] == 1
+    assert listed_quiz["latest_attempt"]["total_count"] == 2
+
+    attempts_response = client.get(f"/api/v1/learning/quizzes/{quiz_id}/attempts", headers=student_headers)
+    assert attempts_response.status_code == 200, attempts_response.text
+    assert attempts_response.json()["data"][0]["id"] == result["attempt"]["id"]
+
+    attempt_detail_response = client.get(f"/api/v1/learning/attempts/{result['attempt']['id']}", headers=student_headers)
+    assert attempt_detail_response.status_code == 200, attempt_detail_response.text
+    attempt_detail = attempt_detail_response.json()["data"]
+    assert attempt_detail["quiz"]["id"] == quiz_id
+    assert attempt_detail["answers"][0]["question"]["stem"] == "TCP 的主要特性是？"
+
     with db_session.SessionLocal() as db:
         existing_quiz = db.get(Quiz, quiz_id)
         alias_quiz = Quiz(
