@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_serializer
 
 from app.schemas.common import ORMModel
+from app.services.parser import sanitize_temporary_docmind_images
 from app.services.storage import storage_service
 
 
@@ -34,6 +35,10 @@ class LessonPageResponse(ORMModel):
     def serialize_audio_url(self, value: str | None):
         return storage_service.normalize_public_url(value)
 
+    @field_serializer("page_text", "script_text", "subtitle_text")
+    def serialize_content_text(self, value: str | None):
+        return sanitize_temporary_docmind_images(value)
+
 
 class MaterialResponse(ORMModel):
     id: int
@@ -56,6 +61,10 @@ class MaterialResponse(ORMModel):
     @field_serializer("preview_url")
     def serialize_preview_url(self, value: str | None):
         return storage_service.normalize_public_url(value)
+
+    @field_serializer("extracted_text")
+    def serialize_extracted_text(self, value: str | None):
+        return sanitize_temporary_docmind_images(value)
 
 
 class MaterialDetailResponse(BaseModel):

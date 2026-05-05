@@ -15,28 +15,30 @@
       <span>{{ currentLabel }}</span>
       <ChevronDown :size="15" />
     </button>
-    <Transition name="popover">
-      <div v-if="open" class="app-select-pop" role="listbox">
-        <button
-          v-for="(item, index) in normalizedOptions"
-          :key="`${item.value}`"
-          type="button"
-          role="option"
-          :aria-selected="isSelected(item.value)"
-          :class="{ active: isSelected(item.value), danger: item.danger, focused: index === activeIndex }"
-          @mouseenter="activeIndex = index"
-          @click="choose(index)"
-        >
-          <span>{{ item.label }}</span>
-          <Check v-if="isSelected(item.value)" :size="14" />
-        </button>
-      </div>
-    </Transition>
+    <Teleport to="body">
+      <Transition name="popover">
+        <div v-if="open" ref="popRef" class="app-select-pop" :style="popStyle" role="listbox">
+          <button
+            v-for="(item, index) in normalizedOptions"
+            :key="`${item.value}`"
+            type="button"
+            role="option"
+            :aria-selected="isSelected(item.value)"
+            :class="{ active: isSelected(item.value), danger: item.danger, focused: index === activeIndex }"
+            @mouseenter="activeIndex = index"
+            @click="choose(index)"
+          >
+            <span>{{ item.label }}</span>
+            <Check v-if="isSelected(item.value)" :size="14" />
+          </button>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { Check, ChevronDown } from "lucide-vue-next";
 
 type SelectValue = string | number | boolean | null;
@@ -58,8 +60,10 @@ const emit = defineEmits<{
 }>();
 
 const rootRef = ref<HTMLElement | null>(null);
+const popRef = ref<HTMLElement | null>(null);
 const open = ref(false);
 const activeIndex = ref(0);
+const popStyle = ref<Record<string, string>>({});
 
 const normalizedOptions = computed<SelectOption[]>(() =>
   props.options.map((item) => {
@@ -97,23 +101,52 @@ function choose(index: number) {
   emit("change", item.value);
   close();
 }
+function updatePopoverPosition() {
+  if (!open.value || !rootRef.value) return;
+  const rect = rootRef.value.getBoundingClientRect();
+  const gap = 6;
+  const edge = 8;
+  const width = Math.max(rect.width, 128);
+  const below = window.innerHeight - rect.bottom - gap - edge;
+  const above = rect.top - gap - edge;
+  const openUp = below < 160 && above > below;
+  const maxHeight = Math.max(120, Math.min(260, openUp ? above : below));
+  const top = openUp ? Math.max(edge, rect.top - gap - maxHeight) : Math.min(window.innerHeight - edge - maxHeight, rect.bottom + gap);
+  const left = Math.max(edge, Math.min(rect.left, window.innerWidth - edge - width));
+  popStyle.value = {
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${width}px`,
+    maxHeight: `${maxHeight}px`,
+  };
+}
 function onDocumentPointerDown(event: PointerEvent) {
-  if (!rootRef.value?.contains(event.target as Node)) close();
+  const target = event.target as Node;
+  if (!rootRef.value?.contains(target) && !popRef.value?.contains(target)) close();
 }
 function onDocumentKeydown(event: KeyboardEvent) {
   if (event.key === "Escape") close();
 }
+function onViewportChange() {
+  updatePopoverPosition();
+}
 
 watch(open, (value) => {
-  if (value) activeIndex.value = Math.max(0, selectedIndex.value);
+  if (!value) return;
+  activeIndex.value = Math.max(0, selectedIndex.value);
+  nextTick(updatePopoverPosition);
 });
 onMounted(() => {
   document.addEventListener("pointerdown", onDocumentPointerDown);
   document.addEventListener("keydown", onDocumentKeydown);
+  window.addEventListener("resize", onViewportChange);
+  window.addEventListener("scroll", onViewportChange, true);
 });
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onDocumentPointerDown);
   document.removeEventListener("keydown", onDocumentKeydown);
+  window.removeEventListener("resize", onViewportChange);
+  window.removeEventListener("scroll", onViewportChange, true);
 });
 </script>
 
@@ -125,7 +158,7 @@ onBeforeUnmount(() => {
 }
 .app-select-trigger {
   width: 100%;
-  min-height: 36px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
@@ -164,13 +197,10 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 .app-select-pop {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: calc(100% + 6px);
+  position: fixed;
   z-index: var(--z-popover);
-  min-width: 100%;
-  max-height: 260px;
+  min-width: 0;
+  box-sizing: border-box;
   overflow: auto;
   display: grid;
   gap: 4px;
@@ -184,7 +214,7 @@ onBeforeUnmount(() => {
   will-change: opacity, transform;
 }
 .app-select-pop button {
-  min-height: 32px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -193,13 +223,19 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   background: transparent;
   color: var(--color-text-body);
-  padding: 0 8px;
+  padding: 0 10px;
   text-align: left;
   transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+.app-select-pop button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .app-select-pop button:hover,
 .app-select-pop button.focused {
   background: var(--color-bg-muted);
+  transform: translateY(-1px);
 }
 .app-select-pop button.active {
   background: var(--color-primary-50);

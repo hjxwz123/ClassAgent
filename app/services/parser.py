@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import base64
+import binascii
 import hashlib
 import html
 import json
@@ -10,7 +12,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 from sqlalchemy.orm import Session
@@ -27,8 +29,11 @@ DEFAULT_ENDPOINT = "docmind-api.cn-hangzhou.aliyuncs.com"
 DEFAULT_REGION = "cn-hangzhou"
 DEFAULT_LAYOUT_STEP_SIZE = 100
 SUPPORTED_MATERIAL_TYPES = {MaterialType.PPTX.value, MaterialType.PDF.value, MaterialType.DOCX.value, MaterialType.TXT.value}
-MARKDOWN_IMAGE_URL_PATTERN = re.compile(r"!\[[^\]]*]\(\s*(?:<(?P<angle>[^>]+)>|(?P<plain>[^)\s]+))(?:\s+['\"][^'\"]*['\"])?\s*\)")
+MARKDOWN_IMAGE_URL_PATTERN = re.compile(
+    r"!\[(?P<alt>[^\]]*)]\(\s*(?:<(?P<angle>[^>]+)>|(?P<plain>[^)\s]+))(?:\s+['\"][^'\"]*['\"])?\s*\)"
+)
 HTML_IMAGE_URL_PATTERN = re.compile(r"""<img\b[^>]*\bsrc=["'](?P<src>[^"']+)["'][^>]*>""", re.IGNORECASE)
+DATA_IMAGE_PATTERN = re.compile(r"^data:(?P<mime>image/[a-z0-9.+-]+);base64,(?P<data>.+)$", re.IGNORECASE | re.DOTALL)
 MAX_MARKDOWN_IMAGE_BYTES = 15 * 1024 * 1024
 
 
@@ -252,6 +257,21 @@ def _is_remote_url(value: str) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
+def _is_temporary_docmind_url(value: str) -> bool:
+    try:
+        parsed = urlsplit(html.unescape(value))
+    except ValueError:
+        return False
+    if parsed.scheme not in {"http", "https"}:
+        return False
+    query = parse_qs(parsed.query)
+    signed_query_keys = {"Expires", "OSSAccessKeyId", "Signature", "security-token"}
+    if signed_query_keys.intersection(query):
+        return True
+    host = parsed.netloc.lower()
+    return "docmind" in host or "doc-mind" in host or "docmind" in parsed.path.lower()
+
+
 def _image_suffix(url: str, content_type: str | None) -> str:
     suffix = Path(urlsplit(url).path).suffix.lower()
     if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}:
@@ -263,6 +283,33 @@ def _image_suffix(url: str, content_type: str | None) -> str:
     return guessed if guessed in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"} else ".png"
 
 
+def _persist_data_image(url: str, *, db: Session | None, cache: dict[str, str | None]) -> str | None:
+    data_url = html.unescape(url).strip()
+    if data_url in cache:
+        return cache[data_url]
+    cache[data_url] = None
+    match = DATA_IMAGE_PATTERN.match(data_url)
+    if match is None:
+        return None
+    try:
+        content = base64.b64decode(match.group("data"), validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    if not content or len(content) > MAX_MARKDOWN_IMAGE_BYTES:
+        return None
+    digest = hashlib.sha256(content).hexdigest()
+    suffix = _image_suffix(f"image.{match.group('mime').split('/', 1)[1]}", match.group("mime"))
+    relative_path = storage_service.save_bytes(
+        content,
+        folder=f"docmind_images/{digest[:2]}",
+        filename=f"{digest}{suffix}",
+        db=db,
+    )
+    public_url = storage_service.public_url(relative_path, db=db)
+    cache[data_url] = public_url
+    return public_url
+
+
 def _persist_markdown_image(
     client: httpx.Client,
     url: str,
@@ -271,6 +318,8 @@ def _persist_markdown_image(
     cache: dict[str, str | None],
 ) -> str | None:
     download_url = html.unescape(url)
+    if DATA_IMAGE_PATTERN.match(download_url.strip()):
+        return _persist_data_image(download_url, db=db, cache=cache)
     if download_url in cache:
         return cache[download_url]
     cache[download_url] = None
@@ -282,11 +331,16 @@ def _persist_markdown_image(
     except httpx.HTTPError:
         return None
     content_type = response.headers.get("content-type", "")
-    if not content_type.lower().startswith("image/"):
-        return None
     content = response.content
     if not content or len(content) > MAX_MARKDOWN_IMAGE_BYTES:
         return None
+    mime = content_type.split(";", 1)[0].strip().lower()
+    if not mime.startswith("image/"):
+        suffix = Path(urlsplit(download_url).path).suffix.lower()
+        if mime and mime not in {"application/octet-stream", "binary/octet-stream"}:
+            return None
+        if suffix not in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}:
+            return None
     digest = hashlib.sha256(download_url.encode("utf-8")).hexdigest()
     suffix = _image_suffix(download_url, content_type)
     relative_path = storage_service.save_bytes(
@@ -298,6 +352,32 @@ def _persist_markdown_image(
     public_url = storage_service.public_url(relative_path, db=db)
     cache[download_url] = public_url
     return public_url
+
+
+def _same_image_url(left: str | None, right: str) -> bool:
+    if not left:
+        return False
+    return html.unescape(left).strip() == html.unescape(right).strip()
+
+
+def _strip_unavailable_image(content: str, raw_url: str) -> str:
+    placeholder = "（图片未能保存，请重新解析资料）"
+
+    def replace_markdown(match: re.Match[str]) -> str:
+        url = match.groupdict().get("angle") or match.groupdict().get("plain")
+        if not _same_image_url(url, raw_url):
+            return match.group(0)
+        alt = (match.groupdict().get("alt") or "").strip()
+        return alt or placeholder
+
+    def replace_html(match: re.Match[str]) -> str:
+        if not _same_image_url(match.groupdict().get("src"), raw_url):
+            return match.group(0)
+        alt_match = re.search(r"""\balt=["'](?P<alt>[^"']+)["']""", match.group(0), flags=re.IGNORECASE)
+        alt = html.unescape(alt_match.group("alt")).strip() if alt_match else ""
+        return alt or placeholder
+
+    return HTML_IMAGE_URL_PATTERN.sub(replace_html, MARKDOWN_IMAGE_URL_PATTERN.sub(replace_markdown, content))
 
 
 def _localize_markdown_images(content: str, db: Session | None, cache: dict[str, str | None]) -> str:
@@ -313,11 +393,23 @@ def _localize_markdown_images(content: str, db: Session | None, cache: dict[str,
         for raw_url in urls:
             public_url = _persist_markdown_image(client, raw_url, db=db, cache=cache)
             if not public_url:
+                if _is_temporary_docmind_url(raw_url):
+                    rewritten = _strip_unavailable_image(rewritten, raw_url)
                 continue
             rewritten = rewritten.replace(raw_url, public_url)
             escaped_url = html.escape(raw_url, quote=False)
             if escaped_url != raw_url:
                 rewritten = rewritten.replace(escaped_url, public_url)
+    return rewritten
+
+
+def sanitize_temporary_docmind_images(content: str | None) -> str | None:
+    if not content:
+        return content
+    rewritten = str(content)
+    for raw_url in _markdown_image_urls(rewritten):
+        if _is_temporary_docmind_url(raw_url):
+            rewritten = _strip_unavailable_image(rewritten, raw_url)
     return rewritten
 
 

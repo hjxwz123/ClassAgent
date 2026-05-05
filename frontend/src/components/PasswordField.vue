@@ -47,7 +47,7 @@ function onInput(event: Event) {
 <style scoped>
 .password-field {
   width: 100%;
-  min-height: 36px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -71,7 +71,7 @@ function onInput(event: Event) {
 .password-field input {
   min-width: 0;
   flex: 1;
-  height: 34px;
+  height: 42px;
   border: 0;
   outline: 0;
   background: transparent;
@@ -81,11 +81,11 @@ function onInput(event: Event) {
   color: var(--color-text-muted);
 }
 .password-tool {
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   display: inline-grid;
   place-items: center;
-  flex: 0 0 28px;
+  flex: 0 0 44px;
   border-radius: 7px;
   color: var(--color-text-muted);
 }

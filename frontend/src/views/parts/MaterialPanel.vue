@@ -74,7 +74,7 @@ onBeforeUnmount(() => audio?.pause());
 
 <style scoped>
 .material-head { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-4); }
-.edit-row { grid-template-columns: 1fr 180px auto; margin-bottom: var(--space-4); }
+.edit-row { grid-template-columns: minmax(0, 1fr) 180px auto; margin-bottom: var(--space-4); }
 .pages { display: grid; gap: var(--space-4); }
 .page-card { box-shadow: none; }
 .source {
@@ -89,7 +89,7 @@ onBeforeUnmount(() => audio?.pause());
   align-items: center;
   gap: 6px;
   width: fit-content;
-  min-height: 30px;
+  min-height: 44px;
   border: 1px solid var(--color-primary-200);
   border-radius: var(--radius-full);
   background: var(--color-primary-50);
@@ -99,5 +99,16 @@ onBeforeUnmount(() => audio?.pause());
 }
 .audio-chip:hover { box-shadow: var(--shadow-sm); }
 .audio-chip:active { transform: scale(.97); }
-.audio-chip.playing { background: var(--color-ai-light); color: #6D28D9; }
+.audio-chip.playing { background: var(--ca-role-student-light); color: var(--ca-role-student-primary-hover); }
+
+@media (max-width: 640px) {
+  .material-head,
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .edit-row {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

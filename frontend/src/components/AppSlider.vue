@@ -4,7 +4,8 @@
     class="app-slider"
     :class="{ disabled }"
     role="slider"
-    tabindex="0"
+    :tabindex="disabled ? -1 : 0"
+    :aria-disabled="disabled"
     :aria-valuemin="min"
     :aria-valuemax="max"
     :aria-valuenow="modelValue"
@@ -90,7 +91,8 @@ onBeforeUnmount(() => window.removeEventListener("pointermove", onMove));
 <style scoped>
 .app-slider {
   position: relative;
-  height: 28px;
+  min-height: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   touch-action: none;
@@ -115,8 +117,8 @@ onBeforeUnmount(() => window.removeEventListener("pointermove", onMove));
 .slider-thumb {
   position: absolute;
   top: 50%;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: 3px solid var(--color-primary-600);
   border-radius: 50%;
   background: white;

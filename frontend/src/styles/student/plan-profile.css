@@ -1,0 +1,130 @@
+/* Generated from the verified StudentView build CSS and grouped by page domain. */
+.profile-activity-card{display:grid;gap:12px}
+.profile-timeline-item{display:grid;grid-template-columns:18px 1fr auto;gap:10px;position:relative}
+.profile-timeline-item:before{content:"";position:absolute;left:8px;top:18px;bottom:-14px;width:1px;background:var(--color-border-default)}
+.profile-timeline-item i{width:9px;height:9px;border-radius:50%;background:var(--color-primary-600);margin-top:6px}
+.profile-timeline-item strong{color:var(--color-text-primary)}
+.profile-timeline-item p,.profile-timeline-item time{margin:0;color:var(--color-text-muted);font-size:12px}
+.underline-tabs,.seg-tabs,.study-tabs,.profile-tabs{display:flex;gap:14px;border-bottom:1px solid var(--color-border-default)}
+.underline-tabs button,.seg-tabs button,.study-tabs button,.profile-tabs button{display:inline-flex;align-items:center;gap:7px;min-height:42px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--color-text-secondary);padding:0 8px}
+.underline-tabs .active,.seg-tabs .active,.study-tabs .active,.profile-tabs .active{border-bottom-color:var(--color-primary-600);color:var(--color-primary-700);font-weight:600}
+.profile-page{max-width:800px;margin:0 auto;display:grid;gap:16px}
+.profile-hero{grid-template-columns:auto 1fr auto;min-height:160px;background:linear-gradient(135deg,#121614,#00e5ff);color:#fff}
+.profile-hero h1{margin:0}
+.profile-hero p{display:flex;align-items:center;gap:6px;margin:4px 0;color:#ffffffc7}
+.profile-hero aside strong{display:block;font-size:36px}
+.profile-form{display:grid;gap:12px}
+.profile-form label{display:grid;gap:6px;color:var(--color-text-secondary)}
+.lesson-markdown th,.lesson-markdown td{border:1px solid var(--color-border-default);padding:8px 10px;vertical-align:top}
+.profile-activity-card{gap:16px}
+.profile-timeline-item{grid-template-columns:22px minmax(0,1fr) auto;padding:6px 0}
+.profile-timeline-item i{width:11px;height:11px;background:var(--s-ai-main)}
+.underline-tabs,.seg-tabs,.profile-tabs,.study-tabs{width:fit-content;display:inline-flex;gap:6px;border:0;border-radius:var(--s-pill);background:#ffffffb3;padding:6px;box-shadow:inset 0 0 0 1px #e2e8f099}
+.underline-tabs button,.seg-tabs button,.profile-tabs button,.study-tabs button,.segmented button{min-height:38px;border:0;border-radius:var(--s-pill);padding:0 18px;color:var(--s-muted);font-weight:700}
+.underline-tabs .active,.seg-tabs .active,.profile-tabs .active,.study-tabs .active,.segmented .active{background:#fff;color:var(--s-primary-600);box-shadow:0 2px 10px #0f172a0f}
+.student-plan-page{--plan-primary-50: #E0F7FA;--plan-primary-100: #B2EBF2;--plan-primary-500: #00B8D4;--plan-primary-600: #0097A7;--plan-ai-main: linear-gradient(135deg, #06B6D4 0%, #00E5FF 100%);--plan-ai-light: linear-gradient(135deg, #FFFFFF 0%, #E0F7FA 100%);--plan-success-50: #ECFDF5;--plan-success-500: #10B981;--plan-warning-500: #F59E0B;--plan-bg: #F4F6F9;--plan-card: #FFFFFF;--plan-muted-bg: #F8FAFC;--plan-border-light: #F1F5F9;--plan-border: #E2E8F0;--plan-text: #1E293B;--plan-secondary: #64748B;--plan-hint: #94A3B8;--plan-radius-sm: 8px;--plan-radius-md: 12px;--plan-radius-lg: 16px;--plan-radius-xl: 24px;--plan-pill: 9999px;--plan-shadow-sm: 0 2px 8px rgba(15, 23, 42, .04);--plan-shadow-card: 0 12px 32px rgba(15, 23, 42, .04);--plan-shadow-focus: 0 0 0 4px rgba(0, 184, 212, .15);width:100%;color:var(--plan-text)}
+.student-plan-page button,.student-plan-page input{font-family:inherit;outline:none;transition:all .2s cubic-bezier(.16,1,.3,1)}
+.student-plan-page .plan-banner{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:space-between;gap:28px;min-height:164px;margin-bottom:32px;border-radius:var(--plan-radius-xl);background:linear-gradient(135deg,#0097a7,#00e5ff);color:#fff;box-shadow:0 20px 40px -10px #00b8d44d;padding:40px 48px}
+.student-plan-page .plan-banner:after{content:"";position:absolute;right:-50px;top:-100px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.1) 0%,transparent 60%);pointer-events:none}
+.student-plan-page .banner-left{position:relative;z-index:1;display:flex;align-items:center;gap:20px}
+.student-plan-page .banner-icon{width:64px;height:64px;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.3);border-radius:20px;background:#fff3;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.student-plan-page .banner-title{font-size:32px;line-height:1.2;font-weight:800;letter-spacing:0}
+.student-plan-page .banner-stats{position:relative;z-index:1;display:flex;gap:48px}
+.student-plan-page .b-stat-item{text-align:center}
+.student-plan-page .b-stat-item h2{display:flex;align-items:center;justify-content:center;gap:4px;margin:0 0 4px;font-size:36px;line-height:1;font-weight:800}
+.student-plan-page .b-stat-item h2 svg{color:#fde047;fill:#fde047}
+.student-plan-page .b-stat-item span{font-size:14px;font-weight:500;opacity:.9}
+.student-plan-page .plan-layout{display:grid;grid-template-columns:1.8fr 1fr;gap:32px;align-items:start}
+.student-plan-page .main-col,.student-plan-page .side-col{display:flex;flex-direction:column;gap:32px}
+.student-plan-page .card{border:1px solid rgba(255,255,255,.8);border-radius:var(--plan-radius-xl);background:var(--plan-card);box-shadow:var(--plan-shadow-card);padding:36px}
+.student-plan-page .card-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:28px}
+.student-plan-page .card-header.compact{margin-bottom:24px}
+.student-plan-page .card-title{display:flex;align-items:center;gap:10px;color:var(--plan-text);font-size:20px;font-weight:800}
+.student-plan-page .card-title svg{color:var(--plan-primary-600)}
+.student-plan-page .achievement-title svg{color:var(--plan-warning-500)}
+.student-plan-page .card-subtitle{color:var(--plan-secondary);font-size:14px;font-weight:600}
+.student-plan-page .calendar-nav{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
+.student-plan-page .cal-month{color:var(--plan-text);font-size:18px;font-weight:800}
+.student-plan-page .cal-arrows{display:flex;gap:8px}
+.student-plan-page .cal-arr-btn{width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:var(--plan-muted-bg);color:var(--plan-secondary)}
+.student-plan-page .cal-arr-btn:hover{background:var(--plan-border);color:var(--plan-text)}
+.student-plan-page .cal-weekdays,.student-plan-page .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);text-align:center}
+.student-plan-page .cal-weekdays{gap:8px;margin-bottom:12px}
+.student-plan-page .cal-grid{grid-auto-rows:44px;gap:12px 8px}
+.student-plan-page .cal-header-day{height:22px;display:flex;align-items:center;justify-content:center;color:var(--plan-hint);font-size:14px;font-weight:600}
+.student-plan-page .cal-day-wrapper{display:flex;align-items:center;justify-content:center;min-height:44px}
+.student-plan-page .cal-day{position:relative;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;color:var(--plan-secondary);font-size:16px;font-weight:500}
+.student-plan-page .cal-day:hover:not(:disabled){background:var(--plan-muted-bg)}
+.student-plan-page .cal-day.empty{color:transparent;pointer-events:none}
+.student-plan-page .cal-day.checked{background:var(--plan-success-50);color:var(--plan-success-500);font-weight:700}
+.student-plan-page .cal-day.today{border:2px solid var(--plan-primary-500);color:var(--plan-primary-600);font-weight:700;box-shadow:0 4px 12px #0097a726}
+.student-plan-page .cal-day.today.checked{border-color:var(--plan-primary-500);background:var(--plan-primary-500);color:#fff}
+.student-plan-page .empty-task-state{display:flex;flex-direction:column;align-items:center;padding:24px 0 16px;text-align:center}
+.student-plan-page .ai-sparkle-bg{width:72px;height:72px;display:flex;align-items:center;justify-content:center;border-radius:20px;background:var(--plan-ai-light);color:#00e5ff;box-shadow:0 12px 24px #00e5ff26;margin-bottom:24px}
+.student-plan-page .empty-task-state h3{margin:0 0 8px;color:var(--plan-text);font-size:22px;font-weight:800}
+.student-plan-page .empty-task-state p{max-width:520px;margin:0 0 32px;color:var(--plan-secondary);font-size:15px}
+.student-plan-page .ai-prompt-bar{width:100%;max-width:540px;display:flex;align-items:center;gap:8px;border:1px solid var(--plan-border);border-radius:var(--plan-pill);background:var(--plan-card);box-shadow:var(--plan-shadow-sm);padding:6px 6px 6px 20px}
+.student-plan-page .ai-prompt-bar:focus-within{border-color:var(--plan-primary-500);box-shadow:0 12px 32px #0097a71a,var(--plan-shadow-focus);transform:translateY(-2px)}
+.student-plan-page .ai-prompt-bar input{flex:1;min-width:0;height:44px;border:0;background:transparent;color:var(--plan-text);box-shadow:none;padding:0;font-size:15px}
+.student-plan-page .ai-prompt-bar input::placeholder{color:var(--plan-hint)}
+.student-plan-page .btn-ai-gen{height:44px;display:flex;align-items:center;gap:8px;border-radius:var(--plan-pill);background:var(--plan-ai-main);color:#fff;box-shadow:0 4px 12px #00e5ff4d;padding:0 24px;font-size:15px;font-weight:700;white-space:nowrap}
+.student-plan-page .btn-ai-gen:hover:not(:disabled){filter:brightness(1.05);transform:scale(1.02)}
+.student-plan-page .plan-task-list{display:grid;gap:14px}
+.student-plan-page .plan-task-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:14px;min-height:68px;border:1px solid var(--plan-border-light);border-radius:var(--plan-radius-lg);background:var(--plan-muted-bg);padding:12px 14px}
+.student-plan-page .plan-task-row:hover{border-color:var(--plan-primary-100);background:#fff;box-shadow:var(--plan-shadow-sm);transform:translateY(-1px)}
+.student-plan-page .plan-task-check{width:42px;height:42px;display:grid;place-items:center;border:1px solid var(--plan-border);border-radius:50%;background:#fff;color:var(--plan-success-500)}
+.student-plan-page .plan-task-row.done .plan-task-check{border-color:var(--plan-success-500);background:var(--plan-success-500);color:#fff}
+.student-plan-page .plan-task-body{display:grid;gap:4px;min-width:0}
+.student-plan-page .plan-task-body strong{overflow:hidden;color:var(--plan-text);text-overflow:ellipsis;white-space:nowrap}
+.student-plan-page .plan-task-body small{color:var(--plan-hint)}
+.student-plan-page .plan-task-row.done .plan-task-body strong{color:var(--plan-hint);text-decoration:line-through}
+.student-plan-page .plan-task-tag{border-radius:var(--plan-pill);background:#fff;color:var(--plan-secondary);padding:5px 12px;font-size:13px;font-weight:700}
+.student-plan-page .plan-task-row.done .plan-task-tag{background:var(--plan-success-50);color:var(--plan-success-500)}
+.student-plan-page .mini-chart{display:flex;align-items:flex-end;justify-content:space-between;height:140px;border-bottom:1px solid var(--plan-border);margin-bottom:20px;padding-bottom:12px}
+.student-plan-page .bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:10px}
+.student-plan-page .bar-track{width:100%;max-width:20px;height:100%;display:flex;align-items:flex-end;border-radius:6px;background:var(--plan-muted-bg)}
+.student-plan-page .bar-fill{width:100%;border-radius:6px;background:linear-gradient(to top,#818cf8,#0097a7);transition:height .5s ease}
+.student-plan-page .bar-label{color:var(--plan-hint);font-size:13px;font-weight:500}
+.student-plan-page .total-hours{display:flex;align-items:baseline;gap:4px;color:var(--plan-text);font-size:16px;font-weight:700}
+.student-plan-page .total-hours span{color:var(--plan-primary-600);font-size:24px;line-height:1}
+.student-plan-page .badges-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.student-plan-page .badge-item{display:flex;flex-direction:column;align-items:center;gap:10px;border:2px dashed var(--plan-border);border-radius:var(--plan-radius-lg);background:var(--plan-muted-bg);color:var(--plan-hint);padding:24px 0}
+.student-plan-page .badge-item.unlocked{border:1px solid #FDE68A;border-style:solid;background:linear-gradient(to bottom right,#fffbeb,#fef3c7);color:#d97706;box-shadow:0 4px 12px #f59e0b1a}
+.student-plan-page .badge-icon{width:36px;height:36px;display:flex;align-items:center;justify-content:center}
+.student-plan-page .badge-name{font-size:14px;font-weight:700;letter-spacing:0}
+.profile-page{width:100%;max-width:1180px;margin:0 auto}
+.profile-pc-layout{display:grid;grid-template-columns:360px minmax(0,1fr);gap:28px;align-items:start}
+.profile-side,.profile-main-card{display:grid;gap:24px}
+.profile-identity-card,.profile-main-card{border:1px solid rgba(255,255,255,.86);border-radius:var(--s-radius-xl);background:#fff;box-shadow:var(--s-shadow-card)}
+.profile-main-card{padding:28px}
+.profile-cover{position:relative;height:180px;margin-bottom:82px;border-radius:var(--s-radius-xl) var(--s-radius-xl) 0 0;background:radial-gradient(circle at 18% 12%,rgba(255,255,255,.28),transparent 30%),linear-gradient(135deg,#e0f7fa,#e0f2fe 46%,#e0f7fa);box-shadow:none}
+.profile-cover:after{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(180deg,#00b8d414,#00b8d400)}
+.profile-header-info{display:grid;gap:18px;padding:0 28px 28px;text-align:center}
+.profile-header-info h1{margin:0 0 8px;color:var(--s-text);font-size:32px;line-height:1.2;font-weight:800}
+.profile-header-info p{display:inline-flex;align-items:center;justify-content:center;gap:8px;margin:4px 6px 0;color:var(--s-muted);word-break:normal;overflow-wrap:anywhere}
+.profile-header-info aside{display:grid;justify-items:center;gap:4px;border-radius:18px;background:var(--s-bg);padding:18px;text-align:center}
+.profile-header-info aside strong{display:block;color:var(--s-primary-600);font-size:36px;line-height:1;font-weight:800}
+.profile-header-info aside span{display:inline-flex;align-items:center;gap:6px;margin-top:6px;color:var(--s-muted);font-weight:800}
+.profile-tabs{width:fit-content;align-self:center;justify-self:center;margin:4px 0 2px;border:0;border-radius:var(--s-pill);background:var(--s-bg);padding:6px}
+.profile-tabs button{min-height:38px;border:0;border-radius:var(--s-pill);padding:0 18px}
+.profile-tabs .active{background:#fff;box-shadow:0 4px 14px #0f172a0f}
+.profile-form{display:grid;gap:20px;border-color:#e2e8f0d1;box-shadow:none;padding:24px}
+.profile-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.profile-form-grid .wide{grid-column:1 / -1}
+.profile-form footer{display:flex;justify-content:flex-end}
+.profile-form .password-field{min-height:48px;border-radius:var(--s-radius-md);box-shadow:0 2px 10px #0f172a09}
+.profile-form label{gap:8px;color:var(--s-text);font-weight:800}
+.profile-form .textarea{min-height:160px}
+.profile-records{box-shadow:none}
+@media(max-width:640px){.student-plan-page .plan-banner{padding:24px}.student-plan-page .banner-left{align-items:flex-start}.student-plan-page .banner-icon{width:52px;height:52px;border-radius:16px}.student-plan-page .banner-stats{display:grid;grid-template-columns:repeat(3,1fr)}.student-plan-page .b-stat-item h2{font-size:26px}.student-plan-page .card{padding:22px}.student-plan-page .cal-grid{grid-auto-rows:36px;gap:10px 4px}.student-plan-page .cal-day{width:36px;height:36px;font-size:14px}.student-plan-page .ai-prompt-bar{align-items:stretch;flex-direction:column;border-radius:var(--plan-radius-lg);padding:12px}.student-plan-page .btn-ai-gen{width:100%;justify-content:center}.student-plan-page .badges-grid{gap:12px}}
+.profile-pc-layout{grid-template-columns:minmax(320px,360px) minmax(0,1fr)}
+.student-plan-page .plan-layout{grid-template-columns:minmax(0,1.75fr) minmax(300px,1fr)}
+.student-course-card p,.course-hero-student p,.course-hero-student div,.home-ac-meta,.student-plan-page .card-header,.profile-header-info p{align-items:flex-start}
+.student-plan-page .cal-weekdays,.student-plan-page .cal-grid{align-items:center}
+.student-plan-page .cal-grid{grid-auto-rows:48px}
+.student-plan-page .cal-day-wrapper{min-height:48px}
+.student-plan-page .plan-task-row{grid-template-columns:42px minmax(0,1fr) auto}
+.student-plan-page .plan-task-body strong{white-space:normal}
+.profile-page{max-width:none}
+.profile-header-info p{word-break:normal;overflow-wrap:anywhere}
+.profile-form-grid label,.profile-form-grid .password-field,.notice-settings-grid .toggle-line{min-width:0}

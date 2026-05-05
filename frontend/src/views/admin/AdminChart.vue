@@ -1,5 +1,8 @@
 <template>
-  <div ref="el" class="admin-chart"></div>
+  <div class="admin-chart-wrap">
+    <div ref="el" class="admin-chart"></div>
+    <div v-if="isEmpty" class="chart-empty">暂无数据</div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -20,6 +23,7 @@ const props = defineProps<{
 
 const el = ref<HTMLDivElement | null>(null);
 const chartHeight = computed(() => `${props.height || 260}px`);
+const isEmpty = computed(() => !props.labels.length || !props.series.some((item) => item.data.some((value) => Number(value) > 0)));
 let chart: ECharts | null = null;
 
 function draw() {
@@ -61,8 +65,24 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.admin-chart-wrap {
+  position: relative;
+  min-width: 0;
+}
 .admin-chart {
   width: 100%;
   height: v-bind(chartHeight);
+}
+.chart-empty {
+  position: absolute;
+  inset: 42px 0 0;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--ca-color-paper-border, #E6E4DD);
+  border-radius: var(--radius-lg, 8px);
+  background: rgba(255,255,255,.76);
+  color: var(--ca-color-paper-sub, #666560);
+  font-size: var(--text-body-sm, 13px);
+  pointer-events: none;
 }
 </style>

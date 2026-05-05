@@ -46,7 +46,7 @@ function toggle() {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 28px;
+  min-height: 44px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -66,11 +66,11 @@ function toggle() {
   box-shadow: var(--shadow-sm);
 }
 .check-box {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: inline-grid;
   place-items: center;
-  flex: 0 0 18px;
+  flex: 0 0 20px;
   border: 1px solid var(--color-border-strong);
   border-radius: 5px;
   background: var(--color-bg-surface);
@@ -87,8 +87,8 @@ function toggle() {
   line-height: 20px;
 }
 .switch-track {
-  width: 42px;
-  height: 24px;
+  width: 44px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   flex: 0 0 42px;
@@ -99,8 +99,8 @@ function toggle() {
   transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
 }
 .switch-track i {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: white;
   box-shadow: var(--shadow-sm);
