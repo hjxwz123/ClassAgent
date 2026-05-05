@@ -1,0 +1,945 @@
+.student-shell {
+  --s-primary-50: var(--ca-role-student-light);
+  --s-primary-100: #B2EBF2;
+  --s-primary-400: #26C6DA;
+  --s-primary-500: var(--ca-role-student-primary);
+  --s-primary-600: var(--ca-role-student-primary);
+  --s-ai-light: var(--ca-role-student-light);
+  --s-ai-main: linear-gradient(135deg, var(--ca-role-student-primary) 0%, var(--ca-role-student-glow) 100%);
+  --s-bg: var(--ca-color-paper-bg);
+  --s-card: var(--ca-color-paper-card);
+  --s-glass: rgba(255, 255, 255, .88);
+  --s-text: var(--ca-color-paper-ink);
+  --s-muted: var(--ca-color-paper-sub);
+  --s-hint: var(--ca-color-paper-muted);
+  --s-border: var(--ca-color-paper-border);
+  --s-radius-sm: var(--ca-radius-md);
+  --s-radius-md: var(--ca-radius-lg);
+  --s-radius-lg: var(--ca-radius-xl);
+  --s-radius-xl: var(--ca-radius-2xl);
+  --s-pill: var(--ca-radius-full);
+  --s-shadow-card: var(--ca-shadow-paper);
+  --s-shadow-float: var(--ca-shadow-paper-hover);
+  --s-shadow-glass: var(--ca-shadow-dropdown);
+  background:
+    radial-gradient(circle at 20% 0%, rgba(18, 22, 20, .035), transparent 32%),
+    var(--ca-color-paper-bg);
+  color: var(--ca-color-paper-ink-soft);
+  font-family: var(--ca-font-sans);
+}
+
+.student-shell .qa-modern-page,
+.student-shell .class-chat {
+  --qa-primary-50: var(--ca-role-student-light);
+  --qa-primary-100: #B2EBF2;
+  --qa-primary-400: #26C6DA;
+  --qa-primary-500: var(--ca-role-student-primary);
+  --qa-primary-600: var(--ca-role-student-primary);
+  --qa-ai-gradient: linear-gradient(135deg, var(--ca-role-student-primary) 0%, var(--ca-role-student-glow) 100%);
+  --qa-ai-light: var(--ca-role-student-light);
+  --qa-bg: var(--ca-color-paper-bg);
+  --qa-surface: var(--ca-color-paper-card);
+  --qa-muted-bg: #F4F1EA;
+  --qa-border: var(--ca-color-paper-border);
+  --qa-text: var(--ca-color-paper-ink);
+  --qa-secondary: var(--ca-color-paper-sub);
+  --qa-hint: var(--ca-color-paper-muted);
+  --qa-shadow-focus: 0 0 0 4px rgba(0, 184, 212, .16);
+  --class-chat-primary: var(--ca-role-student-primary);
+  --class-chat-primary-50: var(--ca-role-student-light);
+  --class-chat-border: var(--ca-color-paper-border);
+  --class-chat-text: var(--ca-color-paper-ink);
+  --class-chat-muted: var(--ca-color-paper-sub);
+  --class-chat-ai: linear-gradient(135deg, var(--ca-role-student-primary) 0%, var(--ca-role-student-glow) 100%);
+}
+
+.student-shell .quiz-modern-page,
+.student-shell .exam-answer-page {
+  --quiz-primary-50: var(--ca-role-student-light);
+  --quiz-primary-100: #B2EBF2;
+  --quiz-primary-500: var(--ca-role-student-primary);
+  --quiz-primary-600: var(--ca-role-student-primary);
+  --quiz-ai-main: linear-gradient(135deg, var(--ca-role-student-primary) 0%, var(--ca-role-student-glow) 100%);
+  --quiz-ai-light: var(--ca-role-student-light);
+  --quiz-bg: var(--ca-color-paper-bg);
+  --quiz-border: var(--ca-color-paper-border);
+  --quiz-text: var(--ca-color-paper-ink);
+  --quiz-secondary: var(--ca-color-paper-sub);
+  --quiz-hint: var(--ca-color-paper-muted);
+  --quiz-shadow-focus: 0 0 0 4px rgba(0, 184, 212, .16);
+  --exam-primary-50: var(--ca-role-student-light);
+  --exam-primary-100: #B2EBF2;
+  --exam-primary-400: #26C6DA;
+  --exam-primary-500: var(--ca-role-student-primary);
+  --exam-primary-600: var(--ca-role-student-primary);
+  --exam-bg-page: var(--ca-color-paper-bg);
+  --exam-border-default: var(--ca-color-paper-border);
+  --exam-border-strong: var(--ca-color-paper-border-strong);
+  --exam-text-main: var(--ca-color-paper-ink);
+  --exam-text-sec: var(--ca-color-paper-sub);
+  --exam-text-hint: var(--ca-color-paper-muted);
+  --exam-shadow-focus: 0 0 0 4px rgba(0, 184, 212, .16);
+}
+
+.student-shell .student-plan-page {
+  --plan-primary-50: var(--ca-role-student-light);
+  --plan-primary-100: #B2EBF2;
+  --plan-primary-500: var(--ca-role-student-primary);
+  --plan-primary-600: var(--ca-role-student-primary);
+  --plan-ai-main: linear-gradient(135deg, var(--ca-role-student-primary) 0%, var(--ca-role-student-glow) 100%);
+  --plan-ai-light: var(--ca-role-student-light);
+  --plan-bg: var(--ca-color-paper-bg);
+  --plan-card: var(--ca-color-paper-card);
+  --plan-border: var(--ca-color-paper-border);
+  --plan-text: var(--ca-color-paper-ink);
+  --plan-secondary: var(--ca-color-paper-sub);
+  --plan-hint: var(--ca-color-paper-muted);
+  --plan-shadow-focus: 0 0 0 4px rgba(0, 184, 212, .16);
+}
+
+.student-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="2" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.015"/%3E%3C/svg%3E');
+}
+
+.student-top,
+.student-main,
+.bottom-tabs,
+.modal-mask {
+  position: relative;
+  z-index: 1;
+}
+
+.student-top {
+  --student-top-padding-x: 24px;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  height: 64px;
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
+  gap: 18px;
+  border-bottom: 1px solid var(--ca-color-paper-border);
+  background: rgba(255,255,255,.94);
+  box-shadow: var(--ca-shadow-paper);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 0 24px;
+}
+
+.brand {
+  color: var(--ca-color-paper-ink);
+  font-family: var(--ca-font-serif);
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.brand span {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--ca-radius-md);
+  background: var(--ca-color-slate);
+  color: var(--ca-role-student-glow);
+  box-shadow: var(--ca-shadow-paper);
+}
+
+.brand strong {
+  overflow: hidden;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-nav-links {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-full);
+  background: var(--ca-color-paper-bg);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.02);
+  padding: 4px;
+  scrollbar-width: none;
+}
+
+.student-nav-link {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--ca-radius-full);
+  color: var(--ca-color-paper-sub);
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 20px;
+  white-space: nowrap;
+}
+
+.student-nav-link:hover {
+  background: var(--ca-color-paper-card);
+  color: var(--ca-color-paper-ink);
+}
+
+.student-nav-link.active,
+.student-nav-link.ai.active {
+  background: var(--ca-color-paper-card);
+  color: var(--ca-color-paper-ink);
+  box-shadow: var(--ca-shadow-paper);
+}
+
+.student-nav-link.active svg,
+.student-nav-link.ai.active svg {
+  color: var(--ca-role-student-primary);
+}
+
+.top-actions {
+  gap: 12px;
+}
+
+.top-icon,
+.avatar-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border: 1px solid var(--ca-color-paper-border);
+  background: var(--ca-color-paper-bg);
+  color: var(--ca-color-paper-sub);
+  box-shadow: none;
+}
+
+.top-icon:hover,
+.avatar-btn:hover {
+  border-color: var(--ca-color-paper-border-strong);
+  background: var(--ca-color-paper-card);
+  color: var(--ca-color-paper-ink);
+  transform: translateY(-1px);
+}
+
+.top-icon em {
+  border: 2px solid var(--ca-color-paper-card);
+  background: var(--ca-role-teacher-primary);
+}
+
+.notice-pop,
+.user-pop {
+  position: fixed;
+  top: 58px;
+  right: var(--student-top-padding-x, 24px);
+  z-index: var(--z-popover);
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-xl);
+  background: var(--ca-color-paper-card);
+  box-shadow: var(--ca-shadow-dropdown);
+}
+
+.notice-pop {
+  right: calc(var(--student-top-padding-x, 24px) + 56px);
+}
+
+.notice-item:hover,
+.user-pop button:hover {
+  background: var(--ca-color-paper-bg);
+  color: var(--ca-color-paper-ink);
+}
+
+.student-main {
+  width: min(1100px, 100%);
+  max-width: 1100px;
+  padding: 32px 24px 80px;
+}
+
+.student-page {
+  gap: 24px;
+}
+
+.hello-card {
+  min-height: 160px;
+  border-radius: var(--ca-radius-xl);
+  background: var(--ca-color-slate);
+  box-shadow: var(--ca-shadow-paper);
+  color: var(--ca-color-chalk);
+  padding: 32px 36px;
+  overflow: hidden;
+}
+
+.hello-card::before {
+  content: "";
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E');
+  pointer-events: none;
+}
+
+.hello-card::after {
+  display: none;
+}
+
+.hello-card > div:first-child {
+  position: relative;
+  z-index: 1;
+}
+
+.hello-card > div:first-child > svg {
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 50%;
+  background: rgba(255,255,255,.05);
+  color: var(--ca-role-student-glow);
+  padding: 12px;
+}
+
+.hello-card h1 {
+  color: var(--ca-color-chalk);
+  font-family: var(--ca-font-serif);
+  font-size: 30px;
+  line-height: 1.25;
+}
+
+.hello-card p {
+  color: var(--ca-color-dust);
+  font-family: var(--ca-font-mono);
+  font-size: 13px;
+}
+
+.circle-stat,
+.white-pill {
+  position: relative;
+  z-index: 1;
+}
+
+.today-plan {
+  min-height: 72px;
+  grid-template-columns: auto 1fr auto minmax(120px, 160px) auto;
+  border: 1px solid var(--ca-color-paper-border);
+  border-left: 0;
+  border-radius: var(--ca-radius-xl);
+  background: var(--ca-color-paper-card);
+  box-shadow: var(--ca-shadow-paper);
+  padding: 14px 18px;
+}
+
+.today-plan > svg {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-md);
+  background: var(--ca-color-paper-bg);
+  color: var(--ca-color-paper-sub);
+  padding: 9px;
+}
+
+.today-plan button,
+.section-head button,
+.link-btn {
+  color: var(--ca-role-student-primary-hover);
+}
+
+.continue-card,
+.panel-card,
+.student-course-card,
+.ask-card,
+.quick-tile,
+.home-ai-recommend-card,
+.home-activity-card,
+.wrong-dashboard-head,
+.wrong-hero,
+.quiz-modern-header,
+.practice-modern-card,
+.tutor-input,
+.guide-card,
+.history-strip button {
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-xl);
+  background: var(--ca-color-paper-card);
+  box-shadow: var(--ca-shadow-paper);
+}
+
+.continue-card {
+  grid-template-columns: 256px minmax(0, 1fr);
+  gap: 24px;
+  min-height: 250px;
+  padding: 24px;
+}
+
+.continue-card:hover,
+.panel-card:hover,
+.student-course-card:hover,
+.quick-tile:hover,
+.home-action-task-card:hover {
+  border-color: var(--ca-color-paper-border-strong);
+  box-shadow: var(--ca-shadow-paper-hover);
+  transform: translateY(-2px);
+}
+
+.continue-cover {
+  min-height: 190px;
+  border-radius: var(--ca-radius-lg);
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-role-student-glow);
+}
+
+.continue-cover span {
+  background: rgba(255,255,255,.1);
+  color: var(--ca-color-chalk);
+}
+
+.tag-ai {
+  border-color: #B2EBF2;
+  background: var(--ca-role-student-light);
+  color: #007C89;
+}
+
+.continue-card h2,
+.section-head h2,
+.panel-card h2,
+.student-course-card h2,
+.ask-card h2 {
+  color: var(--ca-color-paper-ink);
+  font-family: var(--ca-font-serif);
+}
+
+.home-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, .85fr);
+  gap: 24px;
+}
+
+.home-course {
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-lg);
+  background: var(--ca-color-paper-bg);
+}
+
+.home-course:hover {
+  background: var(--ca-color-paper-card);
+}
+
+.home-ai-recommend-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 32px;
+  align-items: center;
+  padding: 28px 32px;
+  background: linear-gradient(135deg, #F9F8F6 0%, #E0F7FA 100%);
+}
+
+.home-ai-rec-header h2,
+.home-ac-title {
+  color: var(--ca-color-paper-ink);
+  font-family: var(--ca-font-serif);
+}
+
+.home-ai-icon-wrap,
+.home-ac-icon-wrapper.ai,
+.home-ac-icon-wrapper.learning,
+.practice-card-icon,
+.practice-feature-icon,
+.qa-title-icon {
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-role-student-glow) !important;
+}
+
+.home-data-tag,
+.home-task-arrow {
+  border-color: #B2EBF2;
+  background: var(--ca-role-student-light);
+  color: #007C89;
+}
+
+.home-action-task-card,
+.home-ac-content-wrap {
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-lg);
+  background: var(--ca-color-paper-card);
+}
+
+.home-activity-list::before {
+  background: var(--ca-color-paper-border);
+}
+
+.btn-primary,
+.send-btn,
+.ask-card button:not(.quick-tags button),
+.practice-generate-btn {
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-color-chalk) !important;
+  box-shadow: var(--ca-shadow-button);
+}
+
+.btn-primary:hover,
+.send-btn:hover:not(:disabled),
+.ask-card button:not(.quick-tags button):hover,
+.practice-generate-btn:hover:not(:disabled) {
+  background: #000 !important;
+  color: var(--ca-role-student-glow) !important;
+}
+
+.btn-ai,
+.tutor-submit-btn {
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-color-chalk) !important;
+}
+
+.btn-ai:hover,
+.tutor-submit-btn:hover:not(:disabled) {
+  color: var(--ca-role-student-glow) !important;
+  filter: none;
+}
+
+.student-course-grid {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 360px));
+  justify-content: start;
+}
+
+.course-art {
+  background: var(--ca-color-slate) !important;
+}
+
+.course-art > svg {
+  color: var(--ca-role-student-glow);
+}
+
+.course-art span,
+.course-art em {
+  background: rgba(255,255,255,.92);
+  color: var(--ca-color-paper-ink);
+}
+
+.course-art .dropdown-trigger {
+  border-color: rgba(244,244,240,.3);
+  background: rgba(255,255,255,.08);
+  color: var(--ca-color-chalk);
+}
+
+.course-layout {
+  grid-template-columns: minmax(0, 1.35fr) minmax(420px, .95fr);
+  gap: 24px;
+}
+
+.course-layout > aside {
+  min-width: 420px;
+}
+
+.quick-row {
+  gap: 14px;
+}
+
+.quick-tile span {
+  border-radius: var(--ca-radius-md);
+  background: var(--ca-color-paper-bg);
+  color: var(--ca-color-paper-sub);
+}
+
+.quick-tile:hover span {
+  background: var(--ca-color-slate);
+  color: var(--ca-role-student-glow);
+}
+
+.input,
+.textarea,
+.pretty-input,
+.select-menu > button,
+.dropdown-trigger,
+.chat-input,
+.input-box,
+.ask-card form,
+.problem-text {
+  border-color: var(--ca-color-paper-border) !important;
+  background: var(--ca-color-paper-card);
+  color: var(--ca-color-paper-ink);
+}
+
+.input:focus,
+.textarea:focus,
+.pretty-input:focus-within,
+.chat-input:focus-within,
+.input-box:focus-within,
+.problem-text:focus {
+  border-color: var(--ca-role-student-primary) !important;
+  box-shadow: 0 0 0 3px rgba(0, 184, 212, .16) !important;
+}
+
+.empty {
+  border-color: var(--ca-color-paper-border);
+  background: var(--ca-color-paper-card);
+  color: var(--ca-color-paper-sub);
+  box-shadow: var(--ca-shadow-paper);
+}
+
+.student-shell .mini-metric.ai svg {
+  color: var(--ca-role-student-primary);
+}
+
+.qa-modern-page,
+.class-chat {
+  --qa-primary-50: var(--ca-role-student-light);
+  --qa-primary-100: #B2EBF2;
+  --qa-primary-400: #26C6DA;
+  --qa-primary-500: var(--ca-role-student-primary);
+  --qa-primary-600: var(--ca-role-student-primary-hover);
+  --qa-ai-gradient: linear-gradient(135deg, var(--ca-role-student-primary), var(--ca-role-student-glow));
+  --qa-ai-light: var(--ca-role-student-light);
+  --qa-bg: var(--ca-color-paper-bg);
+  --qa-surface: var(--ca-color-paper-card);
+  --qa-muted-bg: var(--ca-color-paper-bg);
+  --qa-border: var(--ca-color-paper-border);
+  --qa-text: var(--ca-color-paper-ink);
+  --qa-secondary: var(--ca-color-paper-sub);
+  --qa-hint: var(--ca-color-paper-muted);
+  --qa-shadow-focus: 0 0 0 4px rgba(0, 184, 212, .16);
+  --class-chat-primary: var(--ca-role-student-primary);
+  --class-chat-primary-50: var(--ca-role-student-light);
+  --class-chat-ai: linear-gradient(135deg, var(--ca-role-student-primary), var(--ca-role-student-glow));
+}
+
+.qa-modern-page .thought,
+.class-chat .thought,
+.qa-modern-page .markdown-body blockquote,
+.class-chat .markdown-body blockquote {
+  border-color: #B2EBF2 !important;
+  background: var(--ca-role-student-light) !important;
+  color: #006C78 !important;
+}
+
+.qa-modern-page .avatar-ai,
+.qa-modern-page .qa-title-icon,
+.class-chat .chat-avatar.ai {
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-role-student-glow) !important;
+}
+
+.quiz-modern-page {
+  --quiz-primary-50: var(--ca-role-student-light);
+  --quiz-primary-100: #B2EBF2;
+  --quiz-primary-500: var(--ca-role-student-primary);
+  --quiz-primary-600: var(--ca-role-student-primary-hover);
+  --quiz-ai-main: linear-gradient(135deg, var(--ca-role-student-primary), var(--ca-role-student-glow));
+  --quiz-ai-light: var(--ca-role-student-light);
+  --quiz-bg: var(--ca-color-paper-bg);
+  --quiz-surface: var(--ca-color-paper-card);
+  --quiz-muted: var(--ca-color-paper-bg);
+  --quiz-border: var(--ca-color-paper-border);
+  --quiz-text: var(--ca-color-paper-ink);
+  --quiz-secondary: var(--ca-color-paper-sub);
+  --quiz-hint: var(--ca-color-paper-muted);
+}
+
+.exam-answer-page {
+  --exam-primary-50: var(--ca-role-student-light);
+  --exam-primary-100: #B2EBF2;
+  --exam-primary-400: #26C6DA;
+  --exam-primary-500: var(--ca-role-student-primary);
+  --exam-primary-600: var(--ca-role-student-primary-hover);
+  --exam-bg-page: var(--ca-color-paper-bg);
+  --exam-bg-card: var(--ca-color-paper-card);
+  --exam-border-light: #F0EEE7;
+  --exam-border-default: var(--ca-color-paper-border);
+  --exam-border-strong: var(--ca-color-paper-border-strong);
+  --exam-text-main: var(--ca-color-paper-ink);
+  --exam-text-sec: var(--ca-color-paper-sub);
+  --exam-text-hint: var(--ca-color-paper-muted);
+  --exam-shadow-focus: 0 0 0 4px rgba(0, 184, 212, .16);
+}
+
+.student-plan-page {
+  --plan-primary-50: var(--ca-role-student-light);
+  --plan-primary-100: #B2EBF2;
+  --plan-primary-500: var(--ca-role-student-primary);
+  --plan-primary-600: var(--ca-role-student-primary-hover);
+  --plan-ai-main: linear-gradient(135deg, var(--ca-role-student-primary), var(--ca-role-student-glow));
+  --plan-ai-light: var(--ca-role-student-light);
+  --plan-bg: var(--ca-color-paper-bg);
+  --plan-card: var(--ca-color-paper-card);
+  --plan-muted-bg: var(--ca-color-paper-bg);
+  --plan-border-light: #F0EEE7;
+  --plan-border: var(--ca-color-paper-border);
+  --plan-text: var(--ca-color-paper-ink);
+  --plan-secondary: var(--ca-color-paper-sub);
+  --plan-hint: var(--ca-color-paper-muted);
+  --plan-shadow-focus: 0 0 0 4px rgba(0, 184, 212, .16);
+}
+
+.student-plan-page .plan-banner {
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-color-chalk);
+}
+
+.student-plan-page .plan-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E');
+  pointer-events: none;
+}
+
+.tutoring-page {
+  --tutor-primary-50: var(--ca-role-student-light);
+  --tutor-primary-100: #B2EBF2;
+  --tutor-primary-500: var(--ca-role-student-primary);
+  --tutor-primary-600: var(--ca-role-student-primary-hover);
+  --tutor-ai-main: linear-gradient(135deg, var(--ca-role-student-primary), var(--ca-role-student-glow));
+  --tutor-ai-light: var(--ca-role-student-light);
+  --tutor-card: var(--ca-color-paper-card);
+  --tutor-muted: var(--ca-color-paper-bg);
+  --tutor-border: var(--ca-color-paper-border);
+  --tutor-text: var(--ca-color-paper-ink);
+  --tutor-secondary: var(--ca-color-paper-sub);
+  --tutor-hint: var(--ca-color-paper-muted);
+  --tutor-shadow-focus: 0 0 0 4px rgba(0, 184, 212, .16);
+}
+
+.tutoring-page .empty-guide svg {
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-role-student-glow) !important;
+}
+
+@media (max-width: 1100px) {
+  .student-top {
+    --student-top-padding-x: 16px;
+    grid-template-columns: auto 1fr auto;
+    padding: 0 16px;
+  }
+
+  .student-nav-link {
+    padding: 0 14px;
+  }
+
+  .home-grid,
+  .course-layout,
+  .home-ai-recommend-card {
+    grid-template-columns: 1fr;
+  }
+
+  .course-layout > aside {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .student-top {
+    --student-top-padding-x: 14px;
+    height: auto;
+    min-height: 64px;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+    row-gap: 8px;
+    padding: 10px 14px;
+  }
+
+  .brand { grid-area: brand; }
+  .top-actions { grid-area: actions; }
+  .student-nav-links {
+    grid-area: nav;
+    justify-self: stretch;
+  }
+
+  .student-main {
+    padding: 20px 14px 84px;
+  }
+
+  .hello-card,
+  .today-plan,
+  .continue-card {
+    grid-template-columns: 1fr;
+  }
+
+  .hello-card {
+    padding: 24px;
+  }
+
+  .hello-card h1 {
+    font-size: 24px;
+  }
+
+  .continue-cover {
+    min-height: 160px;
+  }
+}
+
+/* Final student audit overrides: these selectors load after the legacy grouped CSS. */
+.student-shell .tag-ai,
+.student-shell .home-data-tag,
+.student-shell .qa-modern-page .markdown-body code,
+.student-shell .class-chat .markdown-body code,
+.student-shell .ai-summary {
+  color: var(--ca-role-student-primary-hover) !important;
+}
+
+.student-shell .ai-summary,
+.student-shell .class-chat .thought-toggle,
+.student-shell .class-chat .thought,
+.student-shell .qa-modern-page .thought-toggle,
+.student-shell .qa-modern-page .thought {
+  border-color: #B2EBF2 !important;
+  background: var(--ca-role-student-light) !important;
+  color: #006C78 !important;
+}
+
+.student-shell .qa-modern-page .markdown-body blockquote,
+.student-shell .class-chat .markdown-body blockquote {
+  border-left-color: var(--ca-role-student-primary) !important;
+}
+
+.student-shell .qa-modern-page .ai-action-btn:hover:not(:disabled),
+.student-shell .qa-modern-page .msg-actions button:hover:not(:disabled),
+.student-shell .class-chat .msg-actions button:hover:not(:disabled) {
+  border-color: #B2EBF2 !important;
+  background: var(--ca-role-student-light) !important;
+  color: var(--ca-role-student-primary-hover) !important;
+}
+
+.student-shell .student-nav-link,
+.student-shell .btn-sm,
+.student-shell .section-head button,
+.student-shell .select-menu > button,
+.student-shell .dropdown-trigger,
+.student-shell .segmented button,
+.student-shell .practice-segmented-control button,
+.student-shell .quiz-modern-tabs button,
+.student-shell .profile-tabs button,
+.student-shell .study-tabs button,
+.student-shell .qa-modern-page .ai-action-btn,
+.student-shell .qa-modern-page .msg-actions button,
+.student-shell .class-chat .msg-actions button,
+.student-shell .history-favorite-toggle,
+.student-shell .wrong-tree button,
+.student-shell .knowledge-tree button {
+  min-height: 44px !important;
+}
+
+.student-shell .course-art .dropdown-trigger,
+.student-shell .ask-card button:not(.quick-tags button),
+.student-shell .send-btn,
+.student-shell .top-icon,
+.student-shell .avatar-btn,
+.student-shell .qa-modern-page .drawer-head button {
+  min-width: 44px !important;
+  width: 44px !important;
+  min-height: 44px !important;
+  height: 44px !important;
+}
+
+.student-shell .qa-modern-page .thinking,
+.student-shell .class-chat .thinking {
+  border-color: #B2EBF2 !important;
+}
+
+.student-shell .qa-modern-page .bubble-user,
+.student-shell .class-chat .chat-msg.user .chat-bubble,
+.student-shell .qa-modern-page .send-btn,
+.student-shell .practice-switch-wrapper.active .practice-switch,
+.student-shell .exam-btn-primary,
+.student-shell .exam-opt-input:checked + .exam-opt-card .exam-opt-letter {
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-color-chalk) !important;
+}
+
+.student-shell .qa-modern-page .send-btn:hover:not(:disabled),
+.student-shell .exam-btn-primary:hover:not(:disabled) {
+  background: #000 !important;
+  color: var(--ca-role-student-glow) !important;
+}
+
+.student-shell .qa-modern-page .input-dock-container {
+  background: linear-gradient(to bottom, rgba(249, 248, 246, 0), var(--ca-color-paper-bg) 42%) !important;
+}
+
+.student-shell .qa-modern-page .input-box {
+  border-color: var(--ca-color-paper-border) !important;
+  background: rgba(255,255,255,.96) !important;
+}
+
+.student-shell .bottom-tabs .ai span {
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-role-student-glow) !important;
+  box-shadow: 0 8px 20px rgba(0, 184, 212, .22) !important;
+}
+
+.student-shell .profile-cover {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(244,244,240,.14), transparent 30%),
+    var(--ca-color-slate) !important;
+}
+
+.student-shell .profile-cover::after {
+  background: linear-gradient(180deg, rgba(0, 184, 212, .10), transparent) !important;
+}
+
+.student-shell .profile-header-info aside strong,
+.student-shell .student-plan-page .total-hours span {
+  color: var(--ca-role-student-primary-hover) !important;
+}
+
+.student-shell .student-plan-page .bar-fill {
+  background: linear-gradient(to top, var(--ca-role-student-primary-hover), var(--ca-role-student-glow)) !important;
+}
+
+.student-shell .student-plan-page .ai-sparkle-bg,
+.student-shell .student-plan-page .btn-ai-gen,
+.student-shell .practice-card-icon,
+.student-shell .tutoring-page .empty-guide svg {
+  background: var(--ca-color-slate) !important;
+  color: var(--ca-role-student-glow) !important;
+}
+
+.student-shell .student-plan-page .btn-ai-gen,
+.student-shell .practice-generate-btn,
+.student-shell .qa-modern-page .qa-tutoring-link {
+  box-shadow: 0 8px 20px rgba(0, 184, 212, .22) !important;
+}
+
+.student-shell .practice-chip.active,
+.student-shell .practice-segmented-control button.active,
+.student-shell .quiz-modern-tabs button.active {
+  color: var(--ca-role-student-primary-hover) !important;
+  background: var(--ca-role-student-light) !important;
+}
+
+.student-shell .practice-feature-card > span,
+.student-shell .wrong-filter-state button,
+.student-shell .wrong-book-page .wrong-tree button:hover,
+.student-shell .wrong-book-page .wrong-tree button.active {
+  color: var(--ca-role-student-primary-hover) !important;
+}
+
+.student-shell .wrong-book-page .wrong-tree button:hover,
+.student-shell .wrong-book-page .wrong-tree button.active {
+  border-color: #B2EBF2 !important;
+  background: var(--ca-role-student-light) !important;
+}
+
+.student-shell .wrong-book-page .wrong-tree button.active em {
+  background: var(--ca-role-student-primary-hover) !important;
+  color: white !important;
+}
+
+.study-room .study-tabs button.active,
+.study-room .player-bar .popover-button.select-menu > button:hover,
+.study-room .note-tools button:hover,
+.study-room .note-editor:focus {
+  border-color: #B2EBF2 !important;
+  background: var(--ca-role-student-light) !important;
+  color: var(--ca-role-student-primary-hover) !important;
+}
+
+.student-shell .study-room .note-editor:focus,
+.study-room .note-editor:focus {
+  box-shadow: 0 0 0 4px rgba(0, 184, 212, .16), var(--shadow-sm) !important;
+}
+
+.study-room .complete-modal > svg {
+  color: var(--ca-role-student-primary) !important;
+}

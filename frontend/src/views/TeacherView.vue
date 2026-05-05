@@ -6,28 +6,31 @@
         <strong>课程学习助手</strong>
         <i></i>
         <div ref="courseSwitchRef" class="course-switch">
-          <button @click="courseMenuOpen = !courseMenuOpen">{{ currentCourse?.name || '选择课程' }}<ChevronDown :size="16" /></button>
+          <button type="button" :class="{ active: courseMenuOpen }" aria-haspopup="menu" :aria-expanded="courseMenuOpen" @click.stop="toggleCourseMenu">
+            <span>{{ currentCourse?.name || '选择课程' }}</span>
+            <ChevronDown :size="16" />
+          </button>
           <Transition name="top-menu">
-            <div v-if="courseMenuOpen" class="course-popover top-menu-panel">
-              <button v-for="course in courses.slice(0, 8)" :key="course.id" :class="{ active: currentCourseId === course.id }" @click="selectCourse(course.id)">
+            <div v-if="courseMenuOpen" class="course-popover top-menu-panel" role="menu">
+              <button v-for="course in courses.slice(0, 8)" :key="course.id" type="button" role="menuitem" :class="{ active: currentCourseId === course.id }" @click="selectCourse(course.id)">
                 <Check v-if="currentCourseId === course.id" :size="15" />{{ course.name }}
               </button>
-              <button @click="newCourse"><Plus :size="15" />创建课程</button>
+              <button type="button" role="menuitem" @click="newCourse"><Plus :size="15" />创建课程</button>
             </div>
           </Transition>
         </div>
       </div>
       <div class="header-actions">
-        <button class="icon-btn" @click="openNotifications"><Bell :size="20" /><span>通知</span><em v-if="todoCount">{{ todoCount }}</em></button>
-        <button class="icon-btn" @click="openHelp"><HelpCircle :size="20" /><span>帮助</span></button>
+        <button type="button" class="icon-btn" aria-label="通知" @click="openNotifications"><Bell :size="20" /><span>通知</span><em v-if="todoCount">{{ todoCount }}</em></button>
+        <button type="button" class="icon-btn" aria-label="帮助" @click="openHelp"><HelpCircle :size="20" /><span>帮助</span></button>
         <i></i>
         <div ref="userMenuRef" class="user-menu">
-          <button @click="userMenuOpen = !userMenuOpen"><span class="avatar">{{ firstChar(teacherName) }}</span><b>{{ teacherName }}</b><ChevronDown :size="16" /></button>
+          <button type="button" aria-haspopup="menu" :aria-expanded="userMenuOpen" @click="userMenuOpen = !userMenuOpen"><span class="avatar">{{ firstChar(teacherName) }}</span><b>{{ teacherName }}</b><ChevronDown :size="16" /></button>
           <Transition name="top-menu">
-            <div v-if="userMenuOpen" class="user-popover top-menu-panel">
-              <button @click="go('teacherProfile')"><User :size="15" />个人中心</button>
-              <button @click="go('teacherProfile')"><Settings :size="15" />账号设置</button>
-              <button @click="$emit('logout')"><LogOut :size="15" />退出登录</button>
+            <div v-if="userMenuOpen" class="user-popover top-menu-panel" role="menu">
+              <button type="button" role="menuitem" @click="go('teacherProfile')"><User :size="15" />个人中心</button>
+              <button type="button" role="menuitem" @click="go('teacherProfile')"><Settings :size="15" />账号设置</button>
+              <button type="button" role="menuitem" @click="$emit('logout')"><LogOut :size="15" />退出登录</button>
             </div>
           </Transition>
         </div>
@@ -78,7 +81,7 @@
           <button v-if="active === 'teacherDashboard'" class="btn btn-secondary" @click="enterRecentCourse"><Presentation :size="16" />最近课程</button>
           <button v-if="active === 'teacherCourses'" class="btn btn-primary" @click="newCourse"><Plus :size="16" />创建课程</button>
           <button v-if="active === 'teacherCourseForm'" class="btn btn-primary" :data-loading="isPending('save-course')" :disabled="isPending('save-course')" @click="saveCourse">{{ courseForm.id ? '保存修改' : '创建课程' }}</button>
-          <button v-if="active === 'teacherMaterials'" class="btn btn-primary" @click="uploadOpen = true"><Upload :size="16" />上传资料</button>
+          <button v-if="active === 'teacherMaterials'" class="btn btn-primary" @click="openUploadModal"><Upload :size="16" />上传资料</button>
           <button v-if="active === 'teacherLessons'" class="btn btn-primary" @click="go('teacherMaterials')"><Plus :size="16" />从资料创建</button>
           <button v-if="active === 'teacherStudents'" class="btn btn-ghost" :data-loading="isPending('export-teacherStudents')" :disabled="isPending('export-teacherStudents')" @click="exportCurrent"><Download :size="16" />导出学生</button>
           <div v-if="active === 'teacherAnalytics'" class="segmented-control">
@@ -221,7 +224,7 @@
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <div class="metric-grid three compact"><MetricCard :icon="File" label="资料总数" :value="materialSummary.total || 0" sub="份" /><MetricCard :icon="Database" label="存储用量" :value="sizeLabel(materialSummary.size_bytes)" sub="课程资料" tone="success" /><MetricCard :icon="Sparkles" label="已解析" :value="`${materialSummary.ready || 0}/${materialSummary.total || 0}`" sub="AI" tone="ai" /></div>
-          <div class="materials-layout"><aside class="chapter-tree"><div class="search-box small"><Search :size="15" /><input v-model="chapterKeyword" placeholder="搜索章节" /></div><button :class="{ active: selectedChapterId === 0 }" @click="selectedChapterId = 0"><FileText :size="16" />全部资料<span>{{ materialSummary.total || 0 }}</span></button><TransitionGroup name="motion-list" tag="div" class="chapter-buttons"><div v-for="chapter in filteredChapters" :key="chapter.id" class="chapter-tree-row" :class="{ active: selectedChapterId === chapter.id, empty: !chapter.count, 'just-added': freshMaterialChapterId === chapter.id }"><button class="chapter-tree-main" @click="selectedChapterId = chapter.id"><Layers :size="16" />{{ chapter.title }}<span>{{ chapter.count }}</span></button><button class="chapter-tree-delete" :data-loading="isPending(`delete-chapter-${chapter.id}`)" :disabled="isPending(`delete-chapter-${chapter.id}`)" title="删除章节" @click="deleteChapterFromTree(chapter)"><Trash2 :size="14" /></button></div></TransitionGroup><button :data-loading="isPending('add-tree-chapter')" :disabled="isPending('add-tree-chapter')" @click="addChapterFromTree"><Plus :size="16" />添加章节</button></aside><section class="materials-panel" :class="{ 'panel-loading': isPending('filter-materials') }"><div class="material-filter"><div class="search-box"><Search :size="16" /><input v-model="materialFilter.keyword" placeholder="搜索文件名" @keyup.enter="refreshMaterials" /></div><AppSelect v-model="materialFilter.type" :options="materialTypeOptions" /><AppSelect v-model="materialFilter.status" :options="materialStatusOptions" /><AppSelect v-model="materialSort" :options="materialSortOptions" /><div class="view-toggle"><button type="button" :class="{ active: materialView === 'grid' }" @click="materialView = 'grid'"><Grid2X2 :size="16" />网格</button><button type="button" :class="{ active: materialView === 'list' }" @click="materialView = 'list'"><FileText :size="16" />列表</button></div></div><TransitionGroup name="material-list-motion" tag="div" class="material-list" :class="materialView"><article v-for="item in filteredMaterials" :key="item.id" class="material-row"><span class="file-badge" :class="item.material_type"><component :is="fileIcon(item.material_type)" :size="18" /></span><div><strong>{{ item.title }}</strong><small>{{ chapterName(item.chapter_id) }} · {{ typeText(item.material_type) }} · {{ sizeLabel(item.size_bytes) }}</small><MaterialStatus :item="item" /></div><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span><section><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" :data-loading="isPending(`reprocess-material-${item.id}`)" :disabled="isPending(`reprocess-material-${item.id}`)" @click="reprocessMaterial(item.id)"><RefreshCw :size="15" />重新解析</button><button v-if="item.parse_status === 'ready'" class="icon-action" :data-loading="isPending(`open-ppt-${item.id}`)" :disabled="isPending(`open-ppt-${item.id}`)" @click="openPptWorkbench(item.id)"><Wand2 :size="15" />编辑课时</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" :data-loading="isPending(`delete-material-${item.id}`)" :disabled="isPending(`delete-material-${item.id}`)" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></section></article><EmptyState v-if="!filteredMaterials.length" key="empty" text="暂无资料" /></TransitionGroup></section></div>
+          <div class="materials-layout"><aside class="chapter-tree"><div class="search-box small"><Search :size="15" /><input v-model="chapterKeyword" placeholder="搜索章节" /></div><button class="chapter-tree-main" :class="{ active: selectedChapterId === 0 }" @click="selectedChapterId = 0"><FileText :size="16" /><span class="chapter-tree-title">全部资料</span><span class="chapter-tree-count">{{ materialSummary.total || 0 }}</span></button><TransitionGroup name="motion-list" tag="div" class="chapter-buttons"><div v-for="chapter in filteredChapters" :key="chapter.id" class="chapter-tree-row" :class="{ active: selectedChapterId === chapter.id, 'is-empty': !chapter.count, 'just-added': freshMaterialChapterId === chapter.id }"><button class="chapter-tree-main" @click="selectedChapterId = chapter.id"><Layers :size="16" /><span class="chapter-tree-title">{{ chapter.title }}</span><span class="chapter-tree-count">{{ chapter.count || 0 }}</span></button><button class="chapter-tree-delete" :data-loading="isPending(`delete-chapter-${chapter.id}`)" :disabled="isPending(`delete-chapter-${chapter.id}`)" title="删除章节" @click="deleteChapterFromTree(chapter)"><Trash2 :size="14" /></button></div></TransitionGroup><button :data-loading="isPending('add-tree-chapter')" :disabled="isPending('add-tree-chapter')" @click="openAddChapterModal"><Plus :size="16" /><span class="chapter-tree-title">添加章节</span></button></aside><section class="materials-panel" :class="{ 'panel-loading': isPending('filter-materials') }"><div class="material-filter"><div class="search-box"><Search :size="16" /><input v-model="materialFilter.keyword" placeholder="搜索文件名" @keyup.enter="refreshMaterials" /></div><AppSelect v-model="materialFilter.type" :options="materialTypeOptions" /><AppSelect v-model="materialFilter.status" :options="materialStatusOptions" /><AppSelect v-model="materialSort" :options="materialSortOptions" /><div class="view-toggle"><button type="button" :class="{ active: materialView === 'grid' }" @click="materialView = 'grid'"><Grid2X2 :size="16" />网格</button><button type="button" :class="{ active: materialView === 'list' }" @click="materialView = 'list'"><FileText :size="16" />列表</button></div></div><TransitionGroup name="material-list-motion" tag="div" class="material-list" :class="materialView"><article v-for="item in filteredMaterials" :key="item.id" class="material-row"><span class="file-badge" :class="item.material_type"><component :is="fileIcon(item.material_type)" :size="18" /></span><div><strong>{{ item.title }}</strong><small>{{ chapterName(item.chapter_id) }} · {{ typeText(item.material_type) }} · {{ sizeLabel(item.size_bytes) }}</small><MaterialStatus :item="item" /></div><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span><section><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" :data-loading="isPending(`reprocess-material-${item.id}`)" :disabled="isPending(`reprocess-material-${item.id}`)" @click="reprocessMaterial(item.id)"><RefreshCw :size="15" />重新解析</button><button v-if="item.parse_status === 'ready'" class="icon-action" :data-loading="isPending(`open-ppt-${item.id}`)" :disabled="isPending(`open-ppt-${item.id}`)" @click="openPptWorkbench(item.id)"><Wand2 :size="15" />编辑课时</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" :data-loading="isPending(`delete-material-${item.id}`)" :disabled="isPending(`delete-material-${item.id}`)" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></section></article><EmptyState v-if="!filteredMaterials.length" key="empty" text="暂无资料" /></TransitionGroup></section></div>
         </template>
       </section>
 
@@ -229,7 +232,7 @@
         <header class="ppt-head"><button class="btn btn-ghost" @click="go(workbenchMode === 'lesson' ? 'teacherLessons' : 'teacherMaterials')"><ArrowLeft :size="16" />{{ workbenchMode === 'lesson' ? '返回课时管理' : '返回资料管理' }}</button><strong>{{ materialDetail?.material?.title || 'PPT 工作台' }}</strong></header>
         <template v-if="pages.length">
           <aside class="thumb-column"><div class="thumb-top"><strong>{{ materialDetail?.material?.title || '-' }}</strong><small>{{ reviewedCount }}/{{ pages.length }} 页已审核</small><AppProgress :value="reviewedCount" :max="Math.max(pages.length, 1)" tone="success" /><AppCheckbox :model-value="false" label="全选审核" @update:model-value="markAllReviewed" /><button class="btn btn-ghost btn-sm" :data-loading="activePage && isPending(`regen-page-${activePage.id}`)" :disabled="!!activePage && isPending(`regen-page-${activePage.id}`)" @click="regenCurrent"><RefreshCw :size="14" />批量重新生成</button></div><TransitionGroup name="thumb-list" tag="div" class="thumb-list"><button v-for="page in pages" :key="page.id" class="thumb-card" :class="{ active: currentPageId === page.id }" @click="currentPageId = page.id"><span>{{ page.page_number }}</span><div>{{ page.page_title || `第${page.page_number}页` }}</div><CheckCircle v-if="page.script_status === 'ready'" :size="16" /><Clock v-else :size="16" /><small>{{ page.script_text?.slice(0, 20) }}</small></button></TransitionGroup></aside>
-          <main class="ppt-stage" :class="{ focused: stageFocused }"><div class="stage-top"><button class="icon-action" @click="prevPage"><ChevronLeft :size="18" />上一页</button>第 {{ currentPageIndex + 1 }} / {{ pages.length }} 页<button class="icon-action" @click="nextPage"><ChevronRight :size="18" />下一页</button><button class="icon-action" @click="zoomSlide"><ZoomIn :size="18" />放大</button><button class="icon-action" :class="{ active: stageFocused }" @click="toggleStageFocus"><Maximize :size="18" />专注</button></div><div class="slide-preview-wrap" :class="{ focused: stageFocused }" :style="{ '--slide-scale': slideScale }"><Transition name="slide-flip" mode="out-in"><article :key="activePage?.id || 0" class="slide-preview"><h2>{{ activePage?.page_title || `第${currentPageIndex + 1}页` }}</h2><p>{{ activePage?.page_text }}</p></article></Transition></div><Transition name="fade-slide"><div v-if="slideOverviewOpen" class="slide-overview"><TransitionGroup name="thumb-list" tag="div" class="slide-overview-grid"><button v-for="page in pages" :key="page.id" :class="{ active: currentPageId === page.id }" @click="jumpToPage(page.id)"><span>{{ page.page_number }}</span><strong>{{ page.page_title || `第${page.page_number}页` }}</strong><small>{{ page.script_status === 'ready' ? '已审核' : '待处理' }}</small></button></TransitionGroup></div></Transition><div class="stage-controls"><button class="icon-action" @click="firstPage"><SkipBack :size="18" />首页</button><button class="icon-action" @click="prevPage"><ChevronLeft :size="18" />上一页</button><button class="icon-action" @click="nextPage"><ChevronRight :size="18" />下一页</button><button class="icon-action" @click="lastPage"><SkipForward :size="18" />末页</button><button class="icon-action" :class="{ active: slideOverviewOpen }" @click="toggleSlideOverview"><Grid2X2 :size="18" />缩略图</button><button class="icon-action" :class="{ active: presentationMode }" @click="togglePresentationMode"><Presentation :size="18" />演示</button></div></main>
+          <main class="ppt-stage" :class="{ focused: stageFocused }"><div class="stage-top"><button class="icon-action" @click="prevPage"><ChevronLeft :size="18" />上一页</button>第 {{ currentPageIndex + 1 }} / {{ pages.length }} 页<button class="icon-action" @click="nextPage"><ChevronRight :size="18" />下一页</button><button class="icon-action" @click="zoomSlide"><ZoomIn :size="18" />放大</button><button class="icon-action" :class="{ active: stageFocused }" @click="toggleStageFocus"><Maximize :size="18" />专注</button></div><div class="slide-preview-wrap" :class="{ focused: stageFocused }" :style="{ '--slide-scale': slideScale }"><Transition name="slide-flip" mode="out-in"><article :key="activePage?.id || 0" class="slide-preview"><h2>{{ activePage?.page_title || `第${currentPageIndex + 1}页` }}</h2><div class="slide-content teacher-markdown markdown-body" v-html="activePageHtml"></div></article></Transition></div><Transition name="fade-slide"><div v-if="slideOverviewOpen" class="slide-overview"><TransitionGroup name="thumb-list" tag="div" class="slide-overview-grid"><button v-for="page in pages" :key="page.id" :class="{ active: currentPageId === page.id }" @click="jumpToPage(page.id)"><span>{{ page.page_number }}</span><strong>{{ page.page_title || `第${page.page_number}页` }}</strong><small>{{ page.script_status === 'ready' ? '已审核' : '待处理' }}</small></button></TransitionGroup></div></Transition><div class="stage-controls"><button class="icon-action" @click="firstPage"><SkipBack :size="18" />首页</button><button class="icon-action" @click="prevPage"><ChevronLeft :size="18" />上一页</button><button class="icon-action" @click="nextPage"><ChevronRight :size="18" />下一页</button><button class="icon-action" @click="lastPage"><SkipForward :size="18" />末页</button><button class="icon-action" :class="{ active: slideOverviewOpen }" @click="toggleSlideOverview"><Grid2X2 :size="18" />缩略图</button><button class="icon-action" :class="{ active: presentationMode }" @click="togglePresentationMode"><Presentation :size="18" />演示</button></div></main>
           <aside class="script-panel"><div class="script-head"><h2><FileEdit :size="18" />第 {{ activePage?.page_number || 1 }} 页</h2><span class="tag" :class="statusClass(activePage?.script_status)">{{ statusText(activePage?.script_status) }}</span></div><div class="ai-strip" :class="{ thinking: activePage && isPending(`regen-page-${activePage.id}`) }"><Sparkles :size="14" />AI 生成<button :data-loading="activePage && isPending(`regen-page-${activePage.id}`)" :disabled="!!activePage && isPending(`regen-page-${activePage.id}`)" @click="regenCurrent">重新生成</button></div><div class="editor-toolbar"><button :class="{ active: editorPulse === 'bold' }" @click="formatScript('bold')">B</button><button :class="{ active: editorPulse === 'italic' }" @click="formatScript('italic')">I</button><button :class="{ active: editorPulse === 'paragraph' }" @click="formatScript('paragraph')">段落</button><button :class="{ active: editorPulse === 'undo' }" @click="undoScriptEdit">撤销</button><button :class="{ active: editorPulse === 'redo' }" @click="redoScriptEdit">重做</button></div><textarea ref="scriptEditor" v-model="scriptDraft" class="script-editor"></textarea><small class="word-count">{{ scriptDraft.length }} 字</small><div class="script-actions"><span><Volume2 :size="16" />{{ activePage?.audio_url ? '已合成' : '未合成' }}</span><button class="btn btn-ghost btn-sm" :data-loading="activePage && isPending(`regen-page-${activePage.id}`)" :disabled="!!activePage && isPending(`regen-page-${activePage.id}`)" @click="regenCurrent">重新生成</button><button class="btn btn-primary btn-sm" :data-loading="activePage && isPending(`save-script-${activePage.id}`)" :disabled="!!activePage && isPending(`save-script-${activePage.id}`)" @click="saveScript">审核完成</button></div></aside>
           <footer class="ppt-status"><span>{{ materialDetail?.material?.title }} · 已审核 {{ reviewedCount }}/{{ pages.length }} 页 · 已保存</span><div><button class="btn btn-secondary btn-sm" :data-loading="isPending('mark-all-reviewed')" :disabled="isPending('mark-all-reviewed')" @click="markAllReviewed">批量审核</button><button class="btn btn-ghost btn-sm" :data-loading="activePage && isPending(`save-script-${activePage.id}`)" :disabled="!!activePage && isPending(`save-script-${activePage.id}`)" @click="synthesizeCurrent">语音合成</button><button class="btn btn-primary btn-sm" :data-loading="isPending('publish-lesson')" :disabled="isPending('publish-lesson')" @click="publishLessonFromMaterial">发布课时</button></div></footer>
         </template>
@@ -259,7 +262,7 @@
           <article class="ai-suggestion" :class="{ thinking: pageLoading || isPending('refresh-analysis') }"><span><Sparkles :size="20" /></span><div><h2>教学建议</h2><p>{{ analysis.suggestion || '暂无建议' }}</p></div><button class="btn btn-ghost btn-sm" :data-loading="isPending('refresh-analysis')" :disabled="isPending('refresh-analysis')" @click="refreshAnalysis"><RefreshCw :size="14" />刷新</button><span class="tag tag-ai">{{ analysisRange }}</span></article>
           <div class="metric-grid six compact"><MetricCard :icon="Activity" label="活跃率" :value="`${analysis.metrics?.active_rate || 0}%`" sub="近7天" /><MetricCard :icon="Clock" label="学习时长" :value="`${analysis.metrics?.study_hours || 0}h`" sub="期间" /><MetricCard :icon="Presentation" label="完成率" :value="`${analysis.metrics?.completion_rate || 0}%`" sub="课时" /><MetricCard :icon="MessageCircle" label="问答总量" :value="analysis.metrics?.qa_total || 0" sub="期间" /><MetricCard :icon="ClipboardList" label="平均分" :value="analysis.metrics?.average_score || 0" sub="/100" /><MetricCard :icon="AlertTriangle" label="薄弱点" :value="analysis.metrics?.weak_point_count || 0" sub="数量" :danger="(analysis.metrics?.weak_point_count || 0) > 0" /></div>
           <div class="analysis-grid two"><article class="panel-card"><div class="panel-head"><h2><Presentation :size="18" />课时完成率</h2></div><AdminChart type="hbar" :labels="lessonAnalysisLabels" :series="lessonAnalysisSeries" :height="260" /></article><article class="panel-card"><div class="panel-head"><h2><Clock :size="18" />学习时长</h2></div><AdminChart type="line" :labels="analysisTimeLabels" :series="analysisTimeSeries" :height="260" /></article></div>
-          <div class="analysis-grid knowledge"><article class="panel-card"><div class="panel-head"><h2><Layers :size="18" />章节掌握</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="260" /></article><article class="panel-card weak-list"><div class="panel-head"><h2><TrendingDown :size="18" />薄弱知识点</h2><button class="btn btn-ai btn-sm" :data-loading="isPending('weak-quiz-薄弱知识点')" :disabled="isPending('weak-quiz-薄弱知识点')" @click="generateWeakQuiz()"><Sparkles :size="14" />AI生成</button></div><TransitionGroup name="motion-list" tag="div" class="weak-row-list"><div v-for="(item, index) in analysis.weak_points || []" :key="item.knowledge_point" class="weak-row"><b>{{ rankNumber(index) }}</b><span>{{ item.knowledge_point }}</span><AppProgress :value="item.wrong_count" :max="weakMax" tone="danger" /><strong>{{ item.wrong_count }}</strong><button type="button" :data-loading="isPending(`weak-quiz-${item.knowledge_point}`)" :disabled="isPending(`weak-quiz-${item.knowledge_point}`)" @click="generateWeakQuiz(item)">生成</button></div></TransitionGroup><EmptyState v-if="!(analysis.weak_points || []).length" text="暂无薄弱点" /></article></div>
+          <div class="analysis-grid knowledge"><article class="panel-card"><div class="panel-head"><h2><Layers :size="18" />章节掌握</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="260" /></article><article class="panel-card weak-list"><div class="panel-head weak-head"><div><h2><TrendingDown :size="18" />薄弱知识点</h2><small>{{ weakQuizStatus || '可从薄弱点生成待审核测验' }}</small></div><button class="btn btn-ai btn-sm weak-create-all" :data-loading="weakQuizGenerating && weakQuizGenerationMode === 'all'" :disabled="weakQuizGenerating || !(analysis.weak_points || []).length" @click="generateWeakQuiz()"><Sparkles :size="14" />{{ weakQuizGenerating && weakQuizGenerationMode === 'all' ? '整套生成中' : '生成整套测验' }}</button></div><div v-if="weakQuizGenerating" class="weak-generating"><span class="spinner"></span><span>{{ weakQuizStatus }}</span></div><TransitionGroup name="motion-list" tag="div" class="weak-row-list"><div v-for="(item, index) in analysis.weak_points || []" :key="item.knowledge_point" class="weak-row" :class="{ generating: weakQuizGeneratingTopic === item.knowledge_point }"><b>{{ rankNumber(index) }}</b><span>{{ item.knowledge_point }}</span><AppProgress :value="item.wrong_count" :max="weakMax" tone="danger" /><strong>{{ item.wrong_count }}</strong><button type="button" class="weak-point-action" :aria-label="`根据${item.knowledge_point}生成专项题`" :data-loading="weakQuizGeneratingTopic === item.knowledge_point" :disabled="weakQuizGenerating" @click="generateWeakQuiz(item)">{{ weakQuizGeneratingTopic === item.knowledge_point ? '专项生成中' : '生成专项题' }}</button></div></TransitionGroup><EmptyState v-if="!(analysis.weak_points || []).length" text="暂无薄弱点" /></article></div>
           <article class="panel-card"><div class="panel-head"><h2><MessageCircle :size="18" />学生高频问题</h2><small>{{ analysisRange }}</small></div><div class="question-layout"><TransitionGroup name="cloud-list" tag="div" class="word-cloud"><span v-for="item in analysis.high_frequency_questions || []" :key="item.question" :style="{ fontSize: cloudSize(item.count) }">{{ item.question.slice(0, 12) }}</span></TransitionGroup><TransitionGroup name="motion-list" tag="div"><div v-for="(item, index) in analysis.high_frequency_questions || []" :key="item.question" class="question-row"><b>{{ rankPlain(index) }}</b><span>{{ item.question }}</span><strong>{{ item.count }}次</strong></div></TransitionGroup></div></article>
           <div class="analysis-grid three"><article class="panel-card"><div class="panel-head"><h2><ClipboardList :size="18" />成绩分布</h2></div><AdminChart type="bar" :labels="scoreLabels" :series="scoreSeries" :height="220" /></article><article class="panel-card"><div class="panel-head"><h2><CheckCircle :size="18" />测验完成</h2></div><AdminChart type="hbar" :labels="lessonAnalysisLabels" :series="lessonAnalysisSeries" :height="220" /></article><article class="panel-card"><div class="panel-head"><h2><XCircle :size="18" />错题分布</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="220" /></article></div>
           <article class="panel-card"><div class="panel-head"><h2><Users :size="18" />学生活跃度</h2><button class="btn btn-ghost btn-sm" :disabled="!filteredStudents.length" @click="batchRemind"><Bell :size="14" />批量提醒</button></div><div class="activity-layers"><LayerCard label="高度活跃" :value="analysis.student_layers?.high || 0" tone="success" /><LayerCard label="正常活跃" :value="analysis.student_layers?.normal || 0" /><LayerCard label="低活跃" :value="analysis.student_layers?.low || 0" tone="warning" /><LayerCard label="长期未活跃" :value="analysis.student_layers?.inactive || 0" tone="danger" /></div></article>
@@ -294,6 +297,23 @@
             <div v-for="item in uploadQueue" :key="item.id" class="upload-row"><File :size="18" /><span>{{ item.file.name }}</span><small>{{ sizeLabel(item.file.size) }}</small><AppSelect v-model="item.chapter_id" :options="uploadChapterOptions" /><AppSelect v-model="item.category" :options="materialCategoryOptions" /><button class="icon-action danger" @click="removeUpload(item.id)"><Trash2 :size="15" />移除</button></div>
           </TransitionGroup>
           <footer><button class="btn btn-ghost" @click="uploadOpen = false">取消</button><button class="btn btn-primary" :data-loading="isPending('upload-materials')" :disabled="!uploadQueue.length || isPending('upload-materials')" @click="uploadMaterials">确认上传</button></footer>
+        </article>
+      </div>
+    </Transition>
+
+    <Transition name="modal-pop">
+      <div v-if="chapterNameOpen" class="modal-mask">
+        <article class="modal chapter-name-modal">
+          <div class="modal-head">
+            <Layers :size="20" />
+            <h2>添加章节</h2>
+            <button class="icon-action" @click="chapterNameOpen = false"><X :size="16" />关闭</button>
+          </div>
+          <label>章节名称<input ref="chapterNameInput" v-model="chapterNameDraft" class="input" maxlength="80" placeholder="输入章节名称" @keydown.enter.prevent="addChapterFromTree" /></label>
+          <footer>
+            <button class="btn btn-ghost" @click="chapterNameOpen = false">取消</button>
+            <button class="btn btn-primary" :data-loading="isPending('add-tree-chapter')" :disabled="isPending('add-tree-chapter') || !chapterNameDraft.trim()" @click="addChapterFromTree"><Plus :size="16" />添加章节</button>
+          </footer>
         </article>
       </div>
     </Transition>
@@ -367,8 +387,8 @@
               </button>
             </aside>
             <section v-if="lessonPreviewActivePage" class="lesson-preview-stage">
-              <article><h3>{{ lessonPreviewActivePage.page_title || `第${lessonPreviewActivePage.page_number}页` }}</h3><p>{{ lessonPreviewActivePage.page_text }}</p></article>
-              <article><h3>AI 讲解脚本</h3><p>{{ lessonPreviewActivePage.script_text || '暂无脚本' }}</p></article>
+              <article><h3>{{ lessonPreviewActivePage.page_title || `第${lessonPreviewActivePage.page_number}页` }}</h3><div class="teacher-markdown markdown-body" v-html="lessonPreviewPageHtml"></div></article>
+              <article><h3>AI 讲解脚本</h3><div class="teacher-markdown markdown-body" v-html="lessonPreviewScriptHtml"></div></article>
             </section>
             <EmptyState v-else text="该课时暂无页面" />
           </div>
@@ -445,9 +465,6 @@
 <script setup lang="ts">
 import { TransitionGroup, computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type PropType } from "vue";
 import { useRouter } from "vue-router";
-import MarkdownIt from "markdown-it";
-import katex from "katex";
-import "katex/dist/katex.min.css";
 import {
   Activity, AlertCircle, AlertTriangle, ArrowLeft, BarChart2, Bell, BookOpen, Camera, Check, CheckCircle,
   ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Database, Download, Edit2, Eye, File,
@@ -457,7 +474,9 @@ import {
   Users, Volume2, Wand2, X, XCircle, ZoomIn
 } from "lucide-vue-next";
 import { api } from "../api/client";
+import { routeByPage } from "../router";
 import type { Course, CourseDetail, MaterialDetail, User as UserType } from "../types";
+import { extractStructuredText, renderRichText } from "../utils/richText";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
 import AppSelect from "../components/AppSelect.vue";
@@ -469,171 +488,8 @@ const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
 const router = useRouter();
 
-const routeByKey: Record<string, string> = {
-  teacherDashboard: "/teacher",
-  teacherCourses: "/teacher/courses",
-  teacherCourseForm: "/teacher/courses/new",
-  teacherCourseHome: "/teacher/course",
-  teacherMaterials: "/teacher/materials",
-  teacherPpt: "/teacher/materials/workbench",
-  teacherLessons: "/teacher/lessons",
-  teacherStudents: "/teacher/students",
-  teacherAnalytics: "/teacher/analytics",
-  teacherProfile: "/teacher/profile"
-};
-
-const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
-const textPayloadKeys = ["markdownContent", "markdown_content", "llmResult", "llm_result", "page_text", "script_text", "content", "text"] as const;
-
-function renderMath(source: string, displayMode: boolean) {
-  try {
-    return katex.renderToString(source, {
-      displayMode,
-      throwOnError: false,
-      strict: false,
-      output: "html",
-    });
-  } catch {
-    return source;
-  }
-}
-
-function extractSerializedTextValues(value: string) {
-  const keyPattern = new RegExp(String.raw`['"](?:${textPayloadKeys.join("|")})['"]\s*:\s*`, "g");
-  const pieces: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = keyPattern.exec(value))) {
-    let cursor = match.index + match[0].length;
-    while (/\s/.test(value[cursor] || "")) cursor += 1;
-    const quote = value[cursor];
-    if (quote !== "'" && quote !== "\"") continue;
-    cursor += 1;
-    let raw = "";
-    let escaped = false;
-    for (; cursor < value.length; cursor += 1) {
-      const char = value[cursor];
-      if (escaped) {
-        raw += `\\${char}`;
-        escaped = false;
-        continue;
-      }
-      if (char === "\\") {
-        escaped = true;
-        continue;
-      }
-      if (char === quote) {
-        if (raw.trim()) pieces.push(raw);
-        keyPattern.lastIndex = cursor + 1;
-        break;
-      }
-      raw += char;
-    }
-    if (escaped && raw.trim()) pieces.push(`${raw}\\`);
-  }
-  return pieces.join("\n\n");
-}
-
-function extractStructuredText(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (Array.isArray(value)) return value.map(extractStructuredText).filter(Boolean).join("\n\n");
-  if (typeof value === "object") {
-    const payload = value as Record<string, unknown>;
-    for (const key of textPayloadKeys) {
-      const text = extractStructuredText(payload[key]);
-      if (text) return text;
-    }
-    return Object.values(payload).map(extractStructuredText).filter(Boolean).join("\n\n");
-  }
-  let text = String(value).trim();
-  if (!text) return "";
-  if (text.startsWith("{") || text.startsWith("[")) {
-    try {
-      return extractStructuredText(JSON.parse(text));
-    } catch {
-      text = extractSerializedTextValues(text) || text;
-    }
-  }
-  return text
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, "\t")
-    .replace(/\\'/g, "'")
-    .replace(/\\"/g, "\"")
-    .trim();
-}
-
-function normalizeLatexEscapes(value: string) {
-  if (!value.includes("\\")) return value;
-  return value.replace(/(^|[^\\])\\\\([A-Za-z])/g, (_match, prefix: string, command: string) => `${prefix}\\${command}`);
-}
-
-function wrapBareLatexBlocks(value: string) {
-  if (!value.includes("\\")) return value;
-  const command = String.raw`(?:frac|mathrm|mathbf|mathbb|sqrt|sum|int|lim|left|right|begin|end|cdot|times|leq|geq|neq|approx|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|Delta|Omega|infty)`;
-  const commandPattern = new RegExp(String.raw`\\${command}`, "g");
-  let inFence = false;
-  return value.split("\n").map((line) => {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("```")) {
-      inFence = !inFence;
-      return line;
-    }
-    if (
-      inFence ||
-      !trimmed ||
-      trimmed.includes("@@MATH_") ||
-      trimmed.startsWith("$$") ||
-      trimmed.endsWith("$$") ||
-      trimmed.startsWith("\\[") ||
-      trimmed.startsWith("\\(")
-    ) {
-      return line;
-    }
-    const commands = trimmed.match(commandPattern) || [];
-    const syntaxWeight = (trimmed.match(/[\\{}_^=&]/g) || []).length / Math.max(trimmed.length, 1);
-    const formulaLike = commands.length > 0 && (/\\begin\{|\\left|\\right|\\frac|\\mathbb|\\mathrm|[_^=]/.test(trimmed));
-    if (formulaLike && (trimmed.startsWith("\\") || syntaxWeight > 0.12 || trimmed.length > 32)) {
-      const leading = line.match(/^\s*/)?.[0] || "";
-      return `${leading}$$ ${trimmed} $$`;
-    }
-    return line;
-  }).join("\n");
-}
-
-function wrapInlineBareLatex(value: string) {
-  if (!value.includes("\\")) return value;
-  const command = String.raw`(?:frac|mathrm|mathbf|mathbb|sqrt|sum|int|lim|left|right|cdot|times|div|pm|leq|geq|neq|approx|alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|Delta|Omega|infty)`;
-  const pattern = new RegExp(String.raw`(^|[\s：:，,（(])((?:\\${command}(?:\{[^{}]*\}|\[[^\]]*\]|[^\s。；;!?！？])*)+)`, "g");
-  return value.split("\n").map((line) => {
-    if (line.includes("@@MATH_") || line.includes("$$") || line.includes("\\[") || line.includes("\\(")) return line;
-    return line.replace(pattern, (match, prefix: string, expr: string) => {
-      if (!expr) return match;
-      return `${prefix}$${expr.trim()}$`;
-    });
-  }).join("\n");
-}
-
-function renderRichText(value?: unknown) {
-  if (!value) return "";
-  const mathParts: string[] = [];
-  const stash = (html: string) => {
-    const token = `@@MATH_${mathParts.length}@@`;
-    mathParts.push(html);
-    return token;
-  };
-  const renderDelimitedMath = (text: string) => text
-    .replace(/\$\$([\s\S]+?)\$\$/g, (_, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), true)))
-    .replace(/\\\[([\s\S]+?)\\\]/g, (_, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), true)))
-    .replace(/\\\(([\s\S]+?)\\\)/g, (_, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), false)))
-    .replace(/(^|[^\\])\$([^$\n]+?)\$/g, (_, prefix: string, expr: string) => `${prefix}${stash(renderMath(normalizeLatexEscapes(expr.trim()), false))}`);
-  const extracted = normalizeLatexEscapes(extractStructuredText(value));
-  const delimitedRendered = renderDelimitedMath(extracted);
-  const inferredMath = wrapInlineBareLatex(wrapBareLatexBlocks(delimitedRendered));
-  const textWithDelimitedMath = renderDelimitedMath(inferredMath);
-  return markdownRenderer.render(textWithDelimitedMath).replace(/@@MATH_(\d+)@@/g, (_, index: string) => mathParts[Number(index)] || "");
-}
-
 const active = ref(props.pageKey || "teacherDashboard");
-const sidebarCollapsed = ref(localStorage.getItem("teacher_sidebar_collapsed") === "1");
+const sidebarCollapsed = ref(localStorage.getItem("teacher_sidebar_collapsed") !== "0");
 const courses = ref<any[]>([]);
 const dashboard = ref<any>({});
 const courseHome = ref<any>({});
@@ -663,6 +519,9 @@ const materialSort = ref("time");
 const lessonSort = ref("created");
 const uploadOpen = ref(false);
 const uploadQueue = ref<Array<{ id: number; file: File; chapter_id: number; category: string }>>([]);
+const chapterNameOpen = ref(false);
+const chapterNameDraft = ref("");
+const chapterNameInput = ref<HTMLInputElement | null>(null);
 const removedChapterIds = ref<number[]>([]);
 const previewItem = ref<any | null>(null);
 const previewDetail = ref<MaterialDetail | any | null>(null);
@@ -695,6 +554,10 @@ const courseCoverInput = ref<HTMLInputElement | null>(null);
 const quizEditorOpen = ref(false);
 const quizEditorSaving = ref(false);
 const quizEditorPublishing = ref(false);
+const weakQuizGenerating = ref(false);
+const weakQuizGeneratingTopic = ref("");
+const weakQuizGenerationMode = ref<"all" | "single" | "">("");
+const weakQuizStatus = ref("");
 const quizEditor = reactive({ id: 0, status: "", title: "", description: "", questions: [] as any[] });
 let freshChapterTimer = 0;
 let freshMaterialChapterTimer = 0;
@@ -704,13 +567,13 @@ const courseFilter = reactive({ keyword: "", term: "", status: "" });
 const materialFilter = reactive({ keyword: "", type: "", status: "" });
 const lessonFilter = reactive({ keyword: "", chapter_id: 0, status: "" });
 const studentFilter = reactive({ keyword: "", progress: "", active: "" });
-const courseForm = reactive({ id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#4F46E5", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] as any[] });
+const courseForm = reactive({ id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] as any[] });
 const reminderForm = reactive({ title: "", message: "" });
 const profileForm = reactive({ nickname: props.user.nickname, organization: "", department: "", bio: props.user.bio || "" });
 const passwordForm = reactive({ old_password: "", new_password: "" });
 const noticeSettings = reactive([{ key: "join", label: "学生加入课程", enabled: true }, { key: "ppt", label: "PPT 解析完成", enabled: true }, { key: "script", label: "脚本生成完成", enabled: false }, { key: "tts", label: "TTS 合成失败", enabled: true }, { key: "qa", label: "学生问答汇总", enabled: true }, { key: "ai", label: "AI 任务状态", enabled: true }, { key: "peak", label: "提问高峰", enabled: true }, { key: "system", label: "系统公告", enabled: true }]);
 
-const palette = ["#4F46E5", "#10B981", "#F59E0B", "#06B6D4", "#8B5CF6", "#EF4444"];
+const palette = ["#121614", "#D94925", "#00B8D4", "#2E7D32", "#D9A05B", "#C62828"];
 const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const pageTitleMap: Record<string, string> = { teacherDashboard: "工作台首页", teacherCourses: "我的课程", teacherCourseForm: "创建课程", teacherCourseHome: "课程主页", teacherMaterials: "资料管理", teacherPpt: "PPT 工作台", teacherLessons: "课时管理", teacherStudents: "学生管理", teacherAnalytics: "教学分析", teacherProfile: "个人中心" };
 const courseStatusOptions = [{ label: "全部", value: "" }, { label: "进行中", value: "active" }, { label: "已停用", value: "inactive" }];
@@ -732,7 +595,19 @@ const todoCount = computed(() => (dashboard.value.todos || []).length);
 const courseTerms = computed(() => [...new Set(courses.value.map((course) => course.term).filter(Boolean))]);
 const courseTermOptions = computed(() => [{ label: "全部学期", value: "" }, ...courseTerms.value.map((term) => ({ label: String(term), value: String(term) }))]);
 const lessonChapterOptions = computed(() => [{ label: "全部章节", value: 0 }, ...(courseHome.value.chapters || []).map((chapter: any) => ({ label: chapter.title, value: chapter.id }))]);
-const uploadChapterOptions = computed(() => [{ label: "章节", value: 0 }, ...(courseHome.value.chapters || []).map((chapter: any) => ({ label: chapter.title, value: chapter.id }))]);
+const uploadChapterRows = computed(() => {
+  const summaryChapters = Array.isArray(materialSummary.value.chapters) ? materialSummary.value.chapters : [];
+  const homeChapters = Array.isArray(courseHome.value.chapters) ? courseHome.value.chapters : [];
+  const rows = summaryChapters.length ? summaryChapters : homeChapters;
+  const seen = new Set<number>();
+  return rows.filter((chapter: any) => {
+    const id = Number(chapter?.id || 0);
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+});
+const uploadChapterOptions = computed(() => [{ label: "未分章节", value: 0 }, ...uploadChapterRows.value.map((chapter: any) => ({ label: chapter.title || "未命名章节", value: chapter.id }))]);
 const filteredCourses = computed(() => courses.value.filter((course) => (!courseFilter.keyword || course.name.includes(courseFilter.keyword)) && (!courseFilter.term || course.term === courseFilter.term) && (!courseFilter.status || course.status === courseFilter.status)));
 const filteredChapters = computed(() => (materialSummary.value.chapters || []).filter((chapter: any) => !chapterKeyword.value || chapter.title.includes(chapterKeyword.value)));
 const filteredMaterials = computed(() => {
@@ -763,6 +638,12 @@ const pages = computed<any[]>(() => materialDetail.value?.pages || []);
 const currentPageIndex = computed(() => Math.max(0, pages.value.findIndex((page: any) => page.id === currentPageId.value)));
 const activePage = computed(() => pages.value[currentPageIndex.value] || null);
 const lessonPreviewActivePage = computed(() => lessonPreview.value?.pages?.find((page: any) => page.id === lessonPreviewPageId.value) || lessonPreview.value?.pages?.[0] || null);
+const activePageText = computed(() => extractStructuredText(activePage.value?.page_text || "") || String(activePage.value?.page_text || "").trim());
+const activePageHtml = computed(() => renderRichText(activePageText.value || "暂无页面内容"));
+const lessonPreviewPageText = computed(() => extractStructuredText(lessonPreviewActivePage.value?.page_text || "") || String(lessonPreviewActivePage.value?.page_text || "").trim());
+const lessonPreviewScriptText = computed(() => extractStructuredText(lessonPreviewActivePage.value?.script_text || lessonPreviewActivePage.value?.page_text || "") || String(lessonPreviewActivePage.value?.script_text || lessonPreviewActivePage.value?.page_text || "").trim());
+const lessonPreviewPageHtml = computed(() => renderRichText(lessonPreviewPageText.value || "暂无页面内容"));
+const lessonPreviewScriptHtml = computed(() => renderRichText(lessonPreviewScriptText.value || "暂无脚本"));
 const reviewedCount = computed(() => pages.value.filter((page: any) => page.script_status === "ready").length);
 const materialStatusCounts = computed<Record<string, number>>(() => courseHome.value.material_stats?.by_status || {});
 const materialTotal = computed(() => {
@@ -803,7 +684,7 @@ const previewMarkdownHtml = computed(() => renderRichText(previewMarkdownText.va
 const lessonAnalysisLabels = computed(() => (analysis.value.lesson_completion || []).map((item: any) => item.title));
 const lessonAnalysisSeries = computed(() => [{ name: "完成率", data: (analysis.value.lesson_completion || []).map((item: any) => item.completion_rate || item.average_progress || 0), color: "#10B981" }]);
 const analysisTimeLabels = computed(() => (analysis.value.study_time_series || []).map((item: any) => item.label));
-const analysisTimeSeries = computed(() => [{ name: "分钟", data: (analysis.value.study_time_series || []).map((item: any) => item.minutes || 0), color: "#4F46E5" }]);
+const analysisTimeSeries = computed(() => [{ name: "分钟", data: (analysis.value.study_time_series || []).map((item: any) => item.minutes || 0), color: "#D94925" }]);
 const weakLabels = computed(() => (analysis.value.weak_points || []).map((item: any) => item.knowledge_point));
 const weakSeries = computed(() => [{ name: "错题", data: (analysis.value.weak_points || []).map((item: any) => item.wrong_count), color: "#EF4444" }]);
 const weakMax = computed(() => Math.max(1, ...(analysis.value.weak_points || []).map((item: any) => item.wrong_count || 0)));
@@ -841,7 +722,11 @@ async function go(key: string) {
     slideOverviewOpen.value = false;
     stageFocused.value = false;
   }
-  await router.push(routeByKey[key] || "/teacher");
+  await router.push(routeByPage[key] || "/teacher");
+}
+function toggleCourseMenu() {
+  userMenuOpen.value = false;
+  courseMenuOpen.value = !courseMenuOpen.value;
 }
 function openNotifications() {
   if (todoCount.value) {
@@ -909,12 +794,12 @@ function resetCourseCoverSelection() {
   courseCoverPreview.value = "";
   if (courseCoverInput.value) courseCoverInput.value.value = "";
 }
-function newCourse() { removedChapterIds.value = []; resetCourseCoverSelection(); Object.assign(courseForm, { id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#4F46E5", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] }); go("teacherCourseForm"); }
+function newCourse() { removedChapterIds.value = []; resetCourseCoverSelection(); Object.assign(courseForm, { id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] }); go("teacherCourseForm"); }
 async function editCourse(course: any) {
   const detail = await withAction<CourseDetail>(`edit-course-${course.id}`, () => api.get(`/courses/${course.id}`));
   removedChapterIds.value = [];
   resetCourseCoverSelection();
-  Object.assign(courseForm, { id: course.id, name: course.name, description: course.description || "", term: course.term, cover_url: course.cover_url || "", cover_color: course.cover_color || "#4F46E5", chapters: (detail?.chapters || []).length ? detail!.chapters.map((chapter: any) => ({ ...chapter, local_id: chapter.id })) : [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] });
+  Object.assign(courseForm, { id: course.id, name: course.name, description: course.description || "", term: course.term, cover_url: course.cover_url || "", cover_color: course.cover_color || "#121614", chapters: (detail?.chapters || []).length ? detail!.chapters.map((chapter: any) => ({ ...chapter, local_id: chapter.id })) : [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] });
   go("teacherCourseForm");
 }
 function markFreshChapter(localId: number) {
@@ -991,11 +876,38 @@ async function confirmDeleteCourse() {
     await go("teacherCourses");
   });
 }
-async function addChapterFromTree() {
-  const title = `第${(courseHome.value.chapters || []).length + 1}章`;
+function materialChapterRows() {
+  const rows = [...(materialSummary.value.chapters || []), ...(courseHome.value.chapters || [])];
+  const seen = new Set<number>();
+  return rows.filter((chapter: any) => {
+    const id = Number(chapter?.id || 0);
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+function nextChapterOrderIndex() {
+  return Math.max(0, ...materialChapterRows().map((chapter: any) => Number(chapter.order_index || 0))) + 1;
+}
+function openAddChapterModal() {
   if (!currentCourse.value) return;
+  chapterNameDraft.value = `第${nextChapterOrderIndex()}章`;
+  chapterNameOpen.value = true;
+  nextTick(() => {
+    chapterNameInput.value?.focus();
+    chapterNameInput.value?.select();
+  });
+}
+async function addChapterFromTree() {
+  if (!currentCourse.value) return;
+  const title = chapterNameDraft.value.trim();
+  if (!title) return emit("notice", "warning", "请输入章节名称");
+  const existing = [...(materialSummary.value.chapters || []), ...(courseHome.value.chapters || [])];
+  if (existing.some((chapter: any) => String(chapter.title || "").trim() === title)) return emit("notice", "warning", "章节名称已存在");
   await withAction("add-tree-chapter", async () => {
-    const chapter = await run<any>(() => api.post(`/courses/${currentCourse.value!.id}/chapters`, { title, description: "", order_index: (courseHome.value.chapters || []).length + 1 }), "已添加");
+    const chapter = await run<any>(() => api.post(`/courses/${currentCourse.value!.id}/chapters`, { title, description: "", order_index: nextChapterOrderIndex() }), "已添加");
+    chapterNameOpen.value = false;
+    chapterNameDraft.value = "";
     await loadMaterials();
     await loadCourseHome();
     markFreshMaterialChapter(chapter?.id || (materialSummary.value.chapters || []).find((item: any) => item.title === title)?.id);
@@ -1138,22 +1050,47 @@ async function publishQuizEditor() {
   }
 }
 async function generateWeakQuiz(item?: any) {
-  if (!currentCourse.value) return;
-  const topic = item?.knowledge_point || (analysis.value.weak_points || [])[0]?.knowledge_point || "薄弱知识点";
-  await withAction(`weak-quiz-${topic}`, async () => {
+  if (!currentCourse.value) return emit("notice", "warning", "请先选择课程");
+  if (weakQuizGenerating.value) return emit("notice", "info", "正在生成测验，请稍候");
+  const weakRows = analysis.value.weak_points || [];
+  if (!item && !weakRows.length) return emit("notice", "warning", "暂无薄弱知识点，无法生成综合练习");
+  const topic = item?.knowledge_point || weakRows.slice(0, 3).map((row: any) => row.knowledge_point).filter(Boolean).join("、") || "薄弱知识点";
+  const mode: "all" | "single" = item ? "single" : "all";
+  const title = item ? `${topic}专项测验` : "薄弱知识点综合测验";
+  weakQuizGenerating.value = true;
+  weakQuizGeneratingTopic.value = item?.knowledge_point || "";
+  weakQuizGenerationMode.value = mode;
+  weakQuizStatus.value = item ? `正在围绕“${topic}”生成待审核测验...` : "正在根据全部薄弱知识点生成综合测验...";
+  emit("notice", "info", weakQuizStatus.value);
+  try {
     const quiz = await run<any>(() => api.post("/learning/quizzes/generate", {
       course_id: currentCourse.value!.id,
-      title: `${topic}专项测验`,
+      title,
       quiz_type: "course",
-      question_count: 8,
+      question_count: item ? 5 : 8,
       prefer_weak_points: true,
-    }), "已生成测验");
+    }));
     if (!quiz) return;
+    weakQuizStatus.value = "测验已生成，正在打开编辑器...";
     const detail = await run<any>(() => api.get(`/learning/quizzes/${quiz.id}`));
+    if (!detail) return;
     openQuizEditor(detail);
-  });
+    emit("notice", "success", "测验已生成，请审核题目后发布给学生");
+  } finally {
+    weakQuizGenerating.value = false;
+    weakQuizGeneratingTopic.value = "";
+    weakQuizGenerationMode.value = "";
+    weakQuizStatus.value = "";
+  }
 }
 async function refreshMaterials() { await withAction("filter-materials", loadMaterials); }
+async function openUploadModal() {
+  uploadOpen.value = true;
+  if (!currentCourse.value) return;
+  await withAction("load-upload-chapters", async () => {
+    await Promise.all([loadMaterials(), loadCourseHome()]);
+  });
+}
 function scheduleMaterialRefreshes() {
   [3500, 12000, 30000].forEach((delay) => {
     window.setTimeout(async () => {
@@ -1411,7 +1348,7 @@ function courseCoverStyle(course: any) {
 function courseHeroStyle(course: any) {
   if (course?.cover_url) {
     return {
-      backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.72), rgba(79,70,229,0.50)), url(${course.cover_url})`,
+      backgroundImage: `linear-gradient(135deg, rgba(18,22,20,0.82), rgba(217,73,37,0.36)), url(${course.cover_url})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
@@ -1440,6 +1377,13 @@ function onTeacherDocumentKeydown(event: KeyboardEvent) {
   if (event.key !== "Escape") return;
   courseMenuOpen.value = false;
   userMenuOpen.value = false;
+  uploadOpen.value = false;
+  chapterNameOpen.value = false;
+  reminderOpen.value = false;
+  previewItem.value = null;
+  lessonPreview.value = null;
+  quizEditorOpen.value = false;
+  studentDrawer.value = null;
 }
 
 onMounted(async () => {
@@ -1489,692 +1433,5 @@ const LayerCard = defineComponent({ props: { label: { type: String, required: tr
 const InfoRow = defineComponent({ props: { label: { type: String, required: true }, value: { type: String, required: true } }, setup(p) { return () => h("div", { class: "info-row" }, [h("span", p.label), h("strong", p.value)]); } });
 </script>
 
-<style scoped>
-.teacher-shell { min-width: 1280px; min-height: 100vh; background: var(--color-bg-page); color: var(--color-text-body); }
-.teacher-header { position: fixed; inset: 0 0 auto; z-index: var(--z-sticky); height: 60px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 18px; border-bottom: 1px solid var(--color-border-default); background: var(--color-bg-surface); padding: 0 24px; }
-.brand, .header-actions, .user-menu > button, .course-switch > button, .breadcrumb > div, .page-actions, .panel-head h2, .todo-row, .script-row, .quick-action, .drawer-head { display: flex; align-items: center; gap: var(--space-2); }
-.brand { min-width: 0; overflow: hidden; }
-.brand strong { color: var(--color-text-primary); font-size: 17px; font-weight: 600; }
-.brand > i, .header-actions > i { width: 1px; height: 16px; background: var(--color-border-default); }
-.logo-mark { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; background: var(--color-ai-gradient); color: white; }
-.course-switch, .user-menu { position: relative; }
-.course-switch { min-width: 0; }
-.course-switch > button, .user-menu > button { border: 0; background: transparent; color: var(--color-text-body); }
-.course-switch > button { max-width: min(420px, 42vw); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.header-actions { flex: 0 0 auto; justify-content: flex-end; gap: 12px; min-width: max-content; }
-.teacher-shell button,
-.teacher-shell a.icon-action {
-  transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), opacity var(--duration-fast) var(--ease-out);
-  will-change: transform;
-}
-.teacher-shell button:active:not(:disabled),
-.teacher-shell a.icon-action:active {
-  transform: scale(0.96);
-  transition: transform var(--duration-fast) var(--ease-spring);
-}
-.teacher-shell button[data-loading="true"] { cursor: wait; }
-.teacher-shell button[data-loading="true"] svg { opacity: 0.55; }
-.icon-action[data-loading="true"]::before { position: absolute; }
-.icon-action[data-loading="true"] > svg { opacity: 0; }
-.course-popover, .user-popover { position: absolute; top: 38px; min-width: 220px; z-index: var(--z-popover); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 8px; }
-.course-popover button, .user-popover button { display: flex; width: 100%; align-items: center; gap: 8px; min-height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--color-text-body); padding: 0 10px; text-align: left; }
-.course-popover button.active, .course-popover button:hover, .user-popover button:hover { background: var(--color-primary-50); color: var(--color-primary-700); }
-.user-popover { right: 0; min-width: 160px; }
-.icon-btn, .icon-action { position: relative; display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); padding: 0 10px; font-size: var(--text-caption); font-weight: 500; line-height: 1; white-space: nowrap; }
-.header-actions > .icon-btn { flex: 0 0 auto; min-width: 74px; min-height: 38px; padding: 0 12px; }
-.icon-btn:hover, .icon-action:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
-.icon-action.active { background: var(--color-primary-50); color: var(--color-primary-700); box-shadow: var(--shadow-focus); }
-.header-actions > .icon-btn em { position: static; display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 9px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 1; padding: 0 5px; box-shadow: 0 0 0 2px white; }
-.icon-btn em { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; }
-.avatar { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: 50%; background: var(--color-ai-gradient); color: white; font-weight: 700; }
-.avatar.mini { width: 24px; height: 24px; font-size: 12px; }
-.avatar.large { position: relative; width: 80px; height: 80px; font-size: 26px; }
-.avatar.large svg { position: absolute; right: 0; bottom: 0; border-radius: 50%; background: var(--color-primary-600); padding: 4px; }
-.teacher-sidebar { position: fixed; top: 60px; left: 0; bottom: 0; width: 240px; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; border-right: 1px solid var(--color-border-default); background: white; padding: 18px 12px; transition: width var(--duration-base) var(--ease-out), padding var(--duration-base) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }
-.teacher-sidebar-toggle { display: flex; width: 100%; height: 40px; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-muted); color: var(--color-text-secondary); font-size: var(--text-caption); font-weight: 600; margin-bottom: 10px; }
-.teacher-sidebar-toggle:hover { border-color: var(--color-primary-200); background: var(--color-primary-50); color: var(--color-primary-700); box-shadow: var(--shadow-sm); }
-.teacher-shell.sidebar-collapsed .teacher-sidebar { width: 72px; padding: 14px 8px; }
-.teacher-shell.sidebar-collapsed .teacher-sidebar-toggle { width: 44px; padding: 0; margin-inline: auto; }
-.teacher-shell.sidebar-collapsed .teacher-sidebar-toggle span { display: none; }
-.teacher-shell.sidebar-collapsed .nav-group { justify-items: center; gap: 6px; padding: 8px 0; }
-.teacher-shell.sidebar-collapsed .nav-group > span { width: 0; height: 0; overflow: hidden; opacity: 0; padding: 0; }
-.teacher-shell.sidebar-collapsed .nav-group button { width: 44px; height: 44px; justify-content: center; gap: 0; padding: 0; font-size: 0; }
-.teacher-shell.sidebar-collapsed .nav-group button svg { width: 18px; height: 18px; }
-.teacher-shell.sidebar-collapsed .nav-group button.active::before { left: 4px; top: 10px; bottom: 10px; }
-.teacher-shell.sidebar-collapsed .course-title { display: none; }
-.nav-group { display: grid; gap: 2px; padding: 12px 0; border-bottom: 1px solid var(--color-border-subtle); }
-.nav-group > span { padding: 0 12px 8px; color: var(--color-text-muted); font-size: var(--text-overline); font-weight: 600; }
-.course-title { display: flex; align-items: center; justify-content: space-between; cursor: pointer; font-style: normal; border-radius: var(--radius-md); transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out); }
-.course-title:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
-.course-title:active { transform: scale(0.98); }
-.nav-group button { position: relative; display: flex; height: 40px; align-items: center; gap: 8px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); padding: 0 12px; text-align: left; }
-.nav-group button:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
-.nav-group button.active { background: var(--color-primary-50); color: var(--color-primary-700); font-weight: 500; }
-.nav-group button.active::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--color-primary-600); }
-.nav-group button:disabled { opacity: 0.45; }
-.teacher-main { margin-left: 240px; padding-top: 60px; transition: margin-left var(--duration-base) var(--ease-out); }
-.teacher-shell.sidebar-collapsed .teacher-main { margin-left: 72px; }
-.teacher-main.immersive { padding-top: 60px; }
-.teacher-page-stack { display: contents; }
-.teacher-page-loading {
-  position: fixed;
-  top: 72px;
-  right: 32px;
-  z-index: var(--z-fixed);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-full);
-  background: rgba(255,255,255,0.92);
-  box-shadow: var(--shadow-md);
-  padding: 0 14px;
-  backdrop-filter: blur(8px);
-}
-.teacher-page-loading::after { content: "加载中"; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
-.breadcrumb { height: 56px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-default); background: white; padding: 0 32px; }
-.breadcrumb span { color: var(--color-text-secondary); }
-.breadcrumb strong { color: var(--color-text-primary); }
-.teacher-content { display: grid; gap: 16px; padding: 32px 32px 64px; animation: fade-slide-up var(--duration-base) var(--ease-out); }
-.welcome { height: 88px; display: flex; align-items: center; justify-content: space-between; border-radius: var(--radius-xl); color: white; background: var(--color-ai-gradient); padding: 0 32px; }
-.welcome > div { display: flex; align-items: center; gap: 14px; }
-.welcome h1 { margin: 0; font-size: var(--text-h2); }
-.welcome p { margin: 3px 0 0; color: rgba(255,255,255,0.82); }
-.white-btn { border-color: rgba(255,255,255,0.5); color: white; background: rgba(255,255,255,0.12); }
-.metric-grid { display: grid; gap: 16px; }
-.metric-grid.four { grid-template-columns: repeat(4, 1fr); }
-.metric-grid.three { grid-template-columns: repeat(3, 1fr); }
-.metric-grid.five { grid-template-columns: repeat(5, 1fr); }
-.metric-grid.six { grid-template-columns: repeat(6, 1fr); }
-.metric-card { min-height: 100px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 18px; }
-.metric-card > div { display: flex; align-items: center; gap: 10px; color: var(--color-text-secondary); }
-.metric-icon { display: inline-flex; width: 40px; height: 40px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-600); }
-.metric-card.success .metric-icon { background: var(--color-success-50); color: var(--color-success-700); }
-.metric-card.warning .metric-icon { background: var(--color-warning-50); color: var(--color-warning-700); }
-.metric-card.ai .metric-icon { background: var(--color-ai-light); color: #6D28D9; }
-.metric-card.danger { background: var(--color-warning-50); border-color: var(--color-warning-100); }
-.metric-card strong { display: block; margin-top: 12px; color: var(--color-text-primary); font-size: var(--text-display); line-height: 40px; }
-.metric-card small { color: var(--color-text-muted); font-size: var(--text-body-sm); }
-.compact .metric-card { min-height: 82px; }
-.compact .metric-card strong { font-size: 24px; line-height: 30px; }
-.dash-mid { display: grid; grid-template-columns: 60fr 40fr; gap: 16px; }
-.bottom-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.panel-card, .filter-card, .table-card, .profile-card, .ai-suggestion { border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 20px; }
-.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-.panel-head h2 { margin: 0; color: var(--color-text-primary); font-size: var(--text-h4); }
-.panel-head small { color: var(--color-text-muted); }
-.link-btn { border: 0; background: transparent; color: var(--color-primary-700); font-weight: 500; }
-.badge { min-width: 20px; height: 20px; border-radius: 10px; background: var(--color-danger-500); color: white; font-size: 12px; text-align: center; line-height: 20px; }
-.recent-course-list, .todo-list, .script-list, .heat-body, .chapter-buttons, .upload-list, .weak-row-list, .notice-items, .drawer-progress-list, .qa-record-list { display: grid; gap: 8px; }
-.recent-course { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--color-border-subtle); padding: 12px 0; }
-.cover { display: inline-flex; width: 48px; height: 48px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-ai-gradient); color: white; }
-.recent-course div { display: grid; gap: 4px; }
-.recent-course strong { color: var(--color-text-primary); }
-.recent-course small { color: var(--color-text-muted); }
-.dashed-btn, .upload-drop { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-lg); background: white; color: var(--color-primary-700); }
-.todo-row { min-height: 52px; border-bottom: 1px solid var(--color-border-subtle); }
-.todo-row i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-info-500); }
-.todo-row i.error { background: var(--color-danger-500); }
-.todo-row i.lesson { background: var(--color-warning-500); }
-.todo-row div { flex: 1; display: grid; }
-.todo-row strong, .script-row strong { color: var(--color-text-primary); }
-.todo-row small, .script-row small { color: var(--color-text-muted); }
-.heatmap { display: grid; gap: 8px; }
-.heat-head, .heat-row { display: grid; grid-template-columns: 90px repeat(7, 1fr); gap: 6px; align-items: center; }
-.heat-head b { color: var(--color-text-muted); font-size: 11px; text-align: center; }
-.heat-row span { color: var(--color-text-secondary); font-size: 12px; }
-.heat-row i { height: 22px; border-radius: 5px; background: var(--color-primary-600); transition: opacity var(--duration-base) var(--ease-in-out), transform var(--duration-fast) var(--ease-out); }
-.heat-row i:hover { transform: scale(1.08); }
-.script-row { min-height: 48px; border-bottom: 1px solid var(--color-border-subtle); }
-.script-row div { flex: 1; display: grid; }
-.task-list { display: grid; gap: 8px; }
-.task-item { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px; min-height: 34px; }
-.task-item span { color: var(--color-text-body); }
-.task-item small { color: var(--color-text-muted); }
-.task-item .processing { color: var(--color-primary-600); animation: spin var(--duration-slower) linear infinite; }
-.task-item .failed { color: var(--color-danger-500); }
-.task-item .ready { color: var(--color-success-500); }
-.filter-card { min-height: 56px; display: grid; grid-template-columns: 240px 140px 120px 1fr auto; align-items: center; gap: 10px; padding: 10px 14px; }
-.search-box { display: flex; align-items: center; gap: 8px; height: 36px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: white; padding: 0 10px; }
-.search-box input { width: 100%; border: 0; outline: 0; }
-.search-box:focus-within { border-color: var(--color-primary-600); box-shadow: var(--shadow-focus); }
-.search-box.small { height: 32px; }
-.segmented-control { display: flex; background: var(--color-bg-muted); border-radius: var(--radius-md); padding: 4px; }
-.segment-btn { min-height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-muted); padding: 6px 16px; font-size: 13px; font-weight: 500; transition: all var(--duration-fast) var(--ease-out); }
-.segment-btn.active { background: white; color: var(--color-text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-.view-toggle { display: inline-flex; overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
-.view-toggle button { display: inline-flex; min-height: 32px; align-items: center; gap: 6px; border: 0; background: white; color: var(--color-text-secondary); padding: 0 12px; font-size: var(--text-caption); font-weight: 500; }
-.view-toggle .active { background: var(--color-primary-600); color: white; }
-.course-grid { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.course-card { overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); }
-.course-card.inactive .course-cover { filter: grayscale(1); opacity: 0.55; }
-.course-cover { position: relative; aspect-ratio: 16 / 9; display: grid; place-items: center; color: white; background-size: cover; background-position: center; }
-.course-cover.has-image::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15,23,42,0.04), rgba(15,23,42,0.42)); pointer-events: none; }
-.course-cover.has-image .tag { z-index: 1; }
-.course-cover .tag:first-child { position: absolute; top: 12px; left: 12px; }
-.course-cover .tag:nth-child(2) { position: absolute; top: 12px; right: 12px; }
-.course-card section { padding: 16px; }
-.course-card h2 { min-height: 42px; margin: 0 0 6px; color: var(--color-text-primary); font-size: 15px; }
-code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
-.course-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 14px; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
-.course-stats span { display: inline-flex; align-items: center; gap: 5px; }
-.course-card footer { display: flex; justify-content: space-between; border-top: 1px solid var(--color-border-subtle); padding: 12px 16px; }
-.table-card { overflow: auto; padding: 0; }
-.teacher-table { width: 100%; border-collapse: collapse; font-size: var(--text-body-sm); }
-.teacher-table th, .teacher-table td { border-bottom: 1px solid var(--color-border-subtle); padding: 12px 14px; text-align: left; vertical-align: middle; }
-.teacher-table th { background: var(--color-bg-muted); color: var(--color-text-secondary); font-weight: 600; }
-.teacher-table tbody tr:nth-child(even):not(.inactive) { background: rgba(248, 250, 252, 0.72); }
-.teacher-table tbody tr:hover { background: var(--color-primary-50); }
-.teacher-table td svg { display: inline-block; vertical-align: middle; }
-.teacher-table tr.inactive { background: var(--color-danger-50); }
-.mini-cover { display: inline-block; width: 32px; height: 32px; border-radius: 8px; background: var(--color-ai-gradient); margin-right: 8px; vertical-align: middle; }
-.form-content { padding-bottom: 90px; }
-.course-form-layout { max-width: 960px; display: grid; grid-template-columns: 620px 280px; gap: 20px; margin: 0 auto; }
-.form-panel { display: grid; gap: 22px; }
-.form-section { display: grid; gap: 14px; }
-.form-section h2 { margin: 0; color: var(--color-text-primary); font-size: var(--text-h4); }
-.form-section label, .advanced label, .profile-form label, .policy-form label { display: grid; gap: 6px; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
-.color-row { display: flex; gap: 8px; }
-.color-row button { width: 28px; height: 28px; border: 2px solid transparent; border-radius: 50%; }
-.color-row button.active { border-color: var(--color-text-primary); }
-.cover-upload-field { display: grid; grid-template-columns: 176px 1fr; gap: 14px; align-items: center; }
-.cover-upload-preview { width: 176px; aspect-ratio: 16 / 9; display: grid; place-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background-size: cover; background-position: center; color: white; overflow: hidden; }
-.cover-upload-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.cover-upload-actions small { flex-basis: 100%; color: var(--color-text-muted); }
-.section-head { display: flex; align-items: center; justify-content: space-between; }
-.chapter-edit-list { position: relative; display: grid; gap: 8px; }
-.chapter-edit { display: grid; grid-template-columns: auto 1fr 76px auto; gap: 8px; align-items: center; border-radius: var(--radius-md); padding: 2px; transition: background var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out); }
-.chapter-edit.just-added { animation: item-confirm 900ms var(--ease-out) both; }
-.order-input { text-align: center; }
-.advanced { overflow: hidden; border-top: 1px solid var(--color-border-subtle); padding-top: 12px; transition: border-color var(--duration-base) var(--ease-out), background var(--duration-base) var(--ease-out); }
-.advanced.open { border-color: var(--color-primary-100); background: linear-gradient(180deg, var(--color-primary-50), transparent 58%); }
-.advanced-trigger { display: flex; width: 100%; align-items: center; gap: 8px; color: var(--color-text-primary); font-weight: 600; text-align: left; }
-.advanced-trigger svg:last-child { margin-left: auto; transition: transform var(--duration-fast) var(--ease-out); }
-.advanced.open .advanced-trigger svg:last-child { transform: rotate(180deg); }
-.advanced-body { display: grid; gap: 10px; padding-top: 12px; }
-.advanced.open label { animation: fade-slide-up var(--duration-base) var(--ease-out) both; }
-.preview-card .course-card { transform-origin: top left; width: 260px; box-shadow: none; }
-.fixed-actions { position: fixed; left: 240px; right: 0; bottom: 0; z-index: var(--z-fixed); height: 64px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--color-border-default); background: white; padding: 0 32px; transition: left var(--duration-base) var(--ease-out); }
-.teacher-shell.sidebar-collapsed .fixed-actions { left: 72px; }
-.fixed-actions span { display: flex; align-items: center; gap: 6px; color: var(--color-warning-700); }
-.fixed-actions div { display: flex; gap: 10px; }
-.course-hero { min-height: 120px; display: grid; grid-template-columns: 80px 1fr auto; align-items: center; gap: 20px; border-radius: var(--radius-xl); color: white; padding: 20px 24px; background-size: cover; background-position: center; }
-.course-hero > span { display: inline-flex; width: 80px; height: 80px; align-items: center; justify-content: center; border-radius: var(--radius-xl); background: rgba(255,255,255,0.2); backdrop-filter: blur(8px); }
-.course-hero h1 { margin: 0; font-size: 22px; }
-.course-hero p, .course-hero small { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,0.82); }
-.course-hero section { display: flex; gap: 8px; }
-.ghost-white { color: white; border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); }
-.quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.quick-action { min-height: 72px; justify-content: flex-start; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 0 16px; text-align: left; }
-.quick-action:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.quick-action strong { color: var(--color-text-primary); }
-.quick-action small { color: var(--color-text-muted); }
-.course-home-grid { display: grid; grid-template-columns: 45fr 32fr 23fr; align-items: stretch; gap: 16px; }
-.course-bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.home-lesson-card, .material-overview-card { position: relative; display: flex; min-height: 360px; flex-direction: column; gap: 14px; overflow: hidden; background: linear-gradient(180deg, #fff 0%, #F8FAFC 100%); }
-.home-lesson-card::before, .material-overview-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: var(--color-ai-gradient); }
-.rich-head { align-items: flex-start; margin-bottom: 0; }
-.rich-head > div { display: grid; gap: 4px; min-width: 0; }
-.rich-head h2 { display: flex; align-items: center; gap: 8px; }
-.rich-head small { color: var(--color-text-muted); font-size: var(--text-caption); }
-.home-card-action { margin-top: auto; }
-.lesson-rows { position: relative; display: grid; gap: 11px; }
-.lesson-row {
-  position: relative;
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  min-height: 78px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  background: rgba(255,255,255,0.92);
-  box-shadow: 0 1px 2px rgba(15,23,42,0.03);
-  padding: 10px 12px;
-  text-align: left;
-}
-.lesson-row:hover, .lesson-card:hover, .material-row:hover, .thumb-card:hover { border-color: var(--color-primary-200); box-shadow: var(--shadow-md); transform: translateY(-2px); }
-.lesson-row:hover .lesson-open-label { background: var(--color-primary-600); color: white; }
-.lesson-index { position: relative; display: grid; place-items: center; align-self: stretch; }
-.lesson-index b { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-primary-50); color: var(--color-primary-700); font-size: 12px; font-weight: 700; }
-.lesson-index i { position: absolute; top: 46px; bottom: 0; width: 2px; border-radius: var(--radius-full); background: var(--color-primary-100); }
-.lesson-body { display: grid; min-width: 0; gap: 7px; }
-.lesson-title-line { display: flex; min-width: 0; align-items: center; gap: 8px; }
-.lesson-title-line strong { overflow: hidden; color: var(--color-text-primary); font-size: 14px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
-.lesson-body small { color: var(--color-text-muted); font-size: 12px; }
-.lesson-progress-line { display: grid; grid-template-columns: minmax(0, 1fr) 38px; align-items: center; gap: 8px; }
-.lesson-progress-line em { color: var(--color-text-secondary); font-size: 12px; font-style: normal; font-weight: 600; text-align: right; }
-.lesson-open-label { display: inline-flex; min-height: 30px; align-items: center; gap: 5px; border-radius: var(--radius-full); background: var(--color-bg-muted); color: var(--color-text-secondary); padding: 0 10px; font-size: 12px; font-weight: 600; transition: background var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out); }
-.full { width: 100%; }
-.material-health { display: grid; gap: 10px; border: 1px solid var(--color-primary-100); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--color-primary-50), white 70%); padding: 14px; }
-.material-health div { display: flex; align-items: end; justify-content: space-between; gap: 10px; }
-.material-health strong { color: var(--color-text-primary); font-size: 34px; line-height: 1; }
-.material-health span { color: var(--color-text-secondary); font-size: var(--text-body-sm); font-weight: 600; }
-.material-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-.material-status-tile { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; min-height: 44px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: white; color: var(--color-text-secondary); padding: 0 10px; text-align: left; }
-.material-status-tile:hover { border-color: var(--color-primary-200); box-shadow: var(--shadow-sm); transform: translateY(-1px); }
-.material-status-tile strong { color: var(--color-text-primary); font-size: 18px; }
-.material-status-tile.success svg { color: var(--color-success-500); }
-.material-status-tile.warning svg { color: var(--color-warning-500); }
-.material-status-tile.danger svg { color: var(--color-danger-500); }
-.material-status-tile.primary svg { color: var(--color-primary-600); }
-.type-list { display: grid; gap: 9px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); background: rgba(255,255,255,0.9); padding: 10px; }
-.type-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 9px; min-height: 38px; }
-.type-icon { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border-radius: var(--radius-md); background: var(--color-bg-muted); color: var(--color-text-secondary); }
-.type-row.pptx .type-icon { background: rgba(249,115,22,0.12); color: #EA580C; }
-.type-row.pdf .type-icon { background: var(--color-danger-50); color: var(--color-danger-500); }
-.type-row.docx .type-icon { background: rgba(14,165,233,0.12); color: var(--color-info-500); }
-.type-body { display: grid; gap: 5px; min-width: 0; }
-.type-body strong { color: var(--color-text-primary); font-size: 13px; }
-.type-row b { color: var(--color-text-secondary); font-size: 12px; white-space: nowrap; }
-.activity-list { display: grid; gap: 12px; }
-.activity-item { display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center; }
-.activity-item i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary-600); }
-.activity-item i.success { background: var(--color-success-500); }
-.activity-item span { color: var(--color-text-body); font-size: var(--text-body-sm); }
-.activity-item small { color: var(--color-text-muted); font-size: 11px; }
-.progress-list { display: grid; gap: 10px; }
-.student-progress-row { display: grid; grid-template-columns: auto 90px 1fr 52px; align-items: center; gap: 8px; }
-.materials-layout { min-height: 640px; display: grid; grid-template-columns: 220px 1fr; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); overflow: visible; }
-.chapter-tree { display: grid; align-content: start; gap: 6px; border-right: 1px solid var(--color-border-default); padding: 12px; }
-.chapter-tree button { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; min-height: 40px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-body); text-align: left; padding: 0 10px; }
-.chapter-tree button:hover { background: var(--color-bg-muted); }
-.chapter-tree button.active { background: var(--color-primary-50); color: var(--color-primary-700); box-shadow: inset 3px 0 0 var(--color-primary-600); }
-.chapter-tree button.empty { color: var(--color-text-muted); }
-.chapter-tree button.just-added { animation: item-confirm 1100ms var(--ease-out) both; }
-.chapter-tree-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
-  align-items: center;
-  border-radius: var(--radius-md);
-  transition: background var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
-}
-.chapter-tree-row:hover { background: var(--color-bg-muted); }
-.chapter-tree-row.active {
-  background: var(--color-primary-50);
-  color: var(--color-primary-700);
-  box-shadow: inset 3px 0 0 var(--color-primary-600);
-}
-.chapter-tree-row.empty { color: var(--color-text-muted); }
-.chapter-tree-row.just-added { animation: item-confirm 1100ms var(--ease-out) both; }
-.chapter-tree .chapter-tree-main {
-  min-width: 0;
-  background: transparent;
-  box-shadow: none;
-  color: inherit;
-}
-.chapter-tree .chapter-tree-main:hover { background: transparent; }
-.chapter-tree .chapter-tree-delete {
-  width: 30px;
-  height: 30px;
-  min-height: 30px;
-  display: grid;
-  grid-template-columns: 1fr;
-  place-items: center;
-  border-radius: 8px;
-  color: var(--color-text-muted);
-  padding: 0;
-  opacity: 0;
-}
-.chapter-tree-row:hover .chapter-tree-delete,
-.chapter-tree-row .chapter-tree-delete[data-loading="true"] {
-  opacity: 1;
-}
-.chapter-tree .chapter-tree-delete:hover {
-  background: var(--color-danger-50);
-  color: var(--color-danger-700);
-}
-.materials-panel { position: relative; min-width: 0; overflow: visible; }
-.materials-panel.panel-loading::after {
-  content: "";
-  position: absolute;
-  top: 66px;
-  right: 18px;
-  z-index: 3;
-  width: 18px;
-  height: 18px;
-  border: 2px solid var(--color-primary-100);
-  border-top-color: var(--color-primary-600);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-.material-filter { height: 52px; display: grid; grid-template-columns: 1fr 120px 130px 130px auto; align-items: center; gap: 10px; border-bottom: 1px solid var(--color-border-default); padding: 8px 12px; }
-.material-list { position: relative; display: grid; align-content: start; }
-.material-list.grid { grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 12px; }
-.material-row { display: grid; grid-template-columns: 42px 1fr auto auto; align-items: center; gap: 12px; min-height: 64px; border-bottom: 1px solid var(--color-border-subtle); background: white; padding: 10px 14px; transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), border-color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out); }
-.material-list.grid .material-row { border: 1px solid var(--color-border-default); border-radius: var(--radius-md); }
-.file-badge { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: var(--radius-md); color: white; background: var(--color-text-muted); }
-.file-badge.pptx { background: #F97316; }.file-badge.pdf { background: var(--color-danger-500); }.file-badge.docx { background: var(--color-info-500); }
-.material-row strong { color: var(--color-text-primary); }
-.material-row small { display: block; color: var(--color-text-muted); }
-.material-status { margin-top: 2px; }
-.material-row section { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-.ppt-workbench { position: relative; height: calc(100vh - 60px); display: grid; grid-template-columns: 260px minmax(520px, 1fr) 420px; grid-template-rows: minmax(0, 1fr) 48px; overflow: hidden; background: #0F172A; transition: grid-template-columns var(--duration-slow) var(--ease-out), grid-template-rows var(--duration-slow) var(--ease-out); }
-.ppt-workbench.presentation-mode { grid-template-columns: 0 minmax(0, 1fr) 0; grid-template-rows: 1fr 0; }
-.ppt-workbench.presentation-mode .thumb-column,
-.ppt-workbench.presentation-mode .script-panel {
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.96);
-  border-color: transparent;
-}
-.ppt-workbench.presentation-mode .ppt-status {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(48px);
-}
-.ppt-head { position: fixed; top: 0; left: 0; right: 0; z-index: var(--z-fixed); height: 60px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--color-border-default); background: white; padding: 0 18px; }
-.ppt-empty-state { grid-column: 1 / -1; grid-row: 1 / -1; align-self: stretch; display: grid; place-items: center; align-content: center; gap: 12px; background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(248,250,252,0.94)); color: var(--color-text-secondary); text-align: center; padding: 32px; }
-.ppt-empty-state svg { color: var(--color-primary-600); }
-.ppt-empty-state h2 { margin: 0; color: var(--color-text-primary); font-size: var(--text-h3); }
-.ppt-empty-state p { margin: 0 0 6px; }
-.thumb-column, .script-panel { min-width: 0; min-height: 0; background: white; overflow: auto; transition: opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out), border-color var(--duration-base) var(--ease-out); }
-.thumb-column { border-right: 1px solid var(--color-border-default); padding: 12px; }
-.thumb-top { display: grid; gap: 8px; margin-bottom: 12px; }
-.thumb-list { position: relative; display: grid; gap: 8px; }
-.thumb-card { position: relative; width: 100%; min-height: 108px; display: grid; grid-template-rows: 58px auto; gap: 7px; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: white; padding: 8px; text-align: left; transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), border-color var(--duration-fast) var(--ease-out); }
-.thumb-card.active { border-color: var(--color-primary-600); box-shadow: var(--shadow-focus); }
-.thumb-card span { position: absolute; top: 6px; left: 6px; width: 30px; border-radius: 8px; background: var(--color-primary-600); color: white; padding: 0 6px; font-size: 11px; line-height: 18px; text-align: center; }
-.thumb-card svg { position: absolute; top: 6px; right: 6px; color: var(--color-success-500); }
-.thumb-card div { height: 58px; display: grid; place-items: center; overflow: hidden; border-radius: 6px; background: linear-gradient(135deg, var(--color-primary-50), var(--color-bg-muted)); color: var(--color-text-secondary); padding: 8px 10px; text-align: center; }
-.thumb-card small { color: var(--color-text-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.ppt-stage { position: relative; min-width: 0; display: grid; place-items: center; overflow: hidden; padding: 64px 28px; transition: background var(--duration-base) var(--ease-out); }
-.ppt-stage.focused { background: radial-gradient(circle at center, rgba(79,70,229,0.18), transparent 60%); }
-.stage-top, .stage-controls { position: absolute; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 8px; border-radius: var(--radius-full); background: rgba(255,255,255,0.15); color: white; white-space: nowrap; backdrop-filter: blur(10px); padding: 8px 12px; }
-.stage-top { top: 16px; }
-.stage-controls { bottom: 16px; }
-.stage-top .icon-action, .stage-controls .icon-action { min-height: 32px; border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.08); color: white; padding: 0 10px; }
-.stage-top .icon-action.active, .stage-controls .icon-action.active { background: rgba(255,255,255,0.9); color: var(--color-primary-700); }
-.slide-preview-wrap {
-  width: 100%;
-  display: grid;
-  place-items: center;
-  transform: scale(var(--slide-scale, 1));
-  transform-origin: center;
-  transition: transform var(--duration-base) var(--ease-spring), filter var(--duration-base) var(--ease-out);
-}
-.slide-preview-wrap.focused { filter: drop-shadow(0 26px 54px rgba(79,70,229,0.32)); }
-.slide-preview { width: min(860px, 90%); aspect-ratio: 16 / 9; display: grid; align-content: center; gap: 16px; border: 4px solid white; border-radius: 8px; background: white; box-shadow: 0 20px 50px rgba(0,0,0,0.35); padding: 48px; }
-.slide-preview h2 { margin: 0; color: var(--color-text-primary); font-size: 28px; }
-.slide-preview p { max-height: 48vh; overflow: auto; color: var(--color-text-body); font-size: 18px; line-height: 1.8; }
-.slide-overview {
-  position: absolute;
-  inset: 64px 40px 72px;
-  z-index: 4;
-  overflow: auto;
-  border: 1px solid rgba(255,255,255,0.22);
-  border-radius: var(--radius-lg);
-  background: rgba(15,23,42,0.86);
-  box-shadow: 0 22px 58px rgba(0,0,0,0.36);
-  padding: 16px;
-  backdrop-filter: blur(12px);
-}
-.slide-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  gap: 12px;
-}
-.slide-overview button {
-  min-height: 92px;
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: var(--radius-md);
-  background: rgba(255,255,255,0.1);
-  color: white;
-  padding: 12px;
-  text-align: left;
-}
-.slide-overview button:hover,
-.slide-overview button.active { border-color: rgba(255,255,255,0.72); background: rgba(255,255,255,0.18); transform: translateY(-2px); }
-.slide-overview span { width: max-content; border-radius: 999px; background: var(--color-primary-600); padding: 1px 8px; font-size: 11px; }
-.slide-overview strong { font-size: 13px; }
-.slide-overview small { color: rgba(255,255,255,0.7); }
-.script-panel { border-left: 1px solid var(--color-border-default); display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto auto; overflow: hidden; }
-.script-head { display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--color-border-default); }
-.script-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-h4); }
-.ai-strip { display: flex; align-items: center; gap: 8px; background: var(--color-ai-light); color: #6D28D9; padding: 10px 16px; font-size: var(--text-caption); }
-.ai-strip button { margin-left: auto; border: 0; background: transparent; color: #6D28D9; }
-.editor-toolbar { display: flex; gap: 6px; border-bottom: 1px solid var(--color-border-default); padding: 8px 12px; }
-.editor-toolbar button { border: 1px solid var(--color-border-default); border-radius: 6px; background: white; padding: 4px 8px; }
-.editor-toolbar button:hover { border-color: var(--color-primary-200); color: var(--color-primary-700); }
-.editor-toolbar button.active { border-color: var(--color-primary-300); background: var(--color-primary-50); color: var(--color-primary-700); animation: item-confirm 550ms var(--ease-out) both; }
-.script-editor { width: 100%; height: 100%; min-height: 0; overflow: auto; border: 0; outline: 0; background: #FAFAF7; color: var(--color-text-body); font-size: 15px; line-height: 1.75; resize: none; padding: 18px; transition: background var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out); }
-.script-editor:focus { background: white; box-shadow: inset 0 0 0 2px var(--color-primary-100); }
-.word-count { justify-self: end; color: var(--color-text-muted); padding: 4px 12px; }
-.script-actions { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--color-border-default); padding: 10px 12px; }
-.script-actions span { display: flex; align-items: center; gap: 6px; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
-.ppt-status { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--color-border-default); background: white; padding: 0 16px; transition: opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out); }
-.ppt-status span { color: var(--color-text-secondary); }
-.ppt-status div { display: flex; gap: 8px; }
-.lesson-card-list { position: relative; display: grid; gap: 12px; }
-.lesson-card { min-height: 108px; display: grid; grid-template-columns: 96px 1fr auto; align-items: center; gap: 16px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 16px; transition: transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out), border-color var(--duration-fast) var(--ease-out); }
-.lesson-thumb { width: 96px; height: 72px; display: grid; place-items: center; border-radius: 8px; background: #0F172A; color: white; font-size: 24px; font-weight: 700; }
-.lesson-card h2 { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); font-size: 15px; }
-.lesson-card p { color: var(--color-text-secondary); margin: 6px 0 10px; }
-.lesson-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; max-width: 360px; }
-.switch input { display: none; }
-.switch span { position: relative; display: inline-block; width: 36px; height: 20px; border-radius: 10px; background: var(--color-border-strong); transition: background var(--duration-base) var(--ease-in-out), box-shadow var(--duration-fast) var(--ease-out); }
-.switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: white; box-shadow: var(--shadow-xs); transition: transform var(--duration-base) var(--ease-spring); }
-.switch input:checked + span { background: var(--color-success-500); }
-.switch input:checked + span::after { transform: translateX(16px); }
-.switch.loading span { box-shadow: var(--shadow-focus); }
-.teacher-table .danger { color: var(--color-danger-700); }
-.ai-suggestion { display: grid; grid-template-columns: auto 1fr auto auto; align-items: start; gap: 14px; border-left: 4px solid var(--color-ai-cyan); }
-.ai-suggestion > span { color: #6D28D9; }
-.ai-suggestion h2 { margin: 0 0 8px; color: var(--color-text-primary); font-size: var(--text-h4); }
-.ai-suggestion p { margin: 0; color: var(--color-text-body); line-height: 1.7; }
-.analysis-grid { display: grid; gap: 16px; }
-.analysis-grid.two { grid-template-columns: repeat(2, 1fr); }
-.analysis-grid.three { grid-template-columns: repeat(3, 1fr); }
-.analysis-grid.knowledge { grid-template-columns: 40fr 60fr; }
-.weak-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 160px 44px 56px; align-items: center; gap: 10px; min-height: 42px; }
-.weak-row b { font-family: var(--font-family-mono); color: var(--color-text-muted); }
-.weak-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.weak-row button { min-height: 30px; border: 0; border-radius: var(--radius-full); background: var(--color-primary-50); color: var(--color-primary-700); padding: 0 10px; font-size: 12px; font-weight: 700; }
-.weak-row button:hover { background: var(--color-primary-600); color: white; }
-.question-layout { display: grid; grid-template-columns: 55fr 45fr; gap: 16px; }
-.word-cloud { min-height: 320px; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 12px; border-radius: var(--radius-lg); background: var(--color-bg-muted); padding: 18px; color: var(--color-primary-700); }
-.word-cloud span { transition: transform var(--duration-base) var(--ease-out), color var(--duration-fast) var(--ease-out); }
-.word-cloud span:hover { transform: translateY(-2px) scale(1.04); color: var(--color-primary-900); }
-.question-row { display: grid; grid-template-columns: 28px 1fr 60px; align-items: center; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--color-border-subtle); }
-.question-row b { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: 50%; background: var(--color-primary-600); color: white; }
-.activity-layers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.layer-card { display: grid; gap: 8px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); padding: 14px; }
-.profile-content { max-width: 720px; margin: 0 auto; width: 100%; }
-.profile-card { height: 140px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px; border-radius: var(--radius-xl); }
-.profile-card h1 { margin: 0; display: flex; align-items: center; gap: 8px; color: var(--color-text-primary); font-size: 22px; }
-.profile-card p, .profile-card small { display: flex; align-items: center; gap: 6px; margin: 4px 0; color: var(--color-text-muted); }
-.profile-tabs { display: flex; border-bottom: 1px solid var(--color-border-default); }
-.profile-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--color-text-secondary); padding: 0 14px; }
-.profile-tabs button.active { border-bottom-color: var(--color-primary-600); color: var(--color-primary-700); font-weight: 600; }
-.profile-form, .notice-list { display: grid; gap: 14px; }
-.profile-form footer { display: flex; justify-content: flex-end; gap: 10px; }
-.strength { height: 6px; border-radius: 3px; background: var(--color-bg-muted); overflow: hidden; }
-.strength i { display: block; height: 100%; background: var(--color-success-500); transition: width var(--duration-base) var(--ease-in-out), background var(--duration-fast) var(--ease-out); }
-.notice-list label { display: flex; align-items: center; gap: 10px; min-height: 36px; }
-.modal-mask { position: fixed; inset: 0; z-index: var(--z-modal-bg); display: grid; place-items: center; background: rgba(15,23,42,0.38); backdrop-filter: blur(6px); }
-.modal { width: 640px; max-height: 90vh; overflow: auto; border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-xl); padding: 20px; }
-.reminder-modal { display: grid; gap: 14px; }
-.reminder-modal label { display: grid; gap: 8px; color: var(--color-text-secondary); font-weight: 600; }
-.reminder-modal .textarea { min-height: 132px; resize: vertical; }
-.reminder-recipients { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; border-radius: var(--radius-lg); background: var(--color-primary-50); color: var(--color-primary-700); padding: 12px 14px; }
-.reminder-recipients small { grid-column: 2; color: var(--color-text-secondary); }
-.modal.preview-modal { width: min(1120px, 92vw); height: min(820px, 90vh); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
-.preview-head { min-width: 0; }
-.preview-head h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.preview-tabs { display: inline-flex; overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-muted); padding: 3px; }
-.preview-tabs button { min-height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--color-text-secondary); padding: 0 12px; font-size: var(--text-caption); font-weight: 600; }
-.preview-tabs button:hover:not(:disabled) { background: white; color: var(--color-primary-700); }
-.preview-tabs button.active { background: white; color: var(--color-primary-700); box-shadow: var(--shadow-xs); }
-.preview-tabs button:disabled { cursor: not-allowed; opacity: 0.45; }
-.preview-content { min-height: 0; position: relative; overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-muted); }
-.preview-content iframe { width: 100%; height: 100%; border: 0; background: white; }
-.preview-loading { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 10px; background: rgba(255,255,255,0.86); color: var(--color-text-secondary); font-size: var(--text-body-sm); backdrop-filter: blur(4px); }
-.markdown-preview { height: 100%; overflow: auto; background: white; color: var(--color-text-body); padding: 28px 34px 44px; line-height: 1.78; }
-.markdown-preview :deep(h1),
-.markdown-preview :deep(h2),
-.markdown-preview :deep(h3) { margin: 1.1em 0 0.55em; color: var(--color-text-primary); line-height: 1.35; }
-.markdown-preview :deep(h1:first-child),
-.markdown-preview :deep(h2:first-child),
-.markdown-preview :deep(h3:first-child) { margin-top: 0; }
-.markdown-preview :deep(p),
-.markdown-preview :deep(ul),
-.markdown-preview :deep(ol),
-.markdown-preview :deep(blockquote),
-.markdown-preview :deep(pre),
-.markdown-preview :deep(table) { margin: 0 0 14px; }
-.markdown-preview :deep(ul),
-.markdown-preview :deep(ol) { padding-left: 1.35em; }
-.markdown-preview :deep(li + li) { margin-top: 6px; }
-.markdown-preview :deep(a) { color: var(--color-primary-700); text-decoration: none; }
-.markdown-preview :deep(a:hover) { text-decoration: underline; }
-.markdown-preview :deep(code) { border-radius: 6px; background: var(--color-bg-muted); color: var(--color-danger-700); padding: 2px 6px; font-family: var(--font-family-mono); font-size: 0.92em; }
-.markdown-preview :deep(pre) { overflow: auto; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: #0F172A; color: #E2E8F0; padding: 14px 16px; }
-.markdown-preview :deep(pre code) { background: transparent; color: inherit; padding: 0; }
-.markdown-preview :deep(blockquote) { border-left: 4px solid var(--color-primary-200); border-radius: 0 var(--radius-md) var(--radius-md) 0; background: var(--color-primary-50); color: var(--color-text-secondary); padding: 10px 14px; }
-.markdown-preview :deep(table) { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: var(--radius-md); }
-.markdown-preview :deep(th),
-.markdown-preview :deep(td) { border: 1px solid var(--color-border-default); padding: 9px 11px; text-align: left; }
-.markdown-preview :deep(th) { background: var(--color-bg-muted); color: var(--color-text-primary); }
-.markdown-preview :deep(hr) { height: 1px; border: 0; background: var(--color-border-default); margin: 22px 0; }
-.markdown-preview :deep(.katex-display) { overflow-x: auto; overflow-y: hidden; padding: 8px 0; }
-.lesson-preview-modal { width: min(1040px, 92vw); height: min(760px, 90vh); display: grid; grid-template-rows: auto minmax(0, 1fr); }
-.lesson-preview-layout { min-height: 0; display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; }
-.lesson-preview-layout aside { min-height: 0; overflow: auto; display: grid; align-content: start; gap: 8px; border-right: 1px solid var(--color-border-default); padding-right: 12px; }
-.lesson-preview-layout aside button { display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 8px; min-height: 44px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: white; color: var(--color-text-secondary); padding: 0 10px; text-align: left; }
-.lesson-preview-layout aside button:hover,
-.lesson-preview-layout aside button.active { border-color: var(--color-primary-200); background: var(--color-primary-50); color: var(--color-primary-700); transform: translateY(-1px); }
-.lesson-preview-layout aside span { display: inline-flex; height: 24px; align-items: center; justify-content: center; border-radius: 8px; background: var(--color-bg-muted); font-size: 12px; font-weight: 700; }
-.lesson-preview-layout aside strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lesson-preview-stage { min-height: 0; overflow: auto; display: grid; gap: 14px; padding-right: 4px; }
-.lesson-preview-stage article { border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-muted); padding: 16px; }
-.lesson-preview-stage h3 { margin: 0 0 10px; color: var(--color-text-primary); font-size: var(--text-h4); }
-.lesson-preview-stage p { margin: 0; white-space: pre-wrap; color: var(--color-text-body); line-height: 1.75; }
-.modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.modal-head h2 { flex: 1; margin: 0; font-size: var(--text-h3); color: var(--color-text-primary); }
-.upload-drop { position: relative; height: 160px; flex-direction: column; color: var(--color-text-muted); margin-bottom: 14px; }
-.upload-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.upload-row { display: grid; grid-template-columns: auto 1fr 80px 140px 120px auto; align-items: center; gap: 8px; border-bottom: 1px solid var(--color-border-subtle); padding: 8px 0; }
-.quiz-editor-modal { width: min(1180px, 94vw); height: min(820px, 92vh); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
-.quiz-editor-layout { min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; }
-.quiz-editor-side { display: grid; align-content: start; gap: 14px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-muted); padding: 14px; }
-.quiz-editor-side label, .quiz-edit-card label { display: grid; gap: 6px; color: var(--color-text-secondary); font-weight: 600; font-size: var(--text-body-sm); }
-.quiz-editor-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; border-radius: var(--radius-lg); background: white; padding: 12px; }
-.quiz-editor-stats span { color: var(--color-primary-700); font-size: 24px; font-weight: 800; line-height: 1; }
-.quiz-editor-stats small { color: var(--color-text-muted); }
-.quiz-editor-questions { min-height: 0; overflow: auto; display: grid; align-content: start; gap: 14px; padding-right: 4px; }
-.quiz-edit-card { display: grid; gap: 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 16px; }
-.quiz-edit-card header { display: grid; grid-template-columns: 34px 160px 86px auto; gap: 10px; align-items: center; }
-.quiz-edit-card header b { display: inline-grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; background: var(--color-primary-50); color: var(--color-primary-700); font-family: var(--font-family-mono); }
-.score-input { text-align: center; }
-.option-editor { display: grid; gap: 8px; }
-.option-edit-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 72px 34px; gap: 8px; align-items: center; }
-.option-edit-row > span { display: inline-grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; background: var(--color-bg-muted); color: var(--color-text-secondary); font-weight: 800; }
-.answer-radio { display: inline-flex !important; grid-template-columns: none !important; align-items: center; gap: 6px !important; color: var(--color-text-secondary); white-space: nowrap; }
-.modal footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
-.drawer { position: fixed; top: 60px; right: 0; bottom: 0; z-index: var(--z-fixed); width: 520px; display: grid; grid-template-rows: auto auto 1fr; border-left: 1px solid var(--color-border-default); background: white; box-shadow: var(--shadow-xl); }
-.drawer-head { padding: 16px; border-bottom: 1px solid var(--color-border-default); }
-.drawer-head div { flex: 1; }
-.drawer-head h2 { margin: 0; color: var(--color-text-primary); font-size: var(--text-h3); }
-.drawer-head small { color: var(--color-text-muted); }
-.small-tabs { padding: 0 12px; }
-.drawer-body { overflow: auto; display: grid; align-content: start; gap: 14px; padding: 16px; }
-.info-row, .drawer-progress { display: grid; grid-template-columns: 110px 1fr; gap: 10px; border-bottom: 1px solid var(--color-border-subtle); padding-bottom: 10px; }
-.info-row span { color: var(--color-text-muted); }
-.info-row strong { color: var(--color-text-primary); }
-.drawer-actions { display: flex; gap: 10px; }
-.drawer-progress { grid-template-columns: 150px 1fr 70px; align-items: center; }
-.drawer-stats { border-radius: var(--radius-md); background: var(--color-bg-muted); padding: 12px; color: var(--color-text-secondary); }
-.tag-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.qa-record { display: grid; grid-template-columns: auto 1fr; gap: 10px; border-bottom: 1px solid var(--color-border-subtle); padding: 10px 0; }
-.qa-record strong { color: var(--color-text-primary); }
-.qa-record p { margin: 4px 0; color: var(--color-text-secondary); }
-.qa-record small { color: var(--color-text-muted); }
-.empty { min-height: 120px; display: grid; place-items: center; gap: 8px; color: var(--color-text-muted); text-align: center; }
-.page-empty { border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; }
-.tag { display: inline-flex; align-items: center; min-height: 22px; border-radius: var(--radius-full); background: var(--color-bg-muted); color: var(--color-text-secondary); padding: 0 8px; font-size: var(--text-caption); }
-.tag-primary { background: var(--color-primary-50); color: var(--color-primary-700); }
-.tag-success { background: var(--color-success-50); color: var(--color-success-700); }
-.tag-warning { background: var(--color-warning-50); color: var(--color-warning-700); }
-.tag-danger { background: var(--color-danger-50); color: var(--color-danger-700); }
-.tag-ai { background: var(--color-ai-light); color: #6D28D9; border: 1px solid var(--color-ai-border); }
-.motion-list-enter-active,
-.motion-list-leave-active,
-.chapter-list-enter-active,
-.chapter-list-leave-active,
-.material-list-motion-enter-active,
-.material-list-motion-leave-active,
-.thumb-list-enter-active,
-.thumb-list-leave-active,
-.cloud-list-enter-active,
-.cloud-list-leave-active {
-  transition: opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out), filter var(--duration-base) var(--ease-out);
-}
-.motion-list-enter-from,
-.motion-list-leave-to,
-.chapter-list-enter-from,
-.chapter-list-leave-to,
-.material-list-motion-enter-from,
-.material-list-motion-leave-to,
-.thumb-list-enter-from,
-.thumb-list-leave-to,
-.cloud-list-enter-from,
-.cloud-list-leave-to {
-  opacity: 0;
-  filter: blur(2px);
-  transform: translateY(8px) scale(0.98);
-}
-.motion-list-move,
-.chapter-list-move,
-.material-list-motion-move,
-.thumb-list-move,
-.cloud-list-move,
-.card-list-move,
-.row-list-move {
-  transition: transform var(--duration-base) var(--ease-out);
-}
-.card-list-enter-active,
-.card-list-leave-active {
-  transition: opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out), filter var(--duration-base) var(--ease-out);
-}
-.card-list-enter-from,
-.card-list-leave-to {
-  opacity: 0;
-  filter: blur(2px);
-  transform: translateY(12px) scale(0.97);
-}
-.row-list-enter-active,
-.row-list-leave-active {
-  transition: opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out), background var(--duration-base) var(--ease-out);
-}
-.row-list-enter-from,
-.row-list-leave-to {
-  opacity: 0;
-  transform: translateX(10px);
-}
-.slide-flip-enter-active {
-  transition: opacity var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out), filter var(--duration-base) var(--ease-out);
-}
-.slide-flip-leave-active {
-  transition: opacity var(--duration-fast) var(--ease-in), transform var(--duration-fast) var(--ease-in), filter var(--duration-fast) var(--ease-in);
-}
-.slide-flip-enter-from {
-  opacity: 0;
-  filter: blur(3px);
-  transform: translateY(16px) scale(0.98);
-}
-.slide-flip-leave-to {
-  opacity: 0;
-  filter: blur(2px);
-  transform: translateY(-10px) scale(0.98);
-}
-@keyframes item-confirm {
-  0% { background: var(--color-primary-50); box-shadow: 0 0 0 0 rgba(79,70,229,0.24); transform: translateY(-6px) scale(0.98); }
-  55% { background: var(--color-primary-50); box-shadow: 0 0 0 6px rgba(79,70,229,0.08); transform: translateY(0) scale(1.01); }
-  100% { background: transparent; box-shadow: 0 0 0 0 rgba(79,70,229,0); transform: translateY(0) scale(1); }
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-</style>
+<style scoped src="../styles/teacher-scoped.css"></style>
+<style scoped src="../styles/teacher-classagent.css"></style>

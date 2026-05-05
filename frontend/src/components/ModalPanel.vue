@@ -109,4 +109,8 @@ footer {
   border-top: 1px solid var(--color-border-default);
   padding: var(--space-4) var(--space-6);
 }
+header .icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
 </style>

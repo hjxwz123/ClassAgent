@@ -105,4 +105,8 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onDocumentKeydown)
   justify-content: flex-end;
   gap: 8px;
 }
+.confirm-card footer button:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 2px;
+}
 </style>

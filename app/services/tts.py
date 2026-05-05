@@ -1,4 +1,6 @@
+import html
 import json
+import re
 import time
 import wave
 from io import BytesIO
@@ -10,6 +12,99 @@ from app.core.config import get_settings
 from app.core.errors import bad_request
 from app.services.runtime_config import get_enabled_service_config
 from app.services.storage import storage_service
+
+
+MARKDOWN_IMAGE_PATTERN = re.compile(r"!\[(?P<alt>[^\]]*)]\(\s*(?:<[^>]+>|[^)\s]+)(?:\s+['\"][^'\"]*['\"])?\s*\)")
+MARKDOWN_LINK_PATTERN = re.compile(r"\[(?P<label>[^\]]+)]\(\s*(?:<[^>]+>|[^)\s]+)(?:\s+['\"][^'\"]*['\"])?\s*\)")
+HTML_IMG_PATTERN = re.compile(r"""<img\b[^>]*>""", re.IGNORECASE)
+HTML_ALT_PATTERN = re.compile(r"""\balt=["'](?P<alt>[^"']+)["']""", re.IGNORECASE)
+CODE_FENCE_PATTERN = re.compile(r"```[a-zA-Z0-9_-]*\n?(.*?)```", re.DOTALL)
+RAW_URL_PATTERN = re.compile(r"https?://\S+|www\.\S+", re.IGNORECASE)
+TABLE_SEPARATOR_PATTERN = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$")
+LATEX_REPLACEMENTS = {
+    r"\geq": "大于等于",
+    r"\leq": "小于等于",
+    r"\neq": "不等于",
+    r"\times": "乘以",
+    r"\cdot": "乘以",
+    r"\div": "除以",
+    r"\pm": "正负",
+    r"\to": "趋向",
+    r"\rightarrow": "趋向",
+    r"\leftarrow": "反向趋向",
+    r"\infty": "无穷",
+    r"\alpha": "阿尔法",
+    r"\beta": "贝塔",
+    r"\gamma": "伽马",
+    r"\Gamma": "伽马",
+    r"\delta": "德尔塔",
+    r"\lambda": "兰姆达",
+    r"\mu": "缪",
+    r"\pi": "派",
+    r"\sum": "求和",
+    r"\prod": "连乘",
+    r"\sqrt": "根号",
+}
+
+
+def _html_image_alt(match: re.Match[str]) -> str:
+    alt_match = HTML_ALT_PATTERN.search(match.group(0))
+    if alt_match is None:
+        return ""
+    return html.unescape(alt_match.group("alt")).strip()
+
+
+def _clean_latex(text: str) -> str:
+    cleaned = text
+    cleaned = re.sub(r"\\frac\s*{([^{}]+)}\s*{([^{}]+)}", r"\1 除以 \2", cleaned)
+    cleaned = re.sub(r"\\(?:mathrm|mathbb|mathbf|mathcal|text)\s*{([^{}]*)}", r"\1", cleaned)
+    for marker in (r"\left", r"\right", r"\begin", r"\end"):
+        cleaned = cleaned.replace(marker, " ")
+    for source, target in LATEX_REPLACEMENTS.items():
+        cleaned = cleaned.replace(source, f" {target} ")
+    cleaned = re.sub(r"\\[a-zA-Z]+", " ", cleaned)
+    cleaned = cleaned.replace("{", " ").replace("}", " ")
+    cleaned = cleaned.replace("_", " 下标 ").replace("^", " 上标 ")
+    cleaned = cleaned.replace("&", " ").replace("\\\\", " ")
+    return cleaned
+
+
+def markdown_to_speech_text(value: str | None) -> str:
+    """Convert lesson Markdown into plain text before sending it to TTS."""
+    if not value:
+        return ""
+    text = html.unescape(str(value)).replace("\r\n", "\n").replace("\r", "\n")
+    text = CODE_FENCE_PATTERN.sub(lambda match: match.group(1), text)
+    text = HTML_IMG_PATTERN.sub(_html_image_alt, text)
+    text = MARKDOWN_IMAGE_PATTERN.sub(lambda match: (match.group("alt") or "").strip(), text)
+    text = MARKDOWN_LINK_PATTERN.sub(lambda match: match.group("label").strip(), text)
+    text = RAW_URL_PATTERN.sub("", text)
+    text = re.sub(r"\$\$(.*?)\$\$", lambda match: _clean_latex(match.group(1)), text, flags=re.DOTALL)
+    text = re.sub(r"\$(.*?)\$", lambda match: _clean_latex(match.group(1)), text)
+    text = _clean_latex(text)
+
+    lines: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if TABLE_SEPARATOR_PATTERN.match(line):
+            continue
+        line = re.sub(r"^\s{0,3}#{1,6}\s*", "", line)
+        line = re.sub(r"^\s*>\s?", "", line)
+        line = re.sub(r"^\s*[-*+]\s+\[[ xX]\]\s+", "", line)
+        line = re.sub(r"^\s*[-*+]\s+", "", line)
+        line = re.sub(r"^\s*\d+[.)]\s+", "", line)
+        line = line.replace("|", " ")
+        lines.append(line)
+    text = "\n".join(lines)
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = re.sub(r"</?[^>]+>", "", text)
+    text = re.sub(r"[*_~`#>{}\[\]\(\)]+", " ", text)
+    text = re.sub(r"^\s*-{3,}\s*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 class TTSService:
@@ -175,16 +270,17 @@ class TTSService:
         return {"success": True, "message": "TTS 配置可用"}
 
     def synthesize(self, text: str, db: Session | None = None) -> tuple[str, float]:
+        speech_text = markdown_to_speech_text(text) or "本页暂无可朗读内容。"
         service = get_enabled_service_config(db, "tts")
         if service is not None:
             if service.provider == "mock":
-                return self._synthesize_mock(text, db)
+                return self._synthesize_mock(speech_text, db)
             if service.provider == "aliyun":
-                return self._synthesize_aliyun(text, db, self._clean_config(service.config))
+                return self._synthesize_aliyun(speech_text, db, self._clean_config(service.config))
             raise bad_request(f"暂不支持的 TTS 服务提供方: {service.provider}")
         if self.settings.app_env == "production":
             raise bad_request("TTS 服务未配置，请先在管理员服务配置中启用 tts")
-        return self._synthesize_mock(text, db)
+        return self._synthesize_mock(speech_text, db)
 
 
 tts_service = TTSService()

@@ -6,9 +6,9 @@
         <strong>课程学习助手</strong>
       </div>
       <div class="tabs" role="tablist">
-        <button class="btn btn-sm" :class="mode === 'login' ? 'btn-primary' : 'btn-ghost'" @click="setMode('login')">登录</button>
-        <button class="btn btn-sm" :class="mode === 'register' ? 'btn-primary' : 'btn-ghost'" @click="setMode('register')">注册</button>
-        <button class="btn btn-sm" :class="mode === 'reset' ? 'btn-primary' : 'btn-ghost'" @click="setMode('reset')">找回</button>
+        <button type="button" role="tab" class="btn btn-sm" :aria-selected="mode === 'login'" :class="mode === 'login' ? 'btn-primary' : 'btn-ghost'" @click="setMode('login')">登录</button>
+        <button type="button" role="tab" class="btn btn-sm" :aria-selected="mode === 'register'" :class="mode === 'register' ? 'btn-primary' : 'btn-ghost'" @click="setMode('register')">注册</button>
+        <button type="button" role="tab" class="btn btn-sm" :aria-selected="mode === 'reset'" :class="mode === 'reset' ? 'btn-primary' : 'btn-ghost'" @click="setMode('reset')">找回</button>
       </div>
       <Transition name="fade-slide">
         <p v-if="formError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ formError }}</p>
@@ -158,13 +158,18 @@ async function resetPassword() {
   display: grid;
   place-items: center;
   padding: var(--space-6);
+  background:
+    radial-gradient(circle at 20% 24%, rgba(0,229,255,.08), transparent 34%),
+    radial-gradient(circle at 82% 76%, rgba(217,160,91,.1), transparent 30%),
+    var(--ca-color-slate);
+  color: var(--ca-color-paper-ink);
 }
 .auth-card {
   width: min(420px, 100%);
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
+  background: var(--ca-color-paper-card);
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-xl);
+  box-shadow: var(--ca-shadow-dropdown);
   padding: var(--space-8);
 }
 .brand {
@@ -172,7 +177,7 @@ async function resetPassword() {
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-6);
-  color: var(--color-text-primary);
+  color: var(--ca-color-paper-ink);
   font-size: var(--text-h3);
 }
 .brand span {
@@ -181,13 +186,40 @@ async function resetPassword() {
   height: 34px;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-inverse);
-  border-radius: var(--radius-md);
-  background: var(--color-ai-gradient);
+  color: var(--ca-color-slate);
+  border-radius: var(--ca-radius-md);
+  background: var(--ca-role-student-glow);
 }
-.tabs { display: flex; gap: var(--space-2); margin-bottom: var(--space-6); }
-.form-error { display: flex; align-items: center; gap: 6px; min-height: 34px; border: 1px solid var(--color-danger-200); border-radius: var(--radius-md); background: var(--color-danger-50); color: var(--color-danger-700); padding: 0 10px; font-size: var(--text-body-sm); }
-.label { margin-top: var(--space-4); }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); margin-bottom: var(--space-6); }
+.tabs .btn {
+  min-height: 44px;
+}
+.form-error { display: flex; align-items: center; gap: 6px; min-height: 38px; border: 1px solid var(--color-danger-100); border-radius: var(--radius-md); background: var(--color-danger-50); color: var(--color-danger-700); padding: 0 10px; font-size: var(--text-body-sm); }
+.label { display: block; margin-top: var(--space-4); color: var(--ca-color-paper-sub); font-weight: 700; }
 .wide { width: 100%; margin-top: var(--space-6); }
 .inline { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2); margin-top: var(--space-2); }
+
+form {
+  display: grid;
+}
+
+.input:focus,
+:deep(.password-field input:focus) {
+  border-color: var(--ca-role-student-primary);
+  box-shadow: 0 0 0 3px rgba(0, 184, 212, .18);
+}
+
+@media (max-width: 520px) {
+  .auth {
+    padding: 18px;
+  }
+
+  .auth-card {
+    padding: 24px;
+  }
+
+  .inline {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

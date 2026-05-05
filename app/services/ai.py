@@ -461,7 +461,9 @@ class AIService:
             payload["response_format"] = {"type": "json_object"}
 
         try:
-            with httpx.Client(timeout=timeout_seconds or self.settings.external_service_timeout_seconds) as client:
+            request_timeout = timeout_seconds or self.settings.external_service_timeout_seconds
+            timeout = httpx.Timeout(request_timeout, connect=min(15.0, request_timeout), read=request_timeout, write=request_timeout)
+            with httpx.Client(timeout=timeout) as client:
                 response = client.post(self._chat_endpoint(config.endpoint), headers=headers, json=payload)
                 if response.status_code >= 400 and json_mode and "response_format" in payload:
                     retry_payload = dict(payload)
@@ -486,6 +488,11 @@ class AIService:
                     result.reasoning = self._reasoning_from_message(output) or result.reasoning
                     return result
             raise bad_request("模型响应格式不符合 OpenAI 兼容规范")
+        except httpx.TimeoutException as exc:
+            if allow_fallback and self._fallback_allowed():
+                return None
+            request_timeout = timeout_seconds or self.settings.external_service_timeout_seconds
+            raise bad_request(f"模型调用超时：{int(request_timeout)} 秒内未返回结果，请稍后重试，或减少题目数量/资料范围。") from exc
         except httpx.HTTPError as exc:
             if allow_fallback and self._fallback_allowed():
                 return None
@@ -1008,7 +1015,7 @@ class AIService:
             json_mode=False,
             allow_fallback=False,
             max_tokens=completion_limit,
-            timeout_seconds=max(self.settings.external_service_timeout_seconds, 90),
+            timeout_seconds=max(self.settings.external_service_timeout_seconds, 180),
         )
         if content is None:
             raise bad_request("AI 出题失败：模型未返回题目内容")

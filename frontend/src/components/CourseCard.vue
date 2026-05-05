@@ -1,5 +1,13 @@
 <template>
-  <article class="course-card" tabindex="0" @click="$emit('open')" @keydown.enter="$emit('open')">
+  <article
+    class="course-card"
+    role="button"
+    tabindex="0"
+    :aria-label="`打开课程 ${course.name}`"
+    @click="$emit('open')"
+    @keydown.enter="$emit('open')"
+    @keydown.space.prevent="$emit('open')"
+  >
     <div class="cover">
       <BookOpen :size="24" />
       <span class="tag tag-primary">{{ course.status }}</span>
@@ -41,7 +49,10 @@ defineEmits<{ open: [] }>();
   align-items: center;
   justify-content: center;
   color: var(--color-text-inverse);
-  background: var(--color-ai-gradient);
+  background: var(--ca-color-slate);
+}
+.cover svg {
+  color: var(--ca-role-student-glow);
 }
 .cover svg { transition: transform var(--duration-base) var(--ease-out); }
 .course-card:hover .cover svg { transform: scale(1.05); }

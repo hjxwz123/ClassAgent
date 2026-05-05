@@ -53,9 +53,12 @@ const trendClass = computed(() => (props.danger ? "danger" : "success"));
 strong {
   display: block;
   margin-top: var(--space-4);
+  overflow: hidden;
   color: var(--color-text-primary);
   font-size: var(--text-display);
   line-height: 40px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 small {
   display: block;

@@ -10,8 +10,8 @@ from sqlalchemy import select
 
 from app.db import session as db_session
 from app.db.models import AsyncTaskLog, CourseMaterial, KnowledgeChunk, Lesson, LessonPage
-from app.services.parser import doc_parser_service, parse_material
-from app.services.tts import tts_service
+from app.services.parser import _localize_markdown_images, doc_parser_service, parse_material
+from app.services.tts import markdown_to_speech_text, tts_service
 from app.services.vector_store import vector_store
 
 
@@ -108,6 +108,120 @@ def test_doc_parser_layouts_group_into_ordered_pages():
     assert pages[0]["page_text"].startswith("# 第一页标题")
     assert pages[1]["page_number"] == 2
     assert "第二页正文" in pages[1]["page_text"]
+
+
+def test_docmind_markdown_images_are_persisted_to_configured_storage(monkeypatch):
+    calls: dict[str, object] = {}
+
+    class FakeResponse:
+        headers = {"content-type": "image/png"}
+        content = b"fake-png"
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url):
+            calls["download_url"] = url
+            return FakeResponse()
+
+    monkeypatch.setattr("app.services.parser.httpx.Client", FakeClient)
+    monkeypatch.setattr(
+        "app.services.parser.storage_service.save_bytes",
+        lambda content, *, folder, filename, db=None: (
+            calls.update({"content": content, "folder": folder, "filename": filename})
+            or f"{folder}/{filename}"
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.parser.storage_service.public_url",
+        lambda relative_path, db=None: f"https://cdn.example.com/{relative_path}",
+    )
+
+    temporary_url = (
+        "http://docmind-api-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/publicDocStreamStructure/10.png"
+        "?Expires=1777819773&OSSAccessKeyId=STS.demo&Signature=abc%3D&security-token=token"
+    )
+    content = f"第一页\n![公式截图]({temporary_url})"
+
+    rewritten = _localize_markdown_images(content, db=None, cache={})
+
+    assert "docmind-api-cn-hangzhou" not in rewritten
+    assert "OSSAccessKeyId" not in rewritten
+    assert "https://cdn.example.com/docmind_images/" in rewritten
+    assert calls["download_url"] == temporary_url
+    assert calls["content"] == b"fake-png"
+    assert str(calls["folder"]).startswith("docmind_images/")
+
+
+def test_expired_docmind_markdown_images_are_not_kept(monkeypatch):
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url):
+            raise RuntimeError("must not use non-http errors")
+
+    class FailingResponse:
+        headers = {}
+        content = b""
+
+        def raise_for_status(self):
+            import httpx
+
+            raise httpx.HTTPStatusError("forbidden", request=None, response=None)
+
+    class ExpiredClient(FakeClient):
+        def get(self, url):
+            return FailingResponse()
+
+    monkeypatch.setattr("app.services.parser.httpx.Client", ExpiredClient)
+    temporary_url = (
+        "https://docmind-api-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/publicDocStreamStructure/10.png"
+        "?Expires=1&OSSAccessKeyId=STS.demo&Signature=abc"
+    )
+
+    rewritten = _localize_markdown_images(f"说明 ![图1]({temporary_url}) 结束", db=None, cache={})
+
+    assert temporary_url not in rewritten
+    assert "OSSAccessKeyId" not in rewritten
+    assert "图1" in rewritten
+
+
+def test_markdown_to_speech_text_removes_markdown_and_links():
+    cleaned = markdown_to_speech_text(
+        """
+        # 第一章
+        - **重点**：[语法分析](https://example.com/a)
+        ![流程图](https://example.com/image.png)
+        | A | B |
+        | --- | --- |
+        | `归约` | $\\frac{a}{b}$ |
+        > \\mathbb{P}_{2}=\\left\\{\\begin{array}{c c}{\\Gamma_B}\\end{array}\\right.
+        """
+    )
+
+    assert "第一章" in cleaned
+    assert "语法分析" in cleaned
+    assert "流程图" in cleaned
+    assert "https://" not in cleaned
+    for marker in ("#", "**", "[", "](", "![", "|", "`", "\\mathbb", "\\frac"):
+        assert marker not in cleaned
 
 
 def test_aliyun_tts_uses_official_nls_sdk(monkeypatch, tmp_path: Path):
