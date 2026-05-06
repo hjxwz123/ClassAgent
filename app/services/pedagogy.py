@@ -341,9 +341,11 @@ def _page_artifacts(
     lesson: Lesson,
     page: LessonPage,
     order_base: int,
+    use_ai: bool = True,
 ) -> list[PedagogyArtifact]:
-    payload = _normalize_page_payload(
-        ai_service.generate_pedagogy_artifacts(
+    raw_payload: dict[str, Any] | None = None
+    if use_ai:
+        raw_payload = ai_service.generate_pedagogy_artifacts(
             material_title=material.title,
             lesson_title=lesson.title,
             page_title=page.page_title,
@@ -351,7 +353,9 @@ def _page_artifacts(
             page_text=page.page_text,
             script_text=page.script_text,
             db=db,
-        ),
+        )
+    payload = _normalize_page_payload(
+        raw_payload,
         page=page,
         lesson=lesson,
     )
@@ -577,6 +581,39 @@ def generate_material_pedagogy_artifacts(
         artifacts.extend(page_artifacts)
     if pages:
         artifacts.insert(0, _chapter_outline_artifact(material=material, lesson=lesson, pages=pages, page_artifacts=artifacts))
+    for artifact in artifacts:
+        db.add(artifact)
+    db.flush()
+    return artifacts
+
+
+def ensure_lesson_pedagogy_artifacts(
+    db: Session,
+    *,
+    lesson: Lesson,
+    pages: Sequence[LessonPage],
+) -> list[PedagogyArtifact]:
+    if lesson.material_id is None or not pages:
+        return []
+    existing_id = db.scalar(select(PedagogyArtifact.id).where(PedagogyArtifact.lesson_id == lesson.id).limit(1))
+    if existing_id is not None:
+        return []
+    material = db.get(CourseMaterial, lesson.material_id)
+    if material is None:
+        return []
+    artifacts: list[PedagogyArtifact] = []
+    for index, page in enumerate(pages):
+        artifacts.extend(
+            _page_artifacts(
+                db=db,
+                material=material,
+                lesson=lesson,
+                page=page,
+                order_base=index * 100 + 1,
+                use_ai=False,
+            )
+        )
+    artifacts.insert(0, _chapter_outline_artifact(material=material, lesson=lesson, pages=pages, page_artifacts=artifacts))
     for artifact in artifacts:
         db.add(artifact)
     db.flush()
