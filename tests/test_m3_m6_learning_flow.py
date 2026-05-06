@@ -1,12 +1,15 @@
 from io import BytesIO
 
 import pytest
+from sqlalchemy import select
 from pptx import Presentation
 
+from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus
 from app.core.errors import AppError
 from app.db import session as db_session
-from app.db.models import QuizQuestion
+from app.db.models import CourseMaterial, Lesson, LessonPage, QuizQuestion, User
 from app.services.ai import ai_service, sanitize_quiz_source_text
+from app.services.learning import QUIZ_SOURCE_CONTEXT_HARD_LIMIT, _course_source_text_for_quiz
 
 
 def fake_quiz_questions(*, topic, source_text, count, db=None):
@@ -235,6 +238,93 @@ def test_quiz_generation_calls_ai_with_course_context_without_material(client, m
     assert captured["topic"] == "离散数学"
     assert "课程名称：离散数学" in captured["source_text"]
     assert "课程简介：图论与集合基础" in captured["source_text"]
+
+
+def test_quiz_source_context_covers_many_pages_without_oversized_prompt(client):
+    teacher_email = "teacher-long-ppt@example.com"
+    page_count = 420
+    register_user(
+        client,
+        email=teacher_email,
+        password="Teacher123",
+        nickname="长课件老师",
+        role="teacher",
+        employee_no="T2026100",
+    )
+    teacher_login = login_user(client, email=teacher_email, password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "编译原理", "description": "属性文法与语义分析", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+    chapter_resp = client.post(
+        f"/api/v1/courses/{course['id']}/chapters",
+        json={"title": "属性文法", "description": "", "order_index": 1},
+        headers=teacher_headers,
+    )
+    assert chapter_resp.status_code == 200, chapter_resp.text
+    chapter = chapter_resp.json()["data"]
+
+    with db_session.SessionLocal() as db:
+        teacher = db.scalar(select(User).where(User.email == teacher_email))
+        assert teacher is not None
+        material = CourseMaterial(
+            course_id=course["id"],
+            chapter_id=chapter["id"],
+            uploader_id=teacher.id,
+            title="属性文法长课件",
+            category=MaterialCategory.COURSEWARE.value,
+            material_type=MaterialType.PPTX.value,
+            size_bytes=8192,
+            original_filename="attribute-grammar.pptx",
+            storage_path="uploads/test/attribute-grammar.pptx",
+            preview_url="/static/uploads/test/attribute-grammar.pptx",
+            extracted_text=None,
+            parse_status=ProcessStatus.READY.value,
+            vector_status=ProcessStatus.READY.value,
+        )
+        db.add(material)
+        db.commit()
+        db.refresh(material)
+        lesson = Lesson(
+            course_id=course["id"],
+            chapter_id=chapter["id"],
+            material_id=material.id,
+            title="属性文法长课件",
+            summary="长 PPT 每页覆盖",
+            page_count=page_count,
+            status=LessonStatus.PUBLISHED.value,
+        )
+        db.add(lesson)
+        db.commit()
+        db.refresh(lesson)
+        db.add_all(
+            [
+                LessonPage(
+                    lesson_id=lesson.id,
+                    page_number=index,
+                    page_title=f"第{index}页主题",
+                    page_text=(
+                        f"第{index}页开头知识点：属性文法页首覆盖标记{index:03d}。"
+                        + "本页围绕属性文法、语义规则、综合属性和继承属性展开说明。" * 30
+                        + f"第{index}页结尾知识点：属性文法页尾覆盖标记{index:03d}。"
+                    ),
+                    script_status=ProcessStatus.READY.value,
+                )
+                for index in range(1, page_count + 1)
+            ]
+        )
+        db.commit()
+
+        source_text = _course_source_text_for_quiz(db, course_id=course["id"], chapter_ids=[chapter["id"]], points=[])
+
+    assert len(source_text) <= QUIZ_SOURCE_CONTEXT_HARD_LIMIT
+    for index in range(1, page_count + 1):
+        assert f"属性文法页首覆盖标记{index:03d}" in source_text
+        assert f"属性文法页尾覆盖标记{index:03d}" in source_text
 
 
 def test_learning_core_flow(client, monkeypatch):
@@ -648,6 +738,39 @@ def test_quiz_generation_respects_question_type_counts(monkeypatch):
     )
     assert [item["question_type"] for item in questions] == ["single_choice", "blank"]
     assert questions[1]["reference_answer"] == {"keywords": ["线性变换"]}
+
+
+def test_quiz_generation_prioritizes_applied_questions(monkeypatch):
+    captured = {}
+
+    def ai_content(*args, **kwargs):
+        captured["prompt"] = kwargs["user_prompt"]
+        return (
+            '{"items":['
+            '{"question_type":"single_choice",'
+            '"stem":"矩阵可以表示什么？",'
+            '"options":["线性变换","数字表格","坐标变化","向量集合"],'
+            '"reference_answer":{"value":0},'
+            '"explanation":"资料说明矩阵可以表示线性变换。",'
+            '"score":10,"difficulty":"standard"},'
+            '{"question_type":"single_choice",'
+            '"stem":"已知线性变换把向量(1,0)映射到(2,0)，把(0,1)映射到(0,3)，应如何用矩阵表示并判断面积缩放？",'
+            '"options":["矩阵为[[2,0],[0,3]]，面积放大6倍","矩阵为[[3,0],[0,2]]，面积放大5倍","矩阵为[[2,3],[0,0]]，面积不变","矩阵为[[0,2],[3,0]]，面积缩小6倍"],'
+            '"reference_answer":{"value":0},'
+            '"explanation":"矩阵的列向量对应基向量像，行列式为6。",'
+            '"score":10,"difficulty":"standard"}]}'
+        )
+
+    monkeypatch.setattr(ai_service, "_call_chat", ai_content)
+    questions = ai_service.generate_quiz_questions(
+        topic="矩阵与行列式",
+        source_text="矩阵可以表示线性变换，行列式反映面积缩放系数。公式 det(A)=ad-bc。",
+        count=1,
+    )
+    assert "应用题" in captured["prompt"]
+    assert "纯概念题最多" in captured["prompt"]
+    assert "计算题" in captured["prompt"]
+    assert questions[0]["stem"].startswith("已知线性变换")
 
 
 def test_quiz_generation_rejects_direct_fact_short_answer(monkeypatch):

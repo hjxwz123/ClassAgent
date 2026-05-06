@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.enums import QuizStatus, QuizType, QuestionType, TaskStatus, UserRole
@@ -69,6 +69,8 @@ _PLACEHOLDER_SOURCE_TEXT = (
     "未提取到资料内容",
     "可结合课程资料进一步补充",
 )
+QUIZ_SOURCE_PIECE_LIMIT = 3000
+QUIZ_SOURCE_CONTEXT_HARD_LIMIT = 80000
 
 
 def _flatten_text(value) -> list[str]:
@@ -84,7 +86,10 @@ def _flatten_text(value) -> list[str]:
         for item in value:
             pieces.extend(_flatten_text(item))
         return pieces
-    text = " ".join(str(value).split())
+    if isinstance(value, str):
+        text = "\n".join(" ".join(line.split()) for line in value.splitlines())
+    else:
+        text = " ".join(str(value).split())
     return [text] if text else []
 
 
@@ -92,14 +97,92 @@ def _append_source_piece(pieces: list[str], seen: set[str], value, *, limit: int
     for text in _flatten_text(value):
         if not text or any(marker in text for marker in _PLACEHOLDER_SOURCE_TEXT):
             continue
-        compact = sanitize_quiz_source_text(text)[:limit]
+        compact = sanitize_quiz_source_text(text)
         if not compact:
             continue
+        if len(compact) > limit:
+            compact = _truncate_source_piece(compact, limit)
         fingerprint = compact[:220]
         if fingerprint in seen:
             continue
         seen.add(fingerprint)
         pieces.append(compact)
+
+
+def _append_long_source_pieces(
+    pieces: list[str],
+    seen: set[str],
+    title: str,
+    text: str | None,
+    *,
+    window: int = QUIZ_SOURCE_PIECE_LIMIT,
+) -> None:
+    compact = sanitize_quiz_source_text(text or "")
+    if not compact or any(marker in compact for marker in _PLACEHOLDER_SOURCE_TEXT):
+        return
+    if len(compact) <= window:
+        _append_source_piece(pieces, seen, f"{title}\n{compact}", limit=window + 240)
+        return
+    total = (len(compact) + window - 1) // window
+    for index, start in enumerate(range(0, len(compact), window), start=1):
+        excerpt = compact[start : start + window]
+        _append_source_piece(pieces, seen, f"{title}（全文片段{index}/{total}）\n{excerpt}", limit=window + 260)
+
+
+def _join_source_pieces_for_quiz(pieces: list[str]) -> str:
+    pieces = [piece for piece in pieces if piece.strip()]
+    if not pieces:
+        return ""
+    joined = "\n\n".join(pieces)
+    if len(joined) <= QUIZ_SOURCE_CONTEXT_HARD_LIMIT:
+        return joined
+    separator_chars = 2 * max(len(pieces) - 1, 0)
+    per_piece_limit = max(1, (QUIZ_SOURCE_CONTEXT_HARD_LIMIT - separator_chars) // len(pieces))
+    compressed = [_truncate_source_piece(piece, per_piece_limit) for piece in pieces]
+    return "\n\n".join(compressed)
+
+
+def _truncate_source_piece(piece: str, limit: int) -> str:
+    if len(piece) <= limit:
+        return piece
+    if limit <= 0:
+        return ""
+    if "\n" not in piece:
+        return _sample_text_across_body(piece, limit)
+    header, body = piece.split("\n", 1)
+    header_limit = min(len(header), max(24, limit // 3))
+    body_limit = max(0, limit - header_limit - 1)
+    body_excerpt = _sample_text_across_body(body, body_limit)
+    return f"{header[:header_limit].rstrip()}\n{body_excerpt}".strip()
+
+
+def _sample_text_across_body(text: str, limit: int) -> str:
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    if limit <= 0:
+        return ""
+    if limit < 80:
+        separator = "..."
+        available = max(1, limit - len(separator))
+        head_limit = max(1, available // 2)
+        tail_limit = max(1, available - head_limit)
+        return f"{text[:head_limit]}{separator}{text[-tail_limit:]}".strip()
+
+    separator = " ... "
+    available = limit - len(separator) * 2
+    if available <= 0:
+        return text[:limit].rstrip()
+    head_limit = max(1, available // 3)
+    middle_limit = max(1, available // 3)
+    tail_limit = max(1, available - head_limit - middle_limit)
+    middle_start = max(head_limit, (len(text) - middle_limit) // 2)
+    middle_end = middle_start + middle_limit
+    return (
+        f"{text[:head_limit].rstrip()}"
+        f"{separator}{text[middle_start:middle_end].strip()}"
+        f"{separator}{text[-tail_limit:].lstrip()}"
+    ).strip()
 
 
 def _knowledge_text_for_quiz(points: list[KnowledgePoint], *, pieces: list[str], seen: set[str]) -> None:
@@ -123,24 +206,47 @@ def _course_source_text_for_quiz(
     chunk_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
     if chapter_ids:
         chunk_statement = chunk_statement.where(KnowledgeChunk.chapter_id.in_(chapter_ids))
-    for chunk in db.scalars(chunk_statement.order_by(KnowledgeChunk.id).limit(16)):
-        _append_source_piece(pieces, seen, f"{chunk.title}\n{chunk.content}", limit=1200)
+    chunks = list(db.scalars(chunk_statement.order_by(KnowledgeChunk.id)))
+    for chunk in chunks:
+        _append_source_piece(pieces, seen, f"{chunk.title}\n{chunk.content}", limit=QUIZ_SOURCE_PIECE_LIMIT)
 
-    page_statement = select(LessonPage, Lesson).join(Lesson, Lesson.id == LessonPage.lesson_id).where(Lesson.course_id == course_id)
+    page_statement = (
+        select(LessonPage, Lesson, CourseMaterial)
+        .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .outerjoin(CourseMaterial, CourseMaterial.id == Lesson.material_id)
+        .where(Lesson.course_id == course_id)
+    )
     if chapter_ids:
-        page_statement = page_statement.where(Lesson.chapter_id.in_(chapter_ids))
-    for page, lesson in db.execute(page_statement.order_by(Lesson.id, LessonPage.page_number).limit(16)):
+        page_statement = page_statement.where(
+            or_(Lesson.chapter_id.in_(chapter_ids), CourseMaterial.chapter_id.in_(chapter_ids))
+        )
+    pages = list(db.execute(page_statement.order_by(Lesson.id, LessonPage.page_number)))
+    material_ids_with_pages: set[int] = set()
+    for page, lesson, material in pages:
+        if lesson.material_id is not None:
+            material_ids_with_pages.add(lesson.material_id)
+        material_prefix = f"{material.title} - " if material is not None and material.title != lesson.title else ""
         title = page.page_title or f"{lesson.title} 第{page.page_number}页"
-        _append_source_piece(pieces, seen, f"{lesson.title} - {title}\n{page.page_text}", limit=1200)
+        _append_source_piece(
+            pieces,
+            seen,
+            f"{material_prefix}{lesson.title} - {title}\n{page.page_text}",
+            limit=QUIZ_SOURCE_PIECE_LIMIT,
+        )
 
-    material_statement = select(CourseMaterial).where(CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None))
+    material_statement = select(CourseMaterial).where(
+        CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None)
+    )
     if chapter_ids:
         material_statement = material_statement.where(CourseMaterial.chapter_id.in_(chapter_ids))
-    for material in db.scalars(material_statement.order_by(CourseMaterial.created_at.desc()).limit(8)):
-        _append_source_piece(pieces, seen, f"{material.title}\n{material.extracted_text or ''}", limit=1200)
+    materials = list(db.scalars(material_statement.order_by(CourseMaterial.created_at.desc())))
+    for material in materials:
+        if material.id in material_ids_with_pages:
+            continue
+        _append_long_source_pieces(pieces, seen, material.title, material.extracted_text, window=QUIZ_SOURCE_PIECE_LIMIT)
 
     _knowledge_text_for_quiz(points, pieces=pieces, seen=seen)
-    return "\n\n".join(pieces)[:10000]
+    return _join_source_pieces_for_quiz(pieces)
 
 
 def _course_context_text_for_quiz(*, course, points: list[KnowledgePoint]) -> str:

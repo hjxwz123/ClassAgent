@@ -315,8 +315,37 @@
             <div class="underline-tabs"><button :class="{ active: courseTab === 'active' }" @click="courseTab = 'active'"><BookOpen :size="16" />在学中({{ activeCourses.length }})</button><button :class="{ active: courseTab === 'done' }" @click="courseTab = 'done'"><CheckCircle :size="16" />已完成({{ doneCourses.length }})</button></div>
             <div class="student-course-grid">
               <article v-for="course in filteredCourses" :key="course.id" class="student-course-card">
-                <div class="course-art" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><strong v-if="!course.cover_url" class="course-cover-text">{{ courseCoverText(course) }}</strong><span>{{ course.term }}</span><em><Check :size="12" />{{ course.progress_percent || 0 }}%</em><DropdownMenu :items="courseMenuItems" @select="handleCourseMenu($event, course)" /></div>
-                <section><h2>{{ course.name }}</h2><p><User :size="14" />{{ course.teacher?.nickname || '教师' }} · {{ course.teacher?.bio || '课程教师' }}</p><AppProgress :value="course.progress_percent || 0" /><div class="course-meta"><span>已学 {{ course.studied_lessons || 0 }}/{{ course.lesson_total || 0 }}</span><span>{{ course.last_lesson ? relativeTime(course.last_progress?.updated_at) : '未开始' }}</span></div><div class="mini-data"><span><MessageCircle :size="14" />{{ course.qa_count || 0 }}</span><span><XCircle :size="14" />{{ course.wrong_count || 0 }}</span><span><Users :size="14" />{{ course.student_count || 0 }}</span></div><button class="btn btn-primary full" @click="openCourse(course.id)"><Play :size="16" />继续学习</button></section>
+                <header class="course-art" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)">
+                  <span class="course-term-pill">{{ course.term || '本学期' }}</span>
+                  <strong v-if="!course.cover_url" class="course-cover-text">{{ courseCoverText(course) }}</strong>
+                  <DropdownMenu :items="courseMenuItems" @select="handleCourseMenu($event, course)" />
+                </header>
+                <section class="course-card-body">
+                  <div class="course-card-title">
+                    <h2>{{ course.name }}</h2>
+                    <p><User :size="14" />{{ course.teacher?.nickname || '课程教师' }}</p>
+                  </div>
+                  <div class="course-progress-panel">
+                    <div>
+                      <span>学习进度</span>
+                      <strong>{{ course.progress_percent || 0 }}%</strong>
+                    </div>
+                    <AppProgress :value="course.progress_percent || 0" />
+                  </div>
+                  <div class="course-meta">
+                    <span><BookOpen :size="14" />已学 {{ course.studied_lessons || 0 }}/{{ course.lesson_total || 0 }} 课时</span>
+                    <span><Clock :size="14" />{{ course.last_lesson ? relativeTime(course.last_progress?.updated_at) : '未开始' }}</span>
+                  </div>
+                  <div class="course-card-stats">
+                    <span><MessageCircle :size="14" /><b>{{ course.qa_count || 0 }}</b>问答</span>
+                    <span><XCircle :size="14" /><b>{{ course.wrong_count || 0 }}</b>错题</span>
+                    <span><Users :size="14" /><b>{{ course.student_count || 0 }}</b>同学</span>
+                  </div>
+                  <footer class="course-card-actions">
+                    <button type="button" class="btn btn-primary" @click="openCourse(course.id)"><Play :size="16" />{{ (course.progress_percent || 0) > 0 ? '继续学习' : '开始学习' }}</button>
+                    <button type="button" class="course-card-link" @click="handleCourseMenu('qa', course)"><MessageCircle :size="15" />问答</button>
+                  </footer>
+                </section>
               </article>
             </div>
             <EmptyState v-if="!filteredCourses.length" text="暂无课程" />
