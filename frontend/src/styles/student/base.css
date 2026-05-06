@@ -107,6 +107,8 @@
 .achievement-row{grid-template-columns:repeat(4,1fr)}
 .toggle-line,.check-line{display:flex;align-items:center;gap:10px}
 .time-input{width:120px;margin-left:auto}
+.student-modal-scope{--s-primary-50:#E0F7FA;--s-primary-100:#B2EBF2;--s-primary-400:#26C6DA;--s-primary-500:#00B8D4;--s-primary-600:#0097A7;--s-ai-light:linear-gradient(135deg,#E0F2FE 0%,#EDE9FE 100%);--s-ai-main:linear-gradient(135deg,#06B6D4 0%,#00E5FF 100%);--s-bg:#F4F6F9;--s-card:#FFFFFF;--s-glass:rgba(255,255,255,.76);--s-text:#1E293B;--s-muted:#64748B;--s-hint:#94A3B8;--s-border:rgba(226,232,240,.82);--s-radius-sm:8px;--s-radius-md:16px;--s-radius-lg:24px;--s-radius-xl:32px;--s-pill:999px;--s-shadow-card:0 10px 30px -5px rgba(15,23,42,.04);--s-shadow-float:0 20px 40px -10px rgba(15,23,42,.08);--s-shadow-glass:0 8px 32px rgba(30,41,59,.08);box-sizing:border-box;color:var(--s-text);font-family:var(--font-family-base)}
+.student-modal-scope *{box-sizing:border-box}
 .modal-mask{position:fixed;inset:0;z-index:var(--z-modal-bg);display:grid;place-items:center;background:#0f172a5c;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .join-modal{width:480px;max-width:calc(100vw - 32px);border-radius:var(--radius-xl);background:#fff;box-shadow:var(--shadow-xl);padding:20px}
 .modal-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
