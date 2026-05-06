@@ -108,8 +108,7 @@
 
 .student-top,
 .student-main,
-.bottom-tabs,
-.modal-mask {
+.bottom-tabs {
   position: relative;
   z-index: 1;
 }
