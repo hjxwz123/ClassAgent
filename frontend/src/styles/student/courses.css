@@ -24,6 +24,13 @@
 .student-course-card h2{margin:0;color:var(--color-text-primary);font-size:16px}
 .student-course-card p,.course-meta{display:flex;align-items:center;gap:6px;color:var(--color-text-muted);font-size:13px}
 .course-meta{justify-content:space-between}
+.course-route-state{min-height:360px;display:grid;place-items:center;justify-items:center;gap:14px;border:1px solid rgba(226,232,240,.86);border-radius:var(--s-radius-xl);background:linear-gradient(180deg,#fff,#f8fafc);box-shadow:var(--s-shadow-card);padding:44px;text-align:center}
+.course-route-state h1{margin:0;color:var(--s-text);font-size:24px;font-weight:900;letter-spacing:0}
+.course-route-state p{max-width:420px;margin:0;color:var(--s-muted);line-height:1.7}
+.course-route-state footer{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:8px}
+.course-route-icon{display:grid;place-items:center;width:62px;height:62px;border-radius:18px;background:var(--s-primary-50);color:var(--s-primary-600)}
+.course-route-icon.loading svg{animation:student-audit-spin-c9e07e67 .9s linear infinite}
+.course-route-icon.error{background:#fef2f2;color:#dc2626}
 .course-hero-student{min-height:180px;display:grid;grid-template-columns:1fr 180px;align-items:center;gap:24px;border-radius:24px;color:#fff;padding:32px;overflow:hidden}
 .course-hero-student h1{margin:0;font-size:26px}
 .course-hero-student p,.course-hero-student div{display:flex;align-items:center;gap:8px;color:#ffffffc7}

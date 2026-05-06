@@ -465,7 +465,21 @@
           </template>
 
           <template v-else-if="active === 'studentCourseHome'">
-            <CourseRequired v-if="!courseHome.course" />
+            <article v-if="courseHomeLoading" class="course-route-state">
+              <span class="course-route-icon loading"><Loader2 :size="34" /></span>
+              <h1>正在打开课程</h1>
+              <p>正在加载课时、资料和学习数据。</p>
+            </article>
+            <article v-else-if="courseHomeError" class="course-route-state error">
+              <span class="course-route-icon error"><AlertTriangle :size="34" /></span>
+              <h1>课程加载失败</h1>
+              <p>{{ courseHomeError }}</p>
+              <footer>
+                <button type="button" class="btn btn-primary" @click="loadCourseHome"><RefreshCw :size="16" />重试</button>
+                <button type="button" class="btn btn-secondary" @click="go('studentCourses')"><ArrowLeft :size="16" />返回课程列表</button>
+              </footer>
+            </article>
+            <CourseRequired v-else-if="!courseHome.course" />
             <template v-else>
               <article class="course-hero-student" :class="{ 'has-image': courseHome.course.cover_url }" :style="courseHeroStyle(courseHome.course)">
                 <section><h1>{{ courseHome.course.name }}</h1><p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p><div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div></section>
@@ -1088,6 +1102,8 @@ const dashboard = ref<any>({});
 const profilePayload = ref<any>({});
 const courses = ref<any[]>([]);
 const courseHome = ref<any>({});
+const courseHomeLoading = ref(false);
+const courseHomeError = ref("");
 const selectedCourseId = ref<number>(Number(localStorage.getItem("student_current_course_id") || 0));
 const notifications = ref<any[]>([]);
 const lessons = ref<any[]>([]);
@@ -1162,6 +1178,7 @@ let chromeTimer: number | undefined;
 let studyTimer: number | undefined;
 let noteTimer: number | undefined;
 let lessonLoadSeq = 0;
+let courseHomeLoadSeq = 0;
 
 const globalMessages = ref<ChatMessage[]>([]);
 const globalQuestion = ref("");
@@ -1538,7 +1555,15 @@ function queuedQuizMessage(result: any, fallback = "题目已加入生成队列�
   if (result?.id) return "";
   return result?.status === "failed" ? "题目生成失败，请稍后重试" : fallback;
 }
-async function go(key: string) { await router.push(routeByPage[key] || "/home"); }
+function courseRoute(id: number) { return `/courses/${id}`; }
+function pageRoute(key: string) {
+  if (key === "studentCourseHome") {
+    const id = routeCourseId() || selectedCourseId.value;
+    return id ? courseRoute(id) : "/courses";
+  }
+  return routeByPage[key] || "/home";
+}
+async function go(key: string) { await router.push(pageRoute(key)); }
 async function syncRouteState() {
   const nextPageKey = currentRoutePageKey();
   const leavingLessonStudy = active.value === "studentLessonStudy" && nextPageKey !== "studentLessonStudy";
@@ -1591,7 +1616,50 @@ async function toggleNotifications() {
   userMenuOpen.value = false;
   if (noticeOpen.value) await loadNotifications();
 }
-async function loadCourseHome() { if (!selectedCourseId.value) return; courseHome.value = (await run(() => api.get(`/student/courses/${selectedCourseId.value}/home`))) || {}; lessons.value = courseHome.value.lessons || []; }
+async function loadCourseHome() {
+  const routeId = routeCourseId();
+  const isCourseRoute = active.value === "studentCourseHome";
+  if (isCourseRoute && hasCourseRouteParam() && !routeId) {
+    courseHome.value = {};
+    lessons.value = [];
+    courseHomeLoading.value = false;
+    courseHomeError.value = "课程地址无效，请从课程列表重新进入。";
+    return;
+  }
+  const courseId = isCourseRoute ? (routeId || selectedCourseId.value) : selectedCourseId.value;
+  if (!courseId) {
+    if (isCourseRoute) {
+      courseHome.value = {};
+      lessons.value = [];
+      courseHomeLoading.value = false;
+      courseHomeError.value = "";
+    }
+    return;
+  }
+  if (selectedCourseId.value !== courseId) selectedCourseId.value = courseId;
+  const loadSeq = ++courseHomeLoadSeq;
+  if (isCourseRoute) {
+    courseHomeLoading.value = true;
+    courseHomeError.value = "";
+  }
+  try {
+    const home = (await api.get(`/student/courses/${courseId}/home`)) || {};
+    if (loadSeq !== courseHomeLoadSeq) return;
+    if (isCourseRoute && routeCourseId() && routeCourseId() !== courseId) return;
+    courseHome.value = home;
+    lessons.value = courseHome.value.lessons || [];
+    courseHomeError.value = "";
+  } catch (error) {
+    if (loadSeq !== courseHomeLoadSeq) return;
+    courseHome.value = {};
+    lessons.value = [];
+    const message = (error as Error).message || "课程加载失败，请稍后重试。";
+    if (isCourseRoute) courseHomeError.value = message;
+    else emit("notice", "error", message);
+  } finally {
+    if (loadSeq === courseHomeLoadSeq && isCourseRoute) courseHomeLoading.value = false;
+  }
+}
 async function loadProfile() { profilePayload.value = (await run(() => api.get("/student/profile"))) || {}; Object.assign(profileForm, { nickname: profilePayload.value.user?.nickname || props.user.nickname, avatar_url: profilePayload.value.user?.avatar_url || "", school: profilePayload.value.student_profile?.school || "", bio: profilePayload.value.user?.bio || "" }); noticeSettings.splice(0, noticeSettings.length, ...(profilePayload.value.notification_settings || [])); }
 async function loadActive() {
   if (active.value === "studentLessonStudy") {
@@ -1613,7 +1681,23 @@ async function loadActive() {
   if (active.value === "studentPlans") await loadPlans();
   if (active.value === "studentProfile") await loadProfile();
 }
-async function openCourse(id: number) { selectedCourseId.value = id; await loadCourseHome(); await go("studentCourseHome"); }
+async function openCourse(id: number) {
+  const courseId = Number(id);
+  if (!courseId) return;
+  selectedCourseId.value = courseId;
+  courseHomeError.value = "";
+  courseHomeLoading.value = true;
+  if (active.value === "studentCourseHome" && routeCourseId() === courseId) {
+    await loadCourseHome();
+    return;
+  }
+  try {
+    await router.push(courseRoute(courseId));
+  } catch (error) {
+    courseHomeLoading.value = false;
+    emit("notice", "error", (error as Error).message || "打开课程失败");
+  }
+}
 async function openHomeRecommendedLesson() {
   if (!hasJoinedCourses.value) { joinOpen.value = true; return; }
   const lessonId = homeRecommendedLesson.value?.lesson?.id || activeCourse.value?.last_lesson?.id;
@@ -2007,6 +2091,14 @@ async function validateJoinCode() { joinChecking.value = true; joinError.value =
 async function confirmJoin() { if (!joinPreview.value) return; await run(() => api.post("/courses/join", { course_code: joinCode.value }), "已加入"); joinOpen.value = false; joinCode.value = ""; joinPreview.value = null; await loadDashboard(); }
 async function handleCourseMenu(action: string, course: any) { if (action === "detail") await openCourse(course.id); if (action === "qa") { selectedCourseId.value = course.id; await go("studentQa"); } if (action === "share") copyText(course.course_code); if (action === "leave") await run(() => api.post(`/courses/${course.id}/leave`), "已退出"); await loadCourses(); }
 
+function hasCourseRouteParam() {
+  return route.params.courseId !== undefined;
+}
+function routeCourseId() {
+  const raw = Array.isArray(route.params.courseId) ? route.params.courseId[0] : route.params.courseId;
+  const id = Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
 function routeLessonId() {
   const raw = Array.isArray(route.params.lessonId) ? route.params.lessonId[0] : route.params.lessonId;
   const id = Number(raw);
@@ -2101,8 +2193,12 @@ async function openLesson(id: number) {
 }
 async function closeClassroom() {
   const shouldReturnToCourse = active.value === "studentLessonStudy";
+  const returnCourseId = Number(classroomLesson.value?.lesson.course_id || selectedCourseId.value || 0);
   await leaveClassroom(true);
-  if (shouldReturnToCourse) await go("studentCourseHome");
+  if (shouldReturnToCourse) {
+    if (returnCourseId) await openCourse(returnCourseId);
+    else await go("studentCourses");
+  }
   else await loadDashboard();
 }
 function revealChrome() { chromeVisible.value = true; if (chromeTimer) window.clearTimeout(chromeTimer); chromeTimer = window.setTimeout(() => { if (audioPlaying.value) chromeVisible.value = false; }, 3000); }

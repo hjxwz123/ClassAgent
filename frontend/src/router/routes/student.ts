@@ -12,7 +12,8 @@ const studentRoute = (path: string, pageKey: string): RouteRecordRaw => ({
 export const studentRoutes: RouteRecordRaw[] = [
   studentRoute("/home", "studentHome"),
   studentRoute("/courses", "studentCourses"),
-  studentRoute("/courses/detail", "studentCourseHome"),
+  { path: "/courses/detail", redirect: "/courses" },
+  studentRoute("/courses/:courseId", "studentCourseHome"),
   studentRoute("/materials", "studentMaterials"),
   studentRoute("/lessons/:lessonId", "studentLessonStudy"),
   studentRoute("/lessons", "studentCourseHome"),
