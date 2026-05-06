@@ -155,10 +155,67 @@
     <header class="student-top">
       <button class="brand" @click="go('studentHome')"><span><Sparkles :size="16" /></span><strong>课程学习助手</strong></button>
       <transition name="search-expand">
-        <div v-if="searchOpen" class="global-search">
-          <Search :size="18" />
-          <input ref="searchInput" v-model="globalSearch" placeholder="搜索课程、知识点、问答" @keyup.esc="searchOpen = false" />
-          <button @click="searchOpen = false"><X :size="18" /></button>
+        <div v-if="searchOpen" class="global-search" @click.self="closeSearch">
+          <div class="global-search-panel" @click.stop>
+            <div class="global-search-bar">
+              <Search :size="18" />
+              <input
+                ref="searchInput"
+                v-model="globalSearch"
+                placeholder="搜索课程、课时、资料、知识点、问答"
+                @keydown.down.prevent="moveSearchSelection(1)"
+                @keydown.up.prevent="moveSearchSelection(-1)"
+                @keydown.enter.prevent="openActiveSearchResult"
+                @keyup.esc="closeSearch"
+              />
+              <button type="button" @click="closeSearch"><X :size="18" /></button>
+            </div>
+            <div class="global-search-results">
+              <div v-if="searchLoading" class="global-search-state">
+                <Loader2 :size="18" class="lesson-loading-icon" />
+                <span>正在搜索</span>
+              </div>
+              <div v-else-if="searchError" class="global-search-state error">
+                <AlertTriangle :size="18" />
+                <span>{{ searchError }}</span>
+              </div>
+              <div v-else-if="!searchKeyword" class="global-search-state">
+                <Search :size="18" />
+                <span>输入课程、课时、资料、知识点或问答关键词</span>
+              </div>
+              <div v-else-if="searchResultGroups.length" class="global-search-groups">
+                <section v-for="group in searchResultGroups" :key="group.type" class="global-search-group">
+                  <header>
+                    <span>{{ group.label }}</span>
+                    <small>{{ group.items.length }}</small>
+                  </header>
+                  <button
+                    v-for="item in group.items"
+                    :key="item.key"
+                    type="button"
+                    class="global-search-item"
+                    :class="{ active: isSearchResultActive(item), ai: item.type === 'qa' }"
+                    @mouseenter="focusSearchResult(item.key)"
+                    @click="openSearchResult(item)"
+                  >
+                    <span class="global-search-item-icon">
+                      <component :is="searchTypeMeta(item.type).icon" :size="18" />
+                    </span>
+                    <span class="global-search-copy">
+                      <strong>{{ item.title }}</strong>
+                      <small>{{ item.subtitle }}</small>
+                      <p v-if="item.excerpt">{{ item.excerpt }}</p>
+                    </span>
+                    <ChevronRight :size="16" class="global-search-arrow" />
+                  </button>
+                </section>
+              </div>
+              <div v-else class="global-search-state">
+                <Info :size="18" />
+                <span>没有找到相关内容</span>
+              </div>
+            </div>
+          </div>
         </div>
       </transition>
       <nav class="student-nav-links" aria-label="学生端主导航">
@@ -957,6 +1014,21 @@ import "../styles/student/classagent.css";
 
 type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };
 type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: any[]; attachments?: QaAttachment[]; thought?: string; thoughtOpen?: boolean; record_id?: number; favorite?: boolean; outOfScope?: boolean; streaming?: boolean };
+type StudentSearchResultType = "course" | "lesson" | "material" | "knowledge" | "qa";
+type StudentSearchResult = {
+  key: string;
+  type: StudentSearchResultType;
+  title: string;
+  subtitle: string;
+  excerpt?: string;
+  courseId?: number;
+  lessonId?: number;
+  knowledgeId?: number | null;
+  chapterId?: number | null;
+  qaItem?: any;
+  rank: number;
+  order: number;
+};
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
@@ -981,6 +1053,18 @@ const courseSection = ref("lessons");
 const searchOpen = ref(false);
 const globalSearch = ref("");
 const searchInput = ref<HTMLInputElement | null>(null);
+const searchLoading = ref(false);
+const searchError = ref("");
+const searchResults = ref<StudentSearchResult[]>([]);
+const searchActiveIndex = ref(-1);
+const searchCourseHomeCache = reactive<Record<number, any>>({});
+const searchKnowledgeCache = reactive<Record<number, any[]>>({});
+const searchQaCache = reactive<Record<string, any[]>>({});
+const searchCourseHomePending = new Map<number, Promise<any>>();
+const searchKnowledgePending = new Map<number, Promise<any[]>>();
+const searchQaPending = new Map<string, Promise<any[]>>();
+let searchTimer: number | undefined;
+let searchRequestSeq = 0;
 const noticeOpen = ref(false);
 const notificationLoading = ref(false);
 const userMenuOpen = ref(false);
@@ -1114,6 +1198,13 @@ const levelItems = [{ label: "入门", value: "beginner" }, { label: "标准", v
 const quizCountOptions = ["5题", "10题", "15题", "20题"];
 const wrongStatusOptions = [{ label: "全部状态", value: "" }, { label: "待重练", value: "todo" }, { label: "已掌握", value: "resolved" }, { label: "多次错误", value: "repeat" }];
 const courseMenuItems = [{ label: "课程详情", value: "detail" }, { label: "问答记录", value: "qa" }, { label: "分享课程码", value: "share" }, { label: "退出课程", value: "leave", danger: true }];
+const studentSearchTypeMeta: Record<StudentSearchResultType, { label: string; icon: any }> = {
+  course: { label: "课程", icon: Presentation },
+  lesson: { label: "课时", icon: Play },
+  material: { label: "资料", icon: FolderOpen },
+  knowledge: { label: "知识点", icon: Layers },
+  qa: { label: "问答", icon: MessageCircle },
+};
 
 const stats = computed(() => dashboard.value.stats || profilePayload.value.stats || {});
 const planTodayTasks = computed(() => tasks.value.filter((task: any) => taskDateKey(task) === todayTaskKey()));
@@ -1172,6 +1263,15 @@ const filteredCourses = computed(() => (courseTab.value === "active" ? activeCou
 const latestLesson = computed(() => (courseHome.value.lessons || [])[0] || null);
 const isLessonOpening = computed(() => openingLessonId.value !== null);
 const visibleCourseMaterials = computed(() => materialsExpanded.value ? courseHome.value.materials || [] : (courseHome.value.materials || []).slice(0, 5));
+const searchKeyword = computed(() => globalSearch.value.trim());
+const searchResultGroups = computed(() => (["course", "lesson", "material", "knowledge", "qa"] as StudentSearchResultType[])
+  .map((type) => ({
+    type,
+    label: studentSearchTypeMeta[type].label,
+    items: searchResults.value.filter((item) => item.type === type),
+  }))
+  .filter((group) => group.items.length));
+const flatSearchResults = computed(() => searchResultGroups.value.flatMap((group) => group.items));
 const activePage = computed(() => classroomLesson.value?.pages.find((page) => page.page_number === currentPage.value) || classroomLesson.value?.pages[0] || null);
 const activePageText = computed(() => extractStructuredText(activePage.value?.page_text || "") || String(activePage.value?.page_text || "").trim());
 const activeScriptText = computed(() => extractStructuredText(activePage.value?.script_text || activePage.value?.page_text || "") || String(activePage.value?.script_text || activePage.value?.page_text || "").trim());
@@ -1348,6 +1448,29 @@ watch(selectedCourseId, async (id, previousId) => {
   if (active.value === "studentPlans") await loadPlans();
 });
 watch(activePage, async (page) => { if (page) await loadNote(page.id); }, { immediate: false });
+watch(globalSearch, (value) => {
+  if (searchTimer) window.clearTimeout(searchTimer);
+  if (!searchOpen.value) return;
+  const keyword = value.trim();
+  const requestSeq = ++searchRequestSeq;
+  if (!keyword) {
+    searchLoading.value = false;
+    searchError.value = "";
+    searchResults.value = [];
+    searchActiveIndex.value = -1;
+    return;
+  }
+  searchLoading.value = true;
+  searchError.value = "";
+  searchTimer = window.setTimeout(() => { void performGlobalSearch(keyword, requestSeq); }, 220);
+});
+watch(flatSearchResults, (items) => {
+  if (!items.length) {
+    searchActiveIndex.value = -1;
+    return;
+  }
+  if (searchActiveIndex.value < 0 || searchActiveIndex.value >= items.length) searchActiveIndex.value = 0;
+});
 
 async function run<T>(task: () => Promise<T>, ok?: string) { try { const data = await task(); if (ok) emit("notice", "success", ok); return data; } catch (error) { emit("notice", "error", (error as Error).message); return null; } }
 function queuedQuizMessage(result: any, fallback = "题目已加入生成队列，生成成功后会通知你") {
@@ -1372,8 +1495,25 @@ async function handleStudentNav(key: string) {
   }
   await go(key);
 }
-async function loadCourses() { courses.value = (await run<any[]>(() => api.get("/student/courses"))) || []; if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id; }
-async function loadDashboard() { dashboard.value = (await run(() => api.get("/student/dashboard"))) || {}; notifications.value = dashboard.value.notifications || []; courses.value = dashboard.value.courses || courses.value; if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id; }
+function pruneSearchCache() {
+  const validIds = new Set(courses.value.map((course) => Number(course.id)));
+  Object.keys(searchCourseHomeCache).forEach((key) => {
+    if (!validIds.has(Number(key))) delete searchCourseHomeCache[Number(key)];
+  });
+  Object.keys(searchKnowledgeCache).forEach((key) => {
+    if (!validIds.has(Number(key))) delete searchKnowledgeCache[Number(key)];
+  });
+  Object.keys(searchQaCache).forEach((key) => {
+    const [courseId] = key.split(":");
+    if (!validIds.has(Number(courseId))) delete searchQaCache[key];
+  });
+}
+async function loadCourses() {
+  courses.value = (await run<any[]>(() => api.get("/student/courses"))) || [];
+  pruneSearchCache();
+  if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id;
+}
+async function loadDashboard() { dashboard.value = (await run(() => api.get("/student/dashboard"))) || {}; notifications.value = dashboard.value.notifications || []; courses.value = dashboard.value.courses || courses.value; pruneSearchCache(); if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id; }
 async function loadNotifications(silent = false) {
   if (notificationLoading.value) return;
   if (!silent) notificationLoading.value = true;
@@ -1442,7 +1582,288 @@ async function openQuizSelection(tab: "course" | "practice" = "practice") {
   await go("studentQuizzes");
 }
 function scrollToLessons() { document.getElementById("lesson-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
-async function openSearch() { searchOpen.value = true; await nextTick(); searchInput.value?.focus(); }
+function searchTypeMeta(type: StudentSearchResultType) { return studentSearchTypeMeta[type]; }
+function searchTeacherName(course: any) { return course?.teacher_name || course?.teacher?.nickname || course?.teacher?.name || ""; }
+function normalizeSearchText(value?: unknown) { return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase(); }
+function splitSearchTokens(value: string) {
+  const tokens = normalizeSearchText(value).split(/[\s,，。；;、/|]+/).filter(Boolean);
+  return tokens.length ? Array.from(new Set(tokens)) : [];
+}
+function searchScore(query: string, ...fields: unknown[]) {
+  const haystack = normalizeSearchText(fields.filter(Boolean).map((field) => String(field)).join(" "));
+  const keyword = normalizeSearchText(query);
+  if (!haystack || !keyword) return -1;
+  let score = 0;
+  if (haystack === keyword) score += 120;
+  if (haystack.startsWith(keyword)) score += 75;
+  else if (haystack.includes(keyword)) score += 50;
+  const tokens = splitSearchTokens(keyword);
+  let matched = 0;
+  tokens.forEach((token) => {
+    if (haystack.includes(token)) {
+      matched += 1;
+      score += token.length > 1 ? 16 : 8;
+    }
+  });
+  if (!haystack.includes(keyword) && tokens.length > 1 && matched < tokens.length) return -1;
+  if (!haystack.includes(keyword) && matched === 0) return -1;
+  return score;
+}
+function searchExcerpt(value?: unknown, max = 72) {
+  const text = extractStructuredText(String(value ?? "")).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max)}...` : text;
+}
+function knowledgeExcerpt(item: any) {
+  const preferred = item?.content_by_level?.standard || item?.content_by_level?.beginner || item?.content_by_level?.advanced || {};
+  return searchExcerpt([preferred.definition, preferred.principle, preferred.example, preferred.common_mistake, item?.content, item?.description].filter(Boolean).join(" "));
+}
+function resetSearchState(clearKeyword = false) {
+  if (searchTimer) window.clearTimeout(searchTimer);
+  searchTimer = undefined;
+  searchRequestSeq += 1;
+  searchLoading.value = false;
+  searchError.value = "";
+  searchResults.value = [];
+  searchActiveIndex.value = -1;
+  if (clearKeyword) globalSearch.value = "";
+}
+function closeSearch() {
+  searchOpen.value = false;
+  resetSearchState(true);
+}
+async function openSearch() {
+  searchOpen.value = true;
+  if (!courses.value.length) void ensureSearchCoursesLoaded();
+  await nextTick();
+  searchInput.value?.focus();
+}
+async function ensureSearchCoursesLoaded() {
+  if (courses.value.length) return courses.value;
+  const data = await api.get<any[]>("/student/courses");
+  courses.value = Array.isArray(data) ? data : [];
+  pruneSearchCache();
+  if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = Number(courses.value[0].id);
+  return courses.value;
+}
+async function ensureSearchCourseHome(courseId: number) {
+  if (searchCourseHomeCache[courseId]) return searchCourseHomeCache[courseId];
+  const pending = searchCourseHomePending.get(courseId);
+  if (pending) return pending;
+  const task = api.get(`/student/courses/${courseId}/home`)
+    .then((data) => {
+      searchCourseHomeCache[courseId] = data || {};
+      return searchCourseHomeCache[courseId];
+    })
+    .catch(() => null)
+    .finally(() => { searchCourseHomePending.delete(courseId); });
+  searchCourseHomePending.set(courseId, task);
+  return task;
+}
+async function ensureSearchKnowledge(courseId: number) {
+  if (searchKnowledgeCache[courseId]) return searchKnowledgeCache[courseId];
+  const pending = searchKnowledgePending.get(courseId);
+  if (pending) return pending;
+  const task = api.get<any[]>("/learning/knowledge-points", { course_id: courseId })
+    .then((data) => {
+      searchKnowledgeCache[courseId] = Array.isArray(data) ? data : [];
+      return searchKnowledgeCache[courseId];
+    })
+    .catch(() => [])
+    .finally(() => { searchKnowledgePending.delete(courseId); });
+  searchKnowledgePending.set(courseId, task);
+  return task;
+}
+async function ensureSearchQa(courseId: number, keyword: string) {
+  const cacheKey = `${courseId}:${normalizeSearchText(keyword)}`;
+  if (searchQaCache[cacheKey]) return searchQaCache[cacheKey];
+  const pending = searchQaPending.get(cacheKey);
+  if (pending) return pending;
+  const task = api.get<any[]>("/qa/history", { course_id: courseId, keyword })
+    .then((data) => {
+      searchQaCache[cacheKey] = Array.isArray(data) ? data : [];
+      return searchQaCache[cacheKey];
+    })
+    .catch(() => [])
+    .finally(() => { searchQaPending.delete(cacheKey); });
+  searchQaPending.set(cacheKey, task);
+  return task;
+}
+async function performGlobalSearch(keyword: string, currentSearchSeq: number) {
+  searchLoading.value = true;
+  searchError.value = "";
+  try {
+    const courseList = await ensureSearchCoursesLoaded();
+    const results: StudentSearchResult[] = [];
+    let order = 0;
+    courseList.forEach((course: any) => {
+      const score = searchScore(keyword, course?.name, course?.term, searchTeacherName(course), course?.description, course?.intro);
+      if (score < 0) return;
+      results.push({
+        key: `course-${course.id}`,
+        type: "course",
+        title: course?.name || "未命名课程",
+        subtitle: [course?.term, searchTeacherName(course)].filter(Boolean).join(" · ") || "课程",
+        excerpt: searchExcerpt(course?.description || course?.intro),
+        courseId: Number(course.id),
+        rank: score + 80,
+        order: order += 1,
+      });
+    });
+    const shouldSearchQa = normalizeSearchText(keyword).length >= 2;
+    const scopedData = await Promise.all(courseList.map(async (course: any) => {
+      const courseId = Number(course.id);
+      const [home, points, qa] = await Promise.all([
+        ensureSearchCourseHome(courseId),
+        ensureSearchKnowledge(courseId),
+        shouldSearchQa ? ensureSearchQa(courseId, keyword) : Promise.resolve([]),
+      ]);
+      return { course, home: home || {}, points: Array.isArray(points) ? points : [], qa: Array.isArray(qa) ? qa : [] };
+    }));
+    if (currentSearchSeq !== searchRequestSeq) return;
+    scopedData.forEach(({ course, home, points, qa }) => {
+      const courseId = Number(course.id);
+      const courseName = course?.name || home?.course?.name || "课程";
+      const chapters = Array.isArray(home?.chapters) ? home.chapters : [];
+      (Array.isArray(home?.lessons) ? home.lessons : []).forEach((lesson: any) => {
+        const score = searchScore(keyword, lesson?.title, lesson?.summary, lesson?.description, courseName);
+        if (score < 0) return;
+        results.push({
+          key: `lesson-${lesson.id}`,
+          type: "lesson",
+          title: lesson?.title || `课时 ${lesson.id}`,
+          subtitle: `${courseName} · 课时`,
+          excerpt: searchExcerpt(lesson?.summary || lesson?.description),
+          courseId,
+          lessonId: Number(lesson.id),
+          rank: score + 70,
+          order: order += 1,
+        });
+      });
+      (Array.isArray(home?.materials) ? home.materials : []).forEach((material: any) => {
+        const title = material?.title || material?.name || material?.filename || material?.original_name || "课程资料";
+        const score = searchScore(keyword, title, material?.description, material?.filename, courseName);
+        if (score < 0) return;
+        results.push({
+          key: `material-${material.id || `${courseId}-${title}`}`,
+          type: "material",
+          title,
+          subtitle: `${courseName} · 课程资料`,
+          excerpt: searchExcerpt(material?.description || material?.filename || material?.original_name),
+          courseId,
+          rank: score + 60,
+          order: order += 1,
+        });
+      });
+      points.forEach((item: any) => {
+        const chapterTitle = chapters.find((chapter: any) => Number(chapter.id) === Number(item?.chapter_id))?.title || item?.chapter_title || "知识点";
+        const excerpt = knowledgeExcerpt(item);
+        const score = searchScore(keyword, item?.name, chapterTitle, excerpt, courseName);
+        if (score < 0) return;
+        results.push({
+          key: `knowledge-${item.id}`,
+          type: "knowledge",
+          title: item?.name || `知识点 ${item.id}`,
+          subtitle: `${courseName} · ${chapterTitle}`,
+          excerpt,
+          courseId,
+          knowledgeId: Number(item.id),
+          chapterId: item?.chapter_id ? Number(item.chapter_id) : null,
+          rank: score + 65,
+          order: order += 1,
+        });
+      });
+      qa.forEach((item: any) => {
+        const score = searchScore(keyword, item?.question, item?.answer, courseName);
+        if (score < 0) return;
+        results.push({
+          key: `qa-${item.id}`,
+          type: "qa",
+          title: item?.question || "历史问答",
+          subtitle: `${courseName} · ${formatTime(item?.created_at)}`,
+          excerpt: searchExcerpt(item?.answer),
+          courseId,
+          qaItem: item,
+          rank: score + 55,
+          order: order += 1,
+        });
+      });
+    });
+    const seen = new Set<string>();
+    searchResults.value = results
+      .sort((left, right) => right.rank - left.rank || left.order - right.order)
+      .filter((item) => {
+        if (seen.has(item.key)) return false;
+        seen.add(item.key);
+        return true;
+      })
+      .slice(0, 24);
+    searchActiveIndex.value = searchResults.value.length ? 0 : -1;
+  } catch (error) {
+    if (currentSearchSeq !== searchRequestSeq) return;
+    searchError.value = (error as Error).message || "搜索失败，请稍后重试";
+    searchResults.value = [];
+    searchActiveIndex.value = -1;
+  } finally {
+    if (currentSearchSeq === searchRequestSeq) searchLoading.value = false;
+  }
+}
+function moveSearchSelection(step: number) {
+  const items = flatSearchResults.value;
+  if (!items.length) return;
+  if (searchActiveIndex.value < 0) {
+    searchActiveIndex.value = 0;
+    return;
+  }
+  const next = (searchActiveIndex.value + step + items.length) % items.length;
+  searchActiveIndex.value = next;
+}
+function focusSearchResult(key: string) {
+  const index = flatSearchResults.value.findIndex((item) => item.key === key);
+  if (index >= 0) searchActiveIndex.value = index;
+}
+function isSearchResultActive(item: StudentSearchResult) { return flatSearchResults.value[searchActiveIndex.value]?.key === item.key; }
+async function openSearchResult(item: StudentSearchResult) {
+  const courseId = Number(item.courseId || 0);
+  closeSearch();
+  if (item.type === "course" && courseId) {
+    await openCourse(courseId);
+    return;
+  }
+  if (item.type === "lesson" && item.lessonId) {
+    await openLesson(Number(item.lessonId));
+    return;
+  }
+  if (item.type === "material" && courseId) {
+    selectedCourseId.value = courseId;
+    courseSection.value = "materials";
+    await loadCourseHome();
+    await go("studentMaterials");
+    return;
+  }
+  if (item.type === "knowledge" && courseId) {
+    selectedCourseId.value = courseId;
+    selectedChapterId.value = item.chapterId || null;
+    selectedKnowledgeId.value = item.knowledgeId || null;
+    await go("studentKnowledge");
+    await loadCourseHome();
+    await loadKnowledge();
+    if (item.knowledgeId) selectedKnowledgeId.value = Number(item.knowledgeId);
+    return;
+  }
+  if (item.type === "qa" && courseId && item.qaItem) {
+    selectedCourseId.value = courseId;
+    await go("studentQa");
+    await loadCourseHome();
+    await loadQaHistory();
+    reuseHistory(item.qaItem);
+  }
+}
+async function openActiveSearchResult() {
+  const item = flatSearchResults.value[searchActiveIndex.value];
+  if (!item) return;
+  await openSearchResult(item);
+}
 function firstChar(value?: string) { return (value || "-").slice(0, 1); }
 function localDateKey(date: Date) {
   const year = date.getFullYear();
@@ -2585,6 +3006,7 @@ function onStudentDocumentPointerDown(event: PointerEvent) {
 }
 function onStudentDocumentKeydown(event: KeyboardEvent) {
   if (event.key !== "Escape") return;
+  if (searchOpen.value) closeSearch();
   noticeOpen.value = false;
   userMenuOpen.value = false;
   settingsOpen.value = false;
@@ -2625,6 +3047,7 @@ onBeforeUnmount(() => {
   stopStudyClock();
   if (chromeTimer) clearTimeout(chromeTimer);
   if (joinTimer) clearTimeout(joinTimer);
+  if (searchTimer) clearTimeout(searchTimer);
   if (notificationTimer) clearInterval(notificationTimer);
   if (noteTimer) clearTimeout(noteTimer);
 });
