@@ -1,5 +1,15 @@
 <template>
-  <section v-if="classroomOpen" class="study-room" :class="{ panelClosed: !aiPanelOpen }" @mousemove="revealChrome">
+  <section v-if="active === 'studentLessonStudy' && (!classroomOpen || lessonStudyLoading || lessonStudyError)" class="study-room study-route-state">
+    <div class="study-route-center">
+      <Loader2 v-if="!lessonStudyError" :size="42" class="lesson-loading-icon" />
+      <AlertTriangle v-else :size="42" />
+      <h1>{{ lessonStudyError ? '课时加载失败' : '正在打开课时' }}</h1>
+      <p>{{ lessonStudyError || '课件内容较大，正在加载页面、进度和笔记。' }}</p>
+      <button class="glass-btn" @click="returnCourse"><ArrowLeft :size="17" />返回课程</button>
+    </div>
+  </section>
+
+  <section v-else-if="classroomOpen" class="study-room" :class="{ panelClosed: !aiPanelOpen }" @mousemove="revealChrome">
     <transition name="study-top">
       <header v-show="chromeVisible || !audioPlaying" class="study-head">
         <div>
@@ -209,7 +219,7 @@
                 <p>第 {{ continueProgressPage }} 页 / 共 {{ continueLesson.lesson.page_count || 1 }} 页</p>
                 <AppProgress :value="continueProgress" />
                 <small>{{ continueTime }}</small>
-                <button class="btn btn-primary" @click="openLesson(continueLesson.lesson.id)"><Play :size="16" />继续学习</button>
+                <button class="btn btn-primary" :disabled="isLessonOpening" @click="openLesson(continueLesson.lesson.id)"><Loader2 v-if="isOpeningLesson(continueLesson.lesson.id)" :size="16" class="lesson-loading-icon" /><Play v-else :size="16" />{{ isOpeningLesson(continueLesson.lesson.id) ? '正在打开' : '继续学习' }}</button>
               </section>
               <section v-else class="empty-continue"><BookOpen :size="42" /><h2>还没有学习</h2><button class="btn btn-primary" @click="go('studentCourses')">浏览课程</button></section>
             </article>
@@ -358,12 +368,12 @@
             <template v-else>
               <article class="course-hero-student" :class="{ 'has-image': courseHome.course.cover_url }" :style="courseHeroStyle(courseHome.course)">
                 <section><h1>{{ courseHome.course.name }}</h1><p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p><div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div></section>
-                <aside><div class="slide-mini course-hero-cover-text">{{ courseCoverText(courseHome.course) }}</div><button class="btn white-fill" @click="latestLesson && openLesson(Number(latestLesson.id))"><Play :size="16" />进入课时</button></aside>
+                <aside><div class="slide-mini course-hero-cover-text">{{ courseCoverText(courseHome.course) }}</div><button class="btn white-fill" :disabled="isLessonOpening || !latestLesson" @click="latestLesson && openLesson(Number(latestLesson.id))"><Loader2 v-if="latestLesson && isOpeningLesson(Number(latestLesson.id))" :size="16" class="lesson-loading-icon" /><Play v-else :size="16" />{{ latestLesson && isOpeningLesson(Number(latestLesson.id)) ? '正在打开' : '进入课时' }}</button></aside>
               </article>
               <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="openQuizSelection('practice')" /></div>
               <div class="course-layout">
                 <section>
-                  <article id="lesson-list" class="panel-card"><div class="section-head"><h2><Presentation :size="18" />课时列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div><LessonItem v-for="(lesson, index) in courseHome.lessons || []" :key="lesson.id" :lesson="lesson" :index="Number(index)" @open="openLesson(Number(lesson.id))" /></article>
+                  <article id="lesson-list" class="panel-card"><div class="section-head"><h2><Presentation :size="18" />课时列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div><LessonItem v-for="(lesson, index) in courseHome.lessons || []" :key="lesson.id" :lesson="lesson" :index="Number(index)" :loading="isOpeningLesson(Number(lesson.id))" :disabled="isLessonOpening && !isOpeningLesson(Number(lesson.id))" @open="openLesson(Number(lesson.id))" /></article>
                   <article class="panel-card"><div class="section-head"><h2><FolderOpen :size="18" />课程资料</h2><button @click="materialsExpanded = !materialsExpanded">{{ materialsExpanded ? '收起' : '展开' }}</button></div><MaterialRow v-for="item in visibleCourseMaterials" :key="item.id" :item="item" /><button v-if="(courseHome.materials || []).length > 5" class="ghost-row" @click="materialsExpanded = !materialsExpanded"><ChevronDown :size="16" />{{ materialsExpanded ? '收起' : `展开更多` }}</button></article>
                 </section>
                 <aside>
@@ -917,7 +927,7 @@
 
 <script setup lang="ts">
 import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, Teleport, Transition, watch, type PropType, type Ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Award, BarChart2, Bell, BookMarked, BookOpen, CalendarCheck, Camera, Check,
   CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Cpu, Download, FileText, Flame, FolderOpen, GitBranch, Grid2X2,
@@ -950,9 +960,14 @@ type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: an
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
+const route = useRoute();
 const router = useRouter();
 
-const active = ref(props.pageKey || "studentHome");
+function currentRoutePageKey() {
+  return String(route.meta.pageKey || props.pageKey || "studentHome");
+}
+
+const active = ref(currentRoutePageKey());
 const dashboard = ref<any>({});
 const profilePayload = ref<any>({});
 const courses = ref<any[]>([]);
@@ -987,6 +1002,9 @@ const quickCourseQuestion = ref("");
 
 const classroomOpen = ref(false);
 const classroomLesson = ref<{ lesson: Lesson; pages: LessonPage[] } | null>(null);
+const lessonStudyLoading = ref(active.value === "studentLessonStudy");
+const lessonStudyError = ref("");
+const openingLessonId = ref<number | null>(null);
 const currentPage = ref(1);
 const pageDirection = ref<"next" | "prev">("next");
 const classroomTab = ref<"script" | "qa" | "note">("script");
@@ -1015,6 +1033,7 @@ const noteSavedAt = ref("尚未保存");
 let chromeTimer: number | undefined;
 let studyTimer: number | undefined;
 let noteTimer: number | undefined;
+let lessonLoadSeq = 0;
 
 const globalMessages = ref<ChatMessage[]>([]);
 const globalQuestion = ref("");
@@ -1151,6 +1170,7 @@ const activeCourses = computed(() => courses.value.filter((course) => (course.pr
 const doneCourses = computed(() => courses.value.filter((course) => (course.progress_percent || 0) >= 100));
 const filteredCourses = computed(() => (courseTab.value === "active" ? activeCourses.value : doneCourses.value).filter((course) => (!courseKeyword.value || course.name.includes(courseKeyword.value)) && (!termFilter.value || course.term === termFilter.value)));
 const latestLesson = computed(() => (courseHome.value.lessons || [])[0] || null);
+const isLessonOpening = computed(() => openingLessonId.value !== null);
 const visibleCourseMaterials = computed(() => materialsExpanded.value ? courseHome.value.materials || [] : (courseHome.value.materials || []).slice(0, 5));
 const activePage = computed(() => classroomLesson.value?.pages.find((page) => page.page_number === currentPage.value) || classroomLesson.value?.pages[0] || null);
 const activePageText = computed(() => extractStructuredText(activePage.value?.page_text || "") || String(activePage.value?.page_text || "").trim());
@@ -1312,7 +1332,7 @@ function resetCourseScopedState() {
   guideOpen[3] = false;
 }
 
-watch(() => props.pageKey, async (key) => { active.value = key || "studentHome"; await loadActive(); });
+watch(() => [props.pageKey, route.fullPath], async () => { await syncRouteState(); });
 watch(selectedCourseId, async (id, previousId) => {
   if (id) localStorage.setItem("student_current_course_id", String(id));
   if (id === previousId) return;
@@ -1335,6 +1355,16 @@ function queuedQuizMessage(result: any, fallback = "题目已加入生成队列�
   return result?.status === "failed" ? "题目生成失败，请稍后重试" : fallback;
 }
 async function go(key: string) { await router.push(routeByPage[key] || "/home"); }
+async function syncRouteState() {
+  const nextPageKey = currentRoutePageKey();
+  const leavingLessonStudy = active.value === "studentLessonStudy" && nextPageKey !== "studentLessonStudy";
+  active.value = nextPageKey;
+  if (leavingLessonStudy || (classroomOpen.value && nextPageKey !== "studentLessonStudy")) {
+    lessonLoadSeq += 1;
+    await leaveClassroom(true);
+  }
+  await loadActive();
+}
 async function handleStudentNav(key: string) {
   if (key === "studentQuizzes") {
     await openQuizSelection("practice");
@@ -1363,6 +1393,10 @@ async function toggleNotifications() {
 async function loadCourseHome() { if (!selectedCourseId.value) return; courseHome.value = (await run(() => api.get(`/student/courses/${selectedCourseId.value}/home`))) || {}; lessons.value = courseHome.value.lessons || []; }
 async function loadProfile() { profilePayload.value = (await run(() => api.get("/student/profile"))) || {}; Object.assign(profileForm, { nickname: profilePayload.value.user?.nickname || props.user.nickname, avatar_url: profilePayload.value.user?.avatar_url || "", school: profilePayload.value.student_profile?.school || "", bio: profilePayload.value.user?.bio || "" }); noticeSettings.splice(0, noticeSettings.length, ...(profilePayload.value.notification_settings || [])); }
 async function loadActive() {
+  if (active.value === "studentLessonStudy") {
+    await loadLessonStudyRoute();
+    return;
+  }
   if (active.value === "studentHome") await loadDashboard();
   if (active.value === "studentCourses") await loadCourses();
   if (["studentQa", "studentWrongBook", "studentTutoring", "studentKnowledge", "studentQuizzes"].includes(active.value) && !courses.value.length) await loadCourses();
@@ -1472,14 +1506,111 @@ function formatTime(value?: string | null) { return value ? new Date(value).toLo
 function timeLabel(value: number) { if (!Number.isFinite(value)) return "00:00"; return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(Math.floor(value % 60)).padStart(2, "0")}`; }
 function copyText(text: string) { navigator.clipboard?.writeText(text); emit("notice", "success", "已复制"); }
 function chapterName(id?: number | null) { return (courseHome.value.chapters || []).find((item: any) => item.id === id)?.title || "课程章节"; }
+function isOpeningLesson(id?: number | null) { return openingLessonId.value === Number(id || 0); }
 
 function formatJoinCode() { joinCode.value = joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12); joinPreview.value = null; joinError.value = ""; if (joinTimer) window.clearTimeout(joinTimer); if (joinCode.value.length >= 5) joinTimer = window.setTimeout(validateJoinCode, 350); }
 async function validateJoinCode() { joinChecking.value = true; joinError.value = ""; const data = await run<any>(() => api.get("/student/courses/preview", { course_code: joinCode.value })); joinChecking.value = false; if (!data) { joinError.value = "课程码不存在或已停用"; return; } joinPreview.value = data; if (data.already_joined) joinError.value = "你已加入该课程"; }
 async function confirmJoin() { if (!joinPreview.value) return; await run(() => api.post("/courses/join", { course_code: joinCode.value }), "已加入"); joinOpen.value = false; joinCode.value = ""; joinPreview.value = null; await loadDashboard(); }
 async function handleCourseMenu(action: string, course: any) { if (action === "detail") await openCourse(course.id); if (action === "qa") { selectedCourseId.value = course.id; await go("studentQa"); } if (action === "share") copyText(course.course_code); if (action === "leave") await run(() => api.post(`/courses/${course.id}/leave`), "已退出"); await loadCourses(); }
 
-async function openLesson(id: number) { const detail = await run<{ lesson: Lesson; pages: LessonPage[] }>(() => api.get(`/lessons/${id}`)); if (!detail) return; classroomLesson.value = detail; currentPage.value = 1; classMessages.value = []; classConversationId.value = null; classroomOpen.value = true; completeOpen.value = false; studySeconds.value = 0; startStudyClock(); const progress = await run<any>(() => api.get(`/lessons/${id}/progress`)); if (progress?.current_page) currentPage.value = progress.current_page; await loadNote(activePage.value?.id || 0); }
-async function closeClassroom() { await saveProgress(false, true); stopStudyClock(); classroomOpen.value = false; audioPlaying.value = false; classroomLesson.value = null; await loadDashboard(); }
+function routeLessonId() {
+  const raw = Array.isArray(route.params.lessonId) ? route.params.lessonId[0] : route.params.lessonId;
+  const id = Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
+function resetClassroomState() {
+  stopStudyClock();
+  classroomOpen.value = false;
+  audioPlaying.value = false;
+  audioProgress.value = 0;
+  classroomLesson.value = null;
+  classMessages.value = [];
+  classConversationId.value = null;
+  classQuestion.value = "";
+  classThinking.value = false;
+  classQaAttachments.value = [];
+  classQaImageUploading.value = false;
+  completeOpen.value = false;
+  settingsOpen.value = false;
+  thumbOpen.value = false;
+  currentPage.value = 1;
+  studySeconds.value = 0;
+  pageNote.value = "";
+  noteState.value = "已保存";
+  noteSavedAt.value = "尚未保存";
+}
+async function leaveClassroom(saveProgressBeforeClose = false) {
+  if (saveProgressBeforeClose && classroomLesson.value) await saveProgress(false, true);
+  resetClassroomState();
+}
+async function loadLessonStudyRoute() {
+  const lessonId = routeLessonId();
+  if (!lessonId) {
+    lessonStudyLoading.value = false;
+    lessonStudyError.value = "课时地址无效，请从课程列表重新进入。";
+    openingLessonId.value = null;
+    resetClassroomState();
+    return;
+  }
+  if (classroomOpen.value && classroomLesson.value?.lesson.id === lessonId) {
+    lessonStudyLoading.value = false;
+    lessonStudyError.value = "";
+    openingLessonId.value = null;
+    return;
+  }
+  const loadSeq = ++lessonLoadSeq;
+  lessonStudyLoading.value = true;
+  lessonStudyError.value = "";
+  resetClassroomState();
+  try {
+    const detail = await api.get<{ lesson: Lesson; pages: LessonPage[] }>(`/lessons/${lessonId}`);
+    if (loadSeq !== lessonLoadSeq || routeLessonId() !== lessonId) return;
+    if (!detail?.lesson) throw new Error("课时不存在或暂无访问权限");
+    if (detail.lesson.course_id) selectedCourseId.value = Number(detail.lesson.course_id);
+    classroomLesson.value = detail;
+    classroomOpen.value = true;
+    completeOpen.value = false;
+    studySeconds.value = 0;
+    startStudyClock();
+    try {
+      const progress = await api.get<any>(`/lessons/${lessonId}/progress`);
+      if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId && progress?.current_page) currentPage.value = progress.current_page;
+    } catch (error) {
+      emit("notice", "warning", `学习进度加载失败：${(error as Error).message}`);
+    }
+    if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId) await loadNote(activePage.value?.id || 0);
+  } catch (error) {
+    if (loadSeq !== lessonLoadSeq) return;
+    resetClassroomState();
+    lessonStudyError.value = (error as Error).message || "课时加载失败，请稍后重试。";
+  } finally {
+    if (loadSeq === lessonLoadSeq) {
+      lessonStudyLoading.value = false;
+      openingLessonId.value = null;
+    }
+  }
+}
+async function openLesson(id: number) {
+  if (!id || openingLessonId.value) return;
+  openingLessonId.value = id;
+  if (active.value === "studentLessonStudy" && routeLessonId() === id) {
+    openingLessonId.value = null;
+    await loadLessonStudyRoute();
+    return;
+  }
+  try {
+    await router.push(`/lessons/${id}`);
+  } catch (error) {
+    openingLessonId.value = null;
+    emit("notice", "error", (error as Error).message || "打开课时失败");
+  }
+}
+async function closeClassroom() {
+  const shouldReturnToCourse = active.value === "studentLessonStudy";
+  await leaveClassroom(true);
+  if (shouldReturnToCourse) await go("studentCourseHome");
+  else await loadDashboard();
+}
 function revealChrome() { chromeVisible.value = true; if (chromeTimer) window.clearTimeout(chromeTimer); chromeTimer = window.setTimeout(() => { if (audioPlaying.value) chromeVisible.value = false; }, 3000); }
 function startStudyClock() { stopStudyClock(); studyTimer = window.setInterval(() => { studySeconds.value += 1; }, 1000); }
 function stopStudyClock() { if (studyTimer) window.clearInterval(studyTimer); studyTimer = undefined; }
@@ -1511,8 +1642,8 @@ function formatNote(kind: "bold" | "italic" | "mark") {
   queueNoteSave();
 }
 function confettiStyle(n: number) { return { left: `${(n * 37) % 100}%`, background: ["#00B8D4", "#00E5FF", "#2E7D32", "#D9A05B", "#D94925"][n % 5], animationDelay: `${(n % 8) * 0.05}s` }; }
-function nextLessonAfterComplete() { const index = (courseHome.value.lessons || []).findIndex((item: any) => item.id === classroomLesson.value?.lesson.id); const next = (courseHome.value.lessons || [])[index + 1]; if (next) openLesson(next.id); else returnCourse(); }
-function returnCourse() { completeOpen.value = false; closeClassroom(); }
+async function nextLessonAfterComplete() { const index = (courseHome.value.lessons || []).findIndex((item: any) => item.id === classroomLesson.value?.lesson.id); const next = (courseHome.value.lessons || [])[index + 1]; if (next) await openLesson(next.id); else await returnCourse(); }
+async function returnCourse() { completeOpen.value = false; await closeClassroom(); }
 
 function patchChatMessage(messages: Ref<ChatMessage[]>, id: number, updater: (message: ChatMessage) => ChatMessage) {
   const index = messages.value.findIndex((item) => item.id === id);
@@ -2005,13 +2136,18 @@ const QuickTile = defineComponent({
 });
 
 const LessonItem = defineComponent({
-  props: { lesson: { type: Object as PropType<any>, required: true }, index: { type: Number, required: true } },
+  props: {
+    lesson: { type: Object as PropType<any>, required: true },
+    index: { type: Number, required: true },
+    loading: { type: Boolean, default: false },
+    disabled: { type: Boolean, default: false }
+  },
   emits: ["open"],
   setup(p, { emit: update }) {
-    return () => h("button", { type: "button", class: ["lesson-item", p.lesson.progress_percent > 0 && p.lesson.progress_percent < 100 ? "current" : ""], onClick: () => update("open") }, [
+    return () => h("button", { type: "button", class: ["lesson-item", p.lesson.progress_percent > 0 && p.lesson.progress_percent < 100 ? "current" : "", p.loading ? "loading" : ""], disabled: p.disabled || p.loading, onClick: () => update("open") }, [
       h("b", String(p.index + 1).padStart(2, "0")),
-      h("div", [h("strong", p.lesson.title), h("small", `第 ${p.lesson.current_page || 1} 页 · ${p.lesson.progress_percent || 0}%`)]),
-      p.lesson.progress_percent >= 100 ? h(CheckCircle, { size: 18 }) : h(Play, { size: 18 })
+      h("div", [h("strong", p.lesson.title), h("small", p.loading ? "正在打开课时..." : `第 ${p.lesson.current_page || 1} 页 · ${p.lesson.progress_percent || 0}%`)]),
+      p.loading ? h(Loader2, { size: 18, class: "lesson-loading-icon" }) : p.lesson.progress_percent >= 100 ? h(CheckCircle, { size: 18 }) : h(Play, { size: 18 })
     ]);
   }
 });
@@ -2466,8 +2602,13 @@ onMounted(async () => {
   document.addEventListener("keydown", onStudentDocumentKeydown);
   document.addEventListener("visibilitychange", onStudentVisibilityChange);
   window.addEventListener("focus", onStudentWindowFocus);
-  await loadCourses();
-  await loadActive();
+  if (active.value === "studentLessonStudy") {
+    await loadActive();
+    await loadCourses();
+  } else {
+    await loadCourses();
+    await loadActive();
+  }
   await loadNotifications(true);
   notificationTimer = window.setInterval(() => {
     if (!document.hidden) void loadNotifications(true);

@@ -6,6 +6,7 @@ export const routeByPage: Record<string, string> = {
   studentCourseHome: "/courses/detail",
   studentMaterials: "/materials",
   studentLessons: "/lessons",
+  studentLessonStudy: "/lessons",
   studentQa: "/qa",
   studentTutoring: "/tutoring",
   studentKnowledge: "/knowledge",

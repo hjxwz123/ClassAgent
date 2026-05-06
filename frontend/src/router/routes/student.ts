@@ -14,6 +14,7 @@ export const studentRoutes: RouteRecordRaw[] = [
   studentRoute("/courses", "studentCourses"),
   studentRoute("/courses/detail", "studentCourseHome"),
   studentRoute("/materials", "studentMaterials"),
+  studentRoute("/lessons/:lessonId", "studentLessonStudy"),
   studentRoute("/lessons", "studentCourseHome"),
   studentRoute("/qa", "studentQa"),
   studentRoute("/tutoring", "studentTutoring"),
