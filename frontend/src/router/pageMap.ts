@@ -3,7 +3,7 @@ import type { Role } from "../types";
 export const routeByPage: Record<string, string> = {
   studentHome: "/home",
   studentCourses: "/courses",
-  studentCourseHome: "/courses/detail",
+  studentCourseHome: "/courses",
   studentMaterials: "/materials",
   studentLessons: "/lessons",
   studentLessonStudy: "/lessons",
@@ -15,7 +15,7 @@ export const routeByPage: Record<string, string> = {
   studentPlans: "/plans",
   studentProfile: "/profile",
   courses: "/courses",
-  courseDetail: "/courses/detail",
+  courseDetail: "/courses",
   materials: "/materials",
   lessons: "/lessons",
   qa: "/qa",

@@ -243,7 +243,7 @@
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <div class="metric-grid three compact"><MetricCard :icon="File" label="资料总数" :value="materialSummary.total || 0" sub="份" /><MetricCard :icon="Database" label="存储用量" :value="sizeLabel(materialSummary.size_bytes)" sub="课程资料" tone="success" /><MetricCard :icon="Sparkles" label="已解析" :value="`${materialSummary.ready || 0}/${materialSummary.total || 0}`" sub="AI" tone="ai" /></div>
-          <div class="materials-layout"><aside class="chapter-tree"><div class="search-box small"><Search :size="15" /><input v-model="chapterKeyword" placeholder="搜索章节" /></div><button class="chapter-tree-main" :class="{ active: selectedChapterId === 0 }" @click="selectedChapterId = 0"><FileText :size="16" /><span class="chapter-tree-title">全部资料</span><span class="chapter-tree-count">{{ materialSummary.total || 0 }}</span></button><TransitionGroup name="motion-list" tag="div" class="chapter-buttons"><div v-for="chapter in filteredChapters" :key="chapter.id" class="chapter-tree-row" :class="{ active: selectedChapterId === chapter.id, 'is-empty': !chapter.count, 'just-added': freshMaterialChapterId === chapter.id }"><button class="chapter-tree-main" @click="selectedChapterId = chapter.id"><Layers :size="16" /><span class="chapter-tree-title">{{ chapter.title }}</span><span class="chapter-tree-count">{{ chapter.count || 0 }}</span></button><button class="chapter-tree-delete" :data-loading="isPending(`delete-chapter-${chapter.id}`)" :disabled="isPending(`delete-chapter-${chapter.id}`)" title="删除章节" @click="deleteChapterFromTree(chapter)"><Trash2 :size="14" /></button></div></TransitionGroup><button :data-loading="isPending('add-tree-chapter')" :disabled="isPending('add-tree-chapter')" @click="openAddChapterModal"><Plus :size="16" /><span class="chapter-tree-title">添加章节</span></button></aside><section class="materials-panel" :class="{ 'panel-loading': isPending('filter-materials') }"><div class="material-filter"><div class="search-box"><Search :size="16" /><input v-model="materialFilter.keyword" placeholder="搜索文件名" @keyup.enter="refreshMaterials" /></div><AppSelect v-model="materialFilter.type" :options="materialTypeOptions" /><AppSelect v-model="materialFilter.status" :options="materialStatusOptions" /><AppSelect v-model="materialSort" :options="materialSortOptions" /><div class="view-toggle"><button type="button" :class="{ active: materialView === 'grid' }" @click="materialView = 'grid'"><Grid2X2 :size="16" />网格</button><button type="button" :class="{ active: materialView === 'list' }" @click="materialView = 'list'"><FileText :size="16" />列表</button></div></div><TransitionGroup name="material-list-motion" tag="div" class="material-list" :class="materialView"><article v-for="item in filteredMaterials" :key="item.id" class="material-row"><span class="file-badge" :class="item.material_type"><component :is="fileIcon(item.material_type)" :size="18" /></span><div><strong>{{ item.title }}</strong><small>{{ chapterName(item.chapter_id) }} · {{ typeText(item.material_type) }} · {{ sizeLabel(item.size_bytes) }}</small><MaterialStatus :item="item" /></div><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span><section><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" :data-loading="isPending(`reprocess-material-${item.id}`)" :disabled="isPending(`reprocess-material-${item.id}`)" @click="reprocessMaterial(item.id)"><RefreshCw :size="15" />重新解析</button><button v-if="item.parse_status === 'ready'" class="icon-action" :data-loading="isPending(`open-ppt-${item.id}`)" :disabled="isPending(`open-ppt-${item.id}`)" @click="openPptWorkbench(item.id)"><Wand2 :size="15" />编辑课时</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" :data-loading="isPending(`delete-material-${item.id}`)" :disabled="isPending(`delete-material-${item.id}`)" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></section></article><EmptyState v-if="!filteredMaterials.length" key="empty" text="暂无资料" /></TransitionGroup></section></div>
+          <div class="materials-layout"><aside class="chapter-tree"><div class="search-box small"><Search :size="15" /><input v-model="chapterKeyword" placeholder="搜索章节" /></div><button class="chapter-tree-main" :class="{ active: selectedChapterId === 0 }" @click="selectedChapterId = 0"><FileText :size="16" /><span class="chapter-tree-title">全部资料</span><span class="chapter-tree-count">{{ materialSummary.total || 0 }}</span></button><TransitionGroup name="motion-list" tag="div" class="chapter-buttons"><div v-for="chapter in filteredChapters" :key="chapter.id" class="chapter-tree-row" :class="{ active: selectedChapterId === chapter.id, 'is-empty': !chapter.count, 'just-added': freshMaterialChapterId === chapter.id }"><button class="chapter-tree-main" @click="selectedChapterId = chapter.id"><Layers :size="16" /><span class="chapter-tree-title">{{ chapter.title }}</span><span class="chapter-tree-count">{{ chapter.count || 0 }}</span></button><button class="chapter-tree-delete" :data-loading="isPending(`delete-chapter-${chapter.id}`)" :disabled="isPending(`delete-chapter-${chapter.id}`)" title="删除章节" @click="deleteChapterFromTree(chapter)"><Trash2 :size="14" /></button></div></TransitionGroup><button :data-loading="isPending('add-tree-chapter')" :disabled="isPending('add-tree-chapter')" @click="openAddChapterModal"><Plus :size="16" /><span class="chapter-tree-title">添加章节</span></button></aside><section class="materials-panel" :class="{ 'panel-loading': isPending('filter-materials') }"><div class="material-filter"><div class="search-box"><Search :size="16" /><input v-model="materialFilter.keyword" placeholder="搜索文件名" @keyup.enter="refreshMaterials" /></div><AppSelect v-model="materialFilter.type" :options="materialTypeOptions" /><AppSelect v-model="materialFilter.status" :options="materialStatusOptions" /><AppSelect v-model="materialSort" :options="materialSortOptions" /><div class="view-toggle"><button type="button" :class="{ active: materialView === 'grid' }" @click="materialView = 'grid'"><Grid2X2 :size="16" />网格</button><button type="button" :class="{ active: materialView === 'list' }" @click="materialView = 'list'"><FileText :size="16" />列表</button></div></div><TransitionGroup name="material-list-motion" tag="div" class="material-list" :class="materialView"><article v-for="item in filteredMaterials" :key="item.id" class="material-row" :class="{ processing: isMaterialProcessing(item) }"><span class="file-badge" :class="item.material_type"><component :is="fileIcon(item.material_type)" :size="18" /></span><div><strong>{{ item.title }}</strong><small>{{ chapterName(item.chapter_id) }} · {{ typeText(item.material_type) }} · {{ sizeLabel(item.size_bytes) }}</small><MaterialStatus :item="item" /></div><span class="tag" :class="statusClass(materialRowStatus(item))">{{ statusText(materialRowStatus(item)) }}</span><section><button class="icon-action" :disabled="isMaterialProcessing(item)" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" :data-loading="isPending(`reprocess-material-${item.id}`) || isMaterialProcessing(item)" :disabled="isPending(`reprocess-material-${item.id}`) || isMaterialProcessing(item)" @click="reprocessMaterial(item.id)"><RefreshCw :size="15" />{{ isMaterialProcessing(item) ? '解析中' : '重新解析' }}</button><button v-if="materialRowStatus(item) === 'ready'" class="icon-action" :data-loading="isPending(`open-ppt-${item.id}`)" :disabled="isPending(`open-ppt-${item.id}`) || isMaterialProcessing(item)" @click="openPptWorkbench(item.id)"><Wand2 :size="15" />编辑课时</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" :data-loading="isPending(`delete-material-${item.id}`)" :disabled="isPending(`delete-material-${item.id}`)" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></section></article><EmptyState v-if="!filteredMaterials.length" key="empty" text="暂无资料" /></TransitionGroup></section></div>
         </template>
       </section>
 
@@ -627,6 +627,7 @@ const profileEditing = ref(false);
 const passwordConfirm = ref("");
 const studentTab = ref<"base" | "data" | "qa">("base");
 const pendingActions = reactive(new Set<string>());
+const materialProcessingOverrides = reactive<Record<number, { startedAt: number; seenProcessing: boolean }>>({});
 const freshChapterId = ref<number | null>(null);
 const freshMaterialChapterId = ref<number | null>(null);
 const slideScale = ref(1);
@@ -657,6 +658,7 @@ const quizEditor = reactive({ id: 0, status: "", title: "", description: "", que
 let freshChapterTimer = 0;
 let freshMaterialChapterTimer = 0;
 let editorPulseTimer = 0;
+let materialRefreshTimers: number[] = [];
 
 const courseFilter = reactive({ keyword: "", term: "", status: "" });
 const materialFilter = reactive({ keyword: "", type: "", status: "" });
@@ -864,7 +866,12 @@ function openHelp() { emit("notice", "info", "教师端帮助已准备，可以�
 async function loadCourses() { courses.value = (await run(() => api.get<any[]>("/teacher/courses"))) || []; if ((!currentCourseId.value || !courses.value.some((course) => course.id === currentCourseId.value)) && courses.value[0]) currentCourseId.value = courses.value[0].id; }
 async function loadDashboard() { dashboard.value = (await run(() => api.get("/teacher/dashboard"))) || {}; }
 async function loadCourseHome() { if (!currentCourse.value) return; courseHome.value = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/home`))) || {}; lessons.value = courseHome.value.lessons || []; }
-async function loadMaterials() { if (!currentCourse.value) return; materialSummary.value = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/materials/summary`))) || {}; materials.value = (await run(() => api.get<any[]>("/materials", { course_id: currentCourse.value.id, keyword: materialFilter.keyword, category: "" }))) || []; }
+async function loadMaterials() {
+  if (!currentCourse.value) return;
+  materialSummary.value = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/materials/summary`))) || {};
+  const rows = (await run(() => api.get<any[]>("/materials", { course_id: currentCourse.value!.id, keyword: materialFilter.keyword, category: "" }))) || [];
+  materials.value = applyMaterialProcessingOverrides(rows);
+}
 async function loadLessons() { await loadCourseHome(); }
 async function loadStudents() { if (!currentCourse.value) return; studentPayload.value = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/students`))) || { stats: {}, items: [] }; }
 function analysisDays() { return analysisRange.value === "本周" ? 7 : analysisRange.value === "本月" ? 30 : 120; }
@@ -1258,13 +1265,52 @@ async function openUploadModal() {
     await Promise.all([loadMaterials(), loadCourseHome()]);
   });
 }
+function materialRowStatus(item: any) {
+  return isMaterialProcessing(item) ? "processing" : String(item?.parse_status || "");
+}
+function isMaterialProcessing(item: any) {
+  return String(item?.parse_status || "") === "processing" || String(item?.vector_status || "") === "processing";
+}
+function markMaterialReprocessing(id: number) {
+  materialProcessingOverrides[id] = { startedAt: Date.now(), seenProcessing: false };
+  materials.value = materials.value.map((item) => Number(item.id) === id ? { ...item, parse_status: "processing", vector_status: "processing" } : item);
+}
+function applyMaterialProcessingOverrides(rows: any[]) {
+  const now = Date.now();
+  const activeIds = new Set(rows.map((item) => Number(item.id)));
+  Object.keys(materialProcessingOverrides).forEach((key) => {
+    if (!activeIds.has(Number(key))) delete materialProcessingOverrides[Number(key)];
+  });
+  return rows.map((item) => {
+    const id = Number(item.id);
+    const override = materialProcessingOverrides[id];
+    if (!override) return item;
+    const remoteProcessing = item.parse_status === "processing" || item.vector_status === "processing";
+    const remoteTerminal = ["ready", "failed"].includes(String(item.parse_status)) && ["ready", "failed"].includes(String(item.vector_status || item.parse_status));
+    if (remoteProcessing) {
+      override.seenProcessing = true;
+      return { ...item, parse_status: "processing", vector_status: "processing" };
+    }
+    if (remoteTerminal && (override.seenProcessing || now - override.startedAt > 6000)) {
+      delete materialProcessingOverrides[id];
+      return item;
+    }
+    return { ...item, parse_status: "processing", vector_status: "processing" };
+  });
+}
+function clearMaterialRefreshTimers() {
+  materialRefreshTimers.forEach((timer) => window.clearTimeout(timer));
+  materialRefreshTimers = [];
+}
 function scheduleMaterialRefreshes() {
+  clearMaterialRefreshTimers();
   [3500, 12000, 30000].forEach((delay) => {
-    window.setTimeout(async () => {
+    const timer = window.setTimeout(async () => {
       if (!currentCourse.value) return;
       await loadMaterials();
       await loadCourseHome();
     }, delay);
+    materialRefreshTimers.push(timer);
   });
 }
 function pickUploadFiles(event: Event) { const files = Array.from((event.target as HTMLInputElement).files || []); uploadQueue.value = files.map((file, index) => ({ id: Date.now() + index, file, chapter_id: selectedChapterId.value, category: "courseware" })); }
@@ -1295,7 +1341,9 @@ async function uploadMaterials() {
 async function deleteMaterial(id: number) { await withAction(`delete-material-${id}`, async () => { await run(() => api.delete(`/materials/${id}`), "已删除"); await loadMaterials(); }); }
 async function reprocessMaterial(id: number) {
   await withAction(`reprocess-material-${id}`, async () => {
-    await run(() => api.post(`/materials/${id}/reprocess`), "已重新提交解析");
+    const material = await run<any>(() => api.post(`/materials/${id}/reprocess`), "已重新提交解析，正在解析中");
+    if (!material) return;
+    markMaterialReprocessing(id);
     await loadMaterials();
     scheduleMaterialRefreshes();
   });
@@ -1306,6 +1354,10 @@ function closePreview() {
   previewMode.value = "markdown";
 }
 async function previewMaterial(item: any) {
+  if (isMaterialProcessing(item)) {
+    emit("notice", "info", "资料正在解析中，完成后可预览");
+    return;
+  }
   previewItem.value = item;
   previewDetail.value = null;
   previewMode.value = "markdown";
@@ -1314,6 +1366,11 @@ async function previewMaterial(item: any) {
   if (!hasPreviewMarkdown.value && item.preview_url) previewMode.value = "file";
 }
 async function openPptWorkbench(materialId: number) {
+  const row = materials.value.find((item) => Number(item.id) === Number(materialId));
+  if (row && isMaterialProcessing(row)) {
+    emit("notice", "info", "资料正在解析中，完成后可编辑课时");
+    return;
+  }
   const detail = await withAction<MaterialDetail>(`open-ppt-${materialId}`, () => api.get(`/materials/${materialId}`));
   if (!detail) return;
   if (!(detail.pages || []).length) return emit("notice", "warning", "资料还没有可编辑页面，请等待解析完成或重新处理");
@@ -1566,6 +1623,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onTeacherDocumentPointerDown);
   document.removeEventListener("keydown", onTeacherDocumentKeydown);
+  clearMaterialRefreshTimers();
   resetCourseCoverSelection();
 });
 
@@ -1599,7 +1657,7 @@ const MaterialTypeList = defineComponent({ props: { stats: { type: Object as Pro
 const ActivityList = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true } }, setup(p) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "activity-list" }, { default: () => p.items.length ? p.items.map((item) => h("div", { key: item.id || `${item.tone}-${item.time}-${item.text}`, class: "activity-item" }, [h("i", { class: item.tone }), h("span", item.text), h("small", relativeTime(item.time))])) : [h(EmptyState, { key: "empty", text: "暂无活动" })] }); } });
 const ProgressList = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true } }, setup(p) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "progress-list" }, { default: () => p.items.length ? p.items.map((item) => h("div", { key: item.student.id, class: "student-progress-row" }, [h("span", { class: "avatar mini" }, firstChar(item.student.nickname)), h("strong", item.student.nickname), h(ProgressBar, { value: item.progress_percent }), h("small", `${item.progress_percent}%`)])) : [h(EmptyState, { key: "empty", text: "暂无学生" })] }); } });
 const ProgressBar = defineComponent({ props: { value: { type: Number, required: true } }, setup(p) { return () => h(AppProgress, { class: "progress-bar", value: p.value, tone: p.value < 30 ? "danger" : p.value < 70 ? "warning" : "success" }); } });
-const MaterialStatus = defineComponent({ props: { item: { type: Object, required: true } }, setup(p) { return () => h("small", { class: "material-status" }, p.item.parse_status === "ready" ? "脚本已生成 · 语音已合成" : p.item.parse_status === "processing" ? "正在生成脚本" : p.item.parse_status === "failed" ? "解析失败" : "待处理"); } });
+const MaterialStatus = defineComponent({ props: { item: { type: Object, required: true } }, setup(p) { return () => h("small", { class: ["material-status", p.item.parse_status === "processing" ? "processing" : ""] }, p.item.parse_status === "ready" ? "脚本已生成 · 语音已合成 · 教学结构已就绪" : p.item.parse_status === "processing" ? "正在解析课件、生成脚本和教学结构，请稍候" : p.item.parse_status === "failed" ? "解析失败，可重新解析" : "待处理"); } });
 const LayerCard = defineComponent({ props: { label: { type: String, required: true }, value: { type: Number, required: true }, tone: { type: String, default: "primary" } }, setup(p) { return () => h("article", { class: ["layer-card", p.tone] }, [h("strong", p.label), h("span", `${p.value} 人`), h(AppProgress, { value: p.value, max: Math.max(1, studentPayload.value.stats?.total || 1), tone: p.tone as any })]); } });
 const InfoRow = defineComponent({ props: { label: { type: String, required: true }, value: { type: String, required: true } }, setup(p) { return () => h("div", { class: "info-row" }, [h("span", p.label), h("strong", p.value)]); } });
 </script>
