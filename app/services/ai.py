@@ -944,6 +944,45 @@ class AIService:
                 break
         return keywords or ["课程内容"]
 
+    def rewrite_retrieval_query(
+        self,
+        *,
+        question: str,
+        history: Sequence[Any] | None = None,
+        db: Session | None = None,
+    ) -> str:
+        history_lines = "\n".join(
+            f"- {item['role']}: {item['content']}"
+            for item in self._normalize_history_messages(history)[-4:]
+        )
+        try:
+            payload = self._call_json(
+                db,
+                purpose="qa",
+                system_prompt=(
+                    "你是课程问答检索改写器。你的任务是把学生问题改写成更适合检索课程资料的查询。"
+                    "不要回答问题。要去掉具体数字、人名、变量名、样例细节，保留知识点、题型、方法、步骤、条件和目标。"
+                    "必须只返回 JSON。"
+                ),
+                user_prompt=(
+                    f"前序对话：\n{history_lines or '无'}\n"
+                    f"当前问题：{question}\n"
+                    "返回格式："
+                    "{\"retrieval_query\":\"改写后的检索查询\","
+                    "\"keywords\":[\"关键词1\",\"关键词2\"]}"
+                ),
+            )
+        except Exception:
+            payload = None
+        if isinstance(payload, dict):
+            rewritten = str(payload.get("retrieval_query") or "").strip()
+            if rewritten:
+                keywords = [str(item).strip() for item in (payload.get("keywords") or []) if str(item).strip()]
+                if keywords:
+                    return f"{rewritten}\n检索关键词：{' '.join(keywords[:8])}"[:320]
+                return rewritten[:320]
+        return self._heuristic_retrieval_query(question=question, history=history)
+
     def classify_qa_question_scope(
         self,
         *,
@@ -1068,6 +1107,27 @@ class AIService:
 
     def _history_hint_items(self, history: Sequence[Any] | None) -> list[str]:
         return [item["content"] for item in self._normalize_history_messages(history) if item["role"] == "user"]
+
+    def _heuristic_retrieval_query(self, *, question: str, history: Sequence[Any] | None = None) -> str:
+        normalized = _clean_text(question)
+        normalized = re.sub(r"\d+(?:\.\d+)?", "数字", normalized)
+        normalized = re.sub(r"\b[A-Za-z]\b", "变量", normalized)
+        normalized = re.sub(r"\b[A-Za-z_][A-Za-z0-9_]{2,16}\b", "变量", normalized)
+        intent_terms: list[str] = []
+        for term in ["定义", "概念", "步骤", "思路", "方法", "原理", "公式", "例题", "题型", "区别", "联系", "作用", "判断", "证明", "推导", "计算", "分析", "规则", "模板"]:
+            if term in normalized and term not in intent_terms:
+                intent_terms.append(term)
+        keywords = [item for item in self.extract_keywords(normalized, limit=8) if item != "课程内容"]
+        if any(token in question for token in ["这个", "那个", "这题", "那题", "上一个", "继续"]) and history:
+            for item in self._history_hint_items(history)[-2:]:
+                for keyword in self.extract_keywords(item, limit=4):
+                    if keyword != "课程内容" and keyword not in keywords:
+                        keywords.append(keyword)
+        parts = [normalized]
+        focus = [*intent_terms, *keywords]
+        if focus:
+            parts.append(f"检索重点：{' '.join(focus[:8])}")
+        return "\n".join(part for part in parts if part).strip()[:320]
 
     def answer_question(
         self,
