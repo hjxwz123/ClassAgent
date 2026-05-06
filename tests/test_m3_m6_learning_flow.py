@@ -8,7 +8,7 @@ from pptx import Presentation
 from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus
 from app.core.errors import AppError
 from app.db import session as db_session
-from app.db.models import CourseMaterial, KnowledgeChunk, Lesson, LessonPage, QuizQuestion, User
+from app.db.models import Course, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, QuizQuestion, User
 from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.learning import QUIZ_SOURCE_CONTEXT_HARD_LIMIT, _course_source_text_for_quiz
 
@@ -1193,6 +1193,134 @@ def test_qa_retries_with_rewritten_query_when_original_question_is_too_concrete(
     data = response.json()["data"]
     assert data["is_out_of_scope"] is False
     assert any("同题型解题模板" in item for item in captured["contexts"])
+
+
+def test_tutoring_guidance_uses_course_retrieval_and_rewrite_retry(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import tutoring as tutoring_service
+
+    problem_resp = client.post(
+        "/api/v1/tutoring/problems/text",
+        json={"course_id": course["id"], "text": "把样例里的数字换掉后，这一类题怎么做？"},
+        headers=student_headers,
+    )
+    assert problem_resp.status_code == 200, problem_resp.text
+    problem = problem_resp.json()["data"]
+
+    calls: list[str] = []
+
+    def fake_search(db, *, course_id, query, chapter_id=None, lesson_id=None, lesson_page_id=None, limit=5):
+        calls.append(query)
+        if "检索重点" in query:
+            return [
+                KnowledgeChunk(
+                    id=999,
+                    course_id=course_id,
+                    material_id=None,
+                    lesson_page_id=None,
+                    chapter_id=None,
+                    title="同题型模板",
+                    content="同题型解题模板：先分析条件，再匹配方法模板，最后按步骤作答。",
+                    tokens=None,
+                    embedding=None,
+                    source_meta={},
+                )
+            ]
+        return []
+
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(tutoring_service, "search_course_knowledge", fake_search)
+    monkeypatch.setattr(
+        tutoring_service.ai_service,
+        "rewrite_retrieval_query",
+        lambda **kwargs: "同题型 方法 模板 步骤\n检索重点：题型 方法 步骤",
+    )
+
+    def fake_generate_problem_guidance(**kwargs):
+        captured["contexts"] = list(kwargs.get("contexts") or [])
+        return "## 分步思路\n1. 先分析条件。\n2. 再匹配方法模板。"
+
+    monkeypatch.setattr(tutoring_service.ai_service, "generate_problem_guidance", fake_generate_problem_guidance)
+
+    guidance_resp = client.get(
+        f"/api/v1/tutoring/problems/{problem['id']}/guidance",
+        params={"level": 2},
+        headers=student_headers,
+    )
+
+    assert guidance_resp.status_code == 200, guidance_resp.text
+    assert len(calls) >= 2
+    assert any("检索重点" in query for query in calls)
+    assert any("同题型解题模板" in item for item in captured["contexts"])
+
+
+def test_qa_can_answer_out_of_scope_with_notice_when_course_setting_enabled(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    with db_session.SessionLocal() as db:
+        db_course = db.get(Course, course["id"])
+        assert db_course is not None
+        db_course.allow_general_ai_answer = True
+        db.add(db_course)
+        db.commit()
+
+    monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
+    monkeypatch.setattr(qa_service.ai_service, "rewrite_retrieval_query", lambda **kwargs: kwargs["question"])
+    monkeypatch.setattr(
+        qa_service.ai_service,
+        "answer_general_question",
+        lambda **kwargs: ("这是课程资料外的通用说明。", "通用推理"),
+    )
+
+    response = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "question": "这个课程没讲过的背景知识是什么？"},
+        headers=student_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["is_out_of_scope"] is True
+    assert "未在当前课程资料中检索到直接依据" in data["answer"]
+    assert "通用说明" in data["answer"]
+
+
+def test_tutoring_blocks_out_of_scope_guidance_when_course_setting_disabled(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import tutoring as tutoring_service
+
+    monkeypatch.setattr(tutoring_service, "search_course_knowledge", lambda *args, **kwargs: [])
+    monkeypatch.setattr(tutoring_service.ai_service, "rewrite_retrieval_query", lambda **kwargs: kwargs["question"])
+
+    guidance_called = {"value": False}
+
+    def fake_generate_problem_guidance(**kwargs):
+        guidance_called["value"] = True
+        return "不应走到这里"
+
+    monkeypatch.setattr(tutoring_service.ai_service, "generate_problem_guidance", fake_generate_problem_guidance)
+
+    problem_resp = client.post(
+        "/api/v1/tutoring/problems/text",
+        json={"course_id": course["id"], "text": "这道明显不在资料里的题怎么做？"},
+        headers=student_headers,
+    )
+    assert problem_resp.status_code == 200, problem_resp.text
+    problem = problem_resp.json()["data"]
+
+    guidance_resp = client.get(
+        f"/api/v1/tutoring/problems/{problem['id']}/guidance",
+        params={"level": 1},
+        headers=student_headers,
+    )
+
+    assert guidance_resp.status_code == 200, guidance_resp.text
+    assert guidance_called["value"] is False
+    assert "未开启“资料外也可回答”" in guidance_resp.json()["data"]["content"]
 
 
 def test_qa_image_attachment_uploads_and_participates_in_stream_answer(client, monkeypatch):

@@ -4,12 +4,17 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import ProblemSourceType, UserRole
 from app.core.errors import forbidden, not_found
-from app.db.models import CourseMembership, ProblemGuidance, ProblemRecord, User
+from app.db.models import Course, CourseMembership, KnowledgeChunk, ProblemGuidance, ProblemRecord, User
 from app.schemas.tutoring import ProblemTextRequest
 from app.services.ai import ai_service
+from app.services.knowledge import search_course_knowledge
 from app.services.ocr import ocr_service
 from app.services.storage import storage_service
 from app.services.usage import log_ai_usage
+
+_TUTORING_CONTEXT_LIMIT = 8
+_TUTORING_GENERAL_NOTICE = "提示：以下辅导未在当前课程资料中检索到直接依据，属于通用解题说明，请结合老师要求和课程内容自行核对。"
+_TUTORING_GENERAL_DISABLED_NOTICE = "当前课程资料中没有检索到可直接支撑这道题的内容，且本课程未开启“资料外也可回答”，请换一道与课程资料更相关的题，或联系老师开启该开关。"
 
 
 def _assert_student_course_access(db: Session, *, course_id: int, user: User) -> None:
@@ -32,11 +37,50 @@ def _student_course_scope(db: Session, *, user: User, course_id: int | None) -> 
     return course_ids[0] if len(course_ids) == 1 else None
 
 
+def _course_allows_general_ai_answer(db: Session, *, course_id: int) -> bool:
+    course = db.get(Course, course_id)
+    return bool(course and getattr(course, "allow_general_ai_answer", False))
+
+
 def _populate_problem_analysis(problem: ProblemRecord, text: str, db: Session) -> None:
     knowledge_points = ai_service.extract_knowledge_points(text, db=db)
     problem.corrected_text = text
     problem.knowledge_points = knowledge_points
     problem.common_mistakes = ai_service.generate_common_mistakes(knowledge_points, db=db)
+
+
+def _chunk_context(chunk: KnowledgeChunk) -> str:
+    title = chunk.title or "资料片段"
+    content = " ".join(str(chunk.content or "").split()).strip()
+    return f"资料片段：{title}\n{content[:1400]}".strip()
+
+
+def _problem_guidance_contexts(db: Session, *, course_id: int, problem_text: str) -> list[str]:
+    chunks = search_course_knowledge(
+        db,
+        course_id=course_id,
+        query=problem_text,
+        limit=_TUTORING_CONTEXT_LIMIT,
+    )
+    if not chunks:
+        rewritten_query = ai_service.rewrite_retrieval_query(question=problem_text, db=db)
+        if rewritten_query and rewritten_query.strip() != problem_text.strip():
+            chunks = search_course_knowledge(
+                db,
+                course_id=course_id,
+                query=rewritten_query,
+                limit=_TUTORING_CONTEXT_LIMIT,
+            )
+    contexts: list[str] = []
+    seen: set[str] = set()
+    for chunk in chunks:
+        text = _chunk_context(chunk)
+        key = " ".join(text.split())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        contexts.append(text)
+    return contexts
 
 
 def create_text_problem(db: Session, *, user: User, payload: ProblemTextRequest) -> ProblemRecord:
@@ -102,10 +146,18 @@ def get_problem_guidance(db: Session, *, problem_id: int, user: User, level: int
     if guidance is not None:
         return guidance
     source_text = problem.corrected_text or problem.ocr_text or problem.raw_text or ""
+    contexts = _problem_guidance_contexts(db, course_id=problem.course_id, problem_text=source_text)
+    allow_general_ai_answer = _course_allows_general_ai_answer(db, course_id=problem.course_id)
+    if contexts:
+        content = ai_service.generate_problem_guidance(problem_text=source_text, level=level, contexts=contexts, db=db)
+    elif allow_general_ai_answer:
+        content = f"{_TUTORING_GENERAL_NOTICE}\n\n{ai_service.generate_problem_guidance(problem_text=source_text, level=level, contexts=[], db=db)}".strip()
+    else:
+        content = _TUTORING_GENERAL_DISABLED_NOTICE
     guidance = ProblemGuidance(
         problem_id=problem_id,
         level=level,
-        content=ai_service.generate_problem_guidance(problem_text=source_text, level=level, db=db),
+        content=content,
         similar_questions=ai_service.generate_similar_questions(problem.knowledge_points or [], db=db),
     )
     db.add(guidance)

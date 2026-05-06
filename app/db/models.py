@@ -77,6 +77,7 @@ class Course(TimestampMixin, SoftDeleteMixin, Base):
     status: Mapped[str] = mapped_column(String(32), default=CourseStatus.ACTIVE.value)
     cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     cover_color: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    allow_general_ai_answer: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class CourseMembership(TimestampMixin, Base):
