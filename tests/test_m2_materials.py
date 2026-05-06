@@ -11,7 +11,7 @@ from sqlalchemy import select
 from app.db import session as db_session
 from app.db.models import AsyncTaskLog, CourseMaterial, KnowledgeChunk, Lesson, LessonPage
 from app.services.materials import _split_knowledge_text
-from app.services.parser import _localize_markdown_images, doc_parser_service, parse_material
+from app.services.parser import _localize_markdown_images, doc_parser_service, parse_material, sanitize_temporary_docmind_images
 from app.services.tts import markdown_to_speech_text, tts_service
 from app.services.vector_store import vector_store
 
@@ -211,6 +211,87 @@ def test_expired_docmind_markdown_images_are_not_kept(monkeypatch):
     assert temporary_url not in rewritten
     assert "OSSAccessKeyId" not in rewritten
     assert "图1" in rewritten
+
+
+def test_persisted_docmind_images_are_not_sanitized():
+    public_url = "https://classagent.oss-cn-hangzhou.aliyuncs.com/docmind_images/35/354b96c3bd960fd1060945e0a01b673f.jpeg"
+    content = f"说明 ![354b96c3bd960fd1060945e0a01b673f.jpeg]({public_url}) 结束"
+
+    rewritten = _localize_markdown_images(content, db=None, cache={})
+    sanitized = sanitize_temporary_docmind_images(rewritten)
+
+    assert public_url in rewritten
+    assert public_url in sanitized
+    assert "![354b96c3bd960fd1060945e0a01b673f.jpeg]" in sanitized
+
+
+def test_unsigned_docmind_oss_image_is_kept_when_download_fails(monkeypatch):
+    class FailingResponse:
+        headers = {}
+        content = b""
+
+        def raise_for_status(self):
+            import httpx
+
+            raise httpx.HTTPStatusError("forbidden", request=None, response=None)
+
+    class ExpiredClient:
+        def __init__(self, *args, **kwargs):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url):
+            return FailingResponse()
+
+    monkeypatch.setattr("app.services.parser.httpx.Client", ExpiredClient)
+    public_docmind_url = "https://docmind-api-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/publicDocStreamStructure/354b96c3bd960fd1060945e0a01b673f.jpeg"
+
+    rewritten = _localize_markdown_images(f"说明 ![课件图片]({public_docmind_url}) 结束", db=None, cache={})
+    sanitized = sanitize_temporary_docmind_images(rewritten)
+
+    assert public_docmind_url in rewritten
+    assert public_docmind_url in sanitized
+
+
+def test_expired_docmind_image_with_filename_alt_uses_placeholder(monkeypatch):
+    class FailingResponse:
+        headers = {}
+        content = b""
+
+        def raise_for_status(self):
+            import httpx
+
+            raise httpx.HTTPStatusError("forbidden", request=None, response=None)
+
+    class ExpiredClient:
+        def __init__(self, *args, **kwargs):
+            return None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url):
+            return FailingResponse()
+
+    monkeypatch.setattr("app.services.parser.httpx.Client", ExpiredClient)
+    temporary_url = "https://docmind-api-cn-hangzhou.oss-cn-hangzhou.aliyuncs.com/publicDocStreamStructure/10.jpeg?Expires=1&OSSAccessKeyId=STS.demo&Signature=abc"
+
+    rewritten = _localize_markdown_images(
+        f"说明 ![354b96c3bd960fd1060945e0a01b673f.jpeg]({temporary_url}) 结束",
+        db=None,
+        cache={},
+    )
+
+    assert "354b96c3bd960fd1060945e0a01b673f.jpeg" not in rewritten
+    assert "图片未能保存" in rewritten
 
 
 def test_markdown_to_speech_text_removes_markdown_and_links():
