@@ -174,7 +174,10 @@ def sanitize_quiz_source_text(source_text: str) -> str:
             continue
         if _cjk_count(clean) < 2 and not _has_formula_signal(clean):
             continue
-        pieces.append(clean[:420])
+        for index in range(0, len(clean), 420):
+            chunk = clean[index : index + 420].strip()
+            if chunk:
+                pieces.append(chunk)
     return "\n".join(pieces)
 
 
@@ -379,6 +382,66 @@ def _normalize_quiz_question_type(value: Any) -> str:
 
 
 _QUIZ_GENERATION_TYPES = {"single_choice", "multiple_choice", "judge", "blank", "short_answer"}
+
+
+def _quiz_has_calculation_context(source_text: str) -> bool:
+    return _has_formula_signal(source_text) or bool(
+        re.search(
+            r"(公式|计算|推导|矩阵|行列式|方程|函数|概率|统计|算法|复杂度|比例|百分比|利率|成本|收益|"
+            r"速度|面积|体积|浓度|电压|电流|求解|证明|\d+\s*[+\-*/=<>])",
+            source_text,
+        )
+    )
+
+
+def _quiz_generation_style_instruction(*, count: int, candidate_count: int, source_text: str) -> str:
+    applied_target = max(1, min(candidate_count, math.ceil(max(count, 1) * 0.6)))
+    concept_limit = max(1, math.floor(candidate_count * 0.35))
+    calculation_instruction = (
+        f"资料包含公式、算法、数量关系或推导信号，候选题中至少 {max(1, min(applied_target, candidate_count))} 道应为计算题、推导题、步骤题或条件判断题；"
+        if _quiz_has_calculation_context(source_text)
+        else "若当前知识点不适合计算，必须用案例分析题、场景应用题、例题变式题或错误诊断题替代计算题；"
+    )
+    return (
+        "题目风格硬性要求：不要只出概念记忆题；"
+        f"直接问定义、是什么、包括哪些、哪项表述正确的纯概念题最多 {concept_limit} 道候选题；"
+        f"至少 {applied_target} 道候选题必须是应用题、计算题、案例题、例题变式题、错误诊断题或综合分析题；"
+        "items 数组前面的题目优先放应用/计算/案例/变式题，概念题放在后面，避免系统选题时只选到概念题；"
+        "应用型题目必须给出具体情境、条件、数据、公式、案例、学生错误答案或新例子，要求学生计算结果、选择方案、分析原因、判断适用条件或说明步骤；"
+        "可以基于资料中的知识点构造新的小案例、新数值和新例题，但结论必须能由课程资料知识点和通用学科知识推出；"
+        f"{calculation_instruction}"
+        "禁止所有题干都写成“下列说法正确的是/哪一项正确/是什么”。"
+    )
+
+
+_QUIZ_APPLIED_STEM_PATTERN = re.compile(
+    r"(案例|场景|情境|应用|计算|求|推导|步骤|分析|原因|影响|条件|方案|设计|选择.*方案|给定|已知|假设|"
+    r"若|如果|当.*时|错误|诊断|改正|判断.*适用|例题|变式|实际|业务|工程|实验|数据|表格|代码|算法|"
+    r"成本|收益|概率|矩阵|行列式|方程|函数|证明)"
+)
+_QUIZ_CONCEPT_STEM_PATTERN = re.compile(r"(是什么|定义|包括哪些|哪一项正确|哪项正确|说法正确|表示什么|属于哪)")
+
+
+def _quiz_application_score(question: dict) -> int:
+    stem = str(question.get("stem") or "")
+    score = 0
+    if _QUIZ_APPLIED_STEM_PATTERN.search(stem):
+        score += 3
+    if question.get("question_type") in {"blank", "short_answer"} and re.search(r"(分析|说明|解释|比较|步骤|原因)", stem):
+        score += 1
+    if _QUIZ_CONCEPT_STEM_PATTERN.search(stem):
+        score -= 2
+    return score
+
+
+def _prioritize_quiz_question_mix(questions: list[dict]) -> list[dict]:
+    return [
+        question
+        for _index, question in sorted(
+            enumerate(questions),
+            key=lambda item: (-_quiz_application_score(item[1]), item[0]),
+        )
+    ]
 
 
 def _select_quiz_questions_by_type_counts(
@@ -1181,7 +1244,7 @@ class AIService:
     ) -> list[dict]:
         clean_source = sanitize_quiz_source_text(source_text)
         if not clean_source.strip():
-            raise bad_request("课程资料清洗后没有足够文本，无法调用 AI 出题")
+            raise bad_request("课程资料或知识点清洗后没有足够文本，无法调用 AI 出题")
         normalized_type_counts = {
             key: int(value)
             for key, value in (type_counts or {}).items()
@@ -1190,7 +1253,6 @@ class AIService:
         if normalized_type_counts and sum(normalized_type_counts.values()) != count:
             raise bad_request("题型数量合计必须等于总题量")
         candidate_count = min(20, max(count + 4, math.ceil(count * 1.8)))
-        source_limit = max(1800, min(5200, 360 * max(candidate_count, 1)))
         completion_limit = max(2800, min(6500, 340 * max(candidate_count, 1) + 1900))
         type_instruction = (
             "题型分布必须严格满足："
@@ -1199,12 +1261,21 @@ class AIService:
             if normalized_type_counts
             else ""
         )
+        style_instruction = _quiz_generation_style_instruction(
+            count=count,
+            candidate_count=candidate_count,
+            source_text=clean_source,
+        )
         base_prompt = (
-            f"考查主题：{topic}\n课程资料：{clean_source[:source_limit]}\n"
+            f"考查主题/知识点：{topic}\n课程资料与知识点：{clean_source}\n"
             f"目标题目数量：{count}\n候选题数量：{candidate_count}\n"
-            "要求：只能依据课程资料出题；候选题可以多于目标数量，便于教师从有效题中筛选；"
+            "要求：围绕课程资料中呈现的知识点出题，不能机械照搬资料原句；"
+            "可以结合该知识点的通用学科知识、典型应用场景、例题变式和必要背景补全题目；"
+            "不得偏离考查主题/知识点，不得引入与当前课程无关的新知识点；"
+            "候选题可以多于目标数量，便于教师从有效题中筛选；"
             f"{type_instruction}"
-            "题干必须包含资料中的具体概念、定义、公式、案例或事实；"
+            f"{style_instruction}"
+            "题干必须明确指向资料中的具体概念、定义、公式、案例、事实或对应知识点；"
             "禁止把“章节练习、薄弱点章节练习、错题重练、测验”等练习名称当作考点；"
             "禁止把第几页、图片名、URL、OSS域名、文件hash、文件扩展名当作考点或选项；"
             "单选题和多选题必须有 4 个选项，判断题必须只有“正确/错误”两个选项；"
@@ -1215,7 +1286,7 @@ class AIService:
             "直接事实题（例如问“何时、哪个阶段、是什么、哪一项”）必须生成选择题或判断题，不能生成简答题；"
             "简答题只能用于“简述、说明、解释、分析、比较、作用、关系、步骤”等需要展开回答的题，"
             "reference_answer 必须使用 {\"keywords\":[\"关键词\"]}；"
-            "如果资料不足以出题，返回 {\"items\":[]}。\n"
+            "如果课程资料和知识点都不足以确定考查范围，返回 {\"items\":[]}。\n"
             "返回格式：{\"items\":[{\"question_type\":\"single_choice|multiple_choice|judge|blank|short_answer\","
             "\"stem\":\"\",\"options\":[\"\"],\"reference_answer\":{},\"explanation\":\"\",\"score\":10,\"difficulty\":\"standard\"}]}"
         )
@@ -1238,9 +1309,10 @@ class AIService:
         seen_stems: set[str] = set()
         normalized = _normalize_quiz_questions_from_payload(
             payload,
-            count=candidate_count if normalized_type_counts else count,
+            count=candidate_count,
             seen_stems=seen_stems,
         )
+        normalized = _prioritize_quiz_question_mix(normalized)
         if normalized_type_counts:
             selected, missing_by_type = _select_quiz_questions_by_type_counts(normalized, normalized_type_counts)
             if not missing_by_type:
@@ -1255,11 +1327,13 @@ class AIService:
             purpose="quiz",
             system_prompt="你是课程测验题生成助手。请只返回一个 JSON 对象，不要输出解释文字，不要使用 Markdown 代码块。",
             user_prompt=(
-                f"考查主题：{topic}\n课程资料：{clean_source[:source_limit]}\n"
+                f"考查主题/知识点：{topic}\n课程资料与知识点：{clean_source}\n"
                 f"已有有效题干：{[item['stem'] for item in normalized]}\n"
                 f"还缺少 {missing} 道有效题，请再生成 {retry_count} 道不同候选题。\n"
                 f"{'缺少题型：' + '、'.join(f'{key} {value} 道' for key, value in missing_by_type.items()) + '。' if normalized_type_counts else ''}"
-                "要求同前：只能依据课程资料出题；题干避开已有题干；"
+                "要求同前：围绕课程资料中的知识点出题，可结合通用学科知识生成应用和变式题；"
+                "不得偏离考查主题/知识点；题干避开已有题干；"
+                f"{style_instruction}"
                 "question_type 只能使用 single_choice、multiple_choice、judge、blank、short_answer；"
                 "单选/多选 4 个选项，判断题使用正确/错误，reference_answer 使用 0 基下标、下标数组或 keywords。"
                 "返回格式：{\"items\":[{\"question_type\":\"single_choice|multiple_choice|judge|blank|short_answer\","
@@ -1278,10 +1352,11 @@ class AIService:
             normalized.extend(
                 _normalize_quiz_questions_from_payload(
                     retry_payload,
-                    count=retry_count if normalized_type_counts else missing,
+                    count=retry_count,
                     seen_stems=seen_stems,
                 )
             )
+            normalized = _prioritize_quiz_question_mix(normalized)
             if normalized_type_counts:
                 selected, missing_by_type = _select_quiz_questions_by_type_counts(normalized, normalized_type_counts)
                 if not missing_by_type:
