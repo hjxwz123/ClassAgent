@@ -107,6 +107,7 @@
 .qa-modern-page .ref-label,.qa-modern-page .source-label{display:inline-flex;align-items:center;gap:4px;color:var(--qa-hint);font-size:13px;font-weight:600}
 .qa-modern-page .ref-tag,.qa-modern-page .source-tags .tag{min-height:24px;display:inline-flex;align-items:center;border:0;border-radius:var(--qa-pill);background:var(--qa-primary-50);color:var(--qa-primary-600);padding:0 12px;font-size:12px;font-weight:700}
 .qa-modern-page .ref-tag:hover,.qa-modern-page .source-tags .tag:hover{background:var(--qa-primary-100)}
+.qa-modern-page .source-toggle,.class-chat .source-toggle{cursor:pointer}
 .qa-modern-page .ai-action-bar,.qa-modern-page .msg-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px;opacity:1}
 .qa-modern-page .ai-action-btn,.qa-modern-page .msg-actions button{width:auto;min-width:0;min-height:34px;display:inline-flex;align-items:center;justify-content:center;gap:6px;overflow:visible;border:0;border-radius:10px;background:transparent;color:var(--qa-hint);padding:0 10px;font-size:13px;font-weight:700;white-space:nowrap}
 .qa-modern-page .ai-action-btn:disabled,.qa-modern-page .msg-actions button:disabled{cursor:not-allowed;opacity:.45}
@@ -142,6 +143,7 @@
 .class-chat .source-tags{display:flex;align-items:center;flex-wrap:wrap;gap:6px;border-top:1px dashed var(--class-chat-border);margin-top:10px;padding-top:10px}
 .class-chat .source-label{display:inline-flex;align-items:center;gap:4px;color:var(--class-chat-muted);font-size:12px;font-weight:700}
 .class-chat .source-tags .tag{min-height:22px;border-radius:9999px;background:var(--class-chat-primary-50);color:var(--class-chat-primary);padding:0 9px;font-size:12px;font-weight:700}
+.class-chat .source-toggle{border:0}
 .class-chat .msg-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;opacity:1}
 .class-chat .msg-actions button{width:auto;min-height:30px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border:0;border-radius:8px;background:transparent;color:var(--class-chat-muted);padding:0 8px;font-size:12px;font-weight:700;white-space:nowrap}
 .class-chat .msg-actions button:hover:not(:disabled){background:#f8fafc;color:var(--class-chat-text)}
