@@ -943,6 +943,25 @@
   color: var(--ca-role-student-primary) !important;
 }
 
+.student-shell .course-qa-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.student-shell .course-qa-wide .ask-card,
+.student-shell .course-qa-wide .recent-qa-card {
+  width: 100%;
+}
+
+.student-shell .course-qa-wide .qa-mini p {
+  display: -webkit-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
 .student-shell .quiz-hero-card {
   position: relative;
   overflow: hidden;
