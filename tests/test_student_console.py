@@ -54,6 +54,18 @@ def test_student_dashboard_without_courses_has_no_ai_recommendation(client):
     assert dashboard["recommendation"]["text"] == ""
     assert dashboard["recommendation"]["based_on"]["courses"] == 0
 
+    admin_headers = auth_headers(login_user(client, email="admin@classagent.com", password="Admin123456")["access_token"])
+    announcement_resp = client.put("/api/v1/admin/system-settings/system.announcement", json={"value": "学生端公告"}, headers=admin_headers)
+    assert announcement_resp.status_code == 200, announcement_resp.text
+    enable_resp = client.put("/api/v1/admin/system-settings/system.announcement_enabled", json={"value": True}, headers=admin_headers)
+    assert enable_resp.status_code == 200, enable_resp.text
+    notifications_response = client.get("/api/v1/student/notifications", headers=student_headers)
+    assert notifications_response.status_code == 200, notifications_response.text
+    assert any(
+        item["type"] == "system_announcement" and item["message"] == "学生端公告"
+        for item in notifications_response.json()["data"]
+    )
+
 
 def prepare_student_workspace(client):
     teacher = register_user(

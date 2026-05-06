@@ -415,7 +415,7 @@
                       <div class="param-desc">{{ item.desc }}</div>
                     </div>
                     <div class="param-control">
-                      <component :is="settingControl(item)" :item="item" :drafts="settingDrafts" />
+                      <SettingControl :item="item" :drafts="settingDrafts" />
                     </div>
                     <div class="param-current">当前值：{{ formatSettingValue(settingDrafts[item.key]) }}</div>
                   </div>
@@ -919,28 +919,28 @@ function formatSettingValue(value: unknown) {
   if (typeof value === "object") return JSON.stringify(value);
   return String(value ?? "");
 }
-function settingControl(item: any) {
-  return defineComponent({
-    props: { item: { type: Object, required: true }, drafts: { type: Object, required: true } },
-    setup(innerProps) {
-      return () => {
-        const key = innerProps.item.key;
-        const update = (event: Event) => { innerProps.drafts[key] = (event.target as HTMLInputElement).value; };
-        if (innerProps.item.type === "number") return h("input", { class: "input form-control", type: "number", value: innerProps.drafts[key], onInput: (event: Event) => { innerProps.drafts[key] = Number((event.target as HTMLInputElement).value); } });
-        if (innerProps.item.type === "range") return h(AppSlider, { modelValue: Number(innerProps.drafts[key] || 0), min: innerProps.item.min, max: innerProps.item.max, "onUpdate:modelValue": (value: number) => { innerProps.drafts[key] = value; } });
-        if (innerProps.item.type === "toggle") return h(AppCheckbox, { modelValue: !!innerProps.drafts[key], label: "启用", variant: "switch", "onUpdate:modelValue": (value: boolean) => { innerProps.drafts[key] = value; } });
-        if (innerProps.item.type === "textarea") return h("textarea", { class: "textarea form-control", value: innerProps.drafts[key], onInput: update });
-        if (innerProps.item.type === "select") return h(AppSelect, { modelValue: innerProps.drafts[key], options: innerProps.item.options.map((option: string) => ({ label: option, value: option })), "onUpdate:modelValue": (value: unknown) => { innerProps.drafts[key] = value; } });
-        if (innerProps.item.type === "checks") return h("div", { class: "checkbox-group" }, innerProps.item.options.map((option: string) => h(AppCheckbox, { label: option, modelValue: Array.isArray(innerProps.drafts[key]) && innerProps.drafts[key].includes(option), "onUpdate:modelValue": (checked: boolean) => {
-          const current = Array.isArray(innerProps.drafts[key]) ? [...innerProps.drafts[key]] : [];
-          innerProps.drafts[key] = checked ? [...new Set([...current, option])] : current.filter((value) => value !== option);
-        } })));
-        if (innerProps.item.type === "json") return h("textarea", { class: "textarea form-control", value: JSON.stringify(innerProps.drafts[key] || {}, null, 2), onInput: (event: Event) => { try { innerProps.drafts[key] = JSON.parse((event.target as HTMLTextAreaElement).value || "{}"); } catch { innerProps.drafts[key] = (event.target as HTMLTextAreaElement).value; } } });
-        return h("input", { class: "input form-control", value: innerProps.drafts[key], onInput: update });
-      };
-    }
-  });
-}
+const SettingControl = defineComponent({
+  props: { item: { type: Object, required: true }, drafts: { type: Object, required: true } },
+  setup(innerProps) {
+    return () => {
+      const key = (innerProps.item as any).key;
+      const item = innerProps.item as any;
+      const drafts = innerProps.drafts as Record<string, any>;
+      const update = (event: Event) => { drafts[key] = (event.target as HTMLInputElement).value; };
+      if (item.type === "number") return h("input", { class: "input form-control", type: "number", value: drafts[key], onInput: (event: Event) => { drafts[key] = Number((event.target as HTMLInputElement).value); } });
+      if (item.type === "range") return h(AppSlider, { modelValue: Number(drafts[key] || 0), min: item.min, max: item.max, "onUpdate:modelValue": (value: number) => { drafts[key] = value; } });
+      if (item.type === "toggle") return h(AppCheckbox, { modelValue: !!drafts[key], label: "启用", variant: "switch", "onUpdate:modelValue": (value: boolean) => { drafts[key] = value; } });
+      if (item.type === "textarea") return h("textarea", { class: "textarea form-control", value: drafts[key], onInput: update });
+      if (item.type === "select") return h(AppSelect, { modelValue: drafts[key], options: item.options.map((option: string) => ({ label: option, value: option })), "onUpdate:modelValue": (value: unknown) => { drafts[key] = value; } });
+      if (item.type === "checks") return h("div", { class: "checkbox-group" }, item.options.map((option: string) => h(AppCheckbox, { label: option, modelValue: Array.isArray(drafts[key]) && drafts[key].includes(option), "onUpdate:modelValue": (checked: boolean) => {
+        const current = Array.isArray(drafts[key]) ? [...drafts[key]] : [];
+        drafts[key] = checked ? [...new Set([...current, option])] : current.filter((value) => value !== option);
+      } })));
+      if (item.type === "json") return h("textarea", { class: "textarea form-control", value: JSON.stringify(drafts[key] || {}, null, 2), onInput: (event: Event) => { try { drafts[key] = JSON.parse((event.target as HTMLTextAreaElement).value || "{}"); } catch { drafts[key] = (event.target as HTMLTextAreaElement).value; } } });
+      return h("input", { class: "input form-control", value: drafts[key], onInput: update });
+    };
+  }
+});
 
 async function loadDashboard() {
   dashboard.value = (await run(() => api.get("/admin/dashboard", { activity_days: trendDays.value }))) || {};
