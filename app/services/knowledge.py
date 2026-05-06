@@ -5,10 +5,9 @@ from collections import Counter
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-import re
-
 from app.db.models import Chapter, KnowledgeChunk, KnowledgePoint, LessonPage
 from app.services.ai import ai_service
+from app.services.retrieval import build_retrieval_query_variants, page_numbers_from_query, query_terms, score_text_for_query
 from app.services.vector_store import vector_store
 
 
@@ -43,11 +42,12 @@ def search_course_knowledge(
     lesson_page_id: int | None = None,
     limit: int = 5,
 ) -> list[KnowledgeChunk]:
+    query_variants = build_retrieval_query_variants(query, limit=6)
     try:
-        rows = vector_store.query_course(
+        rows = _query_course_variants(
             db,
             course_id=course_id,
-            query=query,
+            queries=query_variants,
             chapter_id=chapter_id,
             lesson_id=lesson_id,
             lesson_page_id=lesson_page_id,
@@ -70,10 +70,10 @@ def search_course_knowledge(
             try:
                 vector_store.upsert_chunks(db, chunks=chunks_to_index)
                 db.commit()
-                rows = vector_store.query_course(
+                rows = _query_course_variants(
                     db,
                     course_id=course_id,
-                    query=query,
+                    queries=query_variants,
                     chapter_id=chapter_id,
                     lesson_id=lesson_id,
                     lesson_page_id=lesson_page_id,
@@ -124,13 +124,12 @@ def _relational_chunk_fallback(
     chunks = list(db.scalars(statement.order_by(KnowledgeChunk.chapter_id.is_(None), KnowledgeChunk.chapter_id, KnowledgeChunk.id).limit(160)))
     if not chunks:
         return []
-    keywords = _query_terms(query)
-    page_numbers = _page_numbers_from_query(query)
+    keywords = query_terms(query)
+    page_numbers = page_numbers_from_query(query)
 
     def score(chunk: KnowledgeChunk) -> tuple[int, int]:
         source_meta = dict(chunk.source_meta or {})
-        text = f"{chunk.title} {chunk.content}".lower()
-        keyword_score = sum(2 + min(len(keyword), 8) for keyword in keywords if keyword and keyword in text)
+        keyword_score = score_text_for_query(title=chunk.title, text=chunk.content, page_number=None, query=query)
         token_score = sum(3 for token in chunk.tokens or [] if str(token).lower() in keywords)
         page_score = 0
         try:
@@ -145,30 +144,36 @@ def _relational_chunk_fallback(
     return [chunk for chunk in ranked if score(chunk)[0] > 0][:limit] or ranked[:limit]
 
 
-def _page_numbers_from_query(query: str) -> set[int]:
-    numbers: set[int] = set()
-    for pattern in (r"第\s*(\d{1,4})\s*页", r"(?<!\d)(\d{1,4})\s*页", r"\bp\s*(\d{1,4})\b"):
-        for value in re.findall(pattern, query, flags=re.IGNORECASE):
-            number = int(value)
-            if number > 0:
-                numbers.add(number)
-    return numbers
-
-
-def _query_terms(query: str) -> list[str]:
-    terms: list[str] = []
-    candidates = [*ai_service.extract_keywords(query, limit=12), *re.findall(r"[\u4e00-\u9fffA-Za-z0-9]{2,16}", query)]
-    for phrase in re.findall(r"[\u4e00-\u9fff]{3,16}", query):
-        for size in (4, 3, 2):
-            candidates.extend(phrase[index : index + size] for index in range(max(len(phrase) - size + 1, 0)))
-    stopwords = {"这个", "那个", "什么", "请问", "关于", "内容", "解释", "怎么", "如何", "为什么", "当前问题", "前序对话"}
-    for item in candidates:
-        term = str(item).strip().lower()
-        if not term or term.isdigit() or len(term) < 2 or term in stopwords:
-            continue
-        if term not in terms:
-            terms.append(term)
-    return terms[:16]
+def _query_course_variants(
+    db: Session,
+    *,
+    course_id: int,
+    queries: list[str],
+    chapter_id: int | None,
+    lesson_id: int | None,
+    lesson_page_id: int | None,
+    limit: int,
+) -> list[tuple[int, float | None]]:
+    merged: dict[int, tuple[float, int, int, float | None]] = {}
+    per_query_limit = max(limit, 4)
+    for query_index, variant in enumerate(queries):
+        rows = vector_store.query_course(
+            db,
+            course_id=course_id,
+            query=variant,
+            chapter_id=chapter_id,
+            lesson_id=lesson_id,
+            lesson_page_id=lesson_page_id,
+            limit=per_query_limit,
+        )
+        for row_index, (chunk_id, distance) in enumerate(rows):
+            rank = distance if distance is not None else 9_999.0
+            candidate = (rank, query_index, row_index, distance)
+            current = merged.get(chunk_id)
+            if current is None or candidate < current:
+                merged[chunk_id] = candidate
+    ranked = sorted(merged.items(), key=lambda item: item[1])
+    return [(chunk_id, meta[3]) for chunk_id, meta in ranked[:limit]]
 
 
 def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None = None) -> list[KnowledgePoint]:

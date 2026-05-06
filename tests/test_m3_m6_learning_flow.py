@@ -8,7 +8,7 @@ from pptx import Presentation
 from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus
 from app.core.errors import AppError
 from app.db import session as db_session
-from app.db.models import CourseMaterial, Lesson, LessonPage, QuizQuestion, User
+from app.db.models import CourseMaterial, KnowledgeChunk, Lesson, LessonPage, QuizQuestion, User
 from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.learning import QUIZ_SOURCE_CONTEXT_HARD_LIMIT, _course_source_text_for_quiz
 
@@ -1081,6 +1081,118 @@ def test_qa_falls_back_to_database_chunks_when_vector_store_is_readonly(client, 
     assert data["is_out_of_scope"] is False
     assert captured["contexts"]
     assert data["sources"]
+
+
+def test_search_course_knowledge_generalizes_numeric_examples(client, monkeypatch):
+    course, _chapter, lesson_id, _teacher_headers, _student_headers = bootstrap_course_with_material(client)
+
+    from app.services import knowledge as knowledge_service
+
+    with db_session.SessionLocal() as db:
+        page = db.scalar(select(LessonPage).where(LessonPage.lesson_id == lesson_id, LessonPage.page_number == 1))
+        assert page is not None
+        page.page_title = "加法步骤"
+        page.page_text = "1+2 的解决步骤：先识别两个加数，再按照加法规则求和。"
+        page.script_text = "这个例子说明两个数相加时可以先看操作数，再执行加法。"
+        db.add(page)
+
+        chunks = list(db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.lesson_page_id == page.id)))
+        assert chunks
+        for chunk in chunks:
+            chunk.title = "加法步骤"
+            chunk.content = (
+                "资料：算术示例\n"
+                "页码：第1页\n"
+                "页面标题：加法步骤\n"
+                "页面内容：1+2 的解决步骤：先识别两个加数，再按照加法规则求和。"
+            )
+            chunk.tokens = ["加法", "步骤", "求和", "1+2"]
+            db.add(chunk)
+        db.commit()
+
+        monkeypatch.setattr(knowledge_service.vector_store, "query_course", lambda *args, **kwargs: [])
+        monkeypatch.setattr(knowledge_service.vector_store, "upsert_chunks", lambda *args, **kwargs: None)
+
+        chunks = knowledge_service.search_course_knowledge(
+            db,
+            course_id=course["id"],
+            query="8+9 怎么做？",
+            lesson_id=lesson_id,
+            limit=5,
+        )
+
+    assert chunks
+    assert any("1+2" in chunk.content for chunk in chunks)
+
+
+def test_qa_page_keyword_context_generalizes_numeric_examples(client):
+    course, _chapter, lesson_id, _teacher_headers, _student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    with db_session.SessionLocal() as db:
+        page = db.scalar(select(LessonPage).where(LessonPage.lesson_id == lesson_id, LessonPage.page_number == 1))
+        assert page is not None
+        page.page_title = "加法步骤"
+        page.page_text = "1+2 的解决步骤：先识别两个加数，再按照加法规则求和。"
+        page.script_text = None
+        db.add(page)
+        db.commit()
+
+        contexts, sources = qa_service._page_keyword_context(
+            db,
+            course_id=course["id"],
+            query="8+9 怎么做？",
+            lesson_id=lesson_id,
+            limit=3,
+        )
+
+    assert contexts
+    assert any("1+2" in item for item in contexts)
+    assert any(source.get("page_number") == 1 for source in sources)
+
+
+def test_qa_retries_with_rewritten_query_when_original_question_is_too_concrete(client, monkeypatch):
+    course, _chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    with db_session.SessionLocal() as db:
+        pages = list(db.scalars(select(LessonPage).where(LessonPage.lesson_id == lesson_id).order_by(LessonPage.page_number)))
+        assert len(pages) >= 2
+        first_page = pages[0]
+        second_page = pages[1]
+        first_page.page_title = "题型模板"
+        first_page.page_text = "同题型解题模板：先分析条件，再匹配方法模板，最后按步骤作答。"
+        first_page.script_text = None
+        db.add(first_page)
+        db.commit()
+        second_page_id = second_page.id
+
+    captured: dict[str, list[str]] = {}
+    monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        qa_service.ai_service,
+        "rewrite_retrieval_query",
+        lambda **kwargs: "同题型 解题模板 步骤 方法",
+    )
+
+    def answer_question(**kwargs):
+        captured["contexts"] = list(kwargs["contexts"])
+        return "先分析条件，再匹配方法模板。", False, None
+
+    monkeypatch.setattr(qa_service.ai_service, "answer_question", answer_question)
+
+    response = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "lesson_page_id": second_page_id, "question": "把样例里的人名和数字换掉后，这种题怎么做？"},
+        headers=student_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["is_out_of_scope"] is False
+    assert any("同题型解题模板" in item for item in captured["contexts"])
 
 
 def test_qa_image_attachment_uploads_and_participates_in_stream_answer(client, monkeypatch):

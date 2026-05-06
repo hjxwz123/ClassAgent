@@ -16,6 +16,7 @@ from app.services.ai import ai_service
 from app.services.knowledge import search_course_knowledge
 from app.services.parser import _extract_text_payload
 from app.services.ocr import ocr_service
+from app.services.retrieval import page_numbers_from_query, query_terms, score_text_for_query
 from app.services.storage import storage_service
 from app.services.usage import log_ai_usage
 
@@ -250,41 +251,22 @@ def _question_with_history_for_retrieval(question: str, history: list[dict[str, 
 
 
 def _page_numbers_from_query(query: str) -> set[int]:
-    numbers: set[int] = set()
-    for pattern in (r"第\s*(\d{1,4})\s*页", r"(?<!\d)(\d{1,4})\s*页", r"\bp\s*(\d{1,4})\b"):
-        for value in re.findall(pattern, query, flags=re.IGNORECASE):
-            number = int(value)
-            if number > 0:
-                numbers.add(number)
-    return numbers
+    return page_numbers_from_query(query)
 
 
 def _query_terms(query: str) -> list[str]:
-    terms: list[str] = []
-    candidates = [*ai_service.extract_keywords(query, limit=12), *re.findall(r"[\u4e00-\u9fffA-Za-z0-9]{2,16}", query)]
-    for phrase in re.findall(r"[\u4e00-\u9fff]{3,16}", query):
-        for size in (4, 3, 2):
-            candidates.extend(phrase[index : index + size] for index in range(max(len(phrase) - size + 1, 0)))
-    for item in candidates:
-        term = str(item).strip().lower()
-        if not term or term.isdigit() or term in _QA_QUERY_STOPWORDS or len(term) < 2:
-            continue
-        if term not in terms:
-            terms.append(term)
-    return terms[:14]
+    return query_terms(query, stopwords=_QA_QUERY_STOPWORDS, limit=14)
 
 
 def _score_text_for_query(*, title: str, text: str, page_number: int | None, query: str) -> int:
-    page_numbers = _page_numbers_from_query(query)
-    terms = _query_terms(query)
-    haystack = f"{title}\n{text}".lower()
-    score = 0
-    if page_number is not None and page_number in page_numbers:
-        score += 100
-    for term in terms:
-        if term in haystack:
-            score += 5 + min(len(term), 12)
-    return score
+    return score_text_for_query(
+        title=title,
+        text=text,
+        page_number=page_number,
+        query=query,
+        stopwords=_QA_QUERY_STOPWORDS,
+        term_limit=14,
+    )
 
 
 def _page_context_text(page: LessonPage, lesson: Lesson) -> str:
@@ -603,7 +585,14 @@ def _merge_contexts(primary: list[str], chunks: list[KnowledgeChunk], trailing: 
     return contexts
 
 
-def _qa_contexts_and_sources(db: Session, *, course_id: int, payload: QAAskRequest, question_for_ai: str) -> tuple[list[str], list[dict], list]:
+def _qa_contexts_and_sources(
+    db: Session,
+    *,
+    course_id: int,
+    payload: QAAskRequest,
+    question_for_ai: str,
+    history: list[dict[str, str]] | None = None,
+) -> tuple[list[str], list[dict], list]:
     course = db.get(Course, course_id)
     chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
     chapter_rows = [{"id": chapter.id, "title": chapter.title, "order_index": chapter.order_index} for chapter in chapters]
@@ -637,6 +626,28 @@ def _qa_contexts_and_sources(db: Session, *, course_id: int, payload: QAAskReque
         exclude_page_id=payload.lesson_page_id,
         limit=_QA_RELATED_PAGE_CONTEXT_LIMIT,
     )
+    rewritten_query = ""
+    if not chunks and not related_page_contexts:
+        rewritten_query = ai_service.rewrite_retrieval_query(question=payload.question, history=history, db=db)
+        if rewritten_query and rewritten_query.strip() not in {payload.question.strip(), question_for_ai.strip()}:
+            chunks = search_course_knowledge(
+                db,
+                course_id=course_id,
+                query=rewritten_query,
+                chapter_id=None if lesson_id is not None else retrieval_chapter_id,
+                lesson_id=lesson_id,
+                lesson_page_id=None,
+                limit=_QA_DETAIL_VECTOR_CONTEXT_LIMIT if lesson_id is not None else _QA_VECTOR_CONTEXT_LIMIT,
+            )
+            related_page_contexts, related_page_sources = _page_keyword_context(
+                db,
+                course_id=course_id,
+                query=rewritten_query,
+                lesson_id=lesson_id,
+                chapter_id=fallback_chapter_id,
+                exclude_page_id=payload.lesson_page_id,
+                limit=_QA_RELATED_PAGE_CONTEXT_LIMIT,
+            )
     lesson_outline_contexts, lesson_outline_sources = _lesson_outline_context(db, course_id=course_id, lesson_id=lesson_id)
     chapter_contexts: list[str] = []
     chapter_sources: list[dict] = []
@@ -649,7 +660,13 @@ def _qa_contexts_and_sources(db: Session, *, course_id: int, payload: QAAskReque
     if scope == "course_overview" and not page_contexts and not chapter_contexts:
         course_contexts, course_sources = _course_context(db, course_id=course_id)
     if not related_page_contexts and not chunks:
-        material_contexts, material_sources = _material_keyword_context(db, course_id=course_id, query=question_for_ai, chapter_id=fallback_chapter_id)
+        material_query = rewritten_query or question_for_ai
+        material_contexts, material_sources = _material_keyword_context(
+            db,
+            course_id=course_id,
+            query=material_query,
+            chapter_id=fallback_chapter_id,
+        )
     contexts = _merge_contexts(
         [*page_contexts, *related_page_contexts, *chapter_contexts, *course_contexts, *material_contexts],
         chunks,
@@ -696,7 +713,13 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
     attachments = _attachment_dicts(payload)
     question_for_ai = _question_with_attachments(payload.question, attachments)
     retrieval_question = _question_with_history_for_retrieval(question_for_ai, history_for_prompt)
-    contexts, sources, _chunks = _qa_contexts_and_sources(db, course_id=payload.course_id, payload=payload, question_for_ai=retrieval_question)
+    contexts, sources, _chunks = _qa_contexts_and_sources(
+        db,
+        course_id=payload.course_id,
+        payload=payload,
+        question_for_ai=retrieval_question,
+        history=history_for_prompt,
+    )
     answer, out_of_scope, thinking_process = ai_service.answer_question(
         question=question_for_ai,
         contexts=contexts,
@@ -740,7 +763,13 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
     attachments = _attachment_dicts(payload)
     question_for_ai = _question_with_attachments(payload.question, attachments)
     retrieval_question = _question_with_history_for_retrieval(question_for_ai, history_for_prompt)
-    contexts, sources, _chunks = _qa_contexts_and_sources(db, course_id=payload.course_id, payload=payload, question_for_ai=retrieval_question)
+    contexts, sources, _chunks = _qa_contexts_and_sources(
+        db,
+        course_id=payload.course_id,
+        payload=payload,
+        question_for_ai=retrieval_question,
+        history=history_for_prompt,
+    )
     out_of_scope = not contexts
     answer_parts: list[str] = []
     thought_parts: list[str] = []
