@@ -1167,6 +1167,48 @@ class AIService:
         )
         return answer, False, "本次使用本地降级逻辑：根据检索到的课程片段生成回答，未收到上游模型思考过程。"
 
+    def answer_general_question(
+        self,
+        *,
+        question: str,
+        history: Sequence[Any] | None = None,
+        db: Session | None = None,
+    ) -> tuple[str, str | None]:
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "你是课程问答助手。当前问题没有检索到课程资料中的直接依据。"
+                    "你可以基于通用知识回答，但不要伪造课程资料来源，不要声称课程里明确讲过。"
+                    "请直接回答问题本身，使用 Markdown 输出；如果涉及公式，使用 $...$ 或 $$...$$ 包裹 LaTeX。"
+                ),
+            },
+            *self._normalize_history_messages(history),
+            {
+                "role": "user",
+                "content": f"学生问题：{question}\n请给出清晰、谨慎的通用说明。",
+            },
+        ]
+        result = self._call_chat_with_meta(
+            db,
+            purpose="qa",
+            system_prompt=messages[0]["content"],
+            user_prompt=messages[-1]["content"],
+            messages=messages,
+        )
+        if result:
+            return result.content.strip(), result.reasoning
+        history_hint = ""
+        history_items = self._history_hint_items(history)
+        if history_items:
+            history_hint = f"\n可结合前序问题“{history_items[-1][:40]}”继续核对你的理解。"
+        answer = (
+            f"这是一个需要依赖通用知识来回答的问题：{question}\n"
+            "建议先明确题目对象、已知条件、目标，再选择相应概念、公式、方法或题型模板。"
+            f"{history_hint}"
+        )
+        return answer, "本次未检索到课程资料依据，使用通用知识降级回答。"
+
     def stream_answer_question(
         self,
         *,
@@ -1218,27 +1260,59 @@ class AIService:
                 return items[:8]
         return self.extract_keywords(text, limit=5)
 
-    def generate_problem_guidance(self, *, problem_text: str, level: int, db: Session | None = None) -> str:
+    def generate_problem_guidance(
+        self,
+        *,
+        problem_text: str,
+        level: int,
+        contexts: Sequence[str] | None = None,
+        db: Session | None = None,
+    ) -> str:
         level_name = {1: "思路提示", 2: "步骤引导", 3: "完整解析"}.get(level, "解析")
+        context_block = ""
+        if contexts:
+            context_block = "\n课程资料参考：\n" + "\n\n".join(_clean_text(item) for item in contexts if item)[:10000]
         result = self._call_chat(
             db,
             purpose="tutoring",
-            system_prompt="你是题目辅导助手。按学生请求的层级给出帮助，低层级不要直接泄露完整答案。",
-            user_prompt=f"题目：{problem_text}\n请求层级：{level_name}\n请输出中文辅导内容。",
+            system_prompt=(
+                "你是题目辅导助手。按学生请求的层级给出帮助，低层级不要直接泄露完整答案。"
+                "优先结合课程资料参考来组织讲解。"
+                "请使用 Markdown 输出；如果涉及公式，使用 $...$ 或 $$...$$ 包裹 LaTeX。"
+            ),
+            user_prompt=(
+                f"题目：{problem_text}\n"
+                f"请求层级：{level_name}"
+                f"{context_block}\n"
+                "输出要求："
+                "\n- 层级 1 给解题入口和判断方向，不直接给完整答案；"
+                "\n- 层级 2 给分步思路，尽量用有序列表；"
+                "\n- 层级 3 给完整解析，步骤清晰，必要时给公式。"
+            ),
         )
         if result:
             return result.strip()
         snippet = _clean_text(problem_text)[:180]
         if level == 1:
-            return f"先判断题目考查的核心对象与已知条件，再围绕“{snippet}”提炼解题入口。"
+            return (
+                "## 解题入口\n"
+                f"- 先判断这道题考查的核心对象与已知条件。\n"
+                f"- 再围绕“{snippet}”定位对应知识点和可用方法。\n"
+                "- 先不要急着代数，先把题型和目标确认清楚。"
+            )
         if level == 2:
-            return f"关键步骤建议分三步：整理条件、选择公式或定理、逐步代入并检查边界情况。题干片段：{snippet}"
+            return (
+                "## 分步思路\n"
+                "1. 整理题目条件，明确已知量、未知量和目标。\n"
+                "2. 选择合适的概念、定理、公式或题型模板。\n"
+                f"3. 结合题干片段“{snippet}”逐步推导，并检查边界条件、符号和单位。"
+            )
         return (
-            f"完整解析：\n"
+            "## 完整解析\n"
             f"1. 明确题目目标并重述条件：{snippet}\n"
-            "2. 选择正确的概念、定理或公式。\n"
-            "3. 逐步推导并给出最终答案。\n"
-            "4. 回看是否遗漏单位、定义域、符号方向等细节。"
+            "2. 选择正确的概念、定理、公式或证明路径。\n"
+            "3. 按顺序展开推导，必要时写出中间步骤。\n"
+            "4. 给出结论后，回看是否遗漏单位、定义域、符号方向等细节。"
         )
 
     def generate_common_mistakes(self, knowledge_points: Sequence[str], db: Session | None = None) -> list[str]:

@@ -174,6 +174,7 @@
         <section class="course-form-layout">
           <article class="panel-card form-panel">
             <div class="form-section"><h2>基本信息</h2><label>课程名称<input v-model="courseForm.name" class="input" maxlength="50" /></label><label>课程简介<textarea v-model="courseForm.description" class="textarea" maxlength="500"></textarea><small>{{ courseForm.description.length }} / 500</small></label><label>学期<input v-model="courseForm.term" class="input" /></label><label>课程封面<div class="cover-upload-field"><div class="cover-upload-preview" :style="courseCoverPreviewStyle()"><strong v-if="!(courseCoverPreview || courseForm.cover_url)" class="course-cover-title">{{ courseCoverText(courseForm) }}</strong></div><div class="cover-upload-actions"><button type="button" class="btn btn-secondary btn-sm" @click="courseCoverInput?.click()"><Upload :size="14" />上传图片</button><button v-if="courseCoverPreview || courseForm.cover_url" type="button" class="btn btn-ghost btn-sm" @click="courseForm.cover_url = ''; resetCourseCoverSelection()">清除</button><small>{{ courseCoverFile?.name || '未上传图片时显示课程名前四字和底色' }}</small><input ref="courseCoverInput" type="file" accept="image/*" hidden @change="pickCourseCover" /></div></div></label><label>封面底色<div class="color-row"><button v-for="color in palette" :key="color" type="button" :style="{ background: color }" :class="{ active: courseForm.cover_color === color }" @click="courseForm.cover_color = color"></button></div></label></div>
+            <div class="form-section"><h2>AI 设置</h2><AppCheckbox v-model="courseForm.allow_general_ai_answer" variant="switch" label="允许资料外回答" /><small>开启后，学生在 QA、课件页问答和题目辅导中，即使课程资料未覆盖，AI 也会继续回答，但会明确提示该回答没有课程资料依据。</small></div>
             <div class="form-section"><div class="section-head"><h2><Layers :size="18" />课程章节</h2><button class="btn btn-ghost btn-sm" :disabled="courseForm.chapters.length >= 30" @click="addDraftChapter"><Plus :size="14" />添加章节</button></div><TransitionGroup name="chapter-list" tag="div" class="chapter-edit-list"><div v-for="(chapter, index) in courseForm.chapters" :key="chapter.local_id" class="chapter-edit" :class="{ 'just-added': freshChapterId === chapter.local_id }"><GripVertical :size="15" /><input v-model="chapter.title" class="input" /><input v-model.number="chapter.order_index" class="input order-input" type="number" /><button class="icon-action danger" :disabled="courseForm.chapters.length <= 1" @click="removeDraftChapter(index)"><Trash2 :size="15" />删除</button></div></TransitionGroup></div>
             <div class="advanced" :class="{ open: advancedOpen }"><button type="button" class="advanced-trigger" @click="advancedOpen = !advancedOpen"><Settings :size="16" />高级设置<ChevronDown :size="14" /></button><Transition name="accordion"><div v-if="advancedOpen" class="advanced-body"><AppCheckbox v-model="courseForm.allow_leave" label="学生退出" /><AppCheckbox v-model="courseForm.ai_qa" label="AI 问答" /><AppCheckbox v-model="courseForm.quiz_enabled" label="测验发布" /></div></Transition></div>
           </article>
@@ -661,7 +662,7 @@ const courseFilter = reactive({ keyword: "", term: "", status: "" });
 const materialFilter = reactive({ keyword: "", type: "", status: "" });
 const lessonFilter = reactive({ keyword: "", chapter_id: 0, status: "" });
 const studentFilter = reactive({ keyword: "", progress: "", active: "" });
-const courseForm = reactive({ id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] as any[] });
+const courseForm = reactive({ id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, allow_general_ai_answer: false, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] as any[] });
 const weakQuizForm = reactive({
   question_count: 5,
   question_type_counts: {
@@ -918,12 +919,12 @@ function resetCourseCoverSelection() {
   courseCoverPreview.value = "";
   if (courseCoverInput.value) courseCoverInput.value.value = "";
 }
-function newCourse() { removedChapterIds.value = []; resetCourseCoverSelection(); Object.assign(courseForm, { id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] }); go("teacherCourseForm"); }
+function newCourse() { removedChapterIds.value = []; resetCourseCoverSelection(); Object.assign(courseForm, { id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, allow_general_ai_answer: false, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] }); go("teacherCourseForm"); }
 async function editCourse(course: any) {
   const detail = await withAction<CourseDetail>(`edit-course-${course.id}`, () => api.get(`/courses/${course.id}`));
   removedChapterIds.value = [];
   resetCourseCoverSelection();
-  Object.assign(courseForm, { id: course.id, name: course.name, description: course.description || "", term: course.term, cover_url: course.cover_url || "", cover_color: course.cover_color || "#121614", chapters: (detail?.chapters || []).length ? detail!.chapters.map((chapter: any) => ({ ...chapter, local_id: chapter.id })) : [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] });
+  Object.assign(courseForm, { id: course.id, name: course.name, description: course.description || "", term: course.term, cover_url: course.cover_url || "", cover_color: course.cover_color || "#121614", allow_general_ai_answer: !!(detail?.course?.allow_general_ai_answer ?? course.allow_general_ai_answer), chapters: (detail?.chapters || []).length ? detail!.chapters.map((chapter: any) => ({ ...chapter, local_id: chapter.id })) : [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] });
   go("teacherCourseForm");
 }
 function markFreshChapter(localId: number) {
@@ -968,7 +969,7 @@ async function uploadCourseCover(courseId: number) {
 async function saveCourse() {
   if (!courseForm.name.trim() || !courseForm.term.trim()) return emit("notice", "warning", "课程必填");
   await withAction("save-course", async () => {
-    const payload = { name: courseForm.name, description: courseForm.description, term: courseForm.term, cover_url: courseForm.cover_url, cover_color: courseForm.cover_color };
+    const payload = { name: courseForm.name, description: courseForm.description, term: courseForm.term, cover_url: courseForm.cover_url, cover_color: courseForm.cover_color, allow_general_ai_answer: courseForm.allow_general_ai_answer };
     const course = courseForm.id ? await run<Course>(() => api.patch(`/courses/${courseForm.id}`, payload), "已保存") : await run<Course>(() => api.post("/courses", payload), "已创建");
     if (!course) return;
     currentCourseId.value = course.id;

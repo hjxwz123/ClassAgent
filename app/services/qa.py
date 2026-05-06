@@ -52,6 +52,8 @@ _QA_QUERY_STOPWORDS = {
     "如何",
     "为什么",
 }
+_GENERAL_AI_NOTICE = "提示：以下回答未在当前课程资料中检索到直接依据，属于通用知识说明，请结合老师要求和课程内容自行核对。"
+_GENERAL_AI_DISABLED_NOTICE = "当前课程资料中没有检索到可直接支撑该问题的内容，且本课程未开启“资料外也可回答”。请换一种问法，或联系老师开启该开关。"
 
 
 def _assert_student_course_access(db: Session, *, course_id: int, user: User) -> None:
@@ -62,6 +64,11 @@ def _assert_student_course_access(db: Session, *, course_id: int, user: User) ->
     )
     if membership is None:
         raise forbidden("仅可在已加入课程内提问")
+
+
+def _course_allows_general_ai_answer(db: Session, *, course_id: int) -> bool:
+    course = db.get(Course, course_id)
+    return bool(course and getattr(course, "allow_general_ai_answer", False))
 
 
 def _get_or_create_course_conversation(db: Session, *, user: User, payload: QAAskRequest) -> QAConversation:
@@ -720,12 +727,26 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
         question_for_ai=retrieval_question,
         history=history_for_prompt,
     )
-    answer, out_of_scope, thinking_process = ai_service.answer_question(
-        question=question_for_ai,
-        contexts=contexts,
-        history=history_for_prompt,
-        db=db,
-    )
+    allow_general_ai_answer = _course_allows_general_ai_answer(db, course_id=payload.course_id)
+    if contexts:
+        answer, out_of_scope, thinking_process = ai_service.answer_question(
+            question=question_for_ai,
+            contexts=contexts,
+            history=history_for_prompt,
+            db=db,
+        )
+    elif allow_general_ai_answer:
+        general_answer, thinking_process = ai_service.answer_general_question(
+            question=question_for_ai,
+            history=history_for_prompt,
+            db=db,
+        )
+        answer = f"{_GENERAL_AI_NOTICE}\n\n{general_answer}".strip()
+        out_of_scope = True
+    else:
+        answer = _GENERAL_AI_DISABLED_NOTICE
+        out_of_scope = True
+        thinking_process = None
     record = QARecord(
         conversation_id=conversation.id,
         course_id=payload.course_id,
@@ -770,45 +791,61 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
         question_for_ai=retrieval_question,
         history=history_for_prompt,
     )
+    allow_general_ai_answer = _course_allows_general_ai_answer(db, course_id=payload.course_id)
     out_of_scope = not contexts
     answer_parts: list[str] = []
     thought_parts: list[str] = []
     tag_state: dict[str, object] = {"buffer": "", "in_think": False}
     ai_error_message: str | None = None
 
-    try:
-        for delta in ai_service.stream_answer_question(
-            question=question_for_ai,
-            contexts=contexts,
-            history=history_for_prompt,
-            db=db,
-        ):
-            if delta.kind == "reasoning":
-                yield from _stream_text_delta("thought", delta.text, answer_parts, thought_parts)
-                continue
-            for kind, text in _split_thinking_tags(tag_state, delta.text):
-                yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
-    except Exception as exc:
-        answer_parts.clear()
-        thought_parts.clear()
-        tag_state = {"buffer": "", "in_think": False}
+    if not contexts:
+        if allow_general_ai_answer:
+            general_answer, general_thinking = ai_service.answer_general_question(
+                question=question_for_ai,
+                history=history_for_prompt,
+                db=db,
+            )
+            answer = f"{_GENERAL_AI_NOTICE}\n\n{general_answer}".strip()
+            if general_thinking:
+                yield from _stream_text_delta("thought", general_thinking, answer_parts, thought_parts)
+            yield from _stream_text_delta("answer", answer, answer_parts, thought_parts)
+        else:
+            answer = _GENERAL_AI_DISABLED_NOTICE
+            yield from _stream_text_delta("answer", answer, answer_parts, thought_parts)
+    else:
         try:
-            fallback_answer, fallback_out_of_scope, fallback_thinking = ai_service.answer_question(
+            for delta in ai_service.stream_answer_question(
                 question=question_for_ai,
                 contexts=contexts,
                 history=history_for_prompt,
                 db=db,
-            )
-            out_of_scope = fallback_out_of_scope
-            if fallback_thinking:
-                yield from _stream_text_delta("thought", fallback_thinking, answer_parts, thought_parts)
-            for kind, text in _split_thinking_tags(tag_state, fallback_answer):
-                yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
-        except Exception as fallback_exc:
-            ai_error_message = str(fallback_exc or exc)
-            answer = "AI 服务暂时不可用，请稍后重试，或联系管理员检查问答模型配置。"
-            answer_parts.append(answer)
-            yield {"event": "delta", "data": {"type": "answer", "text": answer}}
+            ):
+                if delta.kind == "reasoning":
+                    yield from _stream_text_delta("thought", delta.text, answer_parts, thought_parts)
+                    continue
+                for kind, text in _split_thinking_tags(tag_state, delta.text):
+                    yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
+        except Exception as exc:
+            answer_parts.clear()
+            thought_parts.clear()
+            tag_state = {"buffer": "", "in_think": False}
+            try:
+                fallback_answer, fallback_out_of_scope, fallback_thinking = ai_service.answer_question(
+                    question=question_for_ai,
+                    contexts=contexts,
+                    history=history_for_prompt,
+                    db=db,
+                )
+                out_of_scope = fallback_out_of_scope
+                if fallback_thinking:
+                    yield from _stream_text_delta("thought", fallback_thinking, answer_parts, thought_parts)
+                for kind, text in _split_thinking_tags(tag_state, fallback_answer):
+                    yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
+            except Exception as fallback_exc:
+                ai_error_message = str(fallback_exc or exc)
+                answer = "AI 服务暂时不可用，请稍后重试，或联系管理员检查问答模型配置。"
+                answer_parts.append(answer)
+                yield {"event": "delta", "data": {"type": "answer", "text": answer}}
 
     for kind, text in _flush_thinking_tags(tag_state):
         yield from _stream_text_delta(kind, text, answer_parts, thought_parts)

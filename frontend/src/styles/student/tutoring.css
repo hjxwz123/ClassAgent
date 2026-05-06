@@ -23,7 +23,7 @@
 .tutoring-page .page-title-row{margin-bottom:0}
 .tutoring-page .page-title-actions{align-items:center}
 .tutoring-page .course-select .select-menu>button,.tutoring-page .select-menu-empty{min-height:42px;border:1px solid var(--tutor-border);border-radius:var(--tutor-pill);background:#fff;box-shadow:0 2px 8px #0f172a09;padding:0 16px}
-.tutoring-page .tutoring-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(420px,.88fr);gap:28px;align-items:start}
+.tutoring-page .tutoring-stack{display:grid;gap:24px}
 .tutoring-page .tutor-input,.tutoring-page .guide-card{border:1px solid rgba(226,232,240,.78);border-radius:var(--tutor-radius-xl);background:var(--tutor-card);box-shadow:var(--tutor-shadow-card);padding:30px}
 .tutoring-page .tutor-input{display:grid;gap:20px}
 .tutor-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px}
@@ -57,7 +57,7 @@
 .tutoring-page .guide-card .section-head{margin:0}
 .tutoring-page .active-problem-card{display:grid;gap:8px;border:1px solid var(--tutor-border);border-radius:var(--tutor-radius-lg);background:var(--tutor-muted);padding:16px}
 .tutoring-page .active-problem-card span{color:var(--tutor-hint);font-size:12px;font-weight:900}
-.tutoring-page .active-problem-card p{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:4;margin:0;color:var(--tutor-text);line-height:1.7}
+.tutoring-page .active-problem-card p{margin:0;color:var(--tutor-text);line-height:1.7;white-space:pre-wrap;word-break:break-word}
 .guide-step-list{display:grid;gap:14px}
 .tutoring-page .guide-step{overflow:hidden;border:1px solid var(--tutor-border);border-radius:var(--tutor-radius-lg);background:#fff;box-shadow:none}
 .tutoring-page .guide-step:hover{border-color:var(--tutor-primary-100);box-shadow:0 10px 24px #0f172a0d}
@@ -67,10 +67,23 @@
 .tutoring-page .guide-step strong{flex:1;min-width:0;color:var(--tutor-text);font-size:15px}
 .tutoring-page .guide-step svg:last-child{color:var(--tutor-hint);transition:transform var(--duration-fast) var(--ease-out)}
 .tutoring-page .guide-step .rotate{transform:rotate(180deg)}
-.tutoring-page .guide-body{display:grid;gap:12px;border-top:1px solid var(--tutor-border);background:var(--tutor-muted);color:var(--tutor-secondary);padding:16px 18px;line-height:1.75}
-.tutoring-page .guide-body p{margin:0}
-.tutoring-page .guide-body ol{display:grid;gap:8px;margin:0;padding-left:20px}
-.tutoring-page .guide-body strong{display:block;border-radius:12px;background:var(--tutor-success-50);color:var(--tutor-success-600);padding:10px 12px}
+.tutoring-page .guide-body{display:grid;gap:14px;border-top:1px solid var(--tutor-border);background:var(--tutor-muted);color:var(--tutor-text);padding:16px 18px;line-height:1.75}
+.tutoring-page .guide-content,.tutoring-page .guide-answer{color:var(--tutor-text)}
+.tutoring-page .guide-points{display:grid;gap:10px;margin:0;padding-left:20px}
+.tutoring-page .guide-points li{color:var(--tutor-text)}
+.tutoring-page .guide-answer{border-radius:12px;background:var(--tutor-success-50);padding:12px 14px}
+.tutoring-page .guide-body.markdown-body p,.tutoring-page .guide-body .markdown-body p{margin:0 0 12px}
+.tutoring-page .guide-body.markdown-body p:last-child,.tutoring-page .guide-body .markdown-body p:last-child{margin-bottom:0}
+.tutoring-page .guide-body.markdown-body ul,.tutoring-page .guide-body.markdown-body ol,.tutoring-page .guide-body .markdown-body ul,.tutoring-page .guide-body .markdown-body ol{margin:8px 0 12px;padding-left:22px}
+.tutoring-page .guide-body .markdown-body li+li,.tutoring-page .guide-body.markdown-body li+li{margin-top:4px}
+.tutoring-page .guide-body .markdown-body code,.tutoring-page .guide-body.markdown-body code{border-radius:6px;background:var(--tutor-primary-50);color:var(--tutor-primary-600);padding:2px 6px;font-family:var(--font-family-mono);font-size:.92em}
+.tutoring-page .guide-body .markdown-body pre,.tutoring-page .guide-body.markdown-body pre{overflow:auto;border-radius:12px;background:#0f172a;color:#e2e8f0;margin:12px 0;padding:14px}
+.tutoring-page .guide-body .markdown-body pre code,.tutoring-page .guide-body.markdown-body pre code{background:transparent;color:inherit;padding:0}
+.tutoring-page .guide-body .markdown-body blockquote,.tutoring-page .guide-body.markdown-body blockquote{border-left:3px solid #00E5FF;background:#ffffffcc;margin:12px 0;padding:10px 12px}
+.tutoring-page .guide-body .markdown-body table,.tutoring-page .guide-body.markdown-body table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+.tutoring-page .guide-body .markdown-body th,.tutoring-page .guide-body .markdown-body td,.tutoring-page .guide-body.markdown-body th,.tutoring-page .guide-body.markdown-body td{border:1px solid var(--tutor-border);padding:8px 10px;vertical-align:top}
+.tutoring-page .guide-body .markdown-body th,.tutoring-page .guide-body.markdown-body th{background:#fff;font-weight:800}
+.tutoring-page .guide-body .markdown-body .katex-display,.tutoring-page .guide-body.markdown-body .katex-display{overflow-x:auto;overflow-y:hidden;padding:4px 0}
 .tutoring-page .empty-guide{min-height:330px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;border:1px dashed #CBD5E1;border-radius:var(--tutor-radius-lg);background:linear-gradient(135deg,#fff,#f8fafc);color:var(--tutor-secondary);text-align:center;padding:32px}
 .tutoring-page .empty-guide svg{width:68px;height:68px;border-radius:22px;background:var(--tutor-ai-light);color:#00e5ff;padding:16px}
 .tutoring-page .empty-guide strong{color:var(--tutor-text);font-size:22px;font-weight:900}
@@ -88,6 +101,5 @@
 .tutoring-history-item:active{transform:translateY(0) scale(.985)}
 .tutoring-history-item strong{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:3;color:var(--tutor-text, #1E293B);line-height:1.55}
 .tutoring-history-item small{color:var(--tutor-hint, #94A3B8);font-weight:800}
-@media(max-width:1180px){.tutoring-page .tutoring-grid{grid-template-columns:1fr}}
 @media(max-width:760px){.tutoring-page{gap:22px}.tutoring-page .tutor-input,.tutoring-page .guide-card{padding:22px}.tutor-card-head,.tutoring-page .guide-card .section-head{align-items:flex-start;flex-direction:column}.tutoring-page .tutor-mode-tabs{width:100%}.tutoring-page .tutor-mode-tabs button{flex:1;padding:0 10px}.problem-editor-wrap,.tutoring-page .problem-text,.tutoring-page .image-drop{min-height:220px}.tutoring-history-grid{grid-template-columns:1fr}}
 @keyframes tutor-pulse-c9e07e67{0%,to{transform:scale(1);box-shadow:0 12px 24px #00e5ff26}50%{transform:scale(1.04);box-shadow:0 18px 32px #00e5ff3d}}

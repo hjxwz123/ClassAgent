@@ -55,6 +55,8 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
             statements.append("ALTER TABLE courses ADD COLUMN cover_url VARCHAR(500)")
         if "cover_color" not in course_columns:
             statements.append("ALTER TABLE courses ADD COLUMN cover_color VARCHAR(32)")
+        if "allow_general_ai_answer" not in course_columns:
+            statements.append("ALTER TABLE courses ADD COLUMN allow_general_ai_answer BOOLEAN NOT NULL DEFAULT 0")
     if "wrong_questions" in table_names:
         wrong_columns = {column["name"] for column in inspector.get_columns("wrong_questions")}
         if "is_resolved" not in wrong_columns:

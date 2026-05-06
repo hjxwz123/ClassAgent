@@ -59,6 +59,7 @@ def create_course(db: Session, user: User, payload: CourseCreateRequest) -> Cour
         teacher_id=user.id,
         status=CourseStatus.ACTIVE.value,
         cover_color=payload.cover_color,
+        allow_general_ai_answer=bool(payload.allow_general_ai_answer),
     )
     db.add(course)
     db.commit()
@@ -90,6 +91,8 @@ def update_course(db: Session, user: User, course_id: int, payload: CourseUpdate
         course.cover_url = payload.cover_url or None
     if payload.cover_color is not None:
         course.cover_color = payload.cover_color or None
+    if payload.allow_general_ai_answer is not None:
+        course.allow_general_ai_answer = bool(payload.allow_general_ai_answer)
     db.add(course)
     log_operation(
         db,

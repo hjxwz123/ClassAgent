@@ -10,6 +10,7 @@ class CourseCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=4000)
     term: str = Field(min_length=2, max_length=64)
     cover_color: str | None = Field(default=None, max_length=32)
+    allow_general_ai_answer: bool = False
 
 
 class CourseUpdateRequest(BaseModel):
@@ -19,6 +20,7 @@ class CourseUpdateRequest(BaseModel):
     status: str | None = Field(default=None, max_length=32)
     cover_url: str | None = Field(default=None, max_length=500)
     cover_color: str | None = Field(default=None, max_length=32)
+    allow_general_ai_answer: bool | None = None
 
 
 class JoinCourseRequest(BaseModel):
@@ -51,6 +53,7 @@ class CourseResponse(ORMModel):
     status: str
     cover_url: str | None = None
     cover_color: str | None = None
+    allow_general_ai_answer: bool = False
     created_at: datetime
     updated_at: datetime
 

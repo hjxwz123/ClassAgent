@@ -437,12 +437,12 @@
                 <span class="tag tag-ai"><Sparkles :size="12" />分步提示</span>
               </PageTitle>
 
-              <div class="tutoring-grid">
+              <div class="tutoring-stack">
                 <section class="panel-card tutor-input">
                   <div class="tutor-card-head">
                     <div>
-                      <span class="tutor-eyebrow"><BookOpen :size="14" />当前课程</span>
-                      <h2>{{ courseScopeName }}</h2>
+                      <span class="tutor-eyebrow"><BookOpen :size="14" />题目输入</span>
+                      <h2>{{ selectedCourseId ? `《${courseScopeName}》` : '请先选择课程后输入题目' }}</h2>
                     </div>
                     <span class="tutor-status" :class="{ active: !!activeProblem }">{{ activeProblem ? '辅导中' : '待提交' }}</span>
                   </div>
@@ -490,9 +490,9 @@
                   </button>
                 </section>
 
-                <aside class="panel-card guide-card">
+                <section class="panel-card guide-card">
                   <div class="section-head">
-                    <h2><Sparkles :size="18" />{{ activeProblem ? 'AI 辅导进行中' : '等待题目输入' }}</h2>
+                    <h2><Sparkles :size="18" />{{ activeProblem ? '查看解析' : '等待题目输入' }}</h2>
                     <span v-if="activeProblem" class="tag tag-success">3步引导</span>
                   </div>
 
@@ -505,7 +505,7 @@
                   <div v-else class="guide-step-list">
                     <GuideStep v-for="level in [1,2,3]" :key="level" :level="level" :data="guidance[level]" :open="guideOpen[level]" @toggle="toggleGuide(level)" @load="loadGuidance(level)" />
                   </div>
-                </aside>
+                </section>
               </div>
 
               <HistoryStrip title="历史辅导记录" :items="problemHistory" @pick="selectProblem" />
@@ -2186,13 +2186,16 @@ const GuideStep = defineComponent({
   emits: ["toggle", "load"],
   setup(p, { emit: update }) {
     const title = computed(() => p.level === 1 ? "提示" : p.level === 2 ? "思路" : "详解");
+    const bodyHtml = computed(() => renderRichText(p.data?.content || p.data?.hint || p.data?.answer || "暂无内容"));
     return () => h("section", { class: "guide-step" }, [
-      h("button", { type: "button", onClick: () => update(p.data ? "toggle" : "load") }, [h("b", String(p.level)), h("strong", title.value), h(ChevronDown, { size: 16, class: { rotate: p.open } })]),
+      h("button", { type: "button", onClick: () => update(p.data ? "toggle" : "load") }, [h("b", String(p.level)), h("strong", `第 ${p.level} 步 · ${title.value}`), h(ChevronDown, { size: 16, class: { rotate: p.open } })]),
       h(Transition, { name: "accordion" }, {
         default: () => p.open && p.data ? h("div", { class: "guide-body" }, [
-          h("p", p.data.hint || p.data.content || p.data.answer || "暂无内容"),
-          p.data.steps?.length ? h("ol", p.data.steps.map((step: string, index: number) => h("li", { key: index }, step))) : null,
-          p.data.final_answer ? h("strong", `答案：${p.data.final_answer}`) : null
+          h("div", { class: "guide-content markdown-body", innerHTML: bodyHtml.value }),
+          p.data.steps?.length ? h("ol", { class: "guide-points" }, p.data.steps.map((step: string, index: number) => h("li", { key: index }, [
+            h("div", { class: "markdown-body", innerHTML: renderRichText(step) })
+          ]))) : null,
+          p.data.final_answer ? h("div", { class: "guide-answer markdown-body", innerHTML: renderRichText(`**答案**\n\n${p.data.final_answer}`) }) : null
         ]) : null
       })
     ]);

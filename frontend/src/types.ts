@@ -31,6 +31,7 @@ export type Course = {
   status: string;
   cover_url?: string | null;
   cover_color?: string | null;
+  allow_general_ai_answer?: boolean;
   created_at: string;
   updated_at: string;
 };
