@@ -221,8 +221,22 @@ def test_persisted_docmind_images_are_not_sanitized():
     sanitized = sanitize_temporary_docmind_images(rewritten)
 
     assert public_url in rewritten
-    assert public_url in sanitized
-    assert "![354b96c3bd960fd1060945e0a01b673f.jpeg]" in sanitized
+    assert public_url in sanitized or "/static/docmind_images/" in sanitized
+    assert "![课件图片]" in sanitized
+
+
+def test_existing_docmind_oss_images_use_local_static_url(monkeypatch, tmp_path):
+    image_path = tmp_path / "storage" / "docmind_images" / "73" / "737c56f20ea4699f6d83b1eae7ca55fbbf8de7c82cc162794725c3466a49c89d.png"
+    image_path.parent.mkdir(parents=True)
+    image_path.write_bytes(b"png")
+    monkeypatch.setattr("app.services.parser.storage_service.absolute_path", lambda relative_path: tmp_path / "storage" / relative_path)
+    monkeypatch.setattr("app.services.parser.storage_service.local_public_url", lambda relative_path: f"/static/{relative_path}")
+    public_url = "https://classagent.oss-cn-beijing.aliyuncs.com/docmind_images/73/737c56f20ea4699f6d83b1eae7ca55fbbf8de7c82cc162794725c3466a49c89d.png"
+
+    sanitized = sanitize_temporary_docmind_images(f"说明 ![课件图片]({public_url}) 结束")
+
+    assert public_url not in sanitized
+    assert "![课件图片](/static/docmind_images/73/737c56f20ea4699f6d83b1eae7ca55fbbf8de7c82cc162794725c3466a49c89d.png)" in sanitized
 
 
 def test_unsigned_docmind_oss_image_is_kept_when_download_fails(monkeypatch):

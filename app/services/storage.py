@@ -49,6 +49,9 @@ class StorageService:
             return self._static_url(relative_path)
         return f"{base_url}/static/{relative_path.lstrip('/')}"
 
+    def local_public_url(self, relative_path: str) -> str:
+        return self._local_public_url(relative_path)
+
     def normalize_public_url(self, value: str | None) -> str | None:
         if not value:
             return value

@@ -270,6 +270,23 @@ def _is_temporary_docmind_url(value: str) -> bool:
     return bool(SIGNED_IMAGE_QUERY_KEYS.intersection(query))
 
 
+def _local_docmind_image_url(value: str) -> str | None:
+    try:
+        parsed = urlsplit(html.unescape(value))
+    except ValueError:
+        return None
+    path = parsed.path.lstrip("/")
+    marker = "docmind_images/"
+    if marker not in path:
+        return None
+    relative_path = path[path.index(marker) :]
+    if not relative_path:
+        return None
+    if not storage_service.absolute_path(relative_path).is_file():
+        return None
+    return storage_service.normalize_public_url(storage_service.local_public_url(relative_path))
+
+
 def _image_suffix(url: str, content_type: str | None) -> str:
     suffix = Path(urlsplit(url).path).suffix.lower()
     if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}:
@@ -384,6 +401,30 @@ def _strip_unavailable_image(content: str, raw_url: str) -> str:
     return HTML_IMAGE_URL_PATTERN.sub(replace_html, MARKDOWN_IMAGE_URL_PATTERN.sub(replace_markdown, content))
 
 
+def _replace_image_url(content: str, raw_url: str, new_url: str) -> str:
+    def display_alt(alt: str) -> str:
+        clean = html.unescape(alt).strip()
+        return "课件图片" if IMAGE_FILENAME_ALT_PATTERN.fullmatch(clean) else clean
+
+    def replace_markdown(match: re.Match[str]) -> str:
+        url = match.groupdict().get("angle") or match.groupdict().get("plain")
+        if not _same_image_url(url, raw_url):
+            return match.group(0)
+        alt = display_alt(match.groupdict().get("alt") or "")
+        return f"![{alt}]({new_url})"
+
+    def replace_html(match: re.Match[str]) -> str:
+        if not _same_image_url(match.groupdict().get("src"), raw_url):
+            return match.group(0)
+        updated = match.group(0).replace(match.groupdict().get("src") or "", new_url)
+        alt_match = re.search(r"""\balt=["'](?P<alt>[^"']*)["']""", updated, flags=re.IGNORECASE)
+        if alt_match and IMAGE_FILENAME_ALT_PATTERN.fullmatch(html.unescape(alt_match.group("alt")).strip()):
+            updated = updated[: alt_match.start("alt")] + "课件图片" + updated[alt_match.end("alt") :]
+        return updated
+
+    return HTML_IMAGE_URL_PATTERN.sub(replace_html, MARKDOWN_IMAGE_URL_PATTERN.sub(replace_markdown, content))
+
+
 def _localize_markdown_images(content: str, db: Session | None, cache: dict[str, str | None]) -> str:
     urls = _markdown_image_urls(content)
     if not urls:
@@ -400,10 +441,7 @@ def _localize_markdown_images(content: str, db: Session | None, cache: dict[str,
                 if _is_temporary_docmind_url(raw_url):
                     rewritten = _strip_unavailable_image(rewritten, raw_url)
                 continue
-            rewritten = rewritten.replace(raw_url, public_url)
-            escaped_url = html.escape(raw_url, quote=False)
-            if escaped_url != raw_url:
-                rewritten = rewritten.replace(escaped_url, public_url)
+            rewritten = _replace_image_url(rewritten, raw_url, public_url)
     return rewritten
 
 
@@ -414,6 +452,12 @@ def sanitize_temporary_docmind_images(content: str | None) -> str | None:
     for raw_url in _markdown_image_urls(rewritten):
         if _is_temporary_docmind_url(raw_url):
             rewritten = _strip_unavailable_image(rewritten, raw_url)
+            continue
+        local_url = _local_docmind_image_url(raw_url)
+        if local_url and local_url != raw_url:
+            rewritten = _replace_image_url(rewritten, raw_url, local_url)
+        elif "docmind_images/" in html.unescape(raw_url):
+            rewritten = _replace_image_url(rewritten, raw_url, raw_url)
     return rewritten
 
 
