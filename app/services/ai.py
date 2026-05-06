@@ -10,7 +10,6 @@ from hashlib import blake2b
 from typing import Any
 
 import httpx
-from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -554,22 +553,15 @@ def _invalid_quiz_stem(stem: str) -> bool:
     return bool(re.search(r"关于[“\"']?(章节练习|薄弱点章节练习|错题重练|章节自练)[”\"']?", text))
 
 
-RAG_ANSWER_PROMPT = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            "你是课程知识问答助手。必须优先依据给定课程资料回答。"
-            "如果学生要求解释、举例或类比，可以围绕资料中的概念、公式和条件生成教学示例，"
-            "并明确这是用于说明资料内容的例子；不要因为资料里没有现成示例就直接说资料不足。"
-            "只有当给定资料与问题完全无关或缺少关键定义时，才说明资料不足，不能编造与资料矛盾的内容。",
-        ),
-        (
-            "human",
-            "课程资料：\n{context}\n\n历史问题：\n{history}\n\n学生问题：{question}\n"
-            "请用中文回答。若问题提到某一页，优先使用资料中标注的当前页内容；"
-            "若要求“用例子解释”，请基于资料里的公式、条件或概念构造一个简短例子，并给出关键依据。",
-        ),
-    ]
+RAG_ANSWER_SYSTEM_PROMPT = (
+    "你是课程知识问答助手。必须优先依据给定课程资料回答。"
+    "如果学生要求解释、举例或类比，可以围绕资料中的概念、公式和条件生成教学示例，"
+    "并明确这是用于说明资料内容的例子；不要因为资料里没有现成示例就直接说资料不足。"
+    "只有当给定资料与问题完全无关或缺少关键定义时，才说明资料不足，不能编造与资料矛盾的内容。"
+)
+RAG_ANSWER_USER_INSTRUCTIONS = (
+    "请用中文回答。若问题提到某一页，优先使用资料中标注的当前页内容；"
+    "若要求“用例子解释”，请基于资料里的公式、条件或概念构造一个简短例子，并给出关键依据。"
 )
 
 
@@ -671,6 +663,7 @@ class AIService:
         purpose: str,
         system_prompt: str,
         user_prompt: str,
+        messages: Sequence[dict[str, str]] | None = None,
         json_mode: bool = False,
         allow_fallback: bool = True,
         max_tokens: int | None = None,
@@ -692,7 +685,7 @@ class AIService:
         headers.update(config.extra_config.get("headers") or {})
         payload: dict[str, Any] = {
             "model": config.model_name,
-            "messages": [
+            "messages": list(messages) if messages is not None else [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
@@ -754,6 +747,7 @@ class AIService:
         purpose: str,
         system_prompt: str,
         user_prompt: str,
+        messages: Sequence[dict[str, str]] | None = None,
         json_mode: bool = False,
     ) -> Iterator[ChatDelta]:
         config = get_default_model_config(db, purpose)
@@ -772,7 +766,7 @@ class AIService:
         headers.update(config.extra_config.get("headers") or {})
         payload: dict[str, Any] = {
             "model": config.model_name,
-            "messages": [
+            "messages": list(messages) if messages is not None else [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
@@ -1044,12 +1038,43 @@ class AIService:
         merged = merged[:200] if len(merged) > 200 else merged
         return f"{title}：{merged or '该资料已生成课时页面，可继续补充讲解脚本。'}"
 
+    def _normalize_history_messages(self, history: Sequence[Any] | None) -> list[dict[str, str]]:
+        messages: list[dict[str, str]] = []
+        for item in history or []:
+            if isinstance(item, dict):
+                role = str(item.get("role") or "user")
+                content = str(item.get("content") or "").strip()
+            else:
+                role = "user"
+                content = str(item or "").strip()
+            if role not in {"user", "assistant"} or not content:
+                continue
+            messages.append({"role": role, "content": content[:1200]})
+        return messages
+
+    def _rag_answer_messages(self, *, context: str, history: Sequence[Any] | None, question: str) -> list[dict[str, str]]:
+        messages = [
+            {
+                "role": "system",
+                "content": f"{RAG_ANSWER_SYSTEM_PROMPT}\n\n课程资料：\n{context}",
+            },
+            *self._normalize_history_messages(history),
+            {
+                "role": "user",
+                "content": f"学生问题：{question}\n{RAG_ANSWER_USER_INSTRUCTIONS}",
+            },
+        ]
+        return messages
+
+    def _history_hint_items(self, history: Sequence[Any] | None) -> list[str]:
+        return [item["content"] for item in self._normalize_history_messages(history) if item["role"] == "user"]
+
     def answer_question(
         self,
         *,
         question: str,
         contexts: Sequence[str],
-        history: Sequence[str] | None = None,
+        history: Sequence[Any] | None = None,
         db: Session | None = None,
     ) -> tuple[str, bool, str | None]:
         if not contexts:
@@ -1059,24 +1084,21 @@ class AIService:
                 None,
             )
         context = "\n\n".join(_clean_text(item) for item in contexts if item)
-        history_text = "\n".join(history or [])
-        messages = RAG_ANSWER_PROMPT.format_messages(
-            context=context[:8000],
-            history=history_text[:1000],
-            question=question,
-        )
+        chat_messages = self._rag_answer_messages(context=context[:12000], history=history, question=question)
         result = self._call_chat_with_meta(
             db,
             purpose="qa",
-            system_prompt=str(messages[0].content),
-            user_prompt=str(messages[1].content),
+            system_prompt=chat_messages[0]["content"],
+            user_prompt=chat_messages[-1]["content"],
+            messages=chat_messages,
         )
         if result:
             return result.content.strip(), False, result.reasoning
         context = context[:320]
         history_hint = ""
-        if history:
-            history_hint = f"\n结合前序对话，可继续沿着“{history[-1][:30]}”这个方向理解。"
+        history_items = self._history_hint_items(history)
+        if history_items:
+            history_hint = f"\n结合前序对话，可继续沿着“{history_items[-1][:30]}”这个方向理解。"
         answer = (
             f"根据当前课程资料，问题“{question}”可以这样理解：\n"
             f"{context}\n"
@@ -1090,25 +1112,21 @@ class AIService:
         *,
         question: str,
         contexts: Sequence[str],
-        history: Sequence[str] | None = None,
+        history: Sequence[Any] | None = None,
         db: Session | None = None,
     ) -> Iterator[ChatDelta]:
         if not contexts:
             yield ChatDelta("content", "当前课程资料中没有检索到足以支持回答的内容。请换一种问法，或确认该问题是否属于本课程范围。")
             return
         context = "\n\n".join(_clean_text(item) for item in contexts if item)
-        history_text = "\n".join(history or [])
-        messages = RAG_ANSWER_PROMPT.format_messages(
-            context=context[:6000],
-            history=history_text[:1000],
-            question=question,
-        )
+        chat_messages = self._rag_answer_messages(context=context[:10000], history=history, question=question)
         emitted = False
         for delta in self._stream_chat_with_meta(
             db,
             purpose="qa",
-            system_prompt=str(messages[0].content),
-            user_prompt=str(messages[1].content),
+            system_prompt=chat_messages[0]["content"],
+            user_prompt=chat_messages[-1]["content"],
+            messages=chat_messages,
         ):
             emitted = True
             yield delta
@@ -1116,8 +1134,9 @@ class AIService:
             return
         context_excerpt = context[:320]
         history_hint = ""
-        if history:
-            history_hint = f"\n结合你前面的问题（{'；'.join(history[-2:])}），可以把本题和前序概念一起对照。"
+        history_items = self._history_hint_items(history)
+        if history_items:
+            history_hint = f"\n结合你前面的问题（{'；'.join(history_items[-2:])}），可以把本题和前序概念一起对照。"
         yield ChatDelta(
             "content",
             "根据已检索到的课程资料，可以这样理解："

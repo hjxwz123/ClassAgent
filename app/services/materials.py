@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from threading import Thread
 from typing import Any
 
@@ -38,6 +39,10 @@ ALLOWED_EXTENSIONS = {
     ".md": MaterialType.TXT.value,
     ".markdown": MaterialType.TXT.value,
 }
+
+KNOWLEDGE_CHUNK_TARGET_CHARS = 900
+KNOWLEDGE_CHUNK_OVERLAP_CHARS = 180
+KNOWLEDGE_CHUNK_MIN_TAIL_CHARS = 120
 
 
 def _assert_material_owner(db: Session, material: CourseMaterial, user: User) -> None:
@@ -383,6 +388,107 @@ def _tokenize(content: str) -> list[str]:
     return ai_service.extract_keywords(content, limit=20)
 
 
+def _compact_knowledge_text(value: str) -> str:
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text
+
+
+def _chunk_end_at_boundary(text: str, *, start: int, hard_end: int, target_chars: int) -> int:
+    if hard_end >= len(text):
+        return len(text)
+    lower_bound = start + max(int(target_chars * 0.65), 1)
+    for separator in ("\n\n", "\n", "。", "！", "？", "；", ".", "!", "?", ";", "，", ",", " "):
+        index = text.rfind(separator, lower_bound, hard_end)
+        if index >= lower_bound:
+            return index + len(separator)
+    return hard_end
+
+
+def _split_knowledge_text(
+    text: str,
+    *,
+    target_chars: int = KNOWLEDGE_CHUNK_TARGET_CHARS,
+    overlap_chars: int = KNOWLEDGE_CHUNK_OVERLAP_CHARS,
+) -> list[str]:
+    clean = _compact_knowledge_text(text)
+    if not clean:
+        return []
+    target_chars = max(300, int(target_chars))
+    overlap_chars = max(0, min(int(overlap_chars), target_chars // 3))
+    if len(clean) <= target_chars:
+        return [clean]
+
+    chunks: list[str] = []
+    start = 0
+    while start < len(clean):
+        hard_end = min(len(clean), start + target_chars)
+        end = _chunk_end_at_boundary(clean, start=start, hard_end=hard_end, target_chars=target_chars)
+        chunk = clean[start:end].strip()
+        if chunk:
+            if chunks and len(chunk) < KNOWLEDGE_CHUNK_MIN_TAIL_CHARS:
+                chunks[-1] = f"{chunks[-1]}\n{chunk}".strip()
+            else:
+                chunks.append(chunk)
+        if end >= len(clean):
+            break
+        next_start = max(end - overlap_chars, start + 1)
+        start = next_start
+    return chunks
+
+
+def _page_knowledge_text(*, material: CourseMaterial, page: LessonPage) -> str:
+    page_text = _compact_knowledge_text(page.page_text)
+    script_text = _compact_knowledge_text(page.script_text or "")
+    parts = [
+        f"资料：{material.title}",
+        f"页码：第{page.page_number}页",
+    ]
+    if page.page_title:
+        parts.append(f"页面标题：{page.page_title}")
+    if page_text:
+        parts.append(f"页面内容：\n{page_text}")
+    if script_text and script_text != page_text:
+        parts.append(f"讲解文稿：\n{script_text}")
+    return "\n\n".join(parts)
+
+
+def _build_page_knowledge_chunks(*, material: CourseMaterial, page: LessonPage) -> list[KnowledgeChunk]:
+    windows = _split_knowledge_text(_page_knowledge_text(material=material, page=page))
+    if not windows:
+        windows = [f"资料：{material.title}\n页码：第{page.page_number}页\n本页未提取到有效文字内容。"]
+    chunk_count = len(windows)
+    chunks: list[KnowledgeChunk] = []
+    for index, content in enumerate(windows, start=1):
+        page_title = page.page_title or f"第{page.page_number}页"
+        title = page_title if chunk_count == 1 else f"{page_title} · 片段{index}/{chunk_count}"
+        chunks.append(
+            KnowledgeChunk(
+                course_id=material.course_id,
+                material_id=material.id,
+                lesson_page_id=page.id,
+                chapter_id=material.chapter_id,
+                title=title,
+                content=content,
+                tokens=_tokenize(content),
+                source_meta={
+                    "material_id": material.id,
+                    "material_title": material.title,
+                    "page_number": page.page_number,
+                    "chapter_id": material.chapter_id,
+                    "lesson_id": page.lesson_id,
+                    "lesson_page_id": page.id,
+                    "chunk_index": index,
+                    "chunk_count": chunk_count,
+                    "chunk_target_chars": KNOWLEDGE_CHUNK_TARGET_CHARS,
+                    "chunk_overlap_chars": KNOWLEDGE_CHUNK_OVERLAP_CHARS if chunk_count > 1 else 0,
+                },
+            )
+        )
+    return chunks
+
+
 def process_material_pipeline(db: Session, material_id: int) -> None:
     material = db.get(CourseMaterial, material_id)
     if material is None or material.deleted_at is not None:
@@ -447,24 +553,10 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
 
         created_chunks: list[KnowledgeChunk] = []
         for page in created_pages:
-            chunk = KnowledgeChunk(
-                course_id=material.course_id,
-                material_id=material.id,
-                lesson_page_id=page.id,
-                chapter_id=material.chapter_id,
-                title=page.page_title or f"第{page.page_number}页",
-                content=page.page_text,
-                tokens=_tokenize(page.page_text),
-                source_meta={
-                    "material_id": material.id,
-                    "material_title": material.title,
-                    "page_number": page.page_number,
-                    "chapter_id": material.chapter_id,
-                    "lesson_page_id": page.id,
-                },
-            )
-            db.add(chunk)
-            created_chunks.append(chunk)
+            page_chunks = _build_page_knowledge_chunks(material=material, page=page)
+            for chunk in page_chunks:
+                db.add(chunk)
+            created_chunks.extend(page_chunks)
         db.flush()
         try:
             vector_store.upsert_chunks(db, chunks=created_chunks)
