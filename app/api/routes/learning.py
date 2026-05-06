@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.core.responses import success_response
-from app.db.models import KnowledgePoint, Quiz, QuizAnswer, QuizQuestion, User
+from app.db.models import AsyncTaskLog, KnowledgePoint, Quiz, QuizAnswer, QuizQuestion, User
 from app.db.session import get_db
 from app.schemas.learning import (
     KnowledgePointResponse,
     LearningRecordResponse,
+    AsyncTaskResponse,
     QuizEditRequest,
     QuizAttemptResponse,
     QuizDetailResponse,
@@ -29,10 +30,10 @@ from app.schemas.learning import (
 from app.services.learning import (
     checkin_task,
     create_study_plan,
+    enqueue_quiz_generation,
+    enqueue_teacher_weak_quiz,
+    enqueue_wrong_book_practice,
     extract_reference_answer_value,
-    generate_quiz,
-    generate_teacher_weak_quiz,
-    generate_wrong_book_practice,
     get_knowledge_points,
     get_learning_records,
     get_plan_tasks,
@@ -90,6 +91,28 @@ def _attempt_detail(db: Session, attempt) -> dict:
     }
 
 
+def _generation_task_response(db: Session, task: AsyncTaskLog) -> dict:
+    task_payload = AsyncTaskResponse.model_validate(task).model_dump(mode="json")
+    if task.status == "ready" and task.target_id:
+        quiz = db.get(Quiz, task.target_id)
+        if quiz is not None:
+            quiz_payload = QuizResponse.model_validate(quiz).model_dump(mode="json")
+            quiz_payload["task_id"] = task.id
+            quiz_payload["task_status"] = task.status
+            quiz_payload["generation_task"] = task_payload
+            return quiz_payload
+    return {
+        "task_id": task.id,
+        "task_name": task.task_name,
+        "target_type": task.target_type,
+        "target_id": task.target_id,
+        "status": task.status,
+        "detail": task.detail,
+        "created_at": task_payload["created_at"],
+        "updated_at": task_payload["updated_at"],
+    }
+
+
 @router.get("/knowledge-points")
 def get_knowledge_points_endpoint(
     request: Request,
@@ -112,8 +135,8 @@ def generate_quiz_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    quiz = generate_quiz(db, user=user, payload=payload)
-    return success_response(data=QuizResponse.model_validate(quiz).model_dump(mode="json"), request_id=request.state.request_id)
+    task = enqueue_quiz_generation(db, user=user, payload=payload)
+    return success_response(data=_generation_task_response(db, task), request_id=request.state.request_id)
 
 
 @router.get("/quizzes")
@@ -153,8 +176,8 @@ def generate_teacher_weak_quiz_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    quiz = generate_teacher_weak_quiz(db, user=user, payload=payload)
-    return success_response(data=QuizResponse.model_validate(quiz).model_dump(mode="json"), request_id=request.state.request_id)
+    task = enqueue_teacher_weak_quiz(db, user=user, payload=payload)
+    return success_response(data=_generation_task_response(db, task), request_id=request.state.request_id)
 
 
 @router.get("/teacher/weak-quizzes/{quiz_id}/attempts")
@@ -286,8 +309,8 @@ def generate_wrong_book_practice_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    quiz = generate_wrong_book_practice(db, course_id=course_id, user=user)
-    return success_response(data=QuizResponse.model_validate(quiz).model_dump(mode="json"), request_id=request.state.request_id)
+    task = enqueue_wrong_book_practice(db, course_id=course_id, user=user)
+    return success_response(data=_generation_task_response(db, task), request_id=request.state.request_id)
 
 
 @router.get("/weak-points")

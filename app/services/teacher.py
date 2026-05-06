@@ -5,7 +5,7 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from io import StringIO
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.enums import LessonStatus, ProcessStatus, UserRole
@@ -33,6 +33,7 @@ from app.db.models import (
 from app.services.analytics import get_course_analytics
 from app.services.audit import log_operation
 from app.services.courses import _assert_course_owner, _get_course_or_404, list_teaching_courses
+from app.services.notifications import list_user_notifications
 from app.services.storage import storage_service
 
 
@@ -208,19 +209,32 @@ def _ai_tasks(db: Session, course_ids: list[int], limit: int = 5) -> list[dict]:
             select(CourseMaterial.id).where(CourseMaterial.course_id.in_(course_ids), CourseMaterial.deleted_at.is_(None))
         )
     ]
-    if not material_ids:
-        return []
-    tasks = list(
+    task_filters = [AsyncTaskLog.target_type == "quiz"]
+    if material_ids:
+        task_filters.append((AsyncTaskLog.target_type == "material") & (AsyncTaskLog.target_id.in_(material_ids)))
+    task_rows = list(
         db.scalars(
             select(AsyncTaskLog)
-            .where(AsyncTaskLog.target_type == "material", AsyncTaskLog.target_id.in_(material_ids))
+            .where(or_(*task_filters))
             .order_by(AsyncTaskLog.created_at.desc())
-            .limit(limit)
+            .limit(max(limit * 4, 12))
         )
     )
+    course_id_set = set(course_ids)
+    tasks = [
+        task
+        for task in task_rows
+        if task.target_type != "quiz" or int((task.detail or {}).get("course_id") or 0) in course_id_set
+    ][:limit]
     material_by_id = {
         item.id: item
         for item in db.scalars(select(CourseMaterial).where(CourseMaterial.id.in_([task.target_id for task in tasks if task.target_id])))
+    }
+    quiz_by_id = {
+        item.id: item
+        for item in db.scalars(
+            select(Quiz).where(Quiz.id.in_([int(task.target_id) for task in tasks if task.target_type == "quiz" and task.target_id]))
+        )
     }
     return [
         {
@@ -228,7 +242,14 @@ def _ai_tasks(db: Session, course_ids: list[int], limit: int = 5) -> list[dict]:
             "task_name": task.task_name,
             "status": task.status,
             "target_id": task.target_id,
-            "title": material_by_id.get(task.target_id).title if task.target_id in material_by_id else task.task_name,
+            "title": (
+                material_by_id.get(task.target_id).title
+                if task.target_type == "material" and task.target_id in material_by_id
+                else quiz_by_id.get(task.target_id).title
+                if task.target_type == "quiz" and task.target_id in quiz_by_id
+                else (task.detail or {}).get("title") or task.task_name
+            ),
+            "target_type": task.target_type,
             "detail": task.detail,
             "created_at": task.created_at,
             "updated_at": task.updated_at,
@@ -401,6 +422,7 @@ def get_teacher_dashboard(db: Session, user: User) -> dict:
         "weekly_activity": weekly_activity,
         "pending_scripts": script_rows,
         "ai_tasks": _ai_tasks(db, ids, limit=5),
+        "notifications": list_user_notifications(db, user_id=user.id, limit=8),
     }
 
 

@@ -6,9 +6,10 @@ from datetime import UTC, datetime
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.enums import QuizStatus, QuizType, QuestionType, TaskStatus, UserRole
+from app.core.enums import ProcessStatus, QuizStatus, QuizType, QuestionType, TaskStatus, UserRole
 from app.core.errors import bad_request, forbidden, not_found
 from app.db.models import (
+    AsyncTaskLog,
     CourseMaterial,
     CourseMembership,
     KnowledgeChunk,
@@ -32,6 +33,7 @@ from app.schemas.learning import QuizEditRequest, QuizGenerateRequest, StudyPlan
 from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.knowledge import ensure_knowledge_points
+from app.services.notifications import push_user_notification
 from app.services.usage import log_ai_usage
 
 
@@ -354,7 +356,7 @@ def _prioritize_weak_points(db: Session, *, points: list[KnowledgePoint], course
     return sorted(points, key=lambda point: (weak_rank.get(point.id, len(weak_rank)), point.id))
 
 
-def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Quiz:
+def _validate_quiz_generation_request(db: Session, *, user: User, payload: QuizGenerateRequest):
     course = _get_course_or_404(db, payload.course_id)
     if payload.quiz_type not in {item.value for item in QuizType}:
         raise bad_request("测验类型不合法")
@@ -367,6 +369,69 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         _assert_course_owner(course, user)
     if user.role == UserRole.STUDENT.value:
         _assert_student_course_access(db, course_id=payload.course_id, user=user)
+    return course, question_type_counts
+
+
+def _quiz_generation_task_detail(*, user: User, course, payload: dict, kind: str, title: str) -> dict:
+    return {
+        "kind": kind,
+        "user_id": user.id,
+        "user_role": user.role,
+        "course_id": course.id,
+        "course_name": course.name,
+        "title": title,
+        "payload": payload,
+    }
+
+
+def _dispatch_quiz_generation(task_id: int) -> bool:
+    from app.tasks.quizzes import process_quiz_generation_task
+
+    try:
+        process_quiz_generation_task.delay(task_id)
+        return True
+    except Exception:
+        return False
+
+
+def _mark_quiz_task_dispatch_failed(db: Session, task: AsyncTaskLog) -> None:
+    db.refresh(task)
+    if task.status not in {ProcessStatus.PENDING.value, ProcessStatus.PROCESSING.value}:
+        return
+    detail = task.detail if isinstance(task.detail, dict) else {}
+    task.status = ProcessStatus.FAILED.value
+    task.detail = {**detail, "error": "quiz_generation_dispatch_failed", "failed_at": datetime.now(UTC).isoformat()}
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+
+
+def enqueue_quiz_generation(db: Session, *, user: User, payload: QuizGenerateRequest) -> AsyncTaskLog:
+    course, question_type_counts = _validate_quiz_generation_request(db, user=user, payload=payload)
+    task = AsyncTaskLog(
+        task_name="quiz.generate",
+        target_type="quiz",
+        target_id=None,
+        status=ProcessStatus.PENDING.value,
+        detail=_quiz_generation_task_detail(
+            user=user,
+            course=course,
+            payload={**payload.model_dump(mode="json"), "question_type_counts": question_type_counts},
+            kind="quiz",
+            title=payload.title,
+        ),
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    if not _dispatch_quiz_generation(task.id):
+        _mark_quiz_task_dispatch_failed(db, task)
+    db.refresh(task)
+    return task
+
+
+def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Quiz:
+    course, question_type_counts = _validate_quiz_generation_request(db, user=user, payload=payload)
     chapter_ids = _chapter_ids_for_quiz(payload)
     points = (
         _knowledge_points_by_ids(db, course_id=payload.course_id, point_ids=payload.knowledge_point_ids)
@@ -767,6 +832,34 @@ def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGene
     db.commit()
     db.refresh(quiz)
     return quiz
+
+
+def enqueue_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGenerateRequest) -> AsyncTaskLog:
+    course = _assert_teacher_course_access(db, course_id=payload.course_id, user=user)
+    type_counts = _normalize_question_type_counts(payload.question_type_counts)
+    if type_counts and sum(type_counts.values()) != payload.question_count:
+        raise bad_request("题型数量合计必须等于总题量")
+    title = payload.title or ("薄弱知识点综合测验" if payload.all_weak_points else "薄弱点专项测验")
+    task = AsyncTaskLog(
+        task_name="quiz.teacher_weak.generate",
+        target_type="quiz",
+        target_id=None,
+        status=ProcessStatus.PENDING.value,
+        detail=_quiz_generation_task_detail(
+            user=user,
+            course=course,
+            payload={**payload.model_dump(mode="json"), "question_type_counts": type_counts},
+            kind="teacher_weak_quiz",
+            title=title,
+        ),
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    if not _dispatch_quiz_generation(task.id):
+        _mark_quiz_task_dispatch_failed(db, task)
+    db.refresh(task)
+    return task
 
 
 def get_teacher_quiz_attempts(db: Session, *, quiz_id: int, user: User) -> dict:
@@ -1189,6 +1282,131 @@ def generate_wrong_book_practice(db: Session, *, course_id: int, user: User) -> 
     db.add(quiz)
     db.commit()
     return quiz
+
+
+def enqueue_wrong_book_practice(db: Session, *, course_id: int, user: User) -> AsyncTaskLog:
+    wrong_rows = list_wrong_questions(db, course_id=course_id, user=user)
+    if not wrong_rows:
+        raise bad_request("暂无错题可重练")
+    course = _get_course_or_404(db, course_id)
+    task = AsyncTaskLog(
+        task_name="quiz.wrong_book.generate",
+        target_type="quiz",
+        target_id=None,
+        status=ProcessStatus.PENDING.value,
+        detail=_quiz_generation_task_detail(
+            user=user,
+            course=course,
+            payload={"course_id": course_id},
+            kind="wrong_book_practice",
+            title="错题重练",
+        ),
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    if not _dispatch_quiz_generation(task.id):
+        _mark_quiz_task_dispatch_failed(db, task)
+    db.refresh(task)
+    return task
+
+
+def _quiz_generation_success_title(*, user: User, quiz: Quiz, kind: str) -> tuple[str, str]:
+    if kind == "teacher_weak_quiz":
+        return f"薄弱题目生成完成：{quiz.title}", "题目已进入待审核状态，请检查后发布。"
+    if kind == "wrong_book_practice":
+        return f"错题重练已生成：{quiz.title}", "新的错题重练已准备好，可以开始练习。"
+    if user.role == UserRole.TEACHER.value:
+        return f"题目生成完成：{quiz.title}", "测验已进入待审核状态，请检查后发布。"
+    return f"练习题已生成：{quiz.title}", "新的练习题已准备好，可以开始练习。"
+
+
+def _quiz_generation_failure_title(*, kind: str, title: str) -> tuple[str, str]:
+    prefix = "薄弱题目" if kind == "teacher_weak_quiz" else "错题重练" if kind == "wrong_book_practice" else "题目"
+    return f"{prefix}生成失败：{title}", "AI 生成任务失败，请稍后重试或联系管理员检查模型配置。"
+
+
+def process_quiz_generation_task(db: Session, task_id: int) -> None:
+    task = db.get(AsyncTaskLog, task_id)
+    if task is None:
+        return
+    detail = task.detail if isinstance(task.detail, dict) else {}
+    kind = str(detail.get("kind") or "quiz")
+    user = db.get(User, int(detail.get("user_id") or 0))
+    if user is None:
+        task.status = ProcessStatus.FAILED.value
+        task.detail = {**detail, "error": "user_not_found"}
+        db.add(task)
+        db.commit()
+        return
+    task.status = ProcessStatus.PROCESSING.value
+    task.detail = {**detail, "started_at": datetime.now(UTC).isoformat()}
+    db.add(task)
+    db.commit()
+    try:
+        payload_data = detail.get("payload") if isinstance(detail.get("payload"), dict) else {}
+        if kind == "teacher_weak_quiz":
+            quiz = generate_teacher_weak_quiz(db, user=user, payload=WeakQuizGenerateRequest(**payload_data))
+        elif kind == "wrong_book_practice":
+            quiz = generate_wrong_book_practice(db, course_id=int(payload_data.get("course_id") or detail.get("course_id")), user=user)
+        else:
+            quiz = generate_quiz(db, user=user, payload=QuizGenerateRequest(**payload_data))
+        question_count = int(db.scalar(select(func.count(QuizQuestion.id)).where(QuizQuestion.quiz_id == quiz.id)) or 0)
+        task = db.get(AsyncTaskLog, task_id)
+        if task is None:
+            return
+        title, message = _quiz_generation_success_title(user=user, quiz=quiz, kind=kind)
+        push_user_notification(
+            db,
+            user_id=user.id,
+            notification_type="quiz_generated",
+            title=title,
+            message=message,
+            course_id=quiz.course_id,
+            course_name=str(detail.get("course_name") or ""),
+            resource_type="quiz",
+            resource_id=quiz.id,
+            task_id=task.id,
+        )
+        task.status = ProcessStatus.READY.value
+        task.target_id = quiz.id
+        task.detail = {
+            **(task.detail if isinstance(task.detail, dict) else detail),
+            "quiz_id": quiz.id,
+            "question_count": question_count,
+            "completed_at": datetime.now(UTC).isoformat(),
+            "notification": {"title": title, "message": message},
+        }
+        db.add(task)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        task = db.get(AsyncTaskLog, task_id)
+        if task is None:
+            return
+        title, message = _quiz_generation_failure_title(kind=kind, title=str(detail.get("title") or "题目"))
+        push_user_notification(
+            db,
+            user_id=user.id,
+            notification_type="quiz_generation_failed",
+            title=title,
+            message=f"{message}错误：{str(exc)[:180]}",
+            course_id=int(detail.get("course_id") or 0) or None,
+            course_name=str(detail.get("course_name") or ""),
+            resource_type="quiz",
+            resource_id=None,
+            task_id=task.id,
+        )
+        task.status = ProcessStatus.FAILED.value
+        task.detail = {
+            **(task.detail if isinstance(task.detail, dict) else detail),
+            "error": str(exc),
+            "failed_at": datetime.now(UTC).isoformat(),
+            "notification": {"title": title, "message": message},
+        }
+        db.add(task)
+        db.commit()
+        raise
 
 
 def get_weak_points(db: Session, *, course_id: int, user: User) -> list[dict]:

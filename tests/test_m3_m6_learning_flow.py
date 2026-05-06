@@ -508,6 +508,14 @@ def test_learning_core_flow(client, monkeypatch):
         headers=student_headers,
     )
     assert practice_resp.status_code == 200, practice_resp.text
+    practice_quiz = practice_resp.json()["data"]
+    assert practice_quiz["task_id"]
+    student_notifications_resp = client.get("/api/v1/student/notifications", headers=student_headers)
+    assert student_notifications_resp.status_code == 200, student_notifications_resp.text
+    assert any(
+        item["type"] == "quiz_generated" and item.get("resource_id") == practice_quiz["id"]
+        for item in student_notifications_resp.json()["data"]
+    )
 
     weak_resp = client.get("/api/v1/learning/weak-points", params={"course_id": course["id"]}, headers=student_headers)
     assert weak_resp.status_code == 200, weak_resp.text
@@ -597,8 +605,15 @@ def test_teacher_weak_quiz_management_flow(client, monkeypatch):
     )
     assert generate_resp.status_code == 200, generate_resp.text
     weak_quiz = generate_resp.json()["data"]
+    assert weak_quiz["task_id"]
     assert weak_quiz["metadata_json"]["weak_quiz"] is True
     assert weak_quiz["metadata_json"]["question_type_counts"] == {"single_choice": 1, "judge": 1}
+    teacher_dashboard_resp = client.get("/api/v1/teacher/dashboard", headers=teacher_headers)
+    assert teacher_dashboard_resp.status_code == 200, teacher_dashboard_resp.text
+    assert any(
+        item["type"] == "quiz_generated" and item.get("resource_id") == weak_quiz["id"]
+        for item in teacher_dashboard_resp.json()["data"]["notifications"]
+    )
 
     attempts_empty_resp = client.get(f"/api/v1/learning/teacher/weak-quizzes/{weak_quiz['id']}/attempts", headers=teacher_headers)
     assert attempts_empty_resp.status_code == 200, attempts_empty_resp.text
