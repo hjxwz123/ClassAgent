@@ -34,6 +34,7 @@ from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.knowledge import ensure_knowledge_points
 from app.services.notifications import push_user_notification
+from app.services.pedagogy import quiz_artifact_source_text
 from app.services.usage import log_ai_usage
 
 
@@ -204,6 +205,9 @@ def _course_source_text_for_quiz(
 ) -> str:
     pieces: list[str] = []
     seen: set[str] = set()
+    artifact_text, _artifact_count = quiz_artifact_source_text(db, course_id=course_id, chapter_ids=chapter_ids)
+    if artifact_text:
+        _append_long_source_pieces(pieces, seen, "结构化教学对象", artifact_text, window=QUIZ_SOURCE_PIECE_LIMIT)
 
     chunk_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
     if chapter_ids:
@@ -446,6 +450,7 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         enabled=payload.prefer_weak_points,
     )
     source_text = _course_source_text_for_quiz(db, course_id=payload.course_id, chapter_ids=chapter_ids, points=points)
+    _artifact_text, pedagogy_artifact_count = quiz_artifact_source_text(db, course_id=payload.course_id, chapter_ids=chapter_ids)
     if not source_text.strip():
         source_text = _course_context_text_for_quiz(course=course, points=points)
     quiz_topic = _quiz_topic_for_generation(course_name=course.name, points=points, source_text=source_text)
@@ -475,6 +480,7 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
             "prefer_weak_points": payload.prefer_weak_points,
             "source_topic": quiz_topic,
             "source_chars": len(source_text),
+            "pedagogy_artifact_count": pedagogy_artifact_count,
         },
         total_score=0,
     )

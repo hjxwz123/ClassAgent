@@ -555,6 +555,8 @@ def _invalid_quiz_stem(stem: str) -> bool:
 
 RAG_ANSWER_SYSTEM_PROMPT = (
     "你是课程知识问答助手。必须优先依据给定课程资料回答。"
+    "如果资料中包含“结构化教学对象”或“题型模板”，可以把模板中的条件、步骤、变量槽位迁移到学生的新题干，"
+    "但要说明这是同题型迁移，不要声称课件出现过完全相同题目。"
     "如果学生要求解释、举例或类比，可以围绕资料中的概念、公式和条件生成教学示例，"
     "并明确这是用于说明资料内容的例子；不要因为资料里没有现成示例就直接说资料不足。"
     "只有当给定资料与问题完全无关或缺少关键定义时，才说明资料不足，不能编造与资料矛盾的内容。"
@@ -1076,6 +1078,89 @@ class AIService:
             return result.strip()
         merged = merged[:200] if len(merged) > 200 else merged
         return f"{title}：{merged or '该资料已生成课时页面，可继续补充讲解脚本。'}"
+
+    def generate_pedagogy_artifacts(
+        self,
+        *,
+        material_title: str,
+        lesson_title: str,
+        page_title: str | None,
+        page_number: int,
+        page_text: str,
+        script_text: str | None = None,
+        db: Session | None = None,
+    ) -> dict[str, Any]:
+        clean_page = _clean_text(page_text)
+        clean_script = _clean_text(script_text or "")
+        try:
+            payload = self._call_json(
+                db,
+                purpose="knowledge",
+                system_prompt=(
+                    "你是高校课程教学结构提炼助手。你的任务是把老师上传课件中的单页内容提炼为可被 QA、题目辅导、"
+                    "出题、复盘和教学分析复用的结构化教学对象。不要生成新 PPT，不要虚构与页面矛盾的知识。"
+                    "如果页面有例题或方法，请抽象成可迁移的题型模板：题型、条件、步骤、易错点、可替换变量槽位。"
+                    "必须只返回 JSON 对象。"
+                ),
+                user_prompt=(
+                    f"课件标题：{material_title}\n"
+                    f"课时标题：{lesson_title}\n"
+                    f"页码：第{page_number}页\n"
+                    f"页面标题：{page_title or '无'}\n"
+                    f"页面正文：{clean_page[:5200]}\n"
+                    f"讲解稿参考：{clean_script[:1800]}\n"
+                    "返回字段："
+                    "{"
+                    "\"page_summary\":\"100字内页面摘要\","
+                    "\"learning_objectives\":[\"学习目标\"],"
+                    "\"key_points\":[\"页面重点\"],"
+                    "\"knowledge_points\":[\"知识点\"],"
+                    "\"misconceptions\":[{\"title\":\"易错点\",\"description\":\"错误表现\",\"correction\":\"纠正方法\"}],"
+                    "\"problem_templates\":[{\"name\":\"题型名称\",\"conditions\":[\"适用条件\"],\"steps\":[\"步骤\"],"
+                    "\"mistakes\":[\"易错点\"],\"variable_slots\":[\"可替换变量槽位\"],\"transfer_prompt\":\"迁移到同题型新题的提示\"}],"
+                    "\"prerequisites\":[\"前置知识或前置页面关系\"],"
+                    "\"quick_checks\":[\"课堂快问\"],"
+                    "\"discussion_prompts\":[\"讨论问题\"],"
+                    "\"demo_ideas\":[\"演示入口\"]"
+                    "}"
+                ),
+            )
+        except Exception:
+            payload = None
+        if isinstance(payload, dict):
+            return payload
+        keywords = [item for item in self.extract_keywords(clean_page or page_title or lesson_title, limit=8) if item != "课程内容"]
+        if not keywords:
+            keywords = [page_title or lesson_title or "当前页面"]
+        main = keywords[0]
+        summary = clean_page[:220] or f"{page_title or lesson_title} 的页面内容需要结合课堂讲解继续补充。"
+        return {
+            "page_summary": summary,
+            "learning_objectives": [f"理解 {main} 的含义、适用条件和应用步骤"],
+            "key_points": keywords[:5],
+            "knowledge_points": keywords[:5],
+            "misconceptions": [
+                {
+                    "title": f"{main} 的适用前提",
+                    "description": f"容易脱离条件直接套用 {main} 的结论或步骤。",
+                    "correction": "先判断对象、条件、目标是否匹配，再选择对应方法。",
+                }
+            ],
+            "problem_templates": [
+                {
+                    "name": f"{main} 应用题型",
+                    "conditions": ["题干给出对象、条件或现象，需要选择相应概念、规则或步骤"],
+                    "steps": ["识别考查对象", "整理条件和目标", "选择课程中的概念或方法", "按步骤推理并检查限制条件"],
+                    "mistakes": ["只匹配表面文字，没有判断题型结构", "忽略条件变化导致的方法边界"],
+                    "variable_slots": ["对象", "条件", "目标", "参数或符号"],
+                    "transfer_prompt": f"当题干的对象、数值或符号变化时，先保留 {main} 的方法结构，再替换具体变量。",
+                }
+            ],
+            "prerequisites": keywords[1:4],
+            "quick_checks": [f"{main} 的适用条件是什么？", "遇到同题型新题时第一步应该判断什么？"],
+            "discussion_prompts": [f"请举一个 {main} 的同结构变式，并说明哪些条件被替换。"],
+            "demo_ideas": [f"用一个小例子演示 {main} 从条件识别到结论形成的过程。"],
+        }
 
     def _normalize_history_messages(self, history: Sequence[Any] | None) -> list[dict[str, str]]:
         messages: list[dict[str, str]] = []

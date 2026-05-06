@@ -70,6 +70,19 @@ export type Material = {
   updated_at: string;
 };
 
+export type PageActivity = {
+  id: number;
+  type: string;
+  scene_type: "explain" | "example" | "mistake" | "quick_check" | "discussion" | "demo" | string;
+  label: string;
+  title: string;
+  summary?: string | null;
+  content: string;
+  keywords?: string[];
+  payload?: Record<string, any>;
+  order_index?: number;
+};
+
 export type LessonPage = {
   id: number;
   lesson_id: number;
@@ -81,6 +94,7 @@ export type LessonPage = {
   audio_url?: string | null;
   audio_duration_seconds?: number | null;
   subtitle_text?: string | null;
+  pedagogy?: PageActivity[];
 };
 
 export type MaterialDetail = {

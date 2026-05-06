@@ -79,6 +79,7 @@
       <aside class="lesson-ai">
         <div class="study-tabs">
           <button :class="{ active: classroomTab === 'script' }" @click="classroomTab = 'script'"><FileText :size="16" />文稿</button>
+          <button :class="{ active: classroomTab === 'activity' }" @click="classroomTab = 'activity'"><Zap :size="16" />活动</button>
           <button :class="{ active: classroomTab === 'qa' }" @click="classroomTab = 'qa'"><MessageCircle :size="16" />问答</button>
           <button :class="{ active: classroomTab === 'note' }" @click="classroomTab = 'note'"><ListChecks :size="16" />笔记</button>
         </div>
@@ -88,8 +89,51 @@
             <h2>{{ activePage?.page_title || `第${currentPage}页` }}</h2>
             <div class="reading lesson-markdown" v-html="activeScriptHtml"></div>
           </section>
+          <section v-else-if="classroomTab === 'activity'" key="activity" class="activity-view">
+            <div class="activity-hero">
+              <span><Sparkles :size="16" />页面活动层</span>
+              <h2>{{ activePage?.page_title || `第${currentPage}页` }}</h2>
+              <p>{{ pageSummaryActivity?.summary || pageSummaryActivity?.content || activePageText.slice(0, 120) || '暂无页面摘要' }}</p>
+            </div>
+            <div v-if="learningObjectiveItems.length || keyPointItems.length" class="activity-band">
+              <section v-if="learningObjectiveItems.length">
+                <h3><Layers :size="15" />目标</h3>
+                <ul><li v-for="item in learningObjectiveItems" :key="item">{{ item }}</li></ul>
+              </section>
+              <section v-if="keyPointItems.length">
+                <h3><Zap :size="15" />重点</h3>
+                <ul><li v-for="item in keyPointItems" :key="item">{{ item }}</li></ul>
+              </section>
+            </div>
+            <div v-if="problemTemplateActivities.length" class="activity-section">
+              <h3><Pencil :size="16" />例题模板</h3>
+              <article v-for="item in problemTemplateActivities" :key="item.id" class="activity-item example">
+                <strong>{{ item.title }}</strong>
+                <div class="lesson-markdown" v-html="activityHtml(item)"></div>
+              </article>
+            </div>
+            <div v-if="misconceptionActivities.length" class="activity-section">
+              <h3><Shield :size="16" />易错点</h3>
+              <article v-for="item in misconceptionActivities" :key="item.id" class="activity-item mistake">
+                <strong>{{ item.title }}</strong>
+                <div class="lesson-markdown" v-html="activityHtml(item)"></div>
+              </article>
+            </div>
+            <div v-if="quickCheckActivities.length" class="activity-section">
+              <h3><MessageCircle :size="16" />快问</h3>
+              <button v-for="item in quickCheckActivities" :key="item.id" class="activity-question" type="button" @click="sendQuickClass(activityQuestion(item))">{{ activityQuestion(item) }}</button>
+            </div>
+            <div v-if="discussionDemoActivities.length" class="activity-section">
+              <h3><Presentation :size="16" />讨论与演示</h3>
+              <article v-for="item in discussionDemoActivities" :key="item.id" class="activity-item">
+                <strong>{{ item.title }}</strong>
+                <div class="lesson-markdown" v-html="activityHtml(item)"></div>
+              </article>
+            </div>
+            <EmptyState v-if="!activePageActivities.length" text="本页暂无活动层，重新解析课件后会生成结构化教学对象" />
+          </section>
           <section v-else-if="classroomTab === 'qa'" key="qa" class="class-chat">
-            <div class="context-bar"><Info :size="14" />第{{ currentPage }}页内容</div>
+            <div class="context-bar"><Info :size="14" />当前课件上下文，可跨页提问</div>
               <div class="class-chat-scroll">
               <ChatList :messages="classMessages" :thinking="classThinking" @toggle-thought="toggleThought" @copy="copyText" />
             </div>
@@ -994,7 +1038,7 @@ import {
 } from "lucide-vue-next";
 import { api } from "../api/client";
 import { routeByPage } from "../router";
-import type { Lesson, LessonPage, Quiz, User as UserType } from "../types";
+import type { Lesson, LessonPage, PageActivity, Quiz, User as UserType } from "../types";
 import { extractStructuredText, renderRichText } from "../utils/richText";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
@@ -1091,7 +1135,7 @@ const lessonStudyError = ref("");
 const openingLessonId = ref<number | null>(null);
 const currentPage = ref(1);
 const pageDirection = ref<"next" | "prev">("next");
-const classroomTab = ref<"script" | "qa" | "note">("script");
+const classroomTab = ref<"script" | "activity" | "qa" | "note">("script");
 const classMessages = ref<ChatMessage[]>([]);
 const classQuestion = ref("");
 const classThinking = ref(false);
@@ -1273,6 +1317,21 @@ const searchResultGroups = computed(() => (["course", "lesson", "material", "kno
   .filter((group) => group.items.length));
 const flatSearchResults = computed(() => searchResultGroups.value.flatMap((group) => group.items));
 const activePage = computed(() => classroomLesson.value?.pages.find((page) => page.page_number === currentPage.value) || classroomLesson.value?.pages[0] || null);
+const activePageActivities = computed<PageActivity[]>(() => activePage.value?.pedagogy || []);
+const pageSummaryActivity = computed(() => activePageActivities.value.find((item) => item.type === "page_summary") || null);
+const conceptActivities = computed(() => activePageActivities.value.filter((item) => item.type === "concept_card"));
+const problemTemplateActivities = computed(() => activePageActivities.value.filter((item) => item.type === "problem_template"));
+const misconceptionActivities = computed(() => activePageActivities.value.filter((item) => item.type === "misconception_card"));
+const quickCheckActivities = computed(() => activePageActivities.value.filter((item) => item.type === "quick_check"));
+const discussionActivities = computed(() => activePageActivities.value.filter((item) => item.type === "discussion_prompt"));
+const demoActivities = computed(() => activePageActivities.value.filter((item) => item.type === "demo"));
+const discussionDemoActivities = computed(() => [...discussionActivities.value, ...demoActivities.value]);
+const learningObjectiveItems = computed(() => payloadList(pageSummaryActivity.value, "learning_objectives"));
+const keyPointItems = computed(() => {
+  const items = payloadList(pageSummaryActivity.value, "key_points");
+  if (items.length) return items;
+  return conceptActivities.value.map((item) => item.payload?.knowledge_point || item.title.replace("：知识点", "")).filter(Boolean).slice(0, 6);
+});
 const activePageText = computed(() => extractStructuredText(activePage.value?.page_text || "") || String(activePage.value?.page_text || "").trim());
 const activeScriptText = computed(() => extractStructuredText(activePage.value?.script_text || activePage.value?.page_text || "") || String(activePage.value?.script_text || activePage.value?.page_text || "").trim());
 const activeSubtitleText = computed(() => {
@@ -1315,6 +1374,8 @@ const promptCards = computed(() => {
   });
 });
 const quickPageQuestions = computed(() => {
+  const structured = [...quickCheckActivities.value, ...discussionActivities.value].map(activityQuestion).filter(Boolean);
+  if (structured.length) return Array.from(new Set(structured)).slice(0, 4);
   const title = activePage.value?.page_title || classroomLesson.value?.lesson?.title || "当前页面";
   return [`${title} 的重点？`, `用例子解释 ${title}`, `根据 ${title} 出道题`, `总结 ${title}`];
 });
@@ -1925,6 +1986,18 @@ function normalizePercent(value: unknown) { const percent = Number.parseFloat(St
 function relativeTime(value?: string | null) { if (!value) return "刚刚"; const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
 function formatTime(value?: string | null) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
 function timeLabel(value: number) { if (!Number.isFinite(value)) return "00:00"; return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(Math.floor(value % 60)).padStart(2, "0")}`; }
+function payloadList(activity: PageActivity | null | undefined, key: string) {
+  const value = activity?.payload?.[key];
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8);
+  if (typeof value === "string" && value.trim()) return value.split(/[\n；;]+/).map((item) => item.trim()).filter(Boolean).slice(0, 8);
+  return [];
+}
+function activityQuestion(activity: PageActivity) {
+  return String(activity.payload?.question || activity.payload?.prompt || activity.summary || activity.title || "").trim();
+}
+function activityHtml(activity: PageActivity) {
+  return renderRichText(activity.content || activity.summary || "");
+}
 function copyText(text: string) { navigator.clipboard?.writeText(text); emit("notice", "success", "已复制"); }
 function chapterName(id?: number | null) { return (courseHome.value.chapters || []).find((item: any) => item.id === id)?.title || "课程章节"; }
 function isOpeningLesson(id?: number | null) { return openingLessonId.value === Number(id || 0); }

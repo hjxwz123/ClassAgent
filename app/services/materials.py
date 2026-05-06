@@ -19,11 +19,12 @@ from app.core.enums import (
     UserRole,
 )
 from app.core.errors import bad_request, forbidden, not_found
-from app.db.models import AsyncTaskLog, Chapter, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, User
+from app.db.models import AsyncTaskLog, Chapter, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, PedagogyArtifact, User
 from app.services.ai import ai_service
 from app.services.audit import log_operation
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.parser import parse_material
+from app.services.pedagogy import generate_material_pedagogy_artifacts
 from app.services.runtime_config import get_enabled_service_config
 from app.services.storage import storage_service
 from app.services.tts import tts_service
@@ -279,6 +280,7 @@ def update_material(
                 raise bad_request("章节不存在或不属于当前课程")
         material.chapter_id = chapter_id
     chunks = list(db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.material_id == material.id))) if metadata_changed else []
+    artifacts = list(db.scalars(select(PedagogyArtifact).where(PedagogyArtifact.material_id == material.id))) if metadata_changed else []
     if metadata_changed and chunks:
         for chunk in chunks:
             chunk.chapter_id = material.chapter_id
@@ -288,6 +290,12 @@ def update_material(
             chunk.source_meta = source_meta
             db.add(chunk)
         vector_store.upsert_chunks(db, chunks=chunks)
+    if metadata_changed and artifacts:
+        for artifact in artifacts:
+            artifact.chapter_id = material.chapter_id
+            if isinstance(artifact.payload, dict):
+                artifact.payload = {**artifact.payload, "material_title": material.title, "chapter_id": material.chapter_id}
+            db.add(artifact)
     db.add(material)
     log_operation(
         db,
@@ -309,6 +317,7 @@ def delete_material(db: Session, *, material_id: int, user: User) -> None:
     from datetime import UTC, datetime
 
     vector_store.delete_material(db, course_id=material.course_id, material_id=material.id)
+    db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.material_id == material.id))
     material.deleted_at = datetime.now(UTC)
     db.add(material)
     log_operation(
@@ -501,6 +510,7 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
     db.commit()
     try:
         warnings: list[str] = []
+        artifact_count = 0
         pages = parse_material(
             storage_service.absolute_path(material.storage_path),
             material.material_type,
@@ -520,6 +530,7 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
             vector_store.delete_material(db, course_id=material.course_id, material_id=material.id)
             db.execute(delete(LessonPage).where(LessonPage.lesson_id == lesson.id))
             db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.material_id == material.id))
+            db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.material_id == material.id))
             db.commit()
         lesson.title = material.title
         lesson.chapter_id = material.chapter_id
@@ -564,6 +575,11 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         except Exception as exc:
             material.vector_status = ProcessStatus.FAILED.value
             warnings.append(f"向量索引写入失败: {exc}")
+        try:
+            artifacts = generate_material_pedagogy_artifacts(db, material=material, lesson=lesson, pages=created_pages)
+            artifact_count = len(artifacts)
+        except Exception as exc:
+            warnings.append(f"教学结构生成失败: {exc}")
         material.parse_status = ProcessStatus.READY.value
         db.add(material)
         log_ai_usage(
@@ -577,7 +593,7 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
             error_message="；".join(warnings)[:500] if warnings else None,
         )
         task.status = ProcessStatus.READY.value
-        task.detail = {"page_count": len(created_pages), "warnings": warnings}
+        task.detail = {"page_count": len(created_pages), "pedagogy_artifact_count": artifact_count, "warnings": warnings}
         db.add(task)
         db.commit()
     except Exception as exc:
