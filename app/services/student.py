@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import case, func, select
@@ -124,57 +124,136 @@ def _course_student_total(db: Session, course_id: int) -> int:
     )
 
 
-def _course_progress(db: Session, *, course_id: int, user_id: int) -> dict:
-    lessons = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id, Lesson.status == LessonStatus.PUBLISHED.value)))
-    lesson_ids = [lesson.id for lesson in lessons]
-    progresses = (
-        list(db.scalars(select(LearningProgress).where(LearningProgress.user_id == user_id, LearningProgress.lesson_id.in_(lesson_ids))))
-        if lesson_ids
-        else []
+def _course_summary_context(db: Session, *, courses: list[Course], user_id: int) -> dict:
+    course_ids = [course.id for course in courses]
+    if not course_ids:
+        return {
+            "teachers": {},
+            "student_counts": {},
+            "material_counts": {},
+            "qa_counts": {},
+            "wrong_counts": {},
+            "progress": {},
+            "last_lessons": {},
+        }
+
+    teacher_ids = sorted({course.teacher_id for course in courses})
+    teachers = {teacher.id: teacher for teacher in db.scalars(select(User).where(User.id.in_(teacher_ids)))} if teacher_ids else {}
+    student_counts = {
+        int(course_id): int(count or 0)
+        for course_id, count in db.execute(
+            select(CourseMembership.course_id, func.count(CourseMembership.id))
+            .where(CourseMembership.course_id.in_(course_ids), CourseMembership.role == UserRole.STUDENT.value)
+            .group_by(CourseMembership.course_id)
+        )
+    }
+    material_counts = {
+        int(course_id): int(count or 0)
+        for course_id, count in db.execute(
+            select(CourseMaterial.course_id, func.count(CourseMaterial.id))
+            .where(CourseMaterial.course_id.in_(course_ids), CourseMaterial.deleted_at.is_(None))
+            .group_by(CourseMaterial.course_id)
+        )
+    }
+    qa_counts = {
+        int(course_id): int(count or 0)
+        for course_id, count in db.execute(
+            select(QARecord.course_id, func.count(QARecord.id))
+            .where(QARecord.course_id.in_(course_ids), QARecord.user_id == user_id)
+            .group_by(QARecord.course_id)
+        )
+    }
+    wrong_counts = {
+        int(course_id): int(count or 0)
+        for course_id, count in db.execute(
+            select(WrongQuestion.course_id, func.sum(WrongQuestion.wrong_count))
+            .where(WrongQuestion.course_id.in_(course_ids), WrongQuestion.user_id == user_id)
+            .group_by(WrongQuestion.course_id)
+        )
+    }
+
+    lessons_by_course: dict[int, list[Lesson]] = {course_id: [] for course_id in course_ids}
+    lesson_by_id: dict[int, Lesson] = {}
+    for lesson in db.scalars(select(Lesson).where(Lesson.course_id.in_(course_ids), Lesson.status == LessonStatus.PUBLISHED.value)):
+        lessons_by_course.setdefault(lesson.course_id, []).append(lesson)
+        lesson_by_id[lesson.id] = lesson
+
+    progress_rows = list(
+        db.execute(
+            select(LearningProgress, Lesson.course_id)
+            .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+            .where(
+                LearningProgress.user_id == user_id,
+                Lesson.course_id.in_(course_ids),
+                Lesson.status == LessonStatus.PUBLISHED.value,
+            )
+        )
     )
-    completed = len([item for item in progresses if item.completed_at is not None or item.progress_percent >= 100])
-    studied = len([item for item in progresses if item.progress_percent > 0])
-    progress_percent = round(sum(item.progress_percent for item in progresses) / max(len(lessons), 1), 2) if lessons else 0
-    last_progress = max(progresses, key=lambda item: item.updated_at, default=None)
+    progress_items: dict[int, list[LearningProgress]] = defaultdict(list)
+    for progress, course_id in progress_rows:
+        progress_items[int(course_id)].append(progress)
+
+    progress_by_course: dict[int, dict] = {}
+    last_lessons: dict[int, Lesson] = {}
+    for course_id in course_ids:
+        lessons = lessons_by_course.get(course_id, [])
+        progresses = progress_items.get(course_id, [])
+        last_progress = max(progresses, key=lambda item: item.updated_at, default=None)
+        progress_by_course[course_id] = {
+            "lesson_total": len(lessons),
+            "completed_lessons": len([item for item in progresses if item.completed_at is not None or item.progress_percent >= 100]),
+            "studied_lessons": len([item for item in progresses if item.progress_percent > 0]),
+            "progress_percent": round(sum(item.progress_percent for item in progresses) / max(len(lessons), 1), 2) if lessons else 0,
+            "study_seconds": int(sum(item.total_study_seconds or 0 for item in progresses)),
+            "last_progress": _as_dict(last_progress) if last_progress else None,
+        }
+        if last_progress and last_progress.lesson_id in lesson_by_id:
+            last_lessons[course_id] = lesson_by_id[last_progress.lesson_id]
+
     return {
-        "lesson_total": len(lessons),
-        "completed_lessons": completed,
-        "studied_lessons": studied,
-        "progress_percent": progress_percent,
-        "study_seconds": sum(item.total_study_seconds for item in progresses),
-        "last_progress": _as_dict(last_progress) if last_progress else None,
+        "teachers": teachers,
+        "student_counts": student_counts,
+        "material_counts": material_counts,
+        "qa_counts": qa_counts,
+        "wrong_counts": wrong_counts,
+        "progress": progress_by_course,
+        "last_lessons": last_lessons,
     }
 
 
-def _course_summary(db: Session, *, course: Course, user: User) -> dict:
-    teacher = _teacher(db, course)
-    material_count = db.scalar(
-        select(func.count(CourseMaterial.id)).where(CourseMaterial.course_id == course.id, CourseMaterial.deleted_at.is_(None))
+def _course_summary_with_context(*, course: Course, context: dict) -> dict:
+    progress = context["progress"].get(
+        course.id,
+        {
+            "lesson_total": 0,
+            "completed_lessons": 0,
+            "studied_lessons": 0,
+            "progress_percent": 0,
+            "study_seconds": 0,
+            "last_progress": None,
+        },
     )
-    qa_count = db.scalar(select(func.count(QARecord.id)).where(QARecord.course_id == course.id, QARecord.user_id == user.id))
-    wrong_count = db.scalar(select(func.sum(WrongQuestion.wrong_count)).where(WrongQuestion.course_id == course.id, WrongQuestion.user_id == user.id))
-    progress = _course_progress(db, course_id=course.id, user_id=user.id)
+    teacher = context["teachers"].get(course.teacher_id)
+    last_lesson = context["last_lessons"].get(course.id)
     data = _as_dict(course)
     data.update(
         {
             "teacher": _as_dict(teacher) if teacher else None,
-            "student_count": _course_student_total(db, course.id),
-            "material_count": int(material_count or 0),
-            "qa_count": int(qa_count or 0),
-            "wrong_count": int(wrong_count or 0),
+            "student_count": context["student_counts"].get(course.id, 0),
+            "material_count": context["material_counts"].get(course.id, 0),
+            "qa_count": context["qa_counts"].get(course.id, 0),
+            "wrong_count": context["wrong_counts"].get(course.id, 0),
             **progress,
         }
     )
-    if progress["last_progress"]:
-        lesson = db.get(Lesson, progress["last_progress"]["lesson_id"])
-        data["last_lesson"] = _as_dict(lesson) if lesson else None
-    else:
-        data["last_lesson"] = None
+    data["last_lesson"] = _as_dict(last_lesson) if last_lesson else None
     return data
 
 
 def list_student_course_summaries(db: Session, user: User) -> list[dict]:
-    return [_course_summary(db, course=course, user=user) for course in _joined_courses(db, user)]
+    courses = _joined_courses(db, user)
+    context = _course_summary_context(db, courses=courses, user_id=user.id)
+    return [_course_summary_with_context(course=course, context=context) for course in courses]
 
 
 def preview_course_by_code(db: Session, *, course_code: str, user: User) -> dict:
@@ -305,17 +384,21 @@ def get_student_dashboard(db: Session, user: User) -> dict:
     stats = _learning_stats(db, user=user, course_ids=course_ids)
     weak = []
     if course_ids:
-        counter: Counter[str] = Counter()
+        point_name = func.coalesce(KnowledgePoint.name, "未标注知识点")
         rows = db.execute(
-            select(WrongQuestion, QuizQuestion)
-            .join(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
+            select(point_name, func.sum(WrongQuestion.wrong_count))
+            .select_from(WrongQuestion)
+            .outerjoin(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
+            .outerjoin(
+                KnowledgePoint,
+                KnowledgePoint.id == func.coalesce(WrongQuestion.knowledge_point_id, QuizQuestion.knowledge_point_id),
+            )
             .where(WrongQuestion.user_id == user.id, WrongQuestion.course_id.in_(course_ids))
+            .group_by(point_name)
+            .order_by(func.sum(WrongQuestion.wrong_count).desc(), point_name.asc())
+            .limit(5)
         )
-        for wrong, question in rows:
-            if question.knowledge_point_id:
-                point = db.get(KnowledgePoint, question.knowledge_point_id)
-                counter[point.name if point else "未命名"] += wrong.wrong_count
-        weak = [{"name": name, "count": count} for name, count in counter.most_common(5)]
+        weak = [{"name": name, "count": int(count or 0)} for name, count in rows]
     recent_lesson = _recent_lesson(db, course_ids=course_ids, user=user)
     recommendation = {
         "text": "",
@@ -355,9 +438,25 @@ def get_student_course_home(db: Session, *, course_id: int, user: User) -> dict:
     course = _assert_joined(db, course_id=course_id, user=user)
     teacher = _teacher(db, course)
     chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
+    published_lessons = list(
+        db.scalars(
+            select(Lesson)
+            .where(Lesson.course_id == course_id, Lesson.status == LessonStatus.PUBLISHED.value)
+            .order_by(Lesson.created_at.asc())
+        )
+    )
+    lesson_ids = [lesson.id for lesson in published_lessons]
+    progress_by_lesson = {
+        progress.lesson_id: progress
+        for progress in (
+            db.scalars(select(LearningProgress).where(LearningProgress.user_id == user.id, LearningProgress.lesson_id.in_(lesson_ids)))
+            if lesson_ids
+            else []
+        )
+    }
     lessons = []
-    for lesson in db.scalars(select(Lesson).where(Lesson.course_id == course_id, Lesson.status == LessonStatus.PUBLISHED.value).order_by(Lesson.created_at.asc())):
-        progress = db.scalar(select(LearningProgress).where(LearningProgress.lesson_id == lesson.id, LearningProgress.user_id == user.id))
+    for lesson in published_lessons:
+        progress = progress_by_lesson.get(lesson.id)
         row = _as_dict(lesson)
         row["progress"] = _as_dict(progress) if progress else None
         row["progress_percent"] = progress.progress_percent if progress else 0
