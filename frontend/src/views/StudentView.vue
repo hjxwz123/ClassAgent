@@ -116,19 +116,21 @@
       </aside>
     </main>
 
-    <transition name="modal-pop">
-      <div v-if="completeOpen" class="modal-mask">
-        <article class="complete-modal">
-          <div class="confetti"><i v-for="n in 28" :key="n" :style="confettiStyle(n)"></i></div>
-          <CheckCircle :size="56" />
-          <h2>恭喜完成</h2>
-          <p>{{ classroomLesson?.lesson.title }}</p>
-          <div class="done-stats"><span>本次 {{ Math.max(1, Math.round(studySeconds / 60)) }} 分钟</span><span>{{ classroomLesson?.pages.length || 0 }} 页</span><span>{{ classMessages.filter((m) => m.role === 'user').length }} 次提问</span></div>
-          <div class="ai-summary"><Sparkles :size="16" />{{ completionSummary }}</div>
-          <footer><button class="btn btn-primary" @click="nextLessonAfterComplete">下一课时</button><button class="btn btn-secondary" @click="returnCourse">回课程</button><button class="btn btn-ghost" @click="openQuizSelection('practice')">做练习</button></footer>
-        </article>
-      </div>
-    </transition>
+    <Teleport to="body">
+      <transition name="modal-pop">
+        <div v-if="completeOpen" class="modal-mask student-modal-scope">
+          <article class="complete-modal">
+            <div class="confetti"><i v-for="n in 28" :key="n" :style="confettiStyle(n)"></i></div>
+            <CheckCircle :size="56" />
+            <h2>恭喜完成</h2>
+            <p>{{ classroomLesson?.lesson.title }}</p>
+            <div class="done-stats"><span>本次 {{ Math.max(1, Math.round(studySeconds / 60)) }} 分钟</span><span>{{ classroomLesson?.pages.length || 0 }} 页</span><span>{{ classMessages.filter((m) => m.role === 'user').length }} 次提问</span></div>
+            <div class="ai-summary"><Sparkles :size="16" />{{ completionSummary }}</div>
+            <footer><button class="btn btn-primary" @click="nextLessonAfterComplete">下一课时</button><button class="btn btn-secondary" @click="returnCourse">回课程</button><button class="btn btn-ghost" @click="openQuizSelection('practice')">做练习</button></footer>
+          </article>
+        </div>
+      </transition>
+    </Teleport>
 
     <transition name="fade-slide">
       <div v-if="settingsOpen" class="settings-pop">
@@ -884,35 +886,37 @@
       </button>
     </nav>
 
-    <transition name="modal-pop">
-      <div v-if="joinOpen" class="modal-mask">
-        <article class="join-modal">
-          <div class="modal-head"><PlusCircle :size="22" /><h2>加入新课程</h2><button @click="joinOpen = false"><X :size="16" /></button></div>
-          <label>课程码</label>
-          <div class="code-input" :class="{ ok: joinPreview && !joinPreview.already_joined, error: joinError }"><input v-model="joinCode" maxlength="12" @input="formatJoinCode" /><Loader2 v-if="joinChecking" :size="18" /><CheckCircle v-if="joinPreview && !joinChecking" :size="18" /><XCircle v-if="joinError" :size="18" /></div>
-          <small class="field-error" v-if="joinError">{{ joinError }}</small>
-          <article v-if="joinPreview" class="preview-course"><span :class="{ 'has-image': joinPreview.course.cover_url }" :style="courseCoverStyle(joinPreview.course)"><strong v-if="!joinPreview.course.cover_url" class="course-cover-mini-text">{{ courseCoverText(joinPreview.course) }}</strong></span><div><strong>{{ joinPreview.course.name }}</strong><small>{{ joinPreview.teacher?.nickname || '教师' }} · {{ joinPreview.course.term }} · {{ joinPreview.student_count }}人</small></div></article>
-          <div class="hint-line"><Info :size="14" />加入后即可学习课程内容</div>
-          <footer><button class="btn btn-ghost" @click="joinOpen = false">取消</button><button class="btn btn-primary" :data-loading="joinChecking" :disabled="joinChecking || !joinPreview || joinPreview.already_joined" @click="confirmJoin">确认加入</button></footer>
-        </article>
-      </div>
-    </transition>
+    <Teleport to="body">
+      <transition name="modal-pop">
+        <div v-if="joinOpen" class="modal-mask student-modal-scope">
+          <article class="join-modal">
+            <div class="modal-head"><PlusCircle :size="22" /><h2>加入新课程</h2><button @click="joinOpen = false"><X :size="16" /></button></div>
+            <label>课程码</label>
+            <div class="code-input" :class="{ ok: joinPreview && !joinPreview.already_joined, error: joinError }"><input v-model="joinCode" maxlength="12" @input="formatJoinCode" /><Loader2 v-if="joinChecking" :size="18" /><CheckCircle v-if="joinPreview && !joinChecking" :size="18" /><XCircle v-if="joinError" :size="18" /></div>
+            <small class="field-error" v-if="joinError">{{ joinError }}</small>
+            <article v-if="joinPreview" class="preview-course"><span :class="{ 'has-image': joinPreview.course.cover_url }" :style="courseCoverStyle(joinPreview.course)"><strong v-if="!joinPreview.course.cover_url" class="course-cover-mini-text">{{ courseCoverText(joinPreview.course) }}</strong></span><div><strong>{{ joinPreview.course.name }}</strong><small>{{ joinPreview.teacher?.nickname || '教师' }} · {{ joinPreview.course.term }} · {{ joinPreview.student_count }}人</small></div></article>
+            <div class="hint-line"><Info :size="14" />加入后即可学习课程内容</div>
+            <footer><button class="btn btn-ghost" @click="joinOpen = false">取消</button><button class="btn btn-primary" :data-loading="joinChecking" :disabled="joinChecking || !joinPreview || joinPreview.already_joined" @click="confirmJoin">确认加入</button></footer>
+          </article>
+        </div>
+      </transition>
 
-    <transition name="modal-pop">
-      <div v-if="planModalOpen" class="modal-mask">
-        <article class="join-modal">
-          <div class="modal-head"><Sparkles :size="22" /><h2>AI 学习计划</h2><button @click="planModalOpen = false"><X :size="16" /></button></div>
-          <textarea v-model="planForm.goal" class="textarea" placeholder="学习目标"></textarea>
-          <div class="form-row"><input v-model.number="planForm.daily_minutes" class="input" type="number" /><input v-model.number="planForm.available_days" class="input" type="number" /></div>
-          <footer><button class="btn btn-ghost" @click="planModalOpen = false">取消</button><button class="btn btn-primary" @click="createPlan">采用计划</button></footer>
-        </article>
-      </div>
-    </transition>
+      <transition name="modal-pop">
+        <div v-if="planModalOpen" class="modal-mask student-modal-scope">
+          <article class="join-modal">
+            <div class="modal-head"><Sparkles :size="22" /><h2>AI 学习计划</h2><button @click="planModalOpen = false"><X :size="16" /></button></div>
+            <textarea v-model="planForm.goal" class="textarea" placeholder="学习目标"></textarea>
+            <div class="form-row"><input v-model.number="planForm.daily_minutes" class="input" type="number" /><input v-model.number="planForm.available_days" class="input" type="number" /></div>
+            <footer><button class="btn btn-ghost" @click="planModalOpen = false">取消</button><button class="btn btn-primary" @click="createPlan">采用计划</button></footer>
+          </article>
+        </div>
+      </transition>
+    </Teleport>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, Transition, watch, type PropType, type Ref } from "vue";
+import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, Teleport, Transition, watch, type PropType, type Ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Award, BarChart2, Bell, BookMarked, BookOpen, CalendarCheck, Camera, Check,
@@ -2293,28 +2297,30 @@ const QuizAnswerView = defineComponent({
             ])
           ])
         ]),
-        h(Transition, { name: "modal-pop" }, {
-          default: () => confirming.value ? h("div", { class: "exam-modal-mask" }, [
-            h("article", { class: "exam-confirm-card" }, [
-              h("div", { class: "exam-modal-head" }, [h(AlertTriangle, { size: 22 }), h("h2", "确认交卷"), h("button", { type: "button", onClick: () => { confirming.value = false; } }, [h(X, { size: 16 })])]),
-              h("p", unanswered.length ? `还有 ${unanswered.length} 道未答` : "所有题目已作答"),
-              marked.value.length ? h("p", `已标记 ${marked.value.length} 道`) : null,
-              h("footer", [h("button", { type: "button", class: "exam-btn exam-btn-outline", disabled: p.submitting, onClick: () => { confirming.value = false; } }, "继续作答"), h("button", { type: "button", class: "exam-btn exam-btn-primary", disabled: p.submitting, "data-loading": p.submitting, onClick: submit }, "确认交卷")])
-            ])
-          ]) : null
-        }),
-        h(Transition, { name: "modal-pop" }, {
-          default: () => exitConfirming.value ? h("div", { class: "exam-modal-mask" }, [
-            h("article", { class: "exam-confirm-card" }, [
-              h("div", { class: "exam-modal-head" }, [h(AlertTriangle, { size: 22 }), h("h2", "退出练习？"), h("button", { type: "button", onClick: () => { exitConfirming.value = false; } }, [h(X, { size: 16 })])]),
-              h("p", "当前作答不会自动保存，确认退出后会回到习题选择页。"),
-              h("footer", [
-                h("button", { type: "button", class: "exam-btn exam-btn-outline", onClick: () => { exitConfirming.value = false; } }, "继续作答"),
-                h("button", { type: "button", class: "exam-btn exam-btn-primary", onClick: () => update("exit") }, "退出到选择页")
+        h(Teleport, { to: "body" }, [
+          h(Transition, { name: "modal-pop" }, {
+            default: () => confirming.value ? h("div", { class: "exam-modal-mask exam-modal-scope" }, [
+              h("article", { class: "exam-confirm-card" }, [
+                h("div", { class: "exam-modal-head" }, [h(AlertTriangle, { size: 22 }), h("h2", "确认交卷"), h("button", { type: "button", onClick: () => { confirming.value = false; } }, [h(X, { size: 16 })])]),
+                h("p", unanswered.length ? `还有 ${unanswered.length} 道未答` : "所有题目已作答"),
+                marked.value.length ? h("p", `已标记 ${marked.value.length} 道`) : null,
+                h("footer", [h("button", { type: "button", class: "exam-btn exam-btn-outline", disabled: p.submitting, onClick: () => { confirming.value = false; } }, "继续作答"), h("button", { type: "button", class: "exam-btn exam-btn-primary", disabled: p.submitting, "data-loading": p.submitting, onClick: submit }, "确认交卷")])
               ])
-            ])
-          ]) : null
-        })
+            ]) : null
+          }),
+          h(Transition, { name: "modal-pop" }, {
+            default: () => exitConfirming.value ? h("div", { class: "exam-modal-mask exam-modal-scope" }, [
+              h("article", { class: "exam-confirm-card" }, [
+                h("div", { class: "exam-modal-head" }, [h(AlertTriangle, { size: 22 }), h("h2", "退出练习？"), h("button", { type: "button", onClick: () => { exitConfirming.value = false; } }, [h(X, { size: 16 })])]),
+                h("p", "当前作答不会自动保存，确认退出后会回到习题选择页。"),
+                h("footer", [
+                  h("button", { type: "button", class: "exam-btn exam-btn-outline", onClick: () => { exitConfirming.value = false; } }, "继续作答"),
+                  h("button", { type: "button", class: "exam-btn exam-btn-primary", onClick: () => update("exit") }, "退出到选择页")
+                ])
+              ])
+            ]) : null
+          })
+        ])
       ]);
     };
   }
