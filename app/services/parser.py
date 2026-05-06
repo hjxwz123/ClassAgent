@@ -35,6 +35,8 @@ MARKDOWN_IMAGE_URL_PATTERN = re.compile(
 HTML_IMAGE_URL_PATTERN = re.compile(r"""<img\b[^>]*\bsrc=["'](?P<src>[^"']+)["'][^>]*>""", re.IGNORECASE)
 DATA_IMAGE_PATTERN = re.compile(r"^data:(?P<mime>image/[a-z0-9.+-]+);base64,(?P<data>.+)$", re.IGNORECASE | re.DOTALL)
 MAX_MARKDOWN_IMAGE_BYTES = 15 * 1024 * 1024
+SIGNED_IMAGE_QUERY_KEYS = {"Expires", "OSSAccessKeyId", "Signature", "security-token", "x-oss-security-token"}
+IMAGE_FILENAME_ALT_PATTERN = re.compile(r"^[A-Fa-f0-9_-]{12,}\.(?:png|jpe?g|gif|webp|bmp|svg)$", re.IGNORECASE)
 
 
 def _normalize_page(title: str | None, content: str, page_number: int) -> dict:
@@ -265,11 +267,7 @@ def _is_temporary_docmind_url(value: str) -> bool:
     if parsed.scheme not in {"http", "https"}:
         return False
     query = parse_qs(parsed.query)
-    signed_query_keys = {"Expires", "OSSAccessKeyId", "Signature", "security-token"}
-    if signed_query_keys.intersection(query):
-        return True
-    host = parsed.netloc.lower()
-    return "docmind" in host or "doc-mind" in host or "docmind" in parsed.path.lower()
+    return bool(SIGNED_IMAGE_QUERY_KEYS.intersection(query))
 
 
 def _image_suffix(url: str, content_type: str | None) -> str:
@@ -363,18 +361,24 @@ def _same_image_url(left: str | None, right: str) -> bool:
 def _strip_unavailable_image(content: str, raw_url: str) -> str:
     placeholder = "（图片未能保存，请重新解析资料）"
 
+    def display_alt(alt: str) -> str:
+        clean = html.unescape(alt).strip()
+        if IMAGE_FILENAME_ALT_PATTERN.fullmatch(clean):
+            return ""
+        return clean
+
     def replace_markdown(match: re.Match[str]) -> str:
         url = match.groupdict().get("angle") or match.groupdict().get("plain")
         if not _same_image_url(url, raw_url):
             return match.group(0)
-        alt = (match.groupdict().get("alt") or "").strip()
+        alt = display_alt(match.groupdict().get("alt") or "")
         return alt or placeholder
 
     def replace_html(match: re.Match[str]) -> str:
         if not _same_image_url(match.groupdict().get("src"), raw_url):
             return match.group(0)
         alt_match = re.search(r"""\balt=["'](?P<alt>[^"']+)["']""", match.group(0), flags=re.IGNORECASE)
-        alt = html.unescape(alt_match.group("alt")).strip() if alt_match else ""
+        alt = display_alt(alt_match.group("alt") if alt_match else "")
         return alt or placeholder
 
     return HTML_IMAGE_URL_PATTERN.sub(replace_html, MARKDOWN_IMAGE_URL_PATTERN.sub(replace_markdown, content))
