@@ -33,7 +33,7 @@ from app.db.models import (
 from app.services.analytics import get_course_analytics
 from app.services.audit import log_operation
 from app.services.courses import _assert_course_owner, _get_course_or_404, list_teaching_courses
-from app.services.notifications import list_user_notifications
+from app.services.notifications import active_system_announcement, list_user_notifications
 from app.services.storage import storage_service
 
 
@@ -335,6 +335,16 @@ def update_teacher_notifications(db: Session, *, user: User, settings: list[dict
     return normalized
 
 
+def _teacher_notice_enabled(db: Session, *, user_id: int, key: str) -> bool:
+    settings = _get_preference(db, user_id=user_id, key=TEACHER_NOTIFICATION_KEY) or DEFAULT_NOTIFICATION_SETTINGS
+    if not isinstance(settings, list):
+        return True
+    for item in settings:
+        if isinstance(item, dict) and item.get("key") == key:
+            return bool(item.get("enabled", True))
+    return True
+
+
 def get_teacher_dashboard(db: Session, user: User) -> dict:
     _assert_teacher(user)
     courses = list_teaching_courses(db, user)
@@ -409,6 +419,11 @@ def get_teacher_dashboard(db: Session, user: User) -> dict:
                 .limit(5)
             )
         ]
+    notifications = list_user_notifications(db, user_id=user.id, limit=8)
+    if _teacher_notice_enabled(db, user_id=user.id, key="system"):
+        announcement = active_system_announcement(db, role="teacher")
+        if announcement:
+            notifications = [announcement, *notifications][:8]
     return {
         "stats": {
             "course_total": len(courses),
@@ -422,7 +437,7 @@ def get_teacher_dashboard(db: Session, user: User) -> dict:
         "weekly_activity": weekly_activity,
         "pending_scripts": script_rows,
         "ai_tasks": _ai_tasks(db, ids, limit=5),
-        "notifications": list_user_notifications(db, user_id=user.id, limit=8),
+        "notifications": notifications,
     }
 
 

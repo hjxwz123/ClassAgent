@@ -410,6 +410,18 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
         headers=admin_headers,
     )
     assert update_setting_resp.status_code == 200, update_setting_resp.text
+    enable_announcement_resp = client.put(
+        "/api/v1/admin/system-settings/system.announcement_enabled",
+        json={"value": True},
+        headers=admin_headers,
+    )
+    assert enable_announcement_resp.status_code == 200, enable_announcement_resp.text
+    teacher_dashboard_resp = client.get("/api/v1/teacher/dashboard", headers=teacher_headers)
+    assert teacher_dashboard_resp.status_code == 200, teacher_dashboard_resp.text
+    assert any(
+        item["type"] == "system_announcement" and item["message"] == "期中周系统维护公告"
+        for item in teacher_dashboard_resp.json()["data"]["notifications"]
+    )
 
     monitoring_resp = client.get("/api/v1/admin/monitoring/overview", headers=admin_headers)
     assert monitoring_resp.status_code == 200, monitoring_resp.text

@@ -32,7 +32,7 @@ from app.db.models import (
 )
 from app.services.ai import ai_service
 from app.services.courses import _get_course_or_404
-from app.services.notifications import list_user_notifications
+from app.services.notifications import active_system_announcement, list_user_notifications
 from app.services.storage import storage_service
 
 
@@ -45,6 +45,7 @@ DEFAULT_STUDENT_NOTICES = [
     {"key": "quiz", "label": "测验发布提醒", "enabled": True},
     {"key": "qa", "label": "AI 问答完成", "enabled": True},
     {"key": "teacher", "label": "教师提醒", "enabled": True},
+    {"key": "system", "label": "系统公告", "enabled": True},
     {"key": "plan", "label": "学习计划提醒", "enabled": True, "time": "20:00"},
 ]
 
@@ -555,6 +556,10 @@ def get_student_notifications(db: Session, user: User) -> list[dict]:
     course_ids = [course.id for course in _joined_courses(db, user)]
     course_id_set = set(course_ids)
     notifications: list[dict] = []
+    if _notice_enabled(db, user_id=user.id, key="system"):
+        announcement = active_system_announcement(db, role="student")
+        if announcement:
+            notifications.append(announcement)
     if course_ids:
         if _notice_enabled(db, user_id=user.id, key="quiz"):
             notifications.extend(

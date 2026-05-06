@@ -5,10 +5,46 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import UserPreference
+from app.db.models import SystemSetting, UserPreference
 
 
 USER_NOTIFICATION_KEY = "user.notifications"
+
+
+def _setting_value(db: Session, key: str):
+    item = db.scalar(select(SystemSetting).where(SystemSetting.setting_key == key))
+    return item.setting_value if item is not None else None
+
+
+def _as_enabled(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on", "启用", "是"}
+
+
+def active_system_announcement(db: Session, *, role: str) -> dict | None:
+    if not _as_enabled(_setting_value(db, "system.announcement_enabled")):
+        return None
+    scope = str(_setting_value(db, "system.announcement_scope") or "all").strip().lower()
+    normalized_role = str(role or "").strip().lower()
+    if scope not in {"all", normalized_role}:
+        return None
+    setting = db.scalar(select(SystemSetting).where(SystemSetting.setting_key == "system.announcement"))
+    raw_message = setting.setting_value if setting is not None else ""
+    message = str(raw_message or "").strip()
+    if not message:
+        return None
+    updated_at = (setting.updated_at if setting is not None else None) or datetime.now(UTC)
+    return {
+        "id": f"system-announcement-{int(_notification_time({'time': updated_at}))}",
+        "type": "system_announcement",
+        "title": "系统公告",
+        "message": message,
+        "time": updated_at,
+        "unread": True,
+    }
 
 
 def _notification_time(value) -> float:
