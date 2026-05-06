@@ -1330,6 +1330,10 @@ watch(selectedCourseId, async (id, previousId) => {
 watch(activePage, async (page) => { if (page) await loadNote(page.id); }, { immediate: false });
 
 async function run<T>(task: () => Promise<T>, ok?: string) { try { const data = await task(); if (ok) emit("notice", "success", ok); return data; } catch (error) { emit("notice", "error", (error as Error).message); return null; } }
+function queuedQuizMessage(result: any, fallback = "题目已加入生成队列，生成成功后会通知你") {
+  if (result?.id) return "";
+  return result?.status === "failed" ? "题目生成失败，请稍后重试" : fallback;
+}
 async function go(key: string) { await router.push(routeByPage[key] || "/home"); }
 async function handleStudentNav(key: string) {
   if (key === "studentQuizzes") {
@@ -1705,7 +1709,15 @@ async function loadGuidance(level: number) { if (!activeProblem.value) return; g
 async function toggleGuide(level: number) { if (!guidance[level]) await loadGuidance(level); else guideOpen[level] = !guideOpen[level]; }
 
 async function loadKnowledge() { if (!selectedCourseId.value) return; knowledge.value = (await run<any[]>(() => api.get("/learning/knowledge-points", { course_id: selectedCourseId.value, chapter_id: selectedChapterId.value || undefined }))) || []; if (!selectedKnowledgeId.value && knowledge.value[0]) selectedKnowledgeId.value = knowledge.value[0].id; weakPoints.value = (await run<any[]>(() => api.get("/learning/weak-points", { course_id: selectedCourseId.value }))) || []; if (!courseHome.value.course) await loadCourseHome(); }
-async function generateKnowledgeQuiz(count: number) { if (!selectedCourseId.value) return; await run(() => api.post("/learning/quizzes/generate", { course_id: selectedCourseId.value, chapter_id: selectedKnowledge.value?.chapter_id || undefined, title: `${selectedKnowledge.value?.name || '知识点'}练习`, quiz_type: "practice", question_count: count }), "已生成"); await openQuizSelection("practice"); }
+async function generateKnowledgeQuiz(count: number) {
+  if (!selectedCourseId.value) return;
+  const result = await run<any>(() => api.post("/learning/quizzes/generate", { course_id: selectedCourseId.value, chapter_id: selectedKnowledge.value?.chapter_id || undefined, title: `${selectedKnowledge.value?.name || '知识点'}练习`, quiz_type: "practice", question_count: count }));
+  if (!result) return;
+  const queuedMessage = queuedQuizMessage(result);
+  emit("notice", result.id ? "success" : "info", queuedMessage || "已生成");
+  await openQuizSelection("practice");
+  if (!result.id) await loadNotifications(true);
+}
 
 async function loadQuizPage() { if (!selectedCourseId.value) return; quizzes.value = (await run<Quiz[]>(() => api.get("/learning/quizzes", { course_id: selectedCourseId.value }))) || []; if (!courseHome.value.course) await loadCourseHome(); await loadWrongBook(); }
 async function generateQuiz() {
@@ -1714,7 +1726,7 @@ async function generateQuiz() {
   try {
     const count = Number(quizQuestionCount.value.replace("题", ""));
     const chapterIds = selectedPracticeChapters.value.length ? selectedPracticeChapters.value : (selectedChapterId.value ? [selectedChapterId.value] : []);
-    const quiz = await run<Quiz>(() => api.post("/learning/quizzes/generate", {
+    const quiz = await run<any>(() => api.post("/learning/quizzes/generate", {
       course_id: selectedCourseId.value,
       chapter_id: chapterIds.length === 1 ? chapterIds[0] : undefined,
       chapter_ids: chapterIds,
@@ -1722,9 +1734,11 @@ async function generateQuiz() {
       quiz_type: "practice",
       question_count: count,
       prefer_weak_points: smartQuiz.value,
-    }), "已生成");
+    }));
+    if (quiz) emit("notice", quiz.id ? "success" : "info", queuedQuizMessage(quiz) || "已生成");
     await loadQuizPage();
-    if (quiz) await startQuiz(quiz.id);
+    if (quiz?.id) await startQuiz(quiz.id);
+    if (quiz && !quiz.id) await loadNotifications(true);
   } finally {
     quizGenerating.value = false;
   }
@@ -1788,8 +1802,10 @@ async function loadWrongPractice() {
       emit("notice", "info", "暂无错题可重练");
       return;
     }
-    const quiz = await run<Quiz>(() => api.post("/learning/wrong-questions/practice", undefined, { course_id: selectedCourseId.value }), "已生成");
-    if (quiz) { await go("studentQuizzes"); await loadQuizPage(); await startQuiz(quiz.id); }
+    const quiz = await run<any>(() => api.post("/learning/wrong-questions/practice", undefined, { course_id: selectedCourseId.value }));
+    if (quiz) emit("notice", quiz.id ? "success" : "info", queuedQuizMessage(quiz, "错题重练已加入生成队列，生成成功后会通知你") || "已生成");
+    if (quiz) { await go("studentQuizzes"); await loadQuizPage(); if (quiz.id) await startQuiz(quiz.id); }
+    if (quiz && !quiz.id) await loadNotifications(true);
   } finally {
     wrongPracticeGenerating.value = false;
   }

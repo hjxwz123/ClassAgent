@@ -21,7 +21,7 @@
         </div>
       </div>
       <div class="header-actions">
-        <button type="button" class="icon-btn" aria-label="通知" @click="openNotifications"><Bell :size="20" /><span>通知</span><em v-if="todoCount">{{ todoCount }}</em></button>
+        <button type="button" class="icon-btn" aria-label="通知" @click="openNotifications"><Bell :size="20" /><span>通知</span><em v-if="topNoticeCount">{{ topNoticeCount }}</em></button>
         <button type="button" class="icon-btn" aria-label="帮助" @click="openHelp"><HelpCircle :size="20" /><span>帮助</span></button>
         <i></i>
         <div ref="userMenuRef" class="user-menu">
@@ -703,6 +703,8 @@ const greeting = computed(() => { const hour = new Date().getHours(); if (hour <
 const todayText = computed(() => new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" }));
 const focusCount = computed(() => (dashboard.value.todos || []).length || courses.value.length);
 const todoCount = computed(() => (dashboard.value.todos || []).length);
+const teacherNotifications = computed(() => dashboard.value.notifications || []);
+const topNoticeCount = computed(() => teacherNotifications.value.filter((item: any) => item.unread).length || todoCount.value);
 const courseTerms = computed(() => [...new Set(courses.value.map((course) => course.term).filter(Boolean))]);
 const courseTermOptions = computed(() => [{ label: "全部学期", value: "" }, ...courseTerms.value.map((term) => ({ label: String(term), value: String(term) }))]);
 const lessonChapterOptions = computed(() => [{ label: "全部章节", value: 0 }, ...(courseHome.value.chapters || []).map((chapter: any) => ({ label: chapter.title, value: chapter.id }))]);
@@ -844,6 +846,12 @@ function toggleCourseMenu() {
   courseMenuOpen.value = !courseMenuOpen.value;
 }
 function openNotifications() {
+  const latest = teacherNotifications.value[0];
+  if (latest) {
+    emit("notice", latest.type?.includes("failed") ? "warning" : "success", latest.message ? `${latest.title}：${latest.message}` : latest.title);
+    if (latest.resource_type === "quiz") go("teacherWeakQuizzes");
+    return;
+  }
   if (todoCount.value) {
     emit("notice", "info", `有 ${todoCount.value} 条待办事项`);
     go("teacherDashboard");
@@ -1210,6 +1218,11 @@ async function generateTeacherWeakQuiz(point?: any) {
       question_type_counts: weakQuizTypeCountsPayload(),
     }));
     if (!quiz) return;
+    if (!quiz.id) {
+      emit("notice", "info", "薄弱题目已加入生成队列，生成成功后会通知老师");
+      await loadDashboard();
+      return;
+    }
     await loadWeakQuizzes(true);
     await selectWeakQuizSet(quiz);
     const detail = await run<any>(() => api.get(`/learning/quizzes/${quiz.id}`));

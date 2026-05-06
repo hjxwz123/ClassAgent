@@ -32,6 +32,7 @@ from app.db.models import (
 )
 from app.services.ai import ai_service
 from app.services.courses import _get_course_or_404
+from app.services.notifications import list_user_notifications
 from app.services.storage import storage_service
 
 
@@ -555,6 +556,12 @@ def get_student_notifications(db: Session, user: User) -> list[dict]:
     course_id_set = set(course_ids)
     notifications: list[dict] = []
     if course_ids:
+        if _notice_enabled(db, user_id=user.id, key="quiz"):
+            notifications.extend(
+                item
+                for item in list_user_notifications(db, user_id=user.id, limit=8)
+                if item.get("type") in {"quiz_generated", "quiz_generation_failed"}
+            )
         if _notice_enabled(db, user_id=user.id, key="teacher"):
             reminders = _preference(db, user_id=user.id, key=STUDENT_REMINDER_KEY)
             if isinstance(reminders, list):

@@ -71,6 +71,17 @@ class QuizResponse(ORMModel):
     updated_at: datetime
 
 
+class AsyncTaskResponse(ORMModel):
+    id: int
+    task_name: str
+    target_type: str
+    target_id: int | None
+    status: str
+    detail: dict | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class QuizDetailResponse(BaseModel):
     quiz: QuizResponse
     questions: list[QuizQuestionPayload]
