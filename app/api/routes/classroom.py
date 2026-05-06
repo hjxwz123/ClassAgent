@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.schemas.classroom import LearningProgressResponse, LessonDetailResponse, LessonResponse, ProgressUpdateRequest
 from app.schemas.material import LessonPageResponse
 from app.services.classroom import get_learning_progress, get_lesson_detail, list_lessons, publish_lesson, update_learning_progress
-from app.services.pedagogy import page_activity_payload
+from app.services.pedagogy import ensure_lesson_pedagogy_artifacts, page_activity_payload
 
 
 router = APIRouter()
@@ -37,6 +37,10 @@ def get_lesson_endpoint(
 ):
     lesson, pages = get_lesson_detail(db, lesson_id=lesson_id, user=user)
     activities_by_page = page_activity_payload(db, lesson_page_ids=[page.id for page in pages])
+    if pages and not any(activities_by_page.values()):
+        if ensure_lesson_pedagogy_artifacts(db, lesson=lesson, pages=pages):
+            db.commit()
+            activities_by_page = page_activity_payload(db, lesson_page_ids=[page.id for page in pages])
     page_payloads = []
     for page in pages:
         payload = LessonPageResponse.model_validate(page).model_dump(mode="json")
