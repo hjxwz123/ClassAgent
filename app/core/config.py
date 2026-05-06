@@ -40,8 +40,8 @@ class Settings(BaseSettings):
     vector_store_provider: Literal["chroma"] = "chroma"
     chroma_persist_dir: str = str(VECTOR_DIR / "chroma")
     embedding_dimension: int = 1536
-    vector_query_limit: int = 5
-    vector_max_distance: float = 0.85
+    vector_query_limit: int = 8
+    vector_max_distance: float = 0.9
     default_upload_limit_mb: int = 50
     max_course_materials: int = 200
     script_max_length: int = 3000

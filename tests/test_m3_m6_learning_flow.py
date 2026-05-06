@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 
 import pytest
@@ -826,6 +827,148 @@ def test_qa_stream_falls_back_to_regular_answer_when_upstream_stream_fails(clien
     assert "非流式回退思考过程" in body
     assert "event: final" in body
     assert body.count("event: delta") >= 2
+
+
+def test_qa_stream_sends_previous_turn_as_history_messages(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+    from app.services.ai import ChatDelta
+
+    calls: list[dict] = []
+
+    def stream_answer(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            yield ChatDelta("content", "矩阵可以表示线性变换。")
+        else:
+            yield ChatDelta("content", "这里的“这个”指上一轮提到的线性变换。")
+
+    monkeypatch.setattr(qa_service.ai_service, "stream_answer_question", stream_answer)
+
+    with client.stream(
+        "POST",
+        "/api/v1/qa/ask/stream",
+        json={"course_id": course["id"], "question": "矩阵可以表示什么？"},
+        headers=student_headers,
+    ) as response:
+        first_body = "".join(response.iter_text())
+
+    assert response.status_code == 200, first_body
+    assert "event: final" in first_body
+    final_payload = first_body.split("event: final\ndata: ", 1)[1].split("\n\n", 1)[0]
+    conversation_id = json.loads(final_payload)["conversation_id"]
+
+    with client.stream(
+        "POST",
+        "/api/v1/qa/ask/stream",
+        json={"course_id": course["id"], "conversation_id": conversation_id, "question": "这个能再举个例子吗？"},
+        headers=student_headers,
+    ) as response:
+        second_body = "".join(response.iter_text())
+
+    assert response.status_code == 200, second_body
+    assert len(calls) == 2
+    assert calls[0]["history"] == []
+    assert calls[1]["history"] == [
+        {"role": "user", "content": "矩阵可以表示什么？"},
+        {"role": "assistant", "content": "矩阵可以表示线性变换。"},
+    ]
+    assert calls[1]["question"] == "这个能再举个例子吗？"
+    assert "线性变换" in second_body
+
+
+def test_qa_from_lesson_page_can_answer_other_page_in_same_ppt(client, monkeypatch):
+    course, _chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+    from app.services.ai import ChatDelta
+
+    lesson_detail_resp = client.get(f"/api/v1/lessons/{lesson_id}", headers=student_headers)
+    assert lesson_detail_resp.status_code == 200, lesson_detail_resp.text
+    first_page_id = lesson_detail_resp.json()["data"]["pages"][0]["id"]
+
+    captured: dict[str, list[str]] = {}
+    monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
+
+    def stream_answer(**kwargs):
+        captured["contexts"] = list(kwargs["contexts"])
+        yield ChatDelta("content", "第2页讲行列式反映缩放系数。")
+
+    monkeypatch.setattr(qa_service.ai_service, "stream_answer_question", stream_answer)
+
+    with client.stream(
+        "POST",
+        "/api/v1/qa/ask/stream",
+        json={"course_id": course["id"], "lesson_page_id": first_page_id, "question": "第2页讲了什么？"},
+        headers=student_headers,
+    ) as response:
+        body = "".join(response.iter_text())
+
+    assert response.status_code == 200, body
+    assert "行列式反映缩放系数" in body
+    assert any("第2页" in item and "行列式反映缩放系数" in item for item in captured["contexts"])
+
+
+def test_qa_from_lesson_page_retrieves_with_current_lesson_scope(client, monkeypatch):
+    course, _chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    lesson_detail_resp = client.get(f"/api/v1/lessons/{lesson_id}", headers=student_headers)
+    assert lesson_detail_resp.status_code == 200, lesson_detail_resp.text
+    first_page_id = lesson_detail_resp.json()["data"]["pages"][0]["id"]
+
+    calls: list[dict] = []
+
+    def fake_search(*args, **kwargs):
+        calls.append(kwargs)
+        return []
+
+    monkeypatch.setattr(qa_service, "search_course_knowledge", fake_search)
+
+    def answer_question(**kwargs):
+        return "已根据当前课件上下文回答。", False, None
+
+    monkeypatch.setattr(qa_service.ai_service, "answer_question", answer_question)
+    response = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "lesson_page_id": first_page_id, "question": "第2页讲了什么？"},
+        headers=student_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert calls
+    assert calls[0]["lesson_id"] == lesson_id
+    assert calls[0]["lesson_page_id"] is None
+    assert calls[0]["limit"] >= 8
+
+
+def test_qa_page_can_fallback_to_lesson_pages_without_page_context(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    captured: dict[str, list[str]] = {}
+    monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
+
+    def answer_question(**kwargs):
+        captured["contexts"] = list(kwargs["contexts"])
+        return "行列式反映缩放系数。", False, None
+
+    monkeypatch.setattr(qa_service.ai_service, "answer_question", answer_question)
+
+    response = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "question": "行列式反映什么？"},
+        headers=student_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["is_out_of_scope"] is False
+    assert "行列式反映缩放系数" in data["answer"]
+    assert any("行列式反映缩放系数" in item for item in captured["contexts"])
 
 
 def test_qa_uses_chapter_context_for_chapter_overview_when_vector_search_misses(client, monkeypatch):

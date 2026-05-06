@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from app.db import session as db_session
 from app.db.models import AsyncTaskLog, CourseMaterial, KnowledgeChunk, Lesson, LessonPage
+from app.services.materials import _split_knowledge_text
 from app.services.parser import _localize_markdown_images, doc_parser_service, parse_material
 from app.services.tts import markdown_to_speech_text, tts_service
 from app.services.vector_store import vector_store
@@ -92,6 +93,15 @@ def test_document_parsers_cover_all_supported_types(client, tmp_path: Path):
         assert len(parse_material(pdf_path, "pdf", db=db, filename="demo.pdf")) == 1
         assert len(parse_material(docx_path, "docx", db=db, filename="demo.docx")) >= 1
         assert len(parse_material(txt_path, "txt", db=db, filename="demo.txt")) == 2
+
+
+def test_knowledge_text_split_uses_overlap_for_long_content():
+    text = "\n\n".join(f"第{i}段：" + ("矩阵可以表示线性变换。" * 12) for i in range(12))
+    chunks = _split_knowledge_text(text, target_chars=420, overlap_chars=90)
+
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 520 for chunk in chunks)
+    assert chunks[0][-60:] in chunks[1]
 
 
 def test_doc_parser_layouts_group_into_ordered_pages():
@@ -350,7 +360,9 @@ def test_material_management_flow(client):
         db.add_all([stored_material, stored_page])
         db.commit()
         chunks = list(db.scalars(select(KnowledgeChunk).where(KnowledgeChunk.material_id == material["id"])))
-        assert len(chunks) == 2
+        assert len(chunks) >= 2
+        assert all(chunk.source_meta and chunk.source_meta.get("lesson_id") for chunk in chunks)
+        assert all("页码：第" in chunk.content for chunk in chunks)
         assert all(isinstance(chunk.embedding, list) and chunk.embedding for chunk in chunks)
         vector_rows = vector_store.query_course(db, course_id=course["id"], query="函数变化趋势怎样理解", limit=2)
         assert vector_rows

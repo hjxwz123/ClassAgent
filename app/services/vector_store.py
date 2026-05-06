@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.db.models import KnowledgeChunk
+from app.db.models import KnowledgeChunk, LessonPage
 from app.services.ai import ai_service
 
 
@@ -84,10 +84,19 @@ class VectorStoreService:
         collection,
         store_embeddings: bool,
     ) -> None:
+        page_ids = [int(chunk.lesson_page_id) for chunk in chunks if chunk.lesson_page_id]
+        lesson_ids_by_page: dict[int, int] = {}
+        if page_ids:
+            lesson_ids_by_page = {
+                int(page_id): int(lesson_id)
+                for page_id, lesson_id in db.execute(select(LessonPage.id, LessonPage.lesson_id).where(LessonPage.id.in_(page_ids)))
+            }
         ids: list[str] = []
         documents: list[str] = []
         metadatas: list[dict] = []
         for chunk, embedding in zip(chunks, embeddings, strict=True):
+            source_meta = dict(chunk.source_meta or {})
+            lesson_id = int(source_meta.get("lesson_id") or lesson_ids_by_page.get(int(chunk.lesson_page_id or 0), 0) or 0)
             if store_embeddings:
                 chunk.embedding = embedding
                 db.add(chunk)
@@ -99,9 +108,10 @@ class VectorStoreService:
                     "course_id": int(chunk.course_id),
                     "material_id": int(chunk.material_id or 0),
                     "lesson_page_id": int(chunk.lesson_page_id or 0),
+                    "lesson_id": lesson_id,
                     "chapter_id": int(chunk.chapter_id or 0),
                     "title": chunk.title,
-                    "source_meta": json.dumps(chunk.source_meta or {}, ensure_ascii=False),
+                    "source_meta": json.dumps(source_meta, ensure_ascii=False),
                 }
             )
         collection.upsert(ids=ids, documents=documents, embeddings=embeddings, metadatas=metadatas)
@@ -160,6 +170,7 @@ class VectorStoreService:
         course_id: int,
         query: str,
         chapter_id: int | None = None,
+        lesson_id: int | None = None,
         lesson_page_id: int | None = None,
         limit: int | None = None,
     ) -> list[tuple[int, float | None]]:
@@ -171,6 +182,8 @@ class VectorStoreService:
         filters: list[dict] = []
         if chapter_id is not None:
             filters.append({"chapter_id": int(chapter_id)})
+        if lesson_id is not None:
+            filters.append({"lesson_id": int(lesson_id)})
         if lesson_page_id is not None:
             filters.append({"lesson_page_id": int(lesson_page_id)})
         where = None
