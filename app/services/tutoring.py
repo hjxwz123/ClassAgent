@@ -9,6 +9,7 @@ from app.schemas.tutoring import ProblemTextRequest
 from app.services.ai import ai_service
 from app.services.knowledge import search_course_knowledge
 from app.services.ocr import ocr_service
+from app.services.pedagogy import TUTORING_ARTIFACT_TYPES, artifact_contexts, search_pedagogy_artifacts
 from app.services.storage import storage_service
 from app.services.usage import log_ai_usage
 
@@ -56,15 +57,29 @@ def _chunk_context(chunk: KnowledgeChunk) -> str:
 
 
 def _problem_guidance_contexts(db: Session, *, course_id: int, problem_text: str) -> list[str]:
+    artifacts = search_pedagogy_artifacts(
+        db,
+        course_id=course_id,
+        query=problem_text,
+        types=TUTORING_ARTIFACT_TYPES,
+        limit=6,
+    )
     chunks = search_course_knowledge(
         db,
         course_id=course_id,
         query=problem_text,
         limit=_TUTORING_CONTEXT_LIMIT,
     )
-    if not chunks:
+    if not artifacts and not chunks:
         rewritten_query = ai_service.rewrite_retrieval_query(question=problem_text, db=db)
         if rewritten_query and rewritten_query.strip() != problem_text.strip():
+            artifacts = search_pedagogy_artifacts(
+                db,
+                course_id=course_id,
+                query=rewritten_query,
+                types=TUTORING_ARTIFACT_TYPES,
+                limit=6,
+            )
             chunks = search_course_knowledge(
                 db,
                 course_id=course_id,
@@ -73,6 +88,12 @@ def _problem_guidance_contexts(db: Session, *, course_id: int, problem_text: str
             )
     contexts: list[str] = []
     seen: set[str] = set()
+    for text in artifact_contexts(artifacts, limit=1500):
+        key = " ".join(text.split())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        contexts.append(text)
     for chunk in chunks:
         text = _chunk_context(chunk)
         key = " ".join(text.split())

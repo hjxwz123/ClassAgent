@@ -40,8 +40,14 @@ def init_db() -> None:
 
 
 def _ensure_schema_updates(target_engine: Engine) -> None:
+    from app.db.models import PedagogyArtifact
+
     inspector = inspect(target_engine)
     table_names = inspector.get_table_names()
+    if "pedagogy_artifacts" not in table_names:
+        PedagogyArtifact.__table__.create(bind=target_engine, checkfirst=True)
+        inspector = inspect(target_engine)
+        table_names = inspector.get_table_names()
     statements: list[str] = []
     if "qa_records" in table_names:
         columns = {column["name"] for column in inspector.get_columns("qa_records")}

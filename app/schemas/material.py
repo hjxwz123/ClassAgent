@@ -28,6 +28,7 @@ class LessonPageResponse(ORMModel):
     audio_url: str | None
     audio_duration_seconds: float | None
     subtitle_text: str | None
+    pedagogy: list[dict] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

@@ -22,6 +22,7 @@ from app.db.models import (
     Lesson,
     LessonPage,
     OperationLog,
+    PedagogyArtifact,
     QARecord,
     Quiz,
     QuizAttempt,
@@ -724,6 +725,7 @@ def delete_chapter(db: Session, *, course_id: int, chapter_id: int, user: User) 
     db.execute(update(CourseMaterial).where(CourseMaterial.course_id == course_id, CourseMaterial.chapter_id == chapter_id).values(chapter_id=None))
     db.execute(update(Lesson).where(Lesson.course_id == course_id, Lesson.chapter_id == chapter_id).values(chapter_id=None))
     db.execute(update(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id, KnowledgeChunk.chapter_id == chapter_id).values(chapter_id=None))
+    db.execute(update(PedagogyArtifact).where(PedagogyArtifact.course_id == course_id, PedagogyArtifact.chapter_id == chapter_id).values(chapter_id=None))
     db.execute(update(KnowledgePoint).where(KnowledgePoint.course_id == course_id, KnowledgePoint.chapter_id == chapter_id).values(chapter_id=None))
     db.execute(update(Quiz).where(Quiz.course_id == course_id, Quiz.chapter_id == chapter_id).values(chapter_id=None))
     db.execute(update(QuizQuestion).where(QuizQuestion.course_id == course_id, QuizQuestion.chapter_id == chapter_id).values(chapter_id=None))
@@ -765,6 +767,7 @@ def delete_lesson(db: Session, *, lesson_id: int, user: User) -> None:
         raise not_found("课时不存在")
     _assert_course_access(db, course_id=lesson.course_id, user=user)
     db.execute(delete(LearningProgress).where(LearningProgress.lesson_id == lesson_id))
+    db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.lesson_id == lesson_id))
     db.execute(delete(LessonPage).where(LessonPage.lesson_id == lesson_id))
     db.delete(lesson)
     db.commit()

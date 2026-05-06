@@ -177,6 +177,24 @@ class KnowledgeChunk(TimestampMixin, Base):
     source_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
+class PedagogyArtifact(TimestampMixin, Base):
+    __tablename__ = "pedagogy_artifacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
+    material_id: Mapped[int | None] = mapped_column(ForeignKey("course_materials.id"), nullable=True, index=True)
+    lesson_id: Mapped[int | None] = mapped_column(ForeignKey("lessons.id"), nullable=True, index=True)
+    lesson_page_id: Mapped[int | None] = mapped_column(ForeignKey("lesson_pages.id"), nullable=True, index=True)
+    chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True, index=True)
+    artifact_type: Mapped[str] = mapped_column(String(64), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content: Mapped[str] = mapped_column(Text)
+    keywords: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    payload: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    order_index: Mapped[int] = mapped_column(Integer, default=1)
+
+
 class LearningProgress(TimestampMixin, Base):
     __tablename__ = "learning_progress"
     __table_args__ = (UniqueConstraint("lesson_id", "user_id", name="uq_learning_progress"),)

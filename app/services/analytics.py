@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from app.db.models import (
     KnowledgePoint,
     LearningProgress,
     Lesson,
+    PedagogyArtifact,
     ProblemRecord,
     QARecord,
     Quiz,
@@ -21,6 +23,8 @@ from app.db.models import (
     WrongQuestion,
 )
 from app.services.courses import _assert_course_owner, _get_course_or_404
+from app.services.pedagogy import ARTIFACT_MISCONCEPTION_CARD, ARTIFACT_PROBLEM_TEMPLATE, ARTIFACT_TYPE_LABELS
+from app.services.retrieval import score_text_for_query
 
 
 def _assert_teacher_access(db: Session, *, course_id: int, user: User) -> None:
@@ -30,6 +34,94 @@ def _assert_teacher_access(db: Session, *, course_id: int, user: User) -> None:
     if user.role != UserRole.TEACHER.value:
         raise forbidden("仅教师或管理员可查看教学分析")
     _assert_course_owner(course, user)
+
+
+def _artifact_page_number(artifact: PedagogyArtifact) -> int | None:
+    payload = artifact.payload if isinstance(artifact.payload, dict) else {}
+    try:
+        return int(payload.get("page_number") or 0) or None
+    except (TypeError, ValueError):
+        return None
+
+
+def _artifact_ref(artifact: PedagogyArtifact) -> dict[str, Any]:
+    payload = artifact.payload if isinstance(artifact.payload, dict) else {}
+    page_number = _artifact_page_number(artifact)
+    return {
+        "artifact_id": artifact.id,
+        "artifact_type": artifact.artifact_type,
+        "artifact_label": ARTIFACT_TYPE_LABELS.get(artifact.artifact_type, artifact.artifact_type),
+        "title": artifact.title,
+        "lesson_id": artifact.lesson_id,
+        "lesson_page_id": artifact.lesson_page_id,
+        "page_number": page_number,
+        "material_id": artifact.material_id,
+        "material_title": payload.get("material_title") or "",
+    }
+
+
+def _weak_point_artifact_refs(db: Session, *, course_id: int, weak_points: list[dict]) -> None:
+    if not weak_points:
+        return
+    artifacts = list(
+        db.scalars(
+            select(PedagogyArtifact)
+            .where(PedagogyArtifact.course_id == course_id)
+            .order_by(PedagogyArtifact.lesson_id, PedagogyArtifact.lesson_page_id, PedagogyArtifact.order_index)
+            .limit(700)
+        )
+    )
+    if not artifacts:
+        return
+    for point in weak_points:
+        query = str(point.get("knowledge_point") or "").strip()
+        if not query:
+            continue
+        ranked: list[tuple[int, PedagogyArtifact]] = []
+        for artifact in artifacts:
+            payload = artifact.payload if isinstance(artifact.payload, dict) else {}
+            text = "\n".join(
+                part
+                for part in [
+                    artifact.summary or "",
+                    artifact.content or "",
+                    " ".join(str(item) for item in artifact.keywords or []),
+                    " ".join(str(value) for value in payload.values() if isinstance(value, (str, int, float))),
+                ]
+                if part
+            )
+            score = score_text_for_query(
+                title=artifact.title,
+                text=text,
+                page_number=_artifact_page_number(artifact),
+                query=query,
+                term_limit=12,
+            )
+            if query.lower() in f"{artifact.title}\n{text}".lower():
+                score += 30
+            if score > 0:
+                ranked.append((score, artifact))
+        ranked.sort(key=lambda item: (item[0], -item[1].order_index), reverse=True)
+        related_pages: list[dict[str, Any]] = []
+        related_templates: list[dict[str, Any]] = []
+        related_misconceptions: list[dict[str, Any]] = []
+        seen_pages: set[tuple[int | None, int | None]] = set()
+        seen_artifacts: set[int] = set()
+        for _, artifact in ranked[:18]:
+            ref = _artifact_ref(artifact)
+            page_key = (ref.get("lesson_page_id"), ref.get("page_number"))
+            if ref.get("page_number") and page_key not in seen_pages:
+                seen_pages.add(page_key)
+                related_pages.append(ref)
+            if artifact.id not in seen_artifacts and artifact.artifact_type == ARTIFACT_PROBLEM_TEMPLATE:
+                seen_artifacts.add(artifact.id)
+                related_templates.append(ref)
+            if artifact.id not in seen_artifacts and artifact.artifact_type == ARTIFACT_MISCONCEPTION_CARD:
+                seen_artifacts.add(artifact.id)
+                related_misconceptions.append(ref)
+        point["related_pages"] = related_pages[:6]
+        point["related_problem_templates"] = related_templates[:5]
+        point["related_misconceptions"] = related_misconceptions[:5]
 
 
 def get_course_analytics(db: Session, *, course_id: int, user: User, days: int = 30) -> dict:
@@ -47,23 +139,25 @@ def get_course_analytics(db: Session, *, course_id: int, user: User, days: int =
         )
     ]
 
+    point_id = func.coalesce(WrongQuestion.knowledge_point_id, QuizQuestion.knowledge_point_id)
     point_name = func.coalesce(KnowledgePoint.name, "未标注知识点")
     weak_points = [
-        {"knowledge_point": name, "wrong_count": int(count or 0)}
-        for name, count in db.execute(
-            select(point_name, func.sum(WrongQuestion.wrong_count))
+        {"knowledge_point_id": point_id_value, "knowledge_point": name, "wrong_count": int(count or 0)}
+        for point_id_value, name, count in db.execute(
+            select(point_id, point_name, func.sum(WrongQuestion.wrong_count))
             .select_from(WrongQuestion)
             .outerjoin(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
             .outerjoin(
                 KnowledgePoint,
-                KnowledgePoint.id == func.coalesce(WrongQuestion.knowledge_point_id, QuizQuestion.knowledge_point_id),
+                KnowledgePoint.id == point_id,
             )
             .where(WrongQuestion.course_id == course_id, WrongQuestion.updated_at >= since)
-            .group_by(point_name)
+            .group_by(point_id, point_name)
             .order_by(func.sum(WrongQuestion.wrong_count).desc(), point_name.asc())
             .limit(10)
         )
     ]
+    _weak_point_artifact_refs(db, course_id=course_id, weak_points=weak_points)
 
     student_ids = list(
         db.scalars(

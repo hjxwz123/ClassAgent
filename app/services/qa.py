@@ -16,6 +16,7 @@ from app.services.ai import ai_service
 from app.services.knowledge import search_course_knowledge
 from app.services.parser import _extract_text_payload
 from app.services.ocr import ocr_service
+from app.services.pedagogy import QA_ARTIFACT_TYPES, artifact_contexts, artifact_sources, search_pedagogy_artifacts
 from app.services.retrieval import page_numbers_from_query, query_terms, score_text_for_query
 from app.services.storage import storage_service
 from app.services.usage import log_ai_usage
@@ -613,6 +614,16 @@ def _qa_contexts_and_sources(
     classified_chapter_id = classification.get("chapter_id")
     retrieval_chapter_id = payload.chapter_id if payload.chapter_id is not None else (classified_chapter_id if scope == "chapter_overview" else None)
     lesson_id = _lesson_id_for_page(db, course_id=course_id, lesson_page_id=payload.lesson_page_id)
+    artifact_hits = search_pedagogy_artifacts(
+        db,
+        course_id=course_id,
+        query=question_for_ai,
+        chapter_id=None if lesson_id is not None else retrieval_chapter_id,
+        lesson_id=lesson_id,
+        lesson_page_id=None,
+        types=QA_ARTIFACT_TYPES,
+        limit=10 if lesson_id is not None else 8,
+    )
     chunks = search_course_knowledge(
         db,
         course_id=course_id,
@@ -634,9 +645,19 @@ def _qa_contexts_and_sources(
         limit=_QA_RELATED_PAGE_CONTEXT_LIMIT,
     )
     rewritten_query = ""
-    if not chunks and not related_page_contexts:
+    if not artifact_hits and not chunks and not related_page_contexts:
         rewritten_query = ai_service.rewrite_retrieval_query(question=payload.question, history=history, db=db)
         if rewritten_query and rewritten_query.strip() not in {payload.question.strip(), question_for_ai.strip()}:
+            artifact_hits = search_pedagogy_artifacts(
+                db,
+                course_id=course_id,
+                query=rewritten_query,
+                chapter_id=None if lesson_id is not None else retrieval_chapter_id,
+                lesson_id=lesson_id,
+                lesson_page_id=None,
+                types=QA_ARTIFACT_TYPES,
+                limit=10 if lesson_id is not None else 8,
+            )
             chunks = search_course_knowledge(
                 db,
                 course_id=course_id,
@@ -674,12 +695,14 @@ def _qa_contexts_and_sources(
             query=material_query,
             chapter_id=fallback_chapter_id,
         )
+    structured_contexts = artifact_contexts(artifact_hits)
     contexts = _merge_contexts(
-        [*page_contexts, *related_page_contexts, *chapter_contexts, *course_contexts, *material_contexts],
+        [*structured_contexts, *page_contexts, *related_page_contexts, *chapter_contexts, *course_contexts, *material_contexts],
         chunks,
         trailing=lesson_outline_contexts,
     )
     sources = [
+        *artifact_sources(artifact_hits),
         *page_sources,
         *related_page_sources,
         *chapter_sources,
