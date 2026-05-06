@@ -458,7 +458,8 @@ def test_material_management_flow(client):
         assert len(chunks) >= 2
         assert all(chunk.source_meta and chunk.source_meta.get("lesson_id") for chunk in chunks)
         assert all("页码：第" in chunk.content for chunk in chunks)
-        assert all(isinstance(chunk.embedding, list) and chunk.embedding for chunk in chunks)
+        assert all(chunk.embedding is None for chunk in chunks)
+        assert vector_store.indexed_chunk_count(db, course_id=course["id"]) >= len(chunks)
         vector_rows = vector_store.query_course(db, course_id=course["id"], query="函数变化趋势怎样理解", limit=2)
         assert vector_rows
 

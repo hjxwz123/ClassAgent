@@ -82,7 +82,6 @@ class VectorStoreService:
         chunks: list[KnowledgeChunk],
         embeddings: list[list[float]],
         collection,
-        store_embeddings: bool,
     ) -> None:
         page_ids = [int(chunk.lesson_page_id) for chunk in chunks if chunk.lesson_page_id]
         lesson_ids_by_page: dict[int, int] = {}
@@ -94,12 +93,9 @@ class VectorStoreService:
         ids: list[str] = []
         documents: list[str] = []
         metadatas: list[dict] = []
-        for chunk, embedding in zip(chunks, embeddings, strict=True):
+        for chunk in chunks:
             source_meta = dict(chunk.source_meta or {})
             lesson_id = int(source_meta.get("lesson_id") or lesson_ids_by_page.get(int(chunk.lesson_page_id or 0), 0) or 0)
-            if store_embeddings:
-                chunk.embedding = embedding
-                db.add(chunk)
             ids.append(f"chunk_{chunk.id}")
             documents.append(chunk.content)
             metadatas.append(
@@ -127,7 +123,7 @@ class VectorStoreService:
             if not embeddings:
                 continue
             self._embedding_dimension(embeddings, expected_dimension=dimension)
-            self._upsert_precomputed(db, chunks=batch, embeddings=embeddings, collection=collection, store_embeddings=False)
+            self._upsert_precomputed(db, chunks=batch, embeddings=embeddings, collection=collection)
 
     def _ensure_course_collection(self, db: Session, *, course_id: int, dimension: int):
         collection = self._collection(db, course_id, dimension)
@@ -155,13 +151,54 @@ class VectorStoreService:
         dimension = self._embedding_dimension(embeddings)
         collection = self._collection(db, chunks[0].course_id, dimension)
         try:
-            self._upsert_precomputed(db, chunks=chunks, embeddings=embeddings, collection=collection, store_embeddings=True)
+            self._upsert_precomputed(db, chunks=chunks, embeddings=embeddings, collection=collection)
         except Exception as exc:
             if "dimension" not in str(exc).lower():
                 raise
             self._client.delete_collection(name=collection.name)
             collection = self._collection(db, chunks[0].course_id, dimension)
-            self._upsert_precomputed(db, chunks=chunks, embeddings=embeddings, collection=collection, store_embeddings=True)
+            self._upsert_precomputed(db, chunks=chunks, embeddings=embeddings, collection=collection)
+
+    def _db_collection_names(self, db: Session) -> list[str]:
+        db_key = self._db_key(db)
+        names: list[str] = []
+        try:
+            collections = self._client.list_collections()
+        except Exception:
+            return names
+        pattern = re.compile(rf"^course_\d+_{re.escape(db_key)}(?:_d\d+)?$")
+        for collection in collections:
+            name = getattr(collection, "name", str(collection))
+            if pattern.fullmatch(name):
+                names.append(name)
+        return names
+
+    def indexed_chunk_count(self, db: Session, *, course_id: int | None = None) -> int:
+        names = self._course_collection_names(db, course_id) if course_id is not None else self._db_collection_names(db)
+        seen_ids: set[str] = set()
+        for name in names:
+            try:
+                collection = self._client.get_collection(name=name)
+            except Exception:
+                continue
+            offset = 0
+            page_size = 1000
+            while True:
+                try:
+                    batch = collection.get(limit=page_size, offset=offset, include=[])
+                except Exception:
+                    try:
+                        batch = collection.get(limit=page_size, offset=offset)
+                    except Exception:
+                        break
+                ids = batch.get("ids") or []
+                if not ids:
+                    break
+                seen_ids.update(str(item) for item in ids)
+                if len(ids) < page_size:
+                    break
+                offset += len(ids)
+        return len(seen_ids)
 
     def query_course(
         self,

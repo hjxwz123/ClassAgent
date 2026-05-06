@@ -896,10 +896,18 @@ def get_service_health(db: Session) -> dict:
         redis_detail = str(exc)
     items.append({"key": "redis", "name": "Redis 缓存", "status": redis_status, "metric": "缓存", "detail": redis_detail})
 
-    chunk_count = db.scalar(select(func.count(KnowledgeChunk.id))) or 0
-    vector_ready = db.scalar(select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.embedding.is_not(None))) or 0
-    vector_status = "ok" if VECTOR_DIR.exists() else "down"
-    items.append({"key": "vector", "name": "向量数据库", "status": vector_status, "metric": f"{int(vector_ready)}/{int(chunk_count)}", "detail": "Chroma"})
+    chunk_count = int(db.scalar(select(func.count(KnowledgeChunk.id))) or 0)
+    try:
+        vector_ready = int(vector_store.indexed_chunk_count(db))
+    except Exception:
+        vector_ready = 0
+    if not VECTOR_DIR.exists():
+        vector_status = "down"
+    elif chunk_count and vector_ready < chunk_count:
+        vector_status = "processing"
+    else:
+        vector_status = "ok"
+    items.append({"key": "vector", "name": "向量数据库", "status": vector_status, "metric": f"{vector_ready}/{chunk_count}", "detail": "Chroma"})
 
     try:
         broker_client = redis.Redis.from_url(settings.celery_broker_url, socket_connect_timeout=2, socket_timeout=2)

@@ -11,9 +11,10 @@ from starlette.middleware.cors import CORSMiddleware
 from app.api.router import api_router
 from app.core.config import GENERATED_DIR, STORAGE_DIR, UPLOAD_DIR, VECTOR_DIR, get_settings, validate_production_settings
 from app.core.security import decode_access_token
-from app.db.models import ApiRequestLog, SystemErrorLog
+from app.db.models import SystemErrorLog
 from app.db import session as db_session
 from app.services.bootstrap import ensure_default_admin, ensure_system_settings
+from app.services.request_logging import request_log_writer
 
 
 @asynccontextmanager
@@ -25,7 +26,11 @@ async def lifespan(_: FastAPI):
     with db_session.SessionLocal() as db:
         ensure_default_admin(db)
         ensure_system_settings(db)
-    yield
+    request_log_writer.start()
+    try:
+        yield
+    finally:
+        request_log_writer.stop()
 
 
 def create_app() -> FastAPI:
@@ -58,18 +63,14 @@ def create_app() -> FastAPI:
                 except Exception:
                     user_id = None
             try:
-                with db_session.SessionLocal() as db:
-                    db.add(
-                        ApiRequestLog(
-                            request_id=request_id,
-                            method=request.method,
-                            path=request.url.path,
-                            status_code=response.status_code,
-                            duration_ms=round(duration * 1000, 2),
-                            user_id=user_id,
-                        )
-                    )
-                    db.commit()
+                request_log_writer.enqueue(
+                    request_id=request_id,
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=response.status_code,
+                    duration_ms=round(duration * 1000, 2),
+                    user_id=user_id,
+                )
             except Exception:
                 pass
         return response
