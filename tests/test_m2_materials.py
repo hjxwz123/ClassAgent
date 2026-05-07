@@ -1,4 +1,5 @@
 from io import BytesIO
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -10,7 +11,7 @@ from sqlalchemy import select
 
 from app.db import session as db_session
 from app.db.models import AsyncTaskLog, CourseMaterial, KnowledgeChunk, Lesson, LessonPage
-from app.services.materials import _split_knowledge_text
+from app.services.materials import _split_knowledge_text, recover_stale_material_processing_tasks
 from app.services.parser import _localize_markdown_images, doc_parser_service, parse_material, sanitize_temporary_docmind_images
 from app.services.tts import markdown_to_speech_text, tts_service
 from app.services.vector_store import vector_store
@@ -653,6 +654,66 @@ def test_failed_material_with_existing_pages_is_recovered_for_teacher_views(clie
     detail = detail_resp.json()["data"]
     assert detail["material"]["parse_status"] == "ready"
     assert detail["lesson_page_count"] == 2
+
+
+def test_stale_material_processing_task_is_recovered_to_terminal_status(client):
+    register_user(
+        client,
+        email="teacher-stale-material@example.com",
+        password="Teacher123",
+        nickname="卡死恢复老师",
+        role="teacher",
+        employee_no="STALE-MATERIAL",
+    )
+    teacher_login = login_user(client, email="teacher-stale-material@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "卡死恢复课程", "description": "测试", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+
+    upload_resp = client.post(
+        "/api/v1/materials",
+        data={"course_id": str(course["id"]), "title": "卡死恢复课件", "category": "courseware"},
+        files={"file": ("stale.txt", build_txt_bytes(), "text/plain")},
+        headers=teacher_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    material = upload_resp.json()["data"]
+    stale_at = datetime.now(UTC) - timedelta(hours=2)
+
+    with db_session.SessionLocal() as db:
+        stored_material = db.get(CourseMaterial, material["id"])
+        assert stored_material is not None
+        stored_material.parse_status = "processing"
+        stored_material.vector_status = "processing"
+        task = AsyncTaskLog(
+            task_name="material.process",
+            target_type="material",
+            target_id=material["id"],
+            status="processing",
+            created_at=stale_at,
+            updated_at=stale_at,
+        )
+        db.add_all([stored_material, task])
+        db.commit()
+        task_id = task.id
+
+    with db_session.SessionLocal() as db:
+        assert recover_stale_material_processing_tasks(db, max_age_minutes=60) == 1
+
+    with db_session.SessionLocal() as db:
+        stored_material = db.get(CourseMaterial, material["id"])
+        task = db.get(AsyncTaskLog, task_id)
+        assert stored_material is not None
+        assert task is not None
+        assert stored_material.parse_status == "ready"
+        assert stored_material.vector_status == "failed"
+        assert task.status == "failed"
+        assert task.detail["error"] == "后台资料处理任务中断或超时，请重新解析。"
 
 
 def test_script_save_survives_tts_failure(client, monkeypatch):

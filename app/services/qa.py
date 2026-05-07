@@ -938,6 +938,23 @@ def list_history(db: Session, *, user: User, course_id: int | None = None, keywo
     return list(db.scalars(statement.order_by(QARecord.created_at.desc())))
 
 
+def list_conversation_records(db: Session, *, user: User, conversation_id: int) -> list[QARecord]:
+    conversation = db.scalar(
+        select(QAConversation).where(QAConversation.id == conversation_id, QAConversation.user_id == user.id)
+    )
+    if conversation is None:
+        raise not_found("问答对话不存在")
+    if user.role == UserRole.STUDENT.value:
+        _assert_student_course_access(db, course_id=conversation.course_id, user=user)
+    return list(
+        db.scalars(
+            select(QARecord)
+            .where(QARecord.conversation_id == conversation_id, QARecord.user_id == user.id)
+            .order_by(QARecord.created_at.asc(), QARecord.id.asc())
+        )
+    )
+
+
 def update_favorite(db: Session, *, record_id: int, user: User, is_favorite: bool) -> QARecord:
     record = db.scalar(select(QARecord).where(QARecord.id == record_id, QARecord.user_id == user.id))
     if record is None:

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import re
 from threading import Thread
 from typing import Any
 
 from fastapi import UploadFile
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -19,7 +20,7 @@ from app.core.enums import (
     UserRole,
 )
 from app.core.errors import bad_request, forbidden, not_found
-from app.db.models import AsyncTaskLog, Chapter, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, PedagogyArtifact, User
+from app.db.models import AsyncTaskLog, Chapter, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, PageNote, PedagogyArtifact, QARecord, User
 from app.services.ai import ai_service
 from app.services.audit import log_operation
 from app.services.courses import _assert_course_owner, _get_course_or_404
@@ -527,10 +528,25 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
             db.commit()
             db.refresh(lesson)
         else:
+            page_ids = list(db.scalars(select(LessonPage.id).where(LessonPage.lesson_id == lesson.id)))
             vector_store.delete_material(db, course_id=material.course_id, material_id=material.id)
+            if page_ids:
+                db.execute(
+                    delete(KnowledgeChunk).where(
+                        or_(KnowledgeChunk.material_id == material.id, KnowledgeChunk.lesson_page_id.in_(page_ids))
+                    )
+                )
+                db.execute(
+                    delete(PedagogyArtifact).where(
+                        or_(PedagogyArtifact.material_id == material.id, PedagogyArtifact.lesson_page_id.in_(page_ids))
+                    )
+                )
+                db.execute(delete(PageNote).where(PageNote.lesson_page_id.in_(page_ids)))
+                db.execute(update(QARecord).where(QARecord.lesson_page_id.in_(page_ids)).values(lesson_page_id=None))
+            else:
+                db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.material_id == material.id))
+                db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.material_id == material.id))
             db.execute(delete(LessonPage).where(LessonPage.lesson_id == lesson.id))
-            db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.material_id == material.id))
-            db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.material_id == material.id))
             db.commit()
         lesson.title = material.title
         lesson.chapter_id = material.chapter_id
@@ -644,6 +660,49 @@ def _process_material_in_background(material_id: int) -> None:
             process_material_pipeline(db, material_id)
         except Exception:
             return
+
+
+def recover_stale_material_processing_tasks(db: Session, *, max_age_minutes: int = 60) -> int:
+    cutoff = datetime.now(UTC) - timedelta(minutes=max_age_minutes)
+    tasks = list(
+        db.scalars(
+            select(AsyncTaskLog)
+            .where(
+                AsyncTaskLog.task_name == "material.process",
+                AsyncTaskLog.target_type == "material",
+                AsyncTaskLog.status == ProcessStatus.PROCESSING.value,
+                AsyncTaskLog.updated_at < cutoff,
+            )
+            .order_by(AsyncTaskLog.updated_at.asc(), AsyncTaskLog.id.asc())
+        )
+    )
+    recovered = 0
+    for task in tasks:
+        material = db.get(CourseMaterial, task.target_id) if task.target_id else None
+        if material is not None and material.deleted_at is None:
+            if material.parse_status == ProcessStatus.PROCESSING.value:
+                lesson = db.scalar(select(Lesson).where(Lesson.material_id == material.id))
+                page_count = (
+                    db.scalar(select(func.count(LessonPage.id)).where(LessonPage.lesson_id == lesson.id))
+                    if lesson is not None
+                    else 0
+                )
+                material.parse_status = ProcessStatus.READY.value if page_count and material.extracted_text else ProcessStatus.FAILED.value
+            if material.vector_status == ProcessStatus.PROCESSING.value:
+                material.vector_status = ProcessStatus.FAILED.value
+            db.add(material)
+        task.status = ProcessStatus.FAILED.value
+        task.detail = {
+            **(task.detail or {}),
+            "error": "后台资料处理任务中断或超时，请重新解析。",
+            "recovered_at": datetime.now(UTC).isoformat(),
+            "stale_after_minutes": max_age_minutes,
+        }
+        db.add(task)
+        recovered += 1
+    if recovered:
+        db.commit()
+    return recovered
 
 
 def reprocess_material(db: Session, *, material_id: int, user: User) -> CourseMaterial:

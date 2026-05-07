@@ -15,6 +15,7 @@ from app.services.student import (
     get_student_notifications,
     get_student_profile,
     list_student_course_summaries,
+    mark_student_notifications_read,
     preview_course_by_code,
     save_page_note,
     update_student_notifications,
@@ -44,6 +45,10 @@ class StudentNoticeItem(BaseModel):
 
 class StudentNoticeRequest(BaseModel):
     settings: list[StudentNoticeItem] = Field(min_length=1)
+
+
+class NotificationReadRequest(BaseModel):
+    ids: list[str] | None = Field(default=None, max_length=80)
 
 
 @router.get("/dashboard")
@@ -152,5 +157,18 @@ def update_notifications_endpoint(
 ):
     return success_response(
         data=update_student_notifications(db, user=user, settings=[item.model_dump() for item in payload.settings]),
+        request_id=request.state.request_id,
+    )
+
+
+@router.post("/notifications/read")
+def mark_notifications_read_endpoint(
+    payload: NotificationReadRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    return success_response(
+        data=mark_student_notifications_read(db, user=user, notification_ids=payload.ids),
         request_id=request.state.request_id,
     )

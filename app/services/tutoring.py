@@ -1,5 +1,6 @@
 from fastapi import UploadFile
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.enums import ProblemSourceType, UserRole
@@ -190,7 +191,16 @@ def get_problem_guidance(db: Session, *, problem_id: int, user: User, level: int
         prompt_chars=len(source_text),
         completion_chars=len(guidance.content),
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing_guidance = db.scalar(
+            select(ProblemGuidance).where(ProblemGuidance.problem_id == problem_id, ProblemGuidance.level == level)
+        )
+        if existing_guidance is not None:
+            return existing_guidance
+        raise
     db.refresh(guidance)
     return guidance
 
