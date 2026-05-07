@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from datetime import UTC, datetime
 
 from sqlalchemy import func, or_, select
@@ -33,6 +32,7 @@ from app.schemas.learning import QuizEditRequest, QuizGenerateRequest, StudyPlan
 from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.knowledge import ensure_knowledge_points
+from app.services.learning_signals import learning_signal_point_stats
 from app.services.notifications import push_user_notification
 from app.services.pedagogy import quiz_artifact_source_text
 from app.services.usage import log_ai_usage
@@ -336,23 +336,76 @@ def _normalize_question_type_counts(raw: dict[str, int] | None) -> dict[str, int
     return normalized or None
 
 
-def _prioritize_weak_points(db: Session, *, points: list[KnowledgePoint], course_id: int, user: User, enabled: bool) -> list[KnowledgePoint]:
-    if not enabled or not points:
-        return points
-    statement = select(WrongQuestion.knowledge_point_id).where(
-        WrongQuestion.course_id == course_id,
-        WrongQuestion.knowledge_point_id.is_not(None),
+def _combined_weak_point_stats_by_id(
+    db: Session,
+    *,
+    course_id: int,
+    user: User,
+    point_ids: list[int] | None = None,
+) -> dict[int, dict[str, float | int]]:
+    if user.role not in {UserRole.STUDENT.value, UserRole.TEACHER.value, UserRole.ADMIN.value}:
+        return {}
+
+    point_id_expr = func.coalesce(WrongQuestion.knowledge_point_id, QuizQuestion.knowledge_point_id)
+    statement = (
+        select(point_id_expr.label("point_id"), func.sum(WrongQuestion.wrong_count))
+        .select_from(WrongQuestion)
+        .outerjoin(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
+        .where(WrongQuestion.course_id == course_id, point_id_expr.is_not(None))
+        .group_by(point_id_expr)
     )
     if user.role == UserRole.STUDENT.value:
         statement = statement.where(WrongQuestion.user_id == user.id)
-    elif user.role not in {UserRole.TEACHER.value, UserRole.ADMIN.value}:
+    if point_ids:
+        statement = statement.where(point_id_expr.in_(point_ids))
+
+    stats: dict[int, dict[str, float | int]] = {}
+    for point_id, wrong_count in db.execute(statement):
+        if point_id is None:
+            continue
+        stats[int(point_id)] = {
+            "wrong_count": int(wrong_count or 0),
+            "learning_signal_count": 0,
+            "qa_signal_count": 0,
+            "signal_score": 0.0,
+            "weak_score": float(wrong_count or 0),
+        }
+
+    signal_stats = learning_signal_point_stats(
+        db,
+        course_id=course_id,
+        user_id=user.id if user.role == UserRole.STUDENT.value else None,
+        point_ids=point_ids,
+    )
+    for point_id, signal in signal_stats.items():
+        entry = stats.setdefault(
+            point_id,
+            {
+                "wrong_count": 0,
+                "learning_signal_count": 0,
+                "qa_signal_count": 0,
+                "signal_score": 0.0,
+                "weak_score": 0.0,
+            },
+        )
+        entry["learning_signal_count"] = int(signal.get("learning_signal_count") or 0)
+        entry["qa_signal_count"] = int(signal.get("qa_signal_count") or 0)
+        entry["signal_score"] = float(signal.get("signal_score") or 0)
+        entry["weak_score"] = round(float(entry.get("wrong_count") or 0) + float(entry["signal_score"]), 2)
+    return stats
+
+
+def _prioritize_weak_points(db: Session, *, points: list[KnowledgePoint], course_id: int, user: User, enabled: bool) -> list[KnowledgePoint]:
+    if not enabled or not points:
         return points
+    stats = _combined_weak_point_stats_by_id(db, course_id=course_id, user=user, point_ids=[point.id for point in points])
     weak_ids = [
         point_id
-        for point_id in db.scalars(
-            statement.group_by(WrongQuestion.knowledge_point_id).order_by(func.sum(WrongQuestion.wrong_count).desc())
+        for point_id, item in sorted(
+            stats.items(),
+            key=lambda pair: (-float(pair[1].get("weak_score") or 0), -int(pair[1].get("wrong_count") or 0), pair[0]),
         )
-        if point_id is not None
+        if float(item.get("weak_score") or 0) > 0
     ]
     if not weak_ids:
         return points
@@ -1417,14 +1470,70 @@ def process_quiz_generation_task(db: Session, task_id: int) -> None:
 
 def get_weak_points(db: Session, *, course_id: int, user: User) -> list[dict]:
     rows = list_wrong_questions(db, course_id=course_id, user=user)
-    counter: Counter[str] = Counter()
+    by_point_id: dict[int, dict[str, float | int | str | None]] = {}
+    untagged_wrong_count = 0
     for wrong, question in rows:
-        if question.knowledge_point_id:
-            point = db.get(KnowledgePoint, question.knowledge_point_id)
-            counter[point.name if point else "未命名知识点"] += wrong.wrong_count
+        point_id = wrong.knowledge_point_id or question.knowledge_point_id
+        if point_id:
+            point = db.get(KnowledgePoint, point_id)
+            name = point.name if point else "未命名知识点"
+            entry = by_point_id.setdefault(
+                int(point_id),
+                {
+                    "knowledge_point_id": int(point_id),
+                    "knowledge_point": name,
+                    "wrong_count": 0,
+                    "learning_signal_count": 0,
+                    "qa_signal_count": 0,
+                    "signal_score": 0.0,
+                    "weak_score": 0.0,
+                },
+            )
+            entry["wrong_count"] = int(entry["wrong_count"] or 0) + int(wrong.wrong_count or 0)
         else:
-            counter["未标注知识点"] += wrong.wrong_count
-    return [{"knowledge_point": name, "wrong_count": count} for name, count in counter.most_common(10)]
+            untagged_wrong_count += int(wrong.wrong_count or 0)
+
+    signal_stats = learning_signal_point_stats(db, course_id=course_id, user_id=user.id)
+    for point_id, signal in signal_stats.items():
+        point = db.get(KnowledgePoint, point_id)
+        if point is None:
+            continue
+        entry = by_point_id.setdefault(
+            point_id,
+            {
+                "knowledge_point_id": point_id,
+                "knowledge_point": point.name,
+                "wrong_count": 0,
+                "learning_signal_count": 0,
+                "qa_signal_count": 0,
+                "signal_score": 0.0,
+                "weak_score": 0.0,
+            },
+        )
+        entry["learning_signal_count"] = int(signal.get("learning_signal_count") or 0)
+        entry["qa_signal_count"] = int(signal.get("qa_signal_count") or 0)
+        entry["signal_score"] = float(signal.get("signal_score") or 0)
+
+    items: list[dict] = []
+    for entry in by_point_id.values():
+        entry["weak_score"] = round(float(entry.get("wrong_count") or 0) + float(entry.get("signal_score") or 0), 2)
+        items.append(dict(entry))
+    if untagged_wrong_count:
+        items.append(
+            {
+                "knowledge_point_id": None,
+                "knowledge_point": "未标注知识点",
+                "wrong_count": untagged_wrong_count,
+                "learning_signal_count": 0,
+                "qa_signal_count": 0,
+                "signal_score": 0.0,
+                "weak_score": float(untagged_wrong_count),
+            }
+        )
+    return sorted(
+        items,
+        key=lambda item: (-float(item.get("weak_score") or 0), -int(item.get("wrong_count") or 0), str(item.get("knowledge_point") or "")),
+    )[:10]
 
 
 def create_study_plan(db: Session, *, user: User, payload: StudyPlanCreateRequest) -> tuple[StudyPlan, list[StudyPlanTask]]:

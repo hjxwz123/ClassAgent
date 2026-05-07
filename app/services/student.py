@@ -23,6 +23,7 @@ from app.db.models import (
     Quiz,
     QuizAttempt,
     QuizQuestion,
+    StudentLearningSignal,
     StudyCheckin,
     StudyPlan,
     StudyPlanTask,
@@ -385,6 +386,7 @@ def get_student_dashboard(db: Session, user: User) -> dict:
     weak = []
     if course_ids:
         point_name = func.coalesce(KnowledgePoint.name, "未标注知识点")
+        weak_by_name: dict[str, dict[str, float | int | str]] = {}
         rows = db.execute(
             select(point_name, func.sum(WrongQuestion.wrong_count))
             .select_from(WrongQuestion)
@@ -398,7 +400,29 @@ def get_student_dashboard(db: Session, user: User) -> dict:
             .order_by(func.sum(WrongQuestion.wrong_count).desc(), point_name.asc())
             .limit(5)
         )
-        weak = [{"name": name, "count": int(count or 0)} for name, count in rows]
+        for name, count in rows:
+            weak_by_name[str(name)] = {
+                "name": str(name),
+                "count": int(count or 0),
+                "score": float(count or 0),
+                "qa_signal_count": 0,
+            }
+        signal_rows = db.execute(
+            select(KnowledgePoint.name, func.count(StudentLearningSignal.id), func.sum(StudentLearningSignal.score))
+            .select_from(StudentLearningSignal)
+            .join(KnowledgePoint, KnowledgePoint.id == StudentLearningSignal.knowledge_point_id)
+            .where(StudentLearningSignal.user_id == user.id, StudentLearningSignal.course_id.in_(course_ids))
+            .group_by(KnowledgePoint.name)
+        )
+        for name, signal_count, signal_score in signal_rows:
+            key = str(name)
+            entry = weak_by_name.setdefault(key, {"name": key, "count": 0, "score": 0.0, "qa_signal_count": 0})
+            entry["qa_signal_count"] = int(signal_count or 0)
+            entry["score"] = round(float(entry.get("score") or 0) + float(signal_score or 0), 2)
+        weak = sorted(
+            weak_by_name.values(),
+            key=lambda item: (-float(item.get("score") or 0), -int(item.get("count") or 0), str(item.get("name") or "")),
+        )[:5]
     recent_lesson = _recent_lesson(db, course_ids=course_ids, user=user)
     recommendation = {
         "text": "",

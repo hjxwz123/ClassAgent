@@ -12,8 +12,22 @@
           <a href="#roles">多端教室</a>
         </div>
         <div class="product-nav-actions">
-          <RouterLink to="/auth" class="login-link">登录账号</RouterLink>
-          <RouterLink to="/auth" class="register-link">免费注册学生端</RouterLink>
+          <template v-if="user">
+            <button
+              type="button"
+              class="workbench-link"
+              :class="{ 'is-loading': enteringWorkbench }"
+              :aria-busy="enteringWorkbench"
+              :disabled="enteringWorkbench"
+              @click="openWorkbench"
+            >
+              {{ enteringWorkbench ? "进入中..." : "进入工作台" }}
+            </button>
+          </template>
+          <template v-else>
+            <RouterLink to="/auth" class="login-link">登录账号</RouterLink>
+            <RouterLink to="/auth" class="register-link">免费注册学生端</RouterLink>
+          </template>
         </div>
       </div>
     </nav>
@@ -233,9 +247,14 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { ArrowDown, ArrowRight, BookOpen, Check, GraduationCap, Presentation, SlidersHorizontal, WandSparkles } from "lucide-vue-next";
+import { defaultRouteForRole } from "../router/pageMap";
+import type { User } from "../types";
 
+const props = defineProps<{ user: User | null }>();
+const router = useRouter();
 const heroTextRef = ref<HTMLElement | null>(null);
 const heroGlowRef = ref<HTMLElement | null>(null);
 const trackRef = ref<HTMLElement | null>(null);
@@ -249,11 +268,21 @@ const shadow1FrontRef = ref<HTMLElement | null>(null);
 const shadow1BackRef = ref<HTMLElement | null>(null);
 const shadow2FrontRef = ref<HTMLElement | null>(null);
 const shadow2BackRef = ref<HTMLElement | null>(null);
+const enteringWorkbench = ref(false);
+const user = computed(() => props.user);
+const workbenchPath = computed(() => defaultRouteForRole(props.user?.role));
 
 let frameId = 0;
 let formulaFrameId = 0;
 let formulaCycleStart = 0;
+let homeMounted = false;
 const homeActiveClass = "product-home-active";
+const homeCanvasFonts = [
+  '32px "ClassAgent Chalk"',
+  '32px "ClassAgent Serif"',
+  '16px "ClassAgent Sans"',
+  '12px "ClassAgent Mono"',
+];
 
 const dynamicFormulas = [
   { text: "lim(x→0)  sin x / x = 1", x: 0.66, y: 0.82, size: 30, rotate: -4 },
@@ -283,7 +312,7 @@ function prepareFormulaCanvas(canvas: HTMLCanvasElement) {
 }
 
 function formulaFont(size: number) {
-  return `${size}px "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai", "华文行楷", "PingFang SC", serif`;
+  return `${size}px "ClassAgent Chalk", "ClassAgent Serif", "ClassAgent Sans", "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai", "华文行楷", "PingFang SC", serif`;
 }
 
 function drawChalkBackground(context: CanvasRenderingContext2D, width: number, height: number, now: number) {
@@ -505,16 +534,39 @@ function renderScrollScene() {
   frameId = requestAnimationFrame(renderScrollScene);
 }
 
+async function openWorkbench() {
+  if (enteringWorkbench.value) return;
+  enteringWorkbench.value = true;
+  try {
+    await router.push(workbenchPath.value);
+  } catch {
+    enteringWorkbench.value = false;
+  }
+}
+
+function startFormulaLoop() {
+  if (!homeMounted || formulaFrameId) return;
+  formulaCycleStart = performance.now();
+  formulaFrameId = requestAnimationFrame(renderFormulaCanvas);
+}
+
 onMounted(() => {
+  homeMounted = true;
   document.documentElement.classList.add(homeActiveClass);
   document.body.classList.add(homeActiveClass);
   document.getElementById("app")?.classList.add(homeActiveClass);
-  formulaCycleStart = performance.now();
-  formulaFrameId = requestAnimationFrame(renderFormulaCanvas);
+  if (document.fonts) {
+    Promise.all(homeCanvasFonts.map((font) => document.fonts.load(font)))
+      .then(startFormulaLoop)
+      .catch(startFormulaLoop);
+  } else {
+    startFormulaLoop();
+  }
   frameId = requestAnimationFrame(renderScrollScene);
 });
 
 onBeforeUnmount(() => {
+  homeMounted = false;
   document.documentElement.classList.remove(homeActiveClass);
   document.body.classList.remove(homeActiveClass);
   document.getElementById("app")?.classList.remove(homeActiveClass);
@@ -524,6 +576,38 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+@font-face {
+  font-family: "ClassAgent Chalk";
+  src: url("../assets/fonts/home/classagent-chalk.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "ClassAgent Serif";
+  src: url("../assets/fonts/home/classagent-serif.woff") format("woff");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "ClassAgent Sans";
+  src: url("../assets/fonts/home/classagent-sans.woff") format("woff");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "ClassAgent Mono";
+  src: url("../assets/fonts/home/classagent-mono.woff") format("woff");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+}
+
 :global(html.product-home-active),
 :global(body.product-home-active),
 :global(#app.product-home-active) {
@@ -538,12 +622,13 @@ onBeforeUnmount(() => {
 
 /* ====== 全局 & 字体变量 ====== */
 .product-home {
-  --ca-font-chalk: "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai",
+  --ca-font-chalk: "ClassAgent Chalk", "ClassAgent Serif", "ClassAgent Sans",
+    "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai",
     "华文行楷", "PingFang SC", sans-serif;
-  --ca-font-serif: "Songti SC", "STSong", "SimSun", "宋体", serif;
-  --ca-font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC",
+  --ca-font-serif: "ClassAgent Serif", "Songti SC", "STSong", "SimSun", "宋体", serif;
+  --ca-font-sans: "ClassAgent Sans", -apple-system, BlinkMacSystemFont, "PingFang SC",
     "Microsoft YaHei", "Helvetica Neue", sans-serif;
-  --ca-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+  --ca-font-mono: "ClassAgent Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
     monospace;
   --shared-title-left: max(24px, calc((100vw - 1040px) / 2));
   --shared-title-top: clamp(190px, calc(50vh - 190px), 290px);
@@ -657,6 +742,30 @@ onBeforeUnmount(() => {
 }
 .register-link:hover {
   background: #00e5ff;
+}
+.workbench-link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: #f4f4f0;
+  color: #121614;
+  padding: 0 20px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background-color 300ms, color 300ms, opacity 200ms, transform 200ms;
+}
+.workbench-link:hover:not(:disabled) {
+  background: #00e5ff;
+}
+.workbench-link:active:not(:disabled),
+.workbench-link.is-loading {
+  transform: translateY(1px);
+}
+.workbench-link:disabled {
+  cursor: wait;
+  opacity: .78;
 }
 
 /* ====== 滚动轨道 ====== */
@@ -1719,6 +1828,9 @@ onBeforeUnmount(() => {
     gap: 10px;
   }
   .register-link {
+    padding: 0 14px;
+  }
+  .workbench-link {
     padding: 0 14px;
   }
   .formula-corner,

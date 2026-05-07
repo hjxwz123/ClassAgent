@@ -10,6 +10,7 @@ from app.core.enums import (
     ConfigScope,
     CourseStatus,
     LessonStatus,
+    LearningSignalSource,
     MaterialCategory,
     MaterialType,
     ProblemSourceType,
@@ -236,6 +237,25 @@ class QARecord(TimestampMixin, Base):
     is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
     feedback: Mapped[str] = mapped_column(String(32), default=QAFeedback.NEUTRAL.value)
     feedback_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class StudentLearningSignal(TimestampMixin, Base):
+    __tablename__ = "student_learning_signals"
+    __table_args__ = (
+        UniqueConstraint("user_id", "source_type", "source_id", "knowledge_point_id", name="uq_learning_signal_source_point"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
+    knowledge_point_id: Mapped[int] = mapped_column(ForeignKey("knowledge_points.id"), index=True)
+    source_type: Mapped[str] = mapped_column(String(32), default=LearningSignalSource.QA.value, index=True)
+    source_id: Mapped[int] = mapped_column(Integer, index=True)
+    intent: Mapped[str] = mapped_column(String(64), default="concept_confusion")
+    score: Mapped[float] = mapped_column(Float, default=0.4)
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    evidence_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class ProblemRecord(TimestampMixin, Base):

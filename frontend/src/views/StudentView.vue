@@ -211,7 +211,7 @@
 
   <section v-else class="student-shell">
     <header class="student-top">
-      <button class="brand" @click="go('studentHome')"><span><Sparkles :size="16" /></span><strong>课程学习助手</strong></button>
+      <button class="brand" @click="go('studentHome')"><span class="brand-mark">智学</span><strong>黑板</strong></button>
       <Teleport to="body">
         <transition name="search-expand">
           <div v-if="searchOpen" class="global-search" @click.self="closeSearch">
@@ -528,7 +528,7 @@
           </template>
 
           <template v-else-if="active === 'studentQa'">
-            <section class="qa-modern-page" :class="{ empty: !globalMessages.length }">
+            <section class="qa-modern-page" :class="{ 'is-empty': !globalMessages.length }">
               <div class="qa-scroll-area">
                 <div class="chat-wrapper">
                   <div class="qa-header">
@@ -1454,10 +1454,17 @@ const completionSummary = computed(() => "本次学习完成度良好，建议�
 const filteredQaHistory = computed<QaHistoryConversation[]>(() => {
   const keyword = qaKeyword.value.trim();
   const groups = new Map<number, QaHistoryConversation>();
+  const lessonConversationIds = new Set(
+    qaHistory.value
+      .filter(isLessonQaRecord)
+      .map((record) => Number(record.conversation_id || record.id))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  );
   qaHistory.value.forEach((record) => {
+    const conversationId = Number(record.conversation_id || record.id);
+    if (isLessonQaRecord(record) || lessonConversationIds.has(conversationId)) return;
     if (showFavorites.value && !record.is_favorite) return;
     if (keyword && !String(record.question || "").includes(keyword) && !String(record.answer || "").includes(keyword)) return;
-    const conversationId = Number(record.conversation_id || record.id);
     const existing = groups.get(conversationId);
     if (!existing) {
       groups.set(conversationId, { ...record, conversation_id: conversationId, record_count: 1 });
@@ -1471,7 +1478,11 @@ const filteredQaHistory = computed<QaHistoryConversation[]>(() => {
   return [...groups.values()].sort((left, right) => timestampMs(right.created_at) - timestampMs(left.created_at));
 });
 const selectedKnowledge = computed(() => knowledge.value.find((item) => item.id === selectedKnowledgeId.value) || knowledge.value[0] || null);
-const knowledgeMastery = computed(() => Math.max(35, 90 - (weakPoints.value.find((item) => item.knowledge_point === selectedKnowledge.value?.name)?.wrong_count || 0) * 12));
+const knowledgeMastery = computed(() => {
+  const weak = weakPoints.value.find((item) => item.knowledge_point === selectedKnowledge.value?.name);
+  const impact = Number(weak?.weak_score ?? weak?.wrong_count ?? 0);
+  return Math.max(35, 90 - impact * 12);
+});
 const knowledgeMasteryText = computed(() => knowledgeMastery.value > 75 ? "已掌握" : knowledgeMastery.value > 55 ? "待加强" : "薄弱");
 const knowledgeMasteryClass = computed(() => knowledgeMastery.value > 75 ? "tag-success" : knowledgeMastery.value > 55 ? "tag-warning" : "tag-danger");
 const knowledgeContent = computed(() => selectedKnowledge.value?.content_by_level?.[knowledgeLevel.value] || {});
@@ -2189,6 +2200,7 @@ function timestampMs(value?: string | Date | null) { return parseAppDate(value)?
 function relativeTime(value?: string | Date | null) { const date = parseAppDate(value); if (!date) return "刚刚"; const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
 function formatTime(value?: string | Date | null) { const date = parseAppDate(value); return date ? date.toLocaleString("zh-CN", { hour12: false, timeZone: BEIJING_TIME_ZONE }) : "-"; }
 function timeLabel(value: number) { if (!Number.isFinite(value)) return "00:00"; return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(Math.floor(value % 60)).padStart(2, "0")}`; }
+function isLessonQaRecord(record: any) { return record?.lesson_page_id !== null && record?.lesson_page_id !== undefined; }
 function payloadList(activity: PageActivity | null | undefined, key: string) {
   const value = activity?.payload?.[key];
   if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8);
@@ -2471,6 +2483,11 @@ async function handleQaImageChange(event: Event, scope: "class" | "global") {
 
 async function askInClass() {
   if ((!classQuestion.value.trim() && !classQaAttachments.value.length) || !classroomLesson.value || classThinking.value || classQaImageUploading.value) return;
+  const lessonPageId = Number(activePage.value?.id || 0);
+  if (!lessonPageId) {
+    emit("notice", "warning", "当前课件页还未加载完成，请稍后再提问。");
+    return;
+  }
   const question = classQuestion.value.trim() || "请分析这张图片";
   const attachments = classQaAttachments.value.map((item) => ({ ...item }));
   classQuestion.value = "";
@@ -2484,7 +2501,7 @@ async function askInClass() {
     await api.streamPost("/qa/ask/stream", {
       course_id: classroomLesson.value.lesson.course_id,
       conversation_id: classConversationId.value,
-      lesson_page_id: activePage.value?.id,
+      lesson_page_id: lessonPageId,
       question,
       attachments
     }, (event, data) => {
@@ -2536,7 +2553,20 @@ async function askGlobal() {
 function sendGlobalQuick(text: string) { globalQuestion.value = text; askGlobal(); }
 async function sendCourseQuick(text: string) { quickCourseQuestion.value = text; await askCourseQuick(); }
 async function askCourseQuick() { if (!quickCourseQuestion.value.trim()) return; globalQuestion.value = quickCourseQuestion.value; quickCourseQuestion.value = ""; await go("studentQa"); await askGlobal(); }
-async function loadQaHistory() { if (!selectedCourseId.value) return; qaHistory.value = (await run<any[]>(() => api.get("/qa/history", { course_id: selectedCourseId.value, keyword: qaKeyword.value }))) || []; }
+async function loadQaHistory() {
+  if (!selectedCourseId.value) return;
+  const records = (await run<any[]>(() => api.get("/qa/history", { course_id: selectedCourseId.value, keyword: qaKeyword.value }))) || [];
+  const lessonConversationIds = new Set(
+    records
+      .filter(isLessonQaRecord)
+      .map((record) => Number(record.conversation_id || record.id))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  );
+  qaHistory.value = records.filter((record) => {
+    const conversationId = Number(record.conversation_id || record.id);
+    return !isLessonQaRecord(record) && !lessonConversationIds.has(conversationId);
+  });
+}
 async function loadClassQaHistory() {
   if (!classroomLesson.value) return;
   const lessonId = classroomLesson.value.lesson.id;
@@ -2578,6 +2608,15 @@ async function loadQaRouteConversation() {
   if (!conversationId) return;
   const records = await run<any[]>(() => api.get(`/qa/conversations/${conversationId}`));
   if (!records?.length) return;
+  if (records.some((record) => record?.lesson_page_id)) {
+    globalConversationId.value = null;
+    globalMessages.value = [];
+    globalQaAttachments.value = [];
+    historyOpen.value = false;
+    if (route.path !== "/qa") await router.replace("/qa");
+    await loadQaHistory();
+    return;
+  }
   const courseId = Number(records[0]?.course_id || 0);
   if (courseId && selectedCourseId.value !== courseId) {
     suppressCourseScopedReset = true;

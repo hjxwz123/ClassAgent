@@ -8,7 +8,18 @@ from pptx import Presentation
 from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus
 from app.core.errors import AppError
 from app.db import session as db_session
-from app.db.models import Course, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, ProblemGuidance, QuizQuestion, User
+from app.db.models import (
+    Course,
+    CourseMaterial,
+    KnowledgeChunk,
+    KnowledgePoint,
+    Lesson,
+    LessonPage,
+    ProblemGuidance,
+    QuizQuestion,
+    StudentLearningSignal,
+    User,
+)
 from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.learning import QUIZ_SOURCE_CONTEXT_HARD_LIMIT, _course_source_text_for_quiz
 
@@ -373,7 +384,11 @@ def test_learning_core_flow(client, monkeypatch):
         headers=student_headers,
     )
     assert feedback_resp.status_code == 200, feedback_resp.text
-    history_resp = client.get("/api/v1/qa/history", params={"keyword": "矩阵"}, headers=student_headers)
+    history_resp = client.get(
+        "/api/v1/qa/history",
+        params={"course_id": course["id"], "lesson_id": lesson_id, "keyword": "矩阵"},
+        headers=student_headers,
+    )
     assert history_resp.status_code == 200, history_resp.text
     assert len(history_resp.json()["data"]) >= 1
     assert "thinking_process" in history_resp.json()["data"][0]
@@ -555,6 +570,83 @@ def test_learning_core_flow(client, monkeypatch):
     assert records["recent_qa"]
     assert records["recent_problems"]
     assert records["recent_attempts"]
+
+
+def test_qa_concept_question_contributes_to_weak_points_and_quiz_priority(client, monkeypatch):
+    course, chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+    with db_session.SessionLocal() as db:
+        db.add_all(
+            [
+                KnowledgePoint(
+                    course_id=course["id"],
+                    chapter_id=chapter["id"],
+                    name="矩阵",
+                    description="矩阵相关知识点",
+                    content_by_level={},
+                ),
+                KnowledgePoint(
+                    course_id=course["id"],
+                    chapter_id=chapter["id"],
+                    name="行列式",
+                    description="行列式相关知识点",
+                    content_by_level={},
+                ),
+            ]
+        )
+        db.commit()
+
+    lesson_detail_resp = client.get(f"/api/v1/lessons/{lesson_id}", headers=student_headers)
+    assert lesson_detail_resp.status_code == 200, lesson_detail_resp.text
+    first_page_id = lesson_detail_resp.json()["data"]["pages"][0]["id"]
+
+    qa_resp = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "lesson_page_id": first_page_id, "question": "行列式是什么概念"},
+        headers=student_headers,
+    )
+    assert qa_resp.status_code == 200, qa_resp.text
+    assert qa_resp.json()["data"]["is_out_of_scope"] is False
+
+    with db_session.SessionLocal() as db:
+        signal = db.scalar(
+            select(StudentLearningSignal)
+            .join(KnowledgePoint, KnowledgePoint.id == StudentLearningSignal.knowledge_point_id)
+            .where(StudentLearningSignal.course_id == course["id"], KnowledgePoint.name == "行列式")
+        )
+        assert signal is not None
+        assert signal.intent == "concept_confusion"
+        assert signal.score > 0
+
+    weak_resp = client.get("/api/v1/learning/weak-points", params={"course_id": course["id"]}, headers=student_headers)
+    assert weak_resp.status_code == 200, weak_resp.text
+    weak_items = weak_resp.json()["data"]
+    determinant = next(item for item in weak_items if item["knowledge_point"] == "行列式")
+    assert determinant["wrong_count"] == 0
+    assert determinant["qa_signal_count"] >= 1
+    assert determinant["weak_score"] > 0
+
+    captured = {}
+
+    def fake_prioritized_quiz_questions(*, topic, source_text, count, db=None, **kwargs):
+        captured["topic"] = topic
+        return fake_quiz_questions(topic=topic, source_text=source_text, count=count, db=db)
+
+    monkeypatch.setattr(ai_service, "generate_quiz_questions", fake_prioritized_quiz_questions)
+    quiz_resp = client.post(
+        "/api/v1/learning/quizzes/generate",
+        json={
+            "course_id": course["id"],
+            "chapter_id": chapter["id"],
+            "chapter_ids": [chapter["id"]],
+            "title": "薄弱点章节练习",
+            "quiz_type": "practice",
+            "question_count": 1,
+            "prefer_weak_points": True,
+        },
+        headers=student_headers,
+    )
+    assert quiz_resp.status_code == 200, quiz_resp.text
+    assert captured["topic"].startswith("行列式")
 
 
 def test_teacher_weak_quiz_management_flow(client, monkeypatch):
@@ -842,6 +934,52 @@ def test_qa_stream_falls_back_to_regular_answer_when_upstream_stream_fails(clien
     assert "非流式回退思考过程" in body
     assert "event: final" in body
     assert body.count("event: delta") >= 2
+
+
+def test_course_qa_history_excludes_lesson_page_conversations_by_default(client, monkeypatch):
+    course, _chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    lesson_detail_resp = client.get(f"/api/v1/lessons/{lesson_id}", headers=student_headers)
+    assert lesson_detail_resp.status_code == 200, lesson_detail_resp.text
+    first_page_id = lesson_detail_resp.json()["data"]["pages"][0]["id"]
+
+    monkeypatch.setattr(
+        qa_service.ai_service,
+        "answer_question",
+        lambda **kwargs: ("课件问答回答：矩阵可以表示线性变换。", False, None),
+    )
+    ask_resp = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "lesson_page_id": first_page_id, "question": "课件里的矩阵是什么？"},
+        headers=student_headers,
+    )
+    assert ask_resp.status_code == 200, ask_resp.text
+    lesson_conversation_id = ask_resp.json()["data"]["conversation_id"]
+
+    mixed_scope_resp = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "conversation_id": lesson_conversation_id, "question": "同一课件对话后续追问"},
+        headers=student_headers,
+    )
+    assert mixed_scope_resp.status_code == 200, mixed_scope_resp.text
+
+    history_resp = client.get("/api/v1/qa/history", params={"course_id": course["id"]}, headers=student_headers)
+    assert history_resp.status_code == 200, history_resp.text
+    history = history_resp.json()["data"]
+    assert all(item["lesson_page_id"] is None for item in history)
+    assert not any(item["question"] == "课件里的矩阵是什么？" for item in history)
+    assert not any(item["question"] == "同一课件对话后续追问" for item in history)
+
+    lesson_history_resp = client.get(
+        "/api/v1/qa/history",
+        params={"course_id": course["id"], "lesson_id": lesson_id},
+        headers=student_headers,
+    )
+    assert lesson_history_resp.status_code == 200, lesson_history_resp.text
+    lesson_history = lesson_history_resp.json()["data"]
+    assert any(item["question"] == "课件里的矩阵是什么？" and item["lesson_page_id"] == first_page_id for item in lesson_history)
 
 
 def test_qa_stream_sends_previous_turn_as_history_messages(client, monkeypatch):
