@@ -198,70 +198,72 @@
   <section v-else class="student-shell">
     <header class="student-top">
       <button class="brand" @click="go('studentHome')"><span><Sparkles :size="16" /></span><strong>课程学习助手</strong></button>
-      <transition name="search-expand">
-        <div v-if="searchOpen" class="global-search" @click.self="closeSearch">
-          <div class="global-search-panel" @click.stop>
-            <div class="global-search-bar">
-              <Search :size="18" />
-              <input
-                ref="searchInput"
-                v-model="globalSearch"
-                placeholder="搜索课程、课时、资料、知识点、问答"
-                @keydown.down.prevent="moveSearchSelection(1)"
-                @keydown.up.prevent="moveSearchSelection(-1)"
-                @keydown.enter.prevent="openActiveSearchResult"
-                @keyup.esc="closeSearch"
-              />
-              <button type="button" @click="closeSearch"><X :size="18" /></button>
-            </div>
-            <div class="global-search-results">
-              <div v-if="searchLoading" class="global-search-state">
-                <Loader2 :size="18" class="lesson-loading-icon" />
-                <span>正在搜索</span>
-              </div>
-              <div v-else-if="searchError" class="global-search-state error">
-                <AlertTriangle :size="18" />
-                <span>{{ searchError }}</span>
-              </div>
-              <div v-else-if="!searchKeyword" class="global-search-state">
+      <Teleport to="body">
+        <transition name="search-expand">
+          <div v-if="searchOpen" class="global-search" @click.self="closeSearch">
+            <div class="global-search-panel" @click.stop>
+              <div class="global-search-bar">
                 <Search :size="18" />
-                <span>输入课程、课时、资料、知识点或问答关键词</span>
+                <input
+                  ref="searchInput"
+                  v-model="globalSearch"
+                  placeholder="搜索课程、课时、资料、知识点、问答"
+                  @keydown.down.prevent="moveSearchSelection(1)"
+                  @keydown.up.prevent="moveSearchSelection(-1)"
+                  @keydown.enter.prevent="openActiveSearchResult"
+                  @keyup.esc="closeSearch"
+                />
+                <button type="button" @click="closeSearch"><X :size="18" /></button>
               </div>
-              <div v-else-if="searchResultGroups.length" class="global-search-groups">
-                <section v-for="group in searchResultGroups" :key="group.type" class="global-search-group">
-                  <header>
-                    <span>{{ group.label }}</span>
-                    <small>{{ group.items.length }}</small>
-                  </header>
-                  <button
-                    v-for="item in group.items"
-                    :key="item.key"
-                    type="button"
-                    class="global-search-item"
-                    :class="{ active: isSearchResultActive(item), ai: item.type === 'qa' }"
-                    @mouseenter="focusSearchResult(item.key)"
-                    @click="openSearchResult(item)"
-                  >
-                    <span class="global-search-item-icon">
-                      <component :is="searchTypeMeta(item.type).icon" :size="18" />
-                    </span>
-                    <span class="global-search-copy">
-                      <strong>{{ item.title }}</strong>
-                      <small>{{ item.subtitle }}</small>
-                      <p v-if="item.excerpt">{{ item.excerpt }}</p>
-                    </span>
-                    <ChevronRight :size="16" class="global-search-arrow" />
-                  </button>
-                </section>
-              </div>
-              <div v-else class="global-search-state">
-                <Info :size="18" />
-                <span>没有找到相关内容</span>
+              <div class="global-search-results">
+                <div v-if="searchLoading" class="global-search-state">
+                  <Loader2 :size="18" class="lesson-loading-icon" />
+                  <span>正在搜索</span>
+                </div>
+                <div v-else-if="searchError" class="global-search-state error">
+                  <AlertTriangle :size="18" />
+                  <span>{{ searchError }}</span>
+                </div>
+                <div v-else-if="!searchKeyword" class="global-search-state">
+                  <Search :size="18" />
+                  <span>输入课程、课时、资料、知识点或问答关键词</span>
+                </div>
+                <div v-else-if="searchResultGroups.length" class="global-search-groups">
+                  <section v-for="group in searchResultGroups" :key="group.type" class="global-search-group">
+                    <header>
+                      <span>{{ group.label }}</span>
+                      <small>{{ group.items.length }}</small>
+                    </header>
+                    <button
+                      v-for="item in group.items"
+                      :key="item.key"
+                      type="button"
+                      class="global-search-item"
+                      :class="{ active: isSearchResultActive(item), ai: item.type === 'qa' }"
+                      @mouseenter="focusSearchResult(item.key)"
+                      @click="openSearchResult(item)"
+                    >
+                      <span class="global-search-item-icon">
+                        <component :is="searchTypeMeta(item.type).icon" :size="18" />
+                      </span>
+                      <span class="global-search-copy">
+                        <strong>{{ item.title }}</strong>
+                        <small>{{ item.subtitle }}</small>
+                        <p v-if="item.excerpt">{{ item.excerpt }}</p>
+                      </span>
+                      <ChevronRight :size="16" class="global-search-arrow" />
+                    </button>
+                  </section>
+                </div>
+                <div v-else class="global-search-state">
+                  <Info :size="18" />
+                  <span>没有找到相关内容</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </transition>
+        </transition>
+      </Teleport>
       <nav class="student-nav-links" aria-label="学生端主导航">
         <button
           v-for="item in topNavTabs"
@@ -285,7 +287,16 @@
       </div>
       <transition name="top-menu">
         <div v-if="noticeOpen" ref="noticePopRef" class="notice-pop top-menu-panel">
-          <div v-for="item in notifications" :key="item.id || `${item.type}-${item.title}`" class="notice-item"><Bell :size="15" /><div><strong>{{ item.title }}</strong><p v-if="item.message">{{ item.message }}</p><small>{{ item.course_name ? `${item.course_name} · ` : '' }}{{ relativeTime(item.time) }}</small></div><i v-if="item.unread"></i></div>
+          <header class="notice-head">
+            <strong>通知中心</strong>
+            <button v-if="unreadCount" type="button" :data-loading="notificationReading" :disabled="notificationReading" @click="markStudentNotificationsRead()">全部已读</button>
+          </header>
+          <div v-for="item in notifications" :key="item.id || `${item.type}-${item.title}`" class="notice-item" :class="{ unread: item.unread }">
+            <Bell :size="15" />
+            <div><strong>{{ item.title }}</strong><p v-if="item.message">{{ item.message }}</p><small>{{ item.course_name ? `${item.course_name} · ` : '' }}{{ relativeTime(item.time) }}</small></div>
+            <button v-if="item.unread" type="button" class="notice-read-btn" :data-loading="notificationReading" :disabled="notificationReading" @click.stop="markStudentNotificationsRead(item)">已读</button>
+            <i v-if="item.unread"></i>
+          </div>
           <EmptyState v-if="!notifications.length" text="暂无通知" />
         </div>
       </transition>
@@ -516,6 +527,7 @@
                     <div class="qa-header-actions">
                       <CourseSelect />
                       <button class="qa-tutoring-link" type="button" @click="go('studentTutoring')"><Pencil :size="13" />题目辅导</button>
+                      <button class="qa-new-chat-link" type="button" title="新建对话" aria-label="新建对话" @click="startNewQaConversation"><Plus :size="18" /></button>
                       <button class="action-circle-btn" type="button" :class="{ active: historyOpen }" title="问答历史" aria-label="问答历史" @click="toggleQaHistory"><Clock :size="18" /></button>
                     </div>
                   </div>
@@ -543,7 +555,7 @@
                 </div>
               </form>
               <transition name="fade-slide"><button v-if="historyOpen" type="button" class="history-drawer-backdrop" aria-label="关闭问答历史" @click="closeQaHistory"></button></transition>
-              <transition name="drawer"><aside v-if="historyOpen" class="history-drawer"><div class="drawer-head"><h2>{{ courseScopeName }}问答历史</h2><button type="button" @click="closeQaHistory"><X :size="16" /></button></div><div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索本课程历史问答" @keyup.enter="loadQaHistory" /></div><button type="button" class="history-favorite-toggle" :class="{ checked: showFavorites }" :aria-pressed="showFavorites" @click="showFavorites = !showFavorites"><span class="favorite-check-box" aria-hidden="true"></span><strong>仅看收藏</strong></button><button v-for="item in filteredQaHistory" :key="item.id" class="history-row" type="button" @click="reuseHistory(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}</small></button><EmptyState v-if="!filteredQaHistory.length" text="本课程暂无问答记录" /></aside></transition>
+              <transition name="drawer"><aside v-if="historyOpen" class="history-drawer"><div class="drawer-head"><h2>{{ courseScopeName }}问答历史</h2><div class="drawer-head-actions"><button type="button" class="history-favorite-toggle" :class="{ checked: showFavorites }" :aria-pressed="showFavorites" @click="showFavorites = !showFavorites"><span class="favorite-check-box" aria-hidden="true"></span><strong>仅看收藏</strong></button><button class="drawer-close-btn" type="button" @click="closeQaHistory"><X :size="16" /></button></div></div><div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索本课程历史问答" @keyup.enter="loadQaHistory" /></div><button v-for="item in filteredQaHistory" :key="item.conversation_id" class="history-row" :class="{ active: routeQaConversationId() === Number(item.conversation_id) }" type="button" @click="openQaConversation(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}<template v-if="item.record_count > 1"> · {{ item.record_count }} 条</template></small></button><EmptyState v-if="!filteredQaHistory.length" text="本课程暂无问答记录" /></aside></transition>
             </section>
           </template>
 
@@ -746,7 +758,7 @@
                         <span class="practice-history-icon"><Layers :size="20" /></span>
                         <div>
                           <strong>{{ quiz.title }}</strong>
-                          <small>{{ quizQuestionMeta(quiz) }} · {{ relativeTime(quiz.created_at) }}</small>
+                          <small>{{ quizQuestionMeta(quiz) }} · {{ relativeTime(practiceRecordTime(quiz)) }}</small>
                         </div>
                       </div>
                       <em>{{ quizScoreLabel(quiz) }}</em>
@@ -1074,6 +1086,7 @@ import "../styles/student/classagent.css";
 
 type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };
 type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: any[]; attachments?: QaAttachment[]; thought?: string; thoughtOpen?: boolean; record_id?: number; favorite?: boolean; outOfScope?: boolean; streaming?: boolean };
+type QaHistoryConversation = { id: number; conversation_id: number; question: string; answer: string; created_at: string; attachments?: QaAttachment[]; sources?: any[]; thinking_process?: string; reasoning_content?: string; thought?: string; is_favorite?: boolean; record_count: number };
 type StudentSearchResultType = "course" | "lesson" | "material" | "knowledge" | "qa";
 type StudentSearchResult = {
   key: string;
@@ -1129,6 +1142,7 @@ let searchTimer: number | undefined;
 let searchRequestSeq = 0;
 const noticeOpen = ref(false);
 const notificationLoading = ref(false);
+const notificationReading = ref(false);
 const userMenuOpen = ref(false);
 const topActionsRef = ref<HTMLElement | null>(null);
 const noticePopRef = ref<HTMLElement | null>(null);
@@ -1181,6 +1195,7 @@ let studyTimer: number | undefined;
 let noteTimer: number | undefined;
 let lessonLoadSeq = 0;
 let courseHomeLoadSeq = 0;
+let suppressCourseScopedReset = false;
 
 const globalMessages = ref<ChatMessage[]>([]);
 const globalQuestion = ref("");
@@ -1402,14 +1417,34 @@ const studyClock = computed(() => `${String(Math.floor(studySeconds.value / 60))
 const audioTime = computed(() => timeLabel(audioRef.value?.currentTime || 0));
 const audioDuration = computed(() => timeLabel(audioRef.value?.duration || activePage.value?.audio_duration_seconds || 0));
 const completionSummary = computed(() => "本次学习完成度良好，建议继续完成配套练习并整理课时笔记。");
-const filteredQaHistory = computed(() => qaHistory.value.filter((item) => (!showFavorites.value || item.is_favorite) && (!qaKeyword.value || item.question.includes(qaKeyword.value))));
+const filteredQaHistory = computed<QaHistoryConversation[]>(() => {
+  const keyword = qaKeyword.value.trim();
+  const groups = new Map<number, QaHistoryConversation>();
+  qaHistory.value.forEach((record) => {
+    if (showFavorites.value && !record.is_favorite) return;
+    if (keyword && !String(record.question || "").includes(keyword) && !String(record.answer || "").includes(keyword)) return;
+    const conversationId = Number(record.conversation_id || record.id);
+    const existing = groups.get(conversationId);
+    if (!existing) {
+      groups.set(conversationId, { ...record, conversation_id: conversationId, record_count: 1 });
+      return;
+    }
+    existing.record_count += 1;
+    const isFavorite = Boolean(existing.is_favorite || record.is_favorite);
+    existing.is_favorite = isFavorite;
+    if (timestampMs(record.created_at) > timestampMs(existing.created_at)) Object.assign(existing, { ...record, conversation_id: conversationId, record_count: existing.record_count, is_favorite: isFavorite });
+  });
+  return [...groups.values()].sort((left, right) => timestampMs(right.created_at) - timestampMs(left.created_at));
+});
 const selectedKnowledge = computed(() => knowledge.value.find((item) => item.id === selectedKnowledgeId.value) || knowledge.value[0] || null);
 const knowledgeMastery = computed(() => Math.max(35, 90 - (weakPoints.value.find((item) => item.knowledge_point === selectedKnowledge.value?.name)?.wrong_count || 0) * 12));
 const knowledgeMasteryText = computed(() => knowledgeMastery.value > 75 ? "已掌握" : knowledgeMastery.value > 55 ? "待加强" : "薄弱");
 const knowledgeMasteryClass = computed(() => knowledgeMastery.value > 75 ? "tag-success" : knowledgeMastery.value > 55 ? "tag-warning" : "tag-danger");
 const knowledgeContent = computed(() => selectedKnowledge.value?.content_by_level?.[knowledgeLevel.value] || {});
 const courseQuizzes = computed(() => quizzes.value.filter((quiz) => quiz.quiz_type === "course"));
-const practiceQuizzes = computed(() => quizzes.value.filter((quiz) => quiz.quiz_type !== "course"));
+const practiceQuizzes = computed(() => quizzes.value
+  .filter((quiz) => quiz.quiz_type !== "course")
+  .sort((left, right) => timestampMs(practiceRecordTime(right)) - timestampMs(practiceRecordTime(left))));
 const wrongKnowledgeFilters = computed(() => {
   const counter = new Map<string, number>();
   wrongQuestions.value.forEach((item: any) => {
@@ -1442,7 +1477,8 @@ const wrongFilterSummary = computed(() => {
 });
 const weeklyWrongCount = computed(() => wrongQuestions.value.filter((item) => {
   const time = item.last_wrong_at || item.updated_at || item.created_at;
-  return time && Date.now() - new Date(time).getTime() < 7 * 86400000;
+  const timeMs = timestampMs(time);
+  return timeMs > 0 && Date.now() - timeMs < 7 * 86400000;
 }).length);
 const monthlyCheckins = computed(() => checkinDays.value.filter((day) => day.slice(0, 7) === new Date().toISOString().slice(0, 7)).length);
 const weeklyHours = computed(() => [0.8, 1.2, 1.6, 1.1, 2.2, 0.7, 1.4]);
@@ -1516,6 +1552,7 @@ watch(() => [props.pageKey, route.fullPath], async () => { await syncRouteState(
 watch(selectedCourseId, async (id, previousId) => {
   if (id) localStorage.setItem("student_current_course_id", String(id));
   if (id === previousId) return;
+  if (suppressCourseScopedReset) return;
   resetCourseScopedState();
   if (active.value === "studentQa") {
     await loadCourseHome();
@@ -1558,6 +1595,7 @@ function queuedQuizMessage(result: any, fallback = "题目已加入生成队列�
   return result?.status === "failed" ? "题目生成失败，请稍后重试" : fallback;
 }
 function courseRoute(id: number) { return `/courses/${id}`; }
+function qaConversationRoute(id: number) { return `/qa/${id}`; }
 function pageRoute(key: string) {
   if (key === "studentCourseHome") {
     const id = routeCourseId() || selectedCourseId.value;
@@ -1618,6 +1656,22 @@ async function toggleNotifications() {
   userMenuOpen.value = false;
   if (noticeOpen.value) await loadNotifications();
 }
+async function markStudentNotificationsRead(item?: any) {
+  const ids = item
+    ? [String(item.id || "").trim()].filter(Boolean)
+    : notifications.value.filter((notice) => notice.unread).map((notice) => String(notice.id || "").trim()).filter(Boolean);
+  if (!ids.length || notificationReading.value) return;
+  notificationReading.value = true;
+  try {
+    const updated = await api.post<any[]>("/student/notifications/read", { ids });
+    notifications.value = updated || notifications.value.map((notice) => (ids.includes(String(notice.id || "")) ? { ...notice, unread: false } : notice));
+    if (dashboard.value?.notifications) dashboard.value = { ...dashboard.value, notifications: notifications.value };
+  } catch (error) {
+    emit("notice", "error", (error as Error).message);
+  } finally {
+    notificationReading.value = false;
+  }
+}
 async function loadCourseHome() {
   const routeId = routeCourseId();
   const isCourseRoute = active.value === "studentCourseHome";
@@ -1673,8 +1727,16 @@ async function loadActive() {
   if (["studentQa", "studentWrongBook", "studentTutoring", "studentKnowledge", "studentQuizzes"].includes(active.value) && !courses.value.length) await loadCourses();
   if (["studentCourseHome", "studentMaterials"].includes(active.value)) await loadCourseHome();
   if (active.value === "studentQa") {
-    await loadCourseHome();
-    await loadQaHistory();
+    if (routeQaConversationId()) await loadQaRouteConversation();
+    else {
+      if (globalConversationId.value) {
+        globalConversationId.value = null;
+        globalMessages.value = [];
+        globalQaAttachments.value = [];
+      }
+      await loadCourseHome();
+      await loadQaHistory();
+    }
   }
   if (active.value === "studentTutoring") await loadProblemHistory();
   if (active.value === "studentKnowledge") await loadKnowledge();
@@ -2069,8 +2131,21 @@ function courseHeroStyle(course?: any) {
   return { background: course?.cover_color || courseGradient(Number(course?.id || 1)) };
 }
 function normalizePercent(value: unknown) { const percent = Number.parseFloat(String(value ?? "").replace("%", "")); return Number.isFinite(percent) ? Math.max(0, Math.min(100, Math.round(percent))) : null; }
-function relativeTime(value?: string | null) { if (!value) return "刚刚"; const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
-function formatTime(value?: string | null) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
+const BEIJING_TIME_ZONE = "Asia/Shanghai";
+const TIMEZONE_SUFFIX_RE = /(Z|[+-]\d{2}:?\d{2})$/i;
+function parseAppDate(value?: string | Date | null) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const text = String(value).trim();
+  if (!text) return null;
+  const hasTime = /\d{2}:\d{2}/.test(text);
+  const normalized = hasTime && !TIMEZONE_SUFFIX_RE.test(text) ? `${text.replace(" ", "T")}Z` : text;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+function timestampMs(value?: string | Date | null) { return parseAppDate(value)?.getTime() || 0; }
+function relativeTime(value?: string | Date | null) { const date = parseAppDate(value); if (!date) return "刚刚"; const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
+function formatTime(value?: string | Date | null) { const date = parseAppDate(value); return date ? date.toLocaleString("zh-CN", { hour12: false, timeZone: BEIJING_TIME_ZONE }) : "-"; }
 function timeLabel(value: number) { if (!Number.isFinite(value)) return "00:00"; return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(Math.floor(value % 60)).padStart(2, "0")}`; }
 function payloadList(activity: PageActivity | null | undefined, key: string) {
   const value = activity?.payload?.[key];
@@ -2103,6 +2178,11 @@ function routeCourseId() {
 }
 function routeLessonId() {
   const raw = Array.isArray(route.params.lessonId) ? route.params.lessonId[0] : route.params.lessonId;
+  const id = Number(raw);
+  return Number.isFinite(id) && id > 0 ? id : 0;
+}
+function routeQaConversationId() {
+  const raw = Array.isArray(route.params.conversationId) ? route.params.conversationId[0] : route.params.conversationId;
   const id = Number(raw);
   return Number.isFinite(id) && id > 0 ? id : 0;
 }
@@ -2357,6 +2437,7 @@ async function askGlobal() {
       applyQaStreamEvent(globalMessages, aiMessageId, event, data);
       if (event === "final") globalConversationId.value = data.conversation_id;
     });
+    if (globalConversationId.value && routeQaConversationId() !== globalConversationId.value) await router.replace(qaConversationRoute(globalConversationId.value));
     await loadQaHistory();
   } catch (error) {
     const current = globalMessages.value.find((message) => message.id === aiMessageId);
@@ -2381,7 +2462,59 @@ async function toggleQaHistory() {
   historyOpen.value = true;
   await loadQaHistory();
 }
-function reuseHistory(item: any) { historyOpen.value = false; globalMessages.value = [{ id: item.id * 2, role: "user", text: item.question, attachments: item.attachments || [] }, { id: item.id * 2 + 1, role: "ai", text: item.answer, sources: item.sources || [], attachments: item.attachments || [], thought: item.thinking_process || item.reasoning_content || item.thought || "", record_id: item.id, favorite: item.is_favorite }]; }
+function qaRecordsToMessages(records: any[]) {
+  return records.flatMap((item) => [
+    { id: item.id * 2, role: "user" as const, text: item.question, attachments: item.attachments || [] },
+    {
+      id: item.id * 2 + 1,
+      role: "ai" as const,
+      text: item.answer,
+      sources: item.sources || [],
+      attachments: item.attachments || [],
+      thought: item.thinking_process || item.reasoning_content || item.thought || "",
+      record_id: item.id,
+      favorite: item.is_favorite,
+      outOfScope: item.is_out_of_scope,
+    }
+  ]);
+}
+async function loadQaRouteConversation() {
+  const conversationId = routeQaConversationId();
+  if (!conversationId) return;
+  const records = await run<any[]>(() => api.get(`/qa/conversations/${conversationId}`));
+  if (!records?.length) return;
+  const courseId = Number(records[0]?.course_id || 0);
+  if (courseId && selectedCourseId.value !== courseId) {
+    suppressCourseScopedReset = true;
+    selectedCourseId.value = courseId;
+    if (courseId) localStorage.setItem("student_current_course_id", String(courseId));
+    await nextTick();
+    suppressCourseScopedReset = false;
+  }
+  globalConversationId.value = conversationId;
+  globalMessages.value = qaRecordsToMessages(records);
+  await loadCourseHome();
+  await loadQaHistory();
+}
+async function startNewQaConversation() {
+  historyOpen.value = false;
+  globalConversationId.value = null;
+  globalMessages.value = [];
+  globalQuestion.value = "";
+  globalQaAttachments.value = [];
+  if (route.path !== "/qa") await router.push("/qa");
+}
+async function openQaConversation(item: any) {
+  const conversationId = Number(item?.conversation_id || 0);
+  if (!conversationId) return;
+  historyOpen.value = false;
+  if (routeQaConversationId() === conversationId) {
+    await loadQaRouteConversation();
+    return;
+  }
+  await router.push(qaConversationRoute(conversationId));
+}
+function reuseHistory(item: any) { void openQaConversation(item); }
 function toggleThought(message: ChatMessage) { message.thoughtOpen = !message.thoughtOpen; }
 async function favoriteQaMessage(message: ChatMessage) { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/favorite`, { is_favorite: !message.favorite }), "已收藏"); message.favorite = !message.favorite; }
 async function feedbackQaMessage(message: ChatMessage, feedback = "positive") { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/feedback`, { feedback }), "已评价"); }
@@ -2468,6 +2601,10 @@ async function generateQuiz() {
 }
 function latestQuizAttempt(quiz: any) {
   return quiz?.latest_attempt || quiz?.last_attempt || quiz?.best_attempt || (Array.isArray(quiz?.attempts) ? quiz.attempts[0] : null);
+}
+function practiceRecordTime(quiz: any) {
+  const attempt = latestQuizAttempt(quiz);
+  return attempt?.submitted_at || attempt?.created_at || quiz?.updated_at || quiz?.created_at || null;
 }
 async function openQuiz(quiz: any) {
   const latest = latestQuizAttempt(quiz);

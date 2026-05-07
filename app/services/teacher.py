@@ -34,7 +34,7 @@ from app.db.models import (
 from app.services.analytics import get_course_analytics
 from app.services.audit import log_operation
 from app.services.courses import _assert_course_owner, _get_course_or_404, list_teaching_courses
-from app.services.notifications import active_system_announcement, list_user_notifications
+from app.services.notifications import active_system_announcement, apply_user_notification_reads, list_user_notifications, mark_user_notifications_read
 from app.services.storage import storage_service
 
 
@@ -425,6 +425,7 @@ def get_teacher_dashboard(db: Session, user: User) -> dict:
         announcement = active_system_announcement(db, role="teacher")
         if announcement:
             notifications = [announcement, *notifications][:8]
+    notifications = apply_user_notification_reads(db, user_id=user.id, notifications=notifications)
     return {
         "stats": {
             "course_total": len(courses),
@@ -440,6 +441,21 @@ def get_teacher_dashboard(db: Session, user: User) -> dict:
         "ai_tasks": _ai_tasks(db, ids, limit=5),
         "notifications": notifications,
     }
+
+
+def mark_teacher_notifications_read(db: Session, *, user: User, notification_ids: list[str] | None = None) -> list[dict]:
+    _assert_teacher(user)
+    ids = [str(item).strip() for item in (notification_ids or []) if str(item).strip()]
+    if not ids:
+        ids = [
+            str(item.get("id") or "").strip()
+            for item in get_teacher_dashboard(db, user).get("notifications", [])
+            if str(item.get("id") or "").strip()
+        ]
+    if ids:
+        mark_user_notifications_read(db, user_id=user.id, notification_ids=ids)
+        db.commit()
+    return get_teacher_dashboard(db, user).get("notifications", [])
 
 
 def get_teacher_course_home(db: Session, *, course_id: int, user: User) -> dict:

@@ -61,10 +61,16 @@ def test_student_dashboard_without_courses_has_no_ai_recommendation(client):
     assert enable_resp.status_code == 200, enable_resp.text
     notifications_response = client.get("/api/v1/student/notifications", headers=student_headers)
     assert notifications_response.status_code == 200, notifications_response.text
-    assert any(
-        item["type"] == "system_announcement" and item["message"] == "学生端公告"
+    announcement = next(
+        item
         for item in notifications_response.json()["data"]
+        if item["type"] == "system_announcement" and item["message"] == "学生端公告"
     )
+    assert announcement["unread"] is True
+    read_response = client.post("/api/v1/student/notifications/read", json={"ids": [announcement["id"]]}, headers=student_headers)
+    assert read_response.status_code == 200, read_response.text
+    read_announcement = next(item for item in read_response.json()["data"] if item["id"] == announcement["id"])
+    assert read_announcement["unread"] is False
 
 
 def prepare_student_workspace(client):

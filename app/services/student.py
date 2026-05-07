@@ -32,7 +32,7 @@ from app.db.models import (
 )
 from app.services.ai import ai_service
 from app.services.courses import _get_course_or_404
-from app.services.notifications import active_system_announcement, list_user_notifications
+from app.services.notifications import active_system_announcement, apply_user_notification_reads, list_user_notifications, mark_user_notifications_read
 from app.services.storage import storage_service
 
 
@@ -693,13 +693,51 @@ def get_student_notifications(db: Session, user: User) -> list[dict]:
             .order_by(*_published_lesson_order())
             .limit(4)
         ):
-            notifications.append({"type": "lesson", "title": f"新课时：{lesson.title}", "time": lesson.published_at or lesson.created_at, "unread": True})
+            lesson_time = lesson.published_at or lesson.created_at
+            notifications.append(
+                {
+                    "id": f"lesson-{lesson.id}-{int(_notification_sort_time({'time': lesson_time}))}",
+                    "type": "lesson",
+                    "title": f"新课时：{lesson.title}",
+                    "time": lesson_time,
+                    "unread": True,
+                }
+            )
         failed_material = db.scalar(
             select(CourseMaterial)
             .where(CourseMaterial.course_id.in_(course_ids), CourseMaterial.parse_status == ProcessStatus.FAILED.value)
             .order_by(CourseMaterial.updated_at.desc())
         )
         if failed_material:
-            notifications.append({"type": "material", "title": f"资料处理失败：{failed_material.title}", "time": failed_material.updated_at, "unread": True})
+            notifications.append(
+                {
+                    "id": f"material-{failed_material.id}-{int(_notification_sort_time({'time': failed_material.updated_at}))}",
+                    "type": "material",
+                    "title": f"资料处理失败：{failed_material.title}",
+                    "time": failed_material.updated_at,
+                    "unread": True,
+                }
+            )
     notifications.sort(key=_notification_sort_time, reverse=True)
-    return notifications[:8]
+    return apply_user_notification_reads(db, user_id=user.id, notifications=notifications[:8])
+
+
+def mark_student_notifications_read(db: Session, *, user: User, notification_ids: list[str] | None = None) -> list[dict]:
+    _assert_student(user)
+    ids = [str(item).strip() for item in (notification_ids or []) if str(item).strip()]
+    if not ids:
+        ids = [str(item.get("id") or "").strip() for item in get_student_notifications(db, user) if str(item.get("id") or "").strip()]
+    if ids:
+        mark_user_notifications_read(db, user_id=user.id, notification_ids=ids)
+        reminders = _preference(db, user_id=user.id, key=STUDENT_REMINDER_KEY)
+        if isinstance(reminders, list):
+            changed = False
+            id_set = set(ids)
+            for item in reminders:
+                if isinstance(item, dict) and str(item.get("id") or "").strip() in id_set:
+                    item["unread"] = False
+                    changed = True
+            if changed:
+                _set_preference(db, user_id=user.id, key=STUDENT_REMINDER_KEY, value=reminders)
+        db.commit()
+    return get_student_notifications(db, user)

@@ -9,6 +9,7 @@ from app.db.models import SystemSetting, UserPreference
 
 
 USER_NOTIFICATION_KEY = "user.notifications"
+USER_NOTIFICATION_READ_KEY = "user.notification_reads"
 
 
 def _setting_value(db: Session, key: str):
@@ -87,6 +88,62 @@ def _set_notifications(db: Session, *, user_id: int, notifications: list[dict]) 
     db.add(item)
 
 
+def _get_read_ids(db: Session, *, user_id: int) -> set[str]:
+    item = db.scalar(
+        select(UserPreference).where(
+            UserPreference.user_id == user_id,
+            UserPreference.preference_key == USER_NOTIFICATION_READ_KEY,
+        )
+    )
+    value = item.preference_value if item is not None else None
+    if not isinstance(value, list):
+        return set()
+    return {str(notification_id) for notification_id in value if str(notification_id).strip()}
+
+
+def _set_read_ids(db: Session, *, user_id: int, read_ids: set[str]) -> None:
+    item = db.scalar(
+        select(UserPreference).where(
+            UserPreference.user_id == user_id,
+            UserPreference.preference_key == USER_NOTIFICATION_READ_KEY,
+        )
+    )
+    value = sorted(read_ids)[-500:]
+    if item is None:
+        item = UserPreference(user_id=user_id, preference_key=USER_NOTIFICATION_READ_KEY, preference_value=value)
+    else:
+        item.preference_value = value
+    db.add(item)
+
+
+def apply_user_notification_reads(db: Session, *, user_id: int, notifications: list[dict]) -> list[dict]:
+    read_ids = _get_read_ids(db, user_id=user_id)
+    normalized: list[dict] = []
+    for item in notifications:
+        copied = dict(item)
+        notification_id = str(copied.get("id") or "").strip()
+        if notification_id and notification_id in read_ids:
+            copied["unread"] = False
+        normalized.append(copied)
+    return normalized
+
+
+def mark_user_notifications_read(db: Session, *, user_id: int, notification_ids: list[str] | None = None) -> set[str]:
+    requested_ids = {str(notification_id).strip() for notification_id in (notification_ids or []) if str(notification_id).strip()}
+    existing = [item for item in _get_notifications(db, user_id=user_id) if isinstance(item, dict)]
+    if not requested_ids:
+        requested_ids = {str(item.get("id") or "").strip() for item in existing if str(item.get("id") or "").strip()}
+    for item in existing:
+        if str(item.get("id") or "").strip() in requested_ids:
+            item["unread"] = False
+    if existing:
+        _set_notifications(db, user_id=user_id, notifications=existing)
+    read_ids = _get_read_ids(db, user_id=user_id)
+    read_ids.update(requested_ids)
+    _set_read_ids(db, user_id=user_id, read_ids=read_ids)
+    return requested_ids
+
+
 def push_user_notification(
     db: Session,
     *,
@@ -122,4 +179,4 @@ def push_user_notification(
 def list_user_notifications(db: Session, *, user_id: int, limit: int = 8) -> list[dict]:
     notifications = [item for item in _get_notifications(db, user_id=user_id) if isinstance(item, dict)]
     notifications.sort(key=_notification_time, reverse=True)
-    return notifications[:limit]
+    return apply_user_notification_reads(db, user_id=user_id, notifications=notifications[:limit])

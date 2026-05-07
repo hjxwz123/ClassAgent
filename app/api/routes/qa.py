@@ -11,7 +11,7 @@ from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.qa import QAAskRequest, QAFeedbackRequest, QAFavoriteRequest, QAHistoryItem, QAResponse
-from app.services.qa import ask_question, ask_question_stream, list_history, update_favorite, update_feedback, upload_qa_image
+from app.services.qa import ask_question, ask_question_stream, list_conversation_records, list_history, update_favorite, update_feedback, upload_qa_image
 
 
 router = APIRouter()
@@ -85,6 +85,18 @@ def get_history_endpoint(
     keyword: str | None = Query(default=None),
 ):
     items = [QAHistoryItem.model_validate(item).model_dump(mode="json") for item in list_history(db, user=user, course_id=course_id, keyword=keyword)]
+    return success_response(data=items, request_id=request.state.request_id)
+
+
+@router.get("/conversations/{conversation_id}")
+def get_conversation_endpoint(
+    conversation_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    records = list_conversation_records(db, user=user, conversation_id=conversation_id)
+    items = [QAHistoryItem.model_validate(item).model_dump(mode="json") for item in records]
     return success_response(data=items, request_id=request.state.request_id)
 
 

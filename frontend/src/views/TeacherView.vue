@@ -21,7 +21,27 @@
         </div>
       </div>
       <div class="header-actions">
-        <button type="button" class="icon-btn" aria-label="通知" @click="openNotifications"><Bell :size="20" /><span>通知</span><em v-if="topNoticeCount">{{ topNoticeCount }}</em></button>
+        <div ref="teacherNoticeRef" class="teacher-notice-menu">
+          <button type="button" class="icon-btn" :class="{ active: teacherNoticeOpen }" aria-label="通知" @click.stop="openNotifications"><Bell :size="20" /><span>通知</span><em v-if="topNoticeCount">{{ topNoticeCount }}</em></button>
+          <Transition name="top-menu">
+            <div v-if="teacherNoticeOpen" class="teacher-notice-popover top-menu-panel">
+              <header class="teacher-notice-head">
+                <strong>通知</strong>
+                <button v-if="topNoticeCount" type="button" :data-loading="notificationReading" :disabled="notificationReading" @click="markTeacherNotificationsRead()">全部已读</button>
+              </header>
+              <div v-for="item in teacherNotifications" :key="item.id || `${item.type}-${item.title}`" class="teacher-notice-item" :class="{ unread: item.unread }">
+                <button type="button" class="teacher-notice-main" @click="openTeacherNotification(item)">
+                  <Bell :size="15" />
+                  <span><strong>{{ item.title }}</strong><small v-if="item.message">{{ item.message }}</small><em>{{ item.course_name ? `${item.course_name} · ` : '' }}{{ relativeTime(item.time) }}</em></span>
+                </button>
+                <button v-if="item.unread" type="button" class="notice-read-btn" :data-loading="notificationReading" :disabled="notificationReading" @click.stop="markTeacherNotificationsRead(item)">已读</button>
+                <i v-if="item.unread"></i>
+              </div>
+              <div v-if="!teacherNotifications.length && todoCount" class="teacher-notice-empty"><Clock :size="16" />有 {{ todoCount }} 条待办事项</div>
+              <EmptyState v-if="!teacherNotifications.length && !todoCount" text="暂无通知" />
+            </div>
+          </Transition>
+        </div>
         <button type="button" class="icon-btn" aria-label="帮助" @click="openHelp"><HelpCircle :size="20" /><span>帮助</span></button>
         <i></i>
         <div ref="userMenuRef" class="user-menu">
@@ -600,8 +620,11 @@ const pageLoading = ref(false);
 const currentCourseId = ref<number>(Number(localStorage.getItem("teacher_current_course_id") || 0));
 const courseMenuOpen = ref(false);
 const userMenuOpen = ref(false);
+const teacherNoticeOpen = ref(false);
+const notificationReading = ref(false);
 const courseSwitchRef = ref<HTMLElement | null>(null);
 const userMenuRef = ref<HTMLElement | null>(null);
+const teacherNoticeRef = ref<HTMLElement | null>(null);
 const courseView = ref<"grid" | "list">("grid");
 const materialView = ref<"grid" | "list">("list");
 const selectedChapterId = ref(0);
@@ -707,7 +730,7 @@ const todayText = computed(() => new Date().toLocaleDateString("zh-CN", { year: 
 const focusCount = computed(() => (dashboard.value.todos || []).length || courses.value.length);
 const todoCount = computed(() => (dashboard.value.todos || []).length);
 const teacherNotifications = computed(() => dashboard.value.notifications || []);
-const topNoticeCount = computed(() => teacherNotifications.value.filter((item: any) => item.unread).length || todoCount.value);
+const topNoticeCount = computed(() => teacherNotifications.value.filter((item: any) => item.unread).length);
 const courseTerms = computed(() => [...new Set(courses.value.map((course) => course.term).filter(Boolean))]);
 const courseTermOptions = computed(() => [{ label: "全部学期", value: "" }, ...courseTerms.value.map((term) => ({ label: String(term), value: String(term) }))]);
 const lessonChapterOptions = computed(() => [{ label: "全部章节", value: 0 }, ...(courseHome.value.chapters || []).map((chapter: any) => ({ label: chapter.title, value: chapter.id }))]);
@@ -837,6 +860,7 @@ async function withAction<T>(key: string, task: () => Promise<T>, ok?: string) {
 async function go(key: string) {
   courseMenuOpen.value = false;
   userMenuOpen.value = false;
+  teacherNoticeOpen.value = false;
   if (key !== "teacherPpt") {
     presentationMode.value = false;
     slideOverviewOpen.value = false;
@@ -846,21 +870,35 @@ async function go(key: string) {
 }
 function toggleCourseMenu() {
   userMenuOpen.value = false;
+  teacherNoticeOpen.value = false;
   courseMenuOpen.value = !courseMenuOpen.value;
 }
 function openNotifications() {
-  const latest = teacherNotifications.value[0];
-  if (latest) {
-    emit("notice", latest.type?.includes("failed") ? "warning" : "success", latest.message ? `${latest.title}：${latest.message}` : latest.title);
-    if (latest.resource_type === "quiz") go("teacherWeakQuizzes");
-    return;
+  courseMenuOpen.value = false;
+  userMenuOpen.value = false;
+  teacherNoticeOpen.value = !teacherNoticeOpen.value;
+}
+function openTeacherNotification(item: any) {
+  emit("notice", item.type?.includes("failed") ? "warning" : "success", item.message ? `${item.title}：${item.message}` : item.title);
+  if (item.resource_type === "quiz") {
+    teacherNoticeOpen.value = false;
+    void go("teacherWeakQuizzes");
   }
-  if (todoCount.value) {
-    emit("notice", "info", `有 ${todoCount.value} 条待办事项`);
-    go("teacherDashboard");
-    return;
+}
+async function markTeacherNotificationsRead(item?: any) {
+  const ids = item
+    ? [String(item.id || "").trim()].filter(Boolean)
+    : teacherNotifications.value.filter((notice: any) => notice.unread).map((notice: any) => String(notice.id || "").trim()).filter(Boolean);
+  if (!ids.length || notificationReading.value) return;
+  notificationReading.value = true;
+  try {
+    const updated = await api.post<any[]>("/teacher/notifications/read", { ids });
+    dashboard.value = { ...dashboard.value, notifications: updated || teacherNotifications.value.map((notice: any) => (ids.includes(String(notice.id || "")) ? { ...notice, unread: false } : notice)) };
+  } catch (error) {
+    emit("notice", "error", (error as Error).message);
+  } finally {
+    notificationReading.value = false;
   }
-  emit("notice", "info", "暂无新通知");
 }
 function openHelp() { emit("notice", "info", "教师端帮助已准备，可以从当前页面继续操作"); }
 async function loadCourses() { courses.value = (await run(() => api.get<any[]>("/teacher/courses"))) || []; if ((!currentCourseId.value || !courses.value.some((course) => course.id === currentCourseId.value)) && courses.value[0]) currentCourseId.value = courses.value[0].id; }
@@ -1600,11 +1638,13 @@ function onTeacherDocumentPointerDown(event: PointerEvent) {
   const target = event.target as Node;
   if (!courseSwitchRef.value?.contains(target)) courseMenuOpen.value = false;
   if (!userMenuRef.value?.contains(target)) userMenuOpen.value = false;
+  if (!teacherNoticeRef.value?.contains(target)) teacherNoticeOpen.value = false;
 }
 function onTeacherDocumentKeydown(event: KeyboardEvent) {
   if (event.key !== "Escape") return;
   courseMenuOpen.value = false;
   userMenuOpen.value = false;
+  teacherNoticeOpen.value = false;
   uploadOpen.value = false;
   chapterNameOpen.value = false;
   reminderOpen.value = false;

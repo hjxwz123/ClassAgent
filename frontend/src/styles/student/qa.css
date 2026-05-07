@@ -28,7 +28,7 @@
 .qa-modern-page textarea{font-family:inherit}
 .qa-modern-page.empty{display:block;place-items:initial;gap:0;color:var(--qa-text);text-align:initial}
 .qa-modern-page .qa-scroll-area{width:100%}
-.qa-modern-page .chat-wrapper{width:100%;max-width:860px;display:flex;flex-direction:column;gap:32px;margin:0 auto;padding:40px 24px}
+.qa-modern-page .chat-wrapper{width:100%;max-width:860px;display:flex;flex-direction:column;gap:32px;margin:0 auto;padding:0 24px 40px}
 .qa-modern-page .qa-header{position:static;inset:auto;display:flex;align-items:center;justify-content:space-between;gap:24px;margin:0 0 16px;padding-bottom:32px;border-bottom:1px dashed var(--qa-border)}
 .qa-modern-page .qa-title-group{display:flex;align-items:center;gap:16px;min-width:0}
 .qa-modern-page.empty .qa-header>.qa-title-group{display:flex}
@@ -36,17 +36,21 @@
 .qa-modern-page .qa-title h1{margin:0 0 4px;color:var(--qa-text);font-size:24px;line-height:1.25;font-weight:800;letter-spacing:0}
 .qa-modern-page .qa-title p{margin:0;color:var(--qa-hint);font-size:14px;font-weight:600}
 .qa-modern-page .qa-header-actions{display:flex;align-items:center;gap:12px;flex:0 0 auto}
+.qa-modern-page .qa-new-chat-link{width:40px;height:40px;min-width:40px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 40px;border:1px solid var(--qa-primary-100);border-radius:50%;background:var(--qa-surface);color:var(--qa-primary-600);box-shadow:var(--qa-shadow-sm);padding:0;font-size:14px;font-weight:800;white-space:nowrap}
+.qa-modern-page .qa-new-chat-link:hover{background:var(--qa-primary-50);transform:translateY(-2px);box-shadow:0 10px 22px #0097a724}
 .qa-modern-page .course-select{min-width:0}
 .qa-modern-page .course-select .select-menu>button,.qa-modern-page .select-menu-empty{min-height:40px;border:1px solid var(--qa-border);border-radius:var(--qa-pill);background:var(--qa-surface);color:var(--qa-text);box-shadow:var(--qa-shadow-sm);padding:0 16px;font-size:14px;font-weight:700}
 .qa-modern-page .course-select .select-menu>button:hover,.qa-modern-page .select-menu-empty:hover{border-color:var(--qa-primary-500);color:var(--qa-primary-600);transform:translateY(-2px)}
+.qa-modern-page .course-select .select-menu>button svg{flex:0 0 auto;border:0;border-radius:0;background:transparent!important;box-shadow:none!important;padding:0!important;color:currentColor}
 .qa-modern-page .action-circle-btn{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:1px solid var(--qa-border);border-radius:50%;background:var(--qa-surface);color:var(--qa-secondary);box-shadow:var(--qa-shadow-sm)}
 .qa-modern-page .action-circle-btn:hover{background:var(--qa-muted-bg);color:var(--qa-primary-600);transform:translateY(-2px)}
-.qa-modern-page .history-drawer{position:fixed;top:0;right:0;bottom:0;z-index:var(--z-modal);width:360px;display:grid;align-content:start;gap:14px;border:1px solid rgba(255,255,255,.74);border-radius:24px 0 0 24px;background:#fffffff5;box-shadow:0 12px 32px #0f172a14;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);padding:24px}
-.qa-modern-page .history-drawer-backdrop{position:fixed;inset:0;z-index:calc(var(--z-modal, 1200) + 8);border:0;background:rgba(15,23,42,.18);cursor:default}
+.qa-modern-page .history-drawer{position:fixed;top:64px;right:0;bottom:0;z-index:calc(var(--z-sticky, 1100) - 1);width:360px;display:grid;align-content:start;gap:14px;overflow-y:auto;overflow-x:hidden;border:1px solid rgba(255,255,255,.74);border-radius:24px 0 0 24px;background:#fffffff5;box-shadow:0 12px 32px #0f172a14;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);padding:24px}
+.qa-modern-page .history-drawer-backdrop{position:fixed;inset:64px 0 0;z-index:calc(var(--z-sticky, 1100) - 2);border:0;background:rgba(15,23,42,.18);cursor:default}
 .qa-modern-page .drawer-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.qa-modern-page .drawer-head h2{margin:0;color:var(--qa-text);font-size:18px;font-weight:800}
-.qa-modern-page .drawer-head button{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:50%;background:var(--qa-muted-bg);color:var(--qa-secondary)}
-.qa-modern-page .drawer-head button:hover{background:var(--qa-primary-50);color:var(--qa-primary-600);transform:translateY(-1px)}
+.qa-modern-page .drawer-head h2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;color:var(--qa-text);font-size:18px;font-weight:800}
+.qa-modern-page .drawer-head-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.qa-modern-page .drawer-head .drawer-close-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:50%;background:var(--qa-muted-bg);color:var(--qa-secondary)}
+.qa-modern-page .drawer-head .drawer-close-btn:hover{background:var(--qa-primary-50);color:var(--qa-primary-600);transform:translateY(-1px)}
 .qa-modern-page .history-favorite-toggle{width:fit-content;min-height:36px;display:inline-flex;align-items:center;justify-content:flex-start;gap:9px;border:1px solid var(--qa-border);border-radius:var(--qa-pill);background:var(--qa-surface);color:var(--qa-secondary);box-shadow:var(--qa-shadow-sm);padding:0 13px 0 10px;font-size:13px;font-weight:800;line-height:1;white-space:nowrap}
 .qa-modern-page .history-favorite-toggle .favorite-check-box{width:18px;height:18px;min-width:18px;max-width:18px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 18px;position:relative;overflow:hidden;border:1px solid var(--qa-border);border-radius:6px;background:#fff;color:transparent;line-height:0;overflow-wrap:normal;transition:all .2s ease}
 .qa-modern-page .history-favorite-toggle .favorite-check-box:after{content:"";position:absolute;left:50%;top:48%;width:8px;height:4px;border-left:2px solid #FFFFFF;border-bottom:2px solid #FFFFFF;opacity:0;transform:translate(-50%,-50%) rotate(-45deg);transform-origin:center}
@@ -56,10 +60,11 @@
 .qa-modern-page .history-favorite-toggle.checked{border-color:var(--qa-primary-100);background:var(--qa-primary-50);color:var(--qa-primary-600)}
 .qa-modern-page .history-favorite-toggle.checked .favorite-check-box{border-color:var(--qa-primary-600);background:var(--qa-primary-600);color:#fff}
 .qa-modern-page .history-favorite-toggle.checked .favorite-check-box:after{opacity:1}
-.qa-modern-page .history-row{min-height:56px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 8px;border:0;border-radius:var(--qa-radius-md);background:transparent;color:var(--qa-text);padding:10px;text-align:left}
-.qa-modern-page .history-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.qa-modern-page .history-row small{grid-column:2;color:var(--qa-hint)}
+.qa-modern-page .history-row{min-height:58px;display:grid;grid-template-columns:18px minmax(0,1fr);align-items:center;gap:4px 9px;border:0;border-radius:var(--qa-radius-md);background:transparent;color:var(--qa-text);padding:10px 12px;text-align:left}
+.qa-modern-page .history-row span{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:22px;padding:1px 0}
+.qa-modern-page .history-row small{grid-column:2;min-width:0;color:var(--qa-hint);line-height:1.4}
 .qa-modern-page .history-row:hover{background:var(--qa-primary-50);color:var(--qa-primary-600);transform:translate(2px)}
+.qa-modern-page .history-row.active{border-color:var(--qa-primary-100);background:var(--qa-primary-50);color:var(--qa-primary-600)}
 .qa-modern-page .qa-welcome{min-height:280px;display:flex;align-items:center;flex-direction:column;justify-content:center;gap:12px;padding:32px 0 8px;text-align:center}
 .qa-modern-page .qa-welcome>svg{width:84px;height:84px;padding:20px;border:4px solid white;border-radius:50%;background:var(--qa-ai-gradient);color:#fff;box-shadow:0 16px 40px #00e5ff5c}
 .qa-modern-page .qa-welcome h2{margin:12px 0 0;color:var(--qa-text);font-size:30px;line-height:1.25;font-weight:800;letter-spacing:0}
@@ -189,7 +194,7 @@
 .qa-modern-page .qa-title p,.qa-modern-page .qa-welcome p{color:var(--qa-secondary)}
 .qa-modern-page .history-row{grid-template-columns:auto minmax(0,1fr);border:1px solid transparent}
 .qa-modern-page .history-row:hover{border-color:var(--qa-primary-100)}
-.qa-modern-page .history-row span{white-space:normal}
+.qa-modern-page .history-row span{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:22px;padding:1px 0}
 .qa-modern-page .prompt-grid button{justify-content:center;min-width:min(240px,100%);max-width:100%;white-space:normal;line-height:1.45;padding-block:10px}
 .qa-modern-page .message-row,.class-chat .chat-msg{min-width:0}
 .qa-modern-page .bubble-user,.qa-modern-page .bubble-ai,.class-chat .chat-bubble{min-width:0;overflow-wrap:anywhere;word-break:normal}
@@ -207,11 +212,14 @@
 .class-chat-scroll{min-height:180px}
 .class-chat-dock .quick-tags button{white-space:nowrap}
 .script-view,.class-chat,.note-view{scrollbar-gutter:stable}
-@media(max-width:760px){.student-main{padding:24px 16px 96px}.student-course-grid{grid-template-columns:minmax(0,1fr)}.student-page{gap:24px}.hello-card,.home-ai-recommend-card,.home-activity-card,.student-plan-page .plan-banner,.student-plan-page .card,.panel-card,.profile-main-card,.practice-modern-card{padding:22px}.course-tools,.wrong-tools{grid-template-columns:1fr}.today-plan,.student-plan-page .plan-task-row{grid-template-columns:auto minmax(0,1fr)}.today-plan>.app-progress,.today-plan>button,.student-plan-page .plan-task-tag{grid-column:2}.profile-tabs,.underline-tabs,.seg-tabs,.quiz-modern-tabs{width:100%;overflow-x:auto}.profile-tabs button,.underline-tabs button,.seg-tabs button,.quiz-modern-tabs button{flex:1 0 auto}.qa-modern-page .input-box{gap:10px;padding:12px}.qa-modern-page .qa-header-actions{width:100%}.qa-modern-page .qa-header-actions>*{flex:1 1 auto}.qa-modern-page .action-circle-btn{flex:0 0 40px}.student-plan-page .ai-prompt-bar{border-radius:var(--plan-radius-lg)}}
+@media(max-width:760px){.student-main{padding:24px 16px 96px}.student-course-grid{grid-template-columns:minmax(0,1fr)}.student-page{gap:24px}.hello-card,.home-ai-recommend-card,.home-activity-card,.student-plan-page .plan-banner,.student-plan-page .card,.panel-card,.profile-main-card,.practice-modern-card{padding:22px}.course-tools,.wrong-tools{grid-template-columns:1fr}.today-plan,.student-plan-page .plan-task-row{grid-template-columns:auto minmax(0,1fr)}.today-plan>.app-progress,.today-plan>button,.student-plan-page .plan-task-tag{grid-column:2}.profile-tabs,.underline-tabs,.seg-tabs,.quiz-modern-tabs{width:100%;overflow-x:auto}.profile-tabs button,.underline-tabs button,.seg-tabs button,.quiz-modern-tabs button{flex:1 0 auto}.qa-modern-page .input-box{gap:10px;padding:12px}.qa-modern-page .qa-header-actions{width:100%}.qa-modern-page .qa-header-actions>*{flex:1 1 auto}.qa-modern-page .qa-new-chat-link,.qa-modern-page .action-circle-btn{flex:0 0 40px}.student-plan-page .ai-prompt-bar{border-radius:var(--plan-radius-lg)}}
 .qa-modern-page .qa-header-actions{position:relative;z-index:6}
 .qa-modern-page .action-circle-btn{pointer-events:auto}
 .qa-modern-page .action-circle-btn.active{border-color:var(--qa-primary-100);background:var(--qa-primary-50);color:var(--qa-primary-600);box-shadow:0 8px 18px #0097a724}
-.qa-modern-page .history-drawer{z-index:calc(var(--z-modal, 1200) + 10)}
+.qa-modern-page:has(.history-drawer) .input-dock-container{z-index:calc(var(--z-sticky, 1100) - 3)}
+.qa-modern-page .history-drawer{top:64px;z-index:calc(var(--z-sticky, 1100) - 1);overflow-y:auto;overflow-x:hidden}
+.qa-modern-page .history-drawer-backdrop{inset:64px 0 0;z-index:calc(var(--z-sticky, 1100) - 2)}
+.qa-modern-page .history-row span{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:22px;padding:1px 0}
 .course-layout>aside .ask-card,.course-layout>aside .recent-qa-card{overflow:hidden;border:1px solid rgba(226,232,240,.78);border-left:0;border-radius:var(--s-radius-lg);background:#fff;box-shadow:var(--s-shadow-card);padding:24px}
 .course-layout>aside .recent-qa-card{display:grid;gap:12px}
 .course-layout>aside .recent-qa-card .section-head{margin:0 0 4px}

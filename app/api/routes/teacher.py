@@ -25,6 +25,7 @@ from app.services.teacher import (
     get_teacher_student_detail,
     get_teacher_students,
     list_teacher_course_summaries,
+    mark_teacher_notifications_read,
     remind_student,
     remove_student,
     update_chapter,
@@ -63,6 +64,10 @@ class NotificationSettingItem(BaseModel):
 
 class NotificationSettingsRequest(BaseModel):
     settings: list[NotificationSettingItem] = Field(min_length=1)
+
+
+class NotificationReadRequest(BaseModel):
+    ids: list[str] | None = Field(default=None, max_length=80)
 
 
 class StudentReminderRequest(BaseModel):
@@ -123,6 +128,17 @@ def update_notifications_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     data = update_teacher_notifications(db, user=user, settings=[item.model_dump() for item in payload.settings])
+    return success_response(data=data, request_id=request.state.request_id)
+
+
+@router.post("/notifications/read")
+def mark_notifications_read_endpoint(
+    payload: NotificationReadRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    data = mark_teacher_notifications_read(db, user=user, notification_ids=payload.ids)
     return success_response(data=data, request_id=request.state.request_id)
 
 

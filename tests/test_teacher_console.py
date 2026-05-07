@@ -1,6 +1,8 @@
 from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus
 from app.db import session as db_session
-from app.db.models import CourseMaterial, Lesson, LessonPage
+from app.db.models import CourseMaterial, Lesson, LessonPage, User
+from app.services.notifications import push_user_notification
+from sqlalchemy import select
 
 
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
@@ -185,6 +187,12 @@ def test_teacher_console_aggregation_and_actions(client):
     assert reminders
     assert reminders[0]["title"] == "请完成第一章复习"
     assert reminders[0]["message"] == "请在今晚前完成网络概述课时，并整理一个问题。"
+    assert reminders[0]["unread"] is True
+    read_response = client.post("/api/v1/student/notifications/read", json={"ids": [reminders[0]["id"]]}, headers=student_headers)
+    assert read_response.status_code == 200, read_response.text
+    read_reminders = [item for item in read_response.json()["data"] if item["type"] == "teacher_reminder"]
+    assert read_reminders
+    assert read_reminders[0]["unread"] is False
     dashboard_notifications_response = client.get("/api/v1/student/dashboard", headers=student_headers)
     assert dashboard_notifications_response.status_code == 200, dashboard_notifications_response.text
     dashboard_reminders = [
@@ -192,6 +200,7 @@ def test_teacher_console_aggregation_and_actions(client):
     ]
     assert dashboard_reminders
     assert dashboard_reminders[0]["title"] == "请完成第一章复习"
+    assert dashboard_reminders[0]["unread"] is False
 
     chapter_response = client.patch(
         f"/api/v1/teacher/courses/{course['id']}/chapters/{chapter['id']}",
@@ -296,3 +305,27 @@ def test_teacher_profile_preferences(client):
     assert notice_response.status_code == 200, notice_response.text
     settings = notice_response.json()["data"]
     assert next(item for item in settings if item["key"] == "join")["enabled"] is False
+
+    with db_session.SessionLocal() as db:
+        teacher_id = db.scalar(select(User.id).where(User.email == "teacher-profile@example.com"))
+        notification = push_user_notification(
+            db,
+            user_id=teacher_id,
+            notification_type="quiz_generated",
+            title="题目生成完成",
+            message="薄弱题目已生成。",
+            resource_type="quiz",
+            resource_id=101,
+        )
+        db.commit()
+
+    dashboard_response = client.get("/api/v1/teacher/dashboard", headers=headers)
+    assert dashboard_response.status_code == 200, dashboard_response.text
+    dashboard_notifications = dashboard_response.json()["data"]["notifications"]
+    saved_notification = next(item for item in dashboard_notifications if item["id"] == notification["id"])
+    assert saved_notification["unread"] is True
+
+    read_response = client.post("/api/v1/teacher/notifications/read", json={"ids": [notification["id"]]}, headers=headers)
+    assert read_response.status_code == 200, read_response.text
+    read_notification = next(item for item in read_response.json()["data"] if item["id"] == notification["id"])
+    assert read_notification["unread"] is False

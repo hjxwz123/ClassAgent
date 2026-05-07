@@ -5,7 +5,7 @@
 .brand strong { color: var(--color-text-primary); font-size: 17px; font-weight: 600; }
 .brand > i, .header-actions > i { width: 1px; height: 16px; background: var(--color-border-default); }
 .logo-mark { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 8px; background: var(--color-ai-gradient); color: white; }
-.course-switch, .user-menu { position: relative; }
+.course-switch, .user-menu, .teacher-notice-menu { position: relative; }
 .course-switch { min-width: 0; max-width: min(460px, 44vw); }
 .course-switch > button, .user-menu > button { border: 0; background: transparent; color: var(--color-text-body); }
 .course-switch > button { max-width: 100%; min-width: 0; border-radius: var(--radius-md); padding: 7px 9px; }
@@ -33,11 +33,26 @@
 .course-popover button { justify-content: flex-start; white-space: normal; line-height: 1.35; }
 .course-popover button.active, .course-popover button:hover, .user-popover button:hover { background: var(--color-primary-50); color: var(--color-primary-700); }
 .user-popover { right: 0; min-width: 160px; }
+.teacher-notice-popover { position: absolute; top: 44px; right: 0; z-index: var(--z-popover); width: min(380px, calc(100vw - 32px)); max-height: min(520px, calc(100vh - 82px)); overflow: auto; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-lg); padding: 10px; }
+.teacher-notice-head { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border-subtle); padding: 4px 4px 10px; }
+.teacher-notice-head strong { color: var(--color-text-primary); }
+.teacher-notice-head button, .notice-read-btn { border: 0; border-radius: var(--radius-full); background: var(--color-primary-50); color: var(--color-primary-700); font-size: 12px; font-weight: 700; padding: 6px 10px; }
+.teacher-notice-head button:disabled, .notice-read-btn:disabled { opacity: 0.55; }
+.teacher-notice-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; border-radius: var(--radius-md); padding: 4px; }
+.teacher-notice-item.unread { background: var(--color-primary-50); }
+.teacher-notice-main { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 10px; width: 100%; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--color-text-body); padding: 8px; text-align: left; }
+.teacher-notice-main:hover { background: white; color: var(--color-primary-700); }
+.teacher-notice-main span { min-width: 0; display: grid; gap: 3px; }
+.teacher-notice-main strong { overflow: hidden; color: var(--color-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.teacher-notice-main small, .teacher-notice-main em, .teacher-notice-empty { color: var(--color-text-muted); font-size: 12px; font-style: normal; line-height: 1.45; }
+.teacher-notice-main small { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.teacher-notice-item > i { width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary-600); }
+.teacher-notice-empty { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 10px; }
 .icon-btn, .icon-action { position: relative; display: inline-flex; min-height: 34px; align-items: center; justify-content: center; gap: 6px; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--color-text-secondary); padding: 0 10px; font-size: var(--text-caption); font-weight: 500; line-height: 1; white-space: nowrap; }
-.header-actions > .icon-btn { flex: 0 0 auto; min-width: 74px; min-height: 38px; padding: 0 12px; }
+.header-actions > .icon-btn, .teacher-notice-menu > .icon-btn { flex: 0 0 auto; min-width: 74px; min-height: 38px; padding: 0 12px; }
 .icon-btn:hover, .icon-action:hover { background: var(--color-bg-muted); color: var(--color-text-primary); }
 .icon-action.active { background: var(--color-primary-50); color: var(--color-primary-700); box-shadow: var(--shadow-focus); }
-.header-actions > .icon-btn em { position: static; display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 9px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 1; padding: 0 5px; box-shadow: 0 0 0 2px white; }
+.header-actions > .icon-btn em, .teacher-notice-menu > .icon-btn em { position: static; display: inline-flex; min-width: 18px; height: 18px; align-items: center; justify-content: center; border-radius: 9px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 1; padding: 0 5px; box-shadow: 0 0 0 2px white; }
 .icon-btn em { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--color-danger-500); color: white; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; }
 .avatar { display: inline-flex; width: 36px; height: 36px; align-items: center; justify-content: center; border-radius: 50%; background: var(--color-ai-gradient); color: white; font-weight: 700; }
 .avatar.mini { width: 24px; height: 24px; font-size: 12px; }
@@ -615,7 +630,7 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .strength { height: 6px; border-radius: 3px; background: var(--color-bg-muted); overflow: hidden; }
 .strength i { display: block; height: 100%; background: var(--color-success-500); transition: width var(--duration-base) var(--ease-in-out), background var(--duration-fast) var(--ease-out); }
 .notice-list label { display: flex; align-items: center; gap: 10px; min-height: 36px; }
-.modal-mask { position: fixed; inset: 0; z-index: var(--z-modal-bg); display: grid; place-items: center; background: rgba(15,23,42,0.38); backdrop-filter: blur(6px); }
+.modal-mask { position: fixed; inset: 0; z-index: var(--z-tooltip); display: grid; place-items: center; background: rgba(15,23,42,0.38); backdrop-filter: blur(6px); }
 .modal { width: 640px; max-height: 90vh; overflow: auto; border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-xl); padding: 20px; }
 .chapter-name-modal { width: min(440px, calc(100vw - 32px)); display: grid; gap: 14px; overflow: visible; }
 .chapter-name-modal label { display: grid; gap: 8px; color: var(--color-text-secondary); font-weight: 600; }

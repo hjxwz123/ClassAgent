@@ -8,7 +8,7 @@ from pptx import Presentation
 from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus
 from app.core.errors import AppError
 from app.db import session as db_session
-from app.db.models import Course, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, QuizQuestion, User
+from app.db.models import Course, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, ProblemGuidance, QuizQuestion, User
 from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.learning import QUIZ_SOURCE_CONTEXT_HARD_LIMIT, _course_source_text_for_quiz
 
@@ -1253,6 +1253,66 @@ def test_tutoring_guidance_uses_course_retrieval_and_rewrite_retry(client, monke
     assert len(calls) >= 2
     assert any("检索重点" in query for query in calls)
     assert any("同题型解题模板" in item for item in captured["contexts"])
+
+
+def test_tutoring_guidance_returns_existing_when_parallel_insert_wins(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import tutoring as tutoring_service
+
+    problem_resp = client.post(
+        "/api/v1/tutoring/problems/text",
+        json={"course_id": course["id"], "text": "根据语法制导定义计算表达式 8+7*12。"},
+        headers=student_headers,
+    )
+    assert problem_resp.status_code == 200, problem_resp.text
+    problem = problem_resp.json()["data"]
+    inserted = {"value": False}
+
+    monkeypatch.setattr(
+        tutoring_service,
+        "search_course_knowledge",
+        lambda *args, **kwargs: [
+            KnowledgeChunk(
+                id=998,
+                course_id=course["id"],
+                material_id=None,
+                lesson_page_id=None,
+                chapter_id=None,
+                title="语法制导定义",
+                content="语法制导定义可以通过属性和语义规则计算表达式。",
+                tokens=None,
+                embedding=None,
+                source_meta={},
+            )
+        ],
+    )
+
+    def generate_problem_guidance(**kwargs):
+        if not inserted["value"]:
+            with db_session.SessionLocal() as db:
+                db.add(
+                    ProblemGuidance(
+                        problem_id=problem["id"],
+                        level=2,
+                        content="并发请求已经生成的辅导内容",
+                        similar_questions=["已有相似题"],
+                    )
+                )
+                db.commit()
+            inserted["value"] = True
+        return "较慢请求生成的辅导内容"
+
+    monkeypatch.setattr(tutoring_service.ai_service, "generate_problem_guidance", generate_problem_guidance)
+
+    guidance_resp = client.get(
+        f"/api/v1/tutoring/problems/{problem['id']}/guidance",
+        params={"level": 2},
+        headers=student_headers,
+    )
+
+    assert guidance_resp.status_code == 200, guidance_resp.text
+    assert guidance_resp.json()["data"]["content"] == "并发请求已经生成的辅导内容"
 
 
 def test_qa_can_answer_out_of_scope_with_notice_when_course_setting_enabled(client, monkeypatch):

@@ -26,6 +26,9 @@ async def lifespan(_: FastAPI):
     with db_session.SessionLocal() as db:
         ensure_default_admin(db)
         ensure_system_settings(db)
+        from app.services.materials import recover_stale_material_processing_tasks
+
+        recover_stale_material_processing_tasks(db)
     request_log_writer.start()
     try:
         yield

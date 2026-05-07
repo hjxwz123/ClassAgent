@@ -824,7 +824,7 @@
 .student-shell .send-btn,
 .student-shell .top-icon,
 .student-shell .avatar-btn,
-.student-shell .qa-modern-page .drawer-head button {
+.student-shell .qa-modern-page .drawer-head .drawer-close-btn {
   min-width: 44px !important;
   width: 44px !important;
   min-height: 44px !important;
@@ -1258,6 +1258,27 @@
 .student-shell .class-chat .chat-input.compact > .send-btn svg {
   display: block;
   flex: 0 0 auto;
+}
+
+.student-shell .qa-modern-page .course-select .select-menu > button svg,
+.student-shell .qa-modern-page .input-box > .send-btn svg {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: currentColor !important;
+}
+
+.student-shell .qa-modern-page .input-box > .send-btn {
+  background: var(--ca-role-student-primary) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 12px rgba(0, 151, 167, .3) !important;
+}
+
+.student-shell .qa-modern-page .input-box > .send-btn:hover:not(:disabled) {
+  background: var(--ca-role-student-primary-hover) !important;
+  color: #fff !important;
 }
 
 .student-shell .class-chat .chat-input.compact {
