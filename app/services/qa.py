@@ -919,7 +919,7 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
     }
 
 
-def list_history(db: Session, *, user: User, course_id: int | None = None, keyword: str | None = None) -> list[QARecord]:
+def list_history(db: Session, *, user: User, course_id: int | None = None, lesson_id: int | None = None, keyword: str | None = None) -> list[QARecord]:
     if user.role == UserRole.STUDENT.value:
         if course_id is None:
             course_ids = list(
@@ -932,6 +932,15 @@ def list_history(db: Session, *, user: User, course_id: int | None = None, keywo
     statement = select(QARecord).where(QARecord.user_id == user.id)
     if course_id is not None:
         statement = statement.where(QARecord.course_id == course_id)
+    if lesson_id is not None:
+        lesson_page_ids = (
+            select(LessonPage.id)
+            .join(Lesson, Lesson.id == LessonPage.lesson_id)
+            .where(Lesson.id == lesson_id)
+        )
+        if course_id is not None:
+            lesson_page_ids = lesson_page_ids.where(Lesson.course_id == course_id)
+        statement = statement.where(QARecord.lesson_page_id.in_(lesson_page_ids))
     if keyword:
         like = f"%{keyword}%"
         statement = statement.where(or_(QARecord.question.like(like), QARecord.answer.like(like)))

@@ -28,7 +28,7 @@
       </header>
     </transition>
 
-    <main class="study-main">
+    <main ref="studyMainRef" class="study-main" :style="studyLayoutStyle">
       <transition name="thumb-panel">
         <aside v-if="thumbOpen" class="thumb-panel">
           <strong>全部 {{ classroomLesson?.pages.length || 0 }} 页</strong>
@@ -61,20 +61,35 @@
           </div>
         </transition>
         <transition name="player-pop">
-          <div v-show="chromeVisible || !audioPlaying" class="player-bar">
-            <button class="round-btn ghost" @click="firstPage"><SkipBack :size="18" /></button>
-            <button class="round-btn primary" @click="toggleAudio"><component :is="audioPlaying ? Pause : Play" :size="20" /></button>
-            <button class="round-btn ghost" @click="nextPage"><SkipForward :size="18" /></button>
-            <span class="time">{{ audioTime }}</span>
-            <AppSlider v-model="audioProgress" class="range" :min="0" :max="100" @input="seekAudio" />
-            <span class="time">{{ audioDuration }}</span>
-            <PopoverButton :items="speedItems" :label="`${playbackRate}x`" placement="top" @select="setRate" />
+          <div v-show="chromeVisible || !audioPlaying" class="player-bar" :class="{ 'no-audio': !hasActiveAudio }">
+            <button class="round-btn ghost" title="上一页" @click="prevPage"><ChevronLeft :size="18" /></button>
+            <template v-if="hasActiveAudio">
+              <button class="round-btn primary" @click="toggleAudio"><component :is="audioPlaying ? Pause : Play" :size="20" /></button>
+            </template>
+            <button class="round-btn ghost" title="下一页" @click="nextPage"><ChevronRight :size="18" /></button>
+            <template v-if="hasActiveAudio">
+              <span class="time">{{ audioTime }}</span>
+              <AppSlider v-model="audioProgress" class="range" :min="0" :max="100" @input="seekAudio" />
+              <span class="time">{{ audioDuration }}</span>
+              <PopoverButton :items="speedItems" :label="`${playbackRate}x`" placement="top" @select="setRate" />
+            </template>
             <button class="round-btn ghost" @click="thumbOpen = !thumbOpen"><Grid2X2 :size="18" /></button>
             <button class="round-btn ghost"><Maximize :size="18" /></button>
             <audio v-if="activePage?.audio_url" ref="audioRef" :src="activePage.audio_url" @timeupdate="updateAudio" @loadedmetadata="updateAudio" @ended="handleAudioEnded" @play="audioPlaying = true" @pause="audioPlaying = false"></audio>
           </div>
         </transition>
       </section>
+
+      <button
+        v-show="aiPanelOpen"
+        class="study-resizer"
+        type="button"
+        aria-label="拖动调整课件和互动区域宽度"
+        title="拖动调整宽度"
+        @pointerdown="startLessonResize"
+      >
+        <span></span>
+      </button>
 
       <aside class="lesson-ai">
         <div class="study-tabs">
@@ -133,8 +148,7 @@
             <EmptyState v-if="!activePageActivities.length" text="本页暂无活动层，重新解析课件后会生成结构化教学对象" />
           </section>
           <section v-else-if="classroomTab === 'qa'" key="qa" class="class-chat">
-            <div class="context-bar"><Info :size="14" />当前课件上下文，可跨页提问</div>
-              <div class="class-chat-scroll">
+            <div class="class-chat-scroll">
               <ChatList :messages="classMessages" :thinking="classThinking" @toggle-thought="toggleThought" @copy="copyText" />
             </div>
             <div class="class-chat-dock">
@@ -1061,8 +1075,8 @@ import {
   AlertTriangle, ArrowLeft, ArrowRight, Award, BarChart2, Bell, BookMarked, BookOpen, CalendarCheck, Camera, Check,
   CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Cpu, Download, FileText, Flame, FolderOpen, GitBranch, Grid2X2,
   Eye, History, IdCard, Info, Flag, Layers, ListChecks, Loader2, LogOut, Mail, Maximize, MessageCircle, PanelRight,
-  Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings, SkipBack,
-  Shield, SkipForward, Sparkles, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
+  Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings,
+  Shield, Sparkles, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
 } from "lucide-vue-next";
 import { api } from "../api/client";
 import { routeByPage } from "../router";
@@ -1107,6 +1121,14 @@ const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
 const route = useRoute();
 const router = useRouter();
+
+const LESSON_LAYOUT_STORAGE_KEY = "student_lesson_panel_ratio";
+const LESSON_LAYOUT_DEFAULT_RATIO = 0.3;
+
+function savedLessonPanelRatio() {
+  const value = Number(localStorage.getItem(LESSON_LAYOUT_STORAGE_KEY));
+  return Number.isFinite(value) && value > 0 ? Math.min(0.62, Math.max(0.24, value)) : LESSON_LAYOUT_DEFAULT_RATIO;
+}
 
 function currentRoutePageKey() {
   return String(route.meta.pageKey || props.pageKey || "studentHome");
@@ -1165,6 +1187,9 @@ const classroomLesson = ref<{ lesson: Lesson; pages: LessonPage[] } | null>(null
 const lessonStudyLoading = ref(active.value === "studentLessonStudy");
 const lessonStudyError = ref("");
 const openingLessonId = ref<number | null>(null);
+const studyMainRef = ref<HTMLElement | null>(null);
+const lessonPanelRatio = ref(savedLessonPanelRatio());
+const lessonResizeActive = ref(false);
 const currentPage = ref(1);
 const pageDirection = ref<"next" | "prev">("next");
 const classroomTab = ref<"script" | "activity" | "qa" | "note">("script");
@@ -1179,7 +1204,7 @@ const aiPanelOpen = ref(true);
 const chromeVisible = ref(true);
 const thumbOpen = ref(false);
 const settingsOpen = ref(false);
-const subtitleMode = ref<"full" | "keyword" | "hide">("full");
+const subtitleMode = ref<"full" | "keyword" | "hide">("hide");
 const audioRef = ref<HTMLAudioElement | null>(null);
 const audioPlaying = ref(false);
 const playbackRate = ref(1);
@@ -1351,6 +1376,15 @@ const searchResultGroups = computed(() => (["course", "lesson", "material", "kno
   .filter((group) => group.items.length));
 const flatSearchResults = computed(() => searchResultGroups.value.flatMap((group) => group.items));
 const activePage = computed(() => classroomLesson.value?.pages.find((page) => page.page_number === currentPage.value) || classroomLesson.value?.pages[0] || null);
+const hasActiveAudio = computed(() => Boolean(activePage.value?.audio_url));
+const studyLayoutStyle = computed(() => {
+  const right = Math.round(lessonPanelRatio.value * 1000);
+  const left = Math.max(1, 1000 - right);
+  return {
+    "--lesson-left-fr": `${left}fr`,
+    "--lesson-right-fr": `${Math.max(1, right)}fr`,
+  };
+});
 const activePageActivities = computed<PageActivity[]>(() => activePage.value?.pedagogy || []);
 const pageSummaryActivity = computed(() => activePageActivities.value.find((item) => item.type === "page_summary") || null);
 const conceptActivities = computed(() => activePageActivities.value.filter((item) => item.type === "concept_card"));
@@ -1564,7 +1598,15 @@ watch(selectedCourseId, async (id, previousId) => {
   if (active.value === "studentQuizzes") await loadQuizPage();
   if (active.value === "studentPlans") await loadPlans();
 });
-watch(activePage, async (page) => { if (page) await loadNote(page.id); }, { immediate: false });
+watch(activePage, async (page) => {
+  if (audioRef.value) {
+    audioRef.value.pause();
+    audioRef.value.currentTime = 0;
+  }
+  audioPlaying.value = false;
+  audioProgress.value = 0;
+  if (page) await loadNote(page.id);
+}, { immediate: false });
 watch(globalSearch, (value) => {
   if (searchTimer) window.clearTimeout(searchTimer);
   if (!searchOpen.value) return;
@@ -2247,6 +2289,7 @@ async function loadLessonStudyRoute() {
       emit("notice", "warning", `学习进度加载失败：${(error as Error).message}`);
     }
     if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId) await loadNote(activePage.value?.id || 0);
+    if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId) await loadClassQaHistory();
   } catch (error) {
     if (loadSeq !== lessonLoadSeq) return;
     resetClassroomState();
@@ -2283,12 +2326,54 @@ async function closeClassroom() {
   }
   else await loadDashboard();
 }
+function clampLessonPanelRatio(value: number, totalWidth = studyMainRef.value?.clientWidth || 0) {
+  if (totalWidth > 900) {
+    const splitterWidth = 10;
+    const minLeft = 460;
+    const minRight = 320;
+    const minRatio = minRight / Math.max(totalWidth - splitterWidth, 1);
+    const maxRatio = (totalWidth - splitterWidth - minLeft) / Math.max(totalWidth - splitterWidth, 1);
+    if (maxRatio > minRatio) return Math.min(maxRatio, Math.max(minRatio, value));
+  }
+  return Math.min(0.66, Math.max(0.24, value));
+}
+function updateLessonPanelRatio(clientX: number) {
+  const element = studyMainRef.value;
+  if (!element) return;
+  const rect = element.getBoundingClientRect();
+  const width = Math.max(rect.width, 1);
+  lessonPanelRatio.value = clampLessonPanelRatio((rect.right - clientX) / width, width);
+}
+function onLessonResizePointerMove(event: PointerEvent) {
+  if (!lessonResizeActive.value) return;
+  updateLessonPanelRatio(event.clientX);
+}
+function stopLessonResize() {
+  if (!lessonResizeActive.value) return;
+  lessonResizeActive.value = false;
+  document.body.classList.remove("lesson-resizing");
+  window.removeEventListener("pointermove", onLessonResizePointerMove);
+  window.removeEventListener("pointerup", stopLessonResize);
+  window.removeEventListener("pointercancel", stopLessonResize);
+  localStorage.setItem(LESSON_LAYOUT_STORAGE_KEY, String(lessonPanelRatio.value));
+}
+function startLessonResize(event: PointerEvent) {
+  if (!aiPanelOpen.value) return;
+  event.preventDefault();
+  lessonResizeActive.value = true;
+  (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
+  updateLessonPanelRatio(event.clientX);
+  document.body.classList.add("lesson-resizing");
+  window.addEventListener("pointermove", onLessonResizePointerMove);
+  window.addEventListener("pointerup", stopLessonResize);
+  window.addEventListener("pointercancel", stopLessonResize);
+}
 function revealChrome() { chromeVisible.value = true; if (chromeTimer) window.clearTimeout(chromeTimer); chromeTimer = window.setTimeout(() => { if (audioPlaying.value) chromeVisible.value = false; }, 3000); }
 function startStudyClock() { stopStudyClock(); studyTimer = window.setInterval(() => { studySeconds.value += 1; }, 1000); }
 function stopStudyClock() { if (studyTimer) window.clearInterval(studyTimer); studyTimer = undefined; }
 async function jumpPage(page: number) { pageDirection.value = page >= currentPage.value ? "next" : "prev"; currentPage.value = page; thumbOpen.value = false; await saveProgress(false, true); }
+async function prevPage() { await jumpPage(Math.max(1, currentPage.value - 1)); }
 async function nextPage() { await jumpPage(Math.min(classroomLesson.value?.pages.length || 1, currentPage.value + 1)); }
-async function firstPage() { await jumpPage(1); }
 async function saveProgress(completed: boolean, silent = false) { if (!classroomLesson.value) return; await run(() => api.post(`/lessons/${classroomLesson.value!.lesson.id}/progress`, { current_page: currentPage.value, added_seconds: 30, completed }), silent ? undefined : "已保存"); }
 async function toggleAudio() { if (!audioRef.value) return; audioRef.value.playbackRate = playbackRate.value; if (audioRef.value.paused) await audioRef.value.play(); else audioRef.value.pause(); revealChrome(); }
 function setRate(value: string) { playbackRate.value = Number(value); if (audioRef.value) audioRef.value.playbackRate = playbackRate.value; }
@@ -2452,6 +2537,16 @@ function sendGlobalQuick(text: string) { globalQuestion.value = text; askGlobal(
 async function sendCourseQuick(text: string) { quickCourseQuestion.value = text; await askCourseQuick(); }
 async function askCourseQuick() { if (!quickCourseQuestion.value.trim()) return; globalQuestion.value = quickCourseQuestion.value; quickCourseQuestion.value = ""; await go("studentQa"); await askGlobal(); }
 async function loadQaHistory() { if (!selectedCourseId.value) return; qaHistory.value = (await run<any[]>(() => api.get("/qa/history", { course_id: selectedCourseId.value, keyword: qaKeyword.value }))) || []; }
+async function loadClassQaHistory() {
+  if (!classroomLesson.value) return;
+  const lessonId = classroomLesson.value.lesson.id;
+  const courseId = classroomLesson.value.lesson.course_id;
+  const records = (await run<any[]>(() => api.get("/qa/history", { course_id: courseId, lesson_id: lessonId }))) || [];
+  const ordered = [...records].sort((left, right) => timestampMs(left.created_at) - timestampMs(right.created_at) || Number(left.id || 0) - Number(right.id || 0));
+  classMessages.value = qaRecordsToMessages(ordered);
+  const latest = ordered[ordered.length - 1];
+  classConversationId.value = latest?.conversation_id ? Number(latest.conversation_id) : null;
+}
 function closeQaHistory() { historyOpen.value = false; }
 async function toggleQaHistory() {
   if (historyOpen.value) {
@@ -3352,6 +3447,7 @@ onBeforeUnmount(() => {
   document.removeEventListener("keydown", onStudentDocumentKeydown);
   document.removeEventListener("visibilitychange", onStudentVisibilityChange);
   window.removeEventListener("focus", onStudentWindowFocus);
+  stopLessonResize();
   stopStudyClock();
   if (chromeTimer) clearTimeout(chromeTimer);
   if (joinTimer) clearTimeout(joinTimer);

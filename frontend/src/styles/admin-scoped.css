@@ -205,8 +205,11 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .aliyun-delete { color: var(--color-danger-700); }
 .aliyun-delete:hover { background: var(--color-danger-50); color: var(--color-danger-700); }
 .aliyun-field-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; background: var(--color-bg-muted); padding: 26px; }
-.aliyun-field-grid label { display: grid; gap: 9px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-secondary); padding: 14px; font-size: 12px; font-weight: 500; }
-.aliyun-field-grid .input, .aliyun-field-grid .select { height: 38px; border-color: var(--color-border-default); background: white; }
+.aliyun-field-grid label { min-width: 0; display: grid; gap: 9px; overflow: hidden; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-secondary); padding: 14px; font-size: 12px; font-weight: 500; }
+.aliyun-field-grid label > * { min-width: 0; max-width: 100%; }
+.aliyun-field-grid .input, .aliyun-field-grid .select { width: 100%; min-width: 0; height: 38px; border-color: var(--color-border-default); background: white; }
+.aliyun-field-grid .password-field { width: 100%; min-width: 0; max-width: 100%; }
+.aliyun-field-grid .password-field input { min-width: 0; }
 .aliyun-field-grid .app-select { width: 100%; }
 .danger-zone .app-select { min-width: 220px; }
 .aliyun-check { min-height: 38px; display: inline-flex; align-items: center; gap: 8px; color: var(--color-text-body); font-size: var(--text-body-sm); }
