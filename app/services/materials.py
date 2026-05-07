@@ -318,6 +318,7 @@ def delete_material(db: Session, *, material_id: int, user: User) -> None:
     from datetime import UTC, datetime
 
     vector_store.delete_material(db, course_id=material.course_id, material_id=material.id)
+    db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.material_id == material.id))
     db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.material_id == material.id))
     material.deleted_at = datetime.now(UTC)
     db.add(material)
