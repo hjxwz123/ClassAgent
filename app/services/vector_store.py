@@ -173,7 +173,7 @@ class VectorStoreService:
                 names.append(name)
         return names
 
-    def indexed_chunk_count(self, db: Session, *, course_id: int | None = None) -> int:
+    def indexed_chunk_ids(self, db: Session, *, course_id: int | None = None) -> set[int]:
         names = self._course_collection_names(db, course_id) if course_id is not None else self._db_collection_names(db)
         seen_ids: set[str] = set()
         for name in names:
@@ -198,7 +198,18 @@ class VectorStoreService:
                 if len(ids) < page_size:
                     break
                 offset += len(ids)
-        return len(seen_ids)
+        chunk_ids: set[int] = set()
+        for item in seen_ids:
+            if not item.startswith("chunk_"):
+                continue
+            try:
+                chunk_ids.add(int(item.removeprefix("chunk_")))
+            except ValueError:
+                continue
+        return chunk_ids
+
+    def indexed_chunk_count(self, db: Session, *, course_id: int | None = None) -> int:
+        return len(self.indexed_chunk_ids(db, course_id=course_id))
 
     def query_course(
         self,

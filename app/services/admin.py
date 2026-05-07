@@ -10,7 +10,7 @@ from pathlib import Path
 
 import httpx
 import redis
-from sqlalchemy import distinct, func, or_, select, text
+from sqlalchemy import delete, distinct, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import BACKUP_DIR, VECTOR_DIR, get_settings
@@ -586,6 +586,7 @@ def remove_material_admin(db: Session, *, material_id: int) -> None:
     if material is None or material.deleted_at is not None:
         raise not_found("资料不存在")
     vector_store.delete_material(db, course_id=material.course_id, material_id=material.id)
+    db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.material_id == material.id))
     material.deleted_at = datetime.now(UTC)
     db.add(material)
     db.commit()
@@ -896,9 +897,15 @@ def get_service_health(db: Session) -> dict:
         redis_detail = str(exc)
     items.append({"key": "redis", "name": "Redis 缓存", "status": redis_status, "metric": "缓存", "detail": redis_detail})
 
-    chunk_count = int(db.scalar(select(func.count(KnowledgeChunk.id))) or 0)
+    active_chunk_statement = (
+        select(KnowledgeChunk.id)
+        .outerjoin(CourseMaterial, CourseMaterial.id == KnowledgeChunk.material_id)
+        .where(or_(KnowledgeChunk.material_id.is_(None), CourseMaterial.deleted_at.is_(None)))
+    )
+    active_chunk_ids = set(db.scalars(active_chunk_statement))
+    chunk_count = len(active_chunk_ids)
     try:
-        vector_ready = int(vector_store.indexed_chunk_count(db))
+        vector_ready = len(active_chunk_ids & vector_store.indexed_chunk_ids(db))
     except Exception:
         vector_ready = 0
     if not VECTOR_DIR.exists():
