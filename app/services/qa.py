@@ -14,6 +14,7 @@ from app.db.models import Chapter, Course, CourseMaterial, CourseMembership, Kno
 from app.schemas.qa import QAAskRequest
 from app.services.ai import ai_service
 from app.services.knowledge import search_course_knowledge
+from app.services.learning_signals import record_qa_learning_signals
 from app.services.parser import _extract_text_payload
 from app.services.ocr import ocr_service
 from app.services.pedagogy import QA_ARTIFACT_TYPES, artifact_contexts, artifact_sources, search_pedagogy_artifacts
@@ -796,6 +797,7 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
     )
     db.commit()
     db.refresh(record)
+    record_qa_learning_signals(db, user=user, record=record)
     return record
 
 
@@ -904,6 +906,7 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
     )
     db.commit()
     db.refresh(record)
+    record_qa_learning_signals(db, user=user, record=record)
     yield {
         "event": "final",
         "data": {
@@ -941,6 +944,17 @@ def list_history(db: Session, *, user: User, course_id: int | None = None, lesso
         if course_id is not None:
             lesson_page_ids = lesson_page_ids.where(Lesson.course_id == course_id)
         statement = statement.where(QARecord.lesson_page_id.in_(lesson_page_ids))
+    else:
+        lesson_conversation_ids = select(QARecord.conversation_id).where(
+            QARecord.user_id == user.id,
+            QARecord.lesson_page_id.is_not(None),
+        )
+        if course_id is not None:
+            lesson_conversation_ids = lesson_conversation_ids.where(QARecord.course_id == course_id)
+        statement = statement.where(
+            QARecord.lesson_page_id.is_(None),
+            QARecord.conversation_id.not_in(lesson_conversation_ids),
+        )
     if keyword:
         like = f"%{keyword}%"
         statement = statement.where(or_(QARecord.question.like(like), QARecord.answer.like(like)))

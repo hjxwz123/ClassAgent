@@ -57,6 +57,11 @@ class ProblemSourceType(StrEnum):
     IMAGE = "image"
 
 
+class LearningSignalSource(StrEnum):
+    QA = "qa"
+    TUTORING = "tutoring"
+
+
 class QuizType(StrEnum):
     COURSE = "course"
     PRACTICE = "practice"

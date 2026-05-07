@@ -180,7 +180,12 @@ class WrongQuestionResponse(BaseModel):
 
 class WeakPointResponse(BaseModel):
     knowledge_point: str
-    wrong_count: int
+    wrong_count: int = 0
+    knowledge_point_id: int | None = None
+    learning_signal_count: int = 0
+    qa_signal_count: int = 0
+    signal_score: float = 0.0
+    weak_score: float = 0.0
 
 
 class LearningRecordResponse(BaseModel):
