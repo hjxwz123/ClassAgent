@@ -82,9 +82,13 @@ def get_history_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     course_id: int | None = Query(default=None),
+    lesson_id: int | None = Query(default=None),
     keyword: str | None = Query(default=None),
 ):
-    items = [QAHistoryItem.model_validate(item).model_dump(mode="json") for item in list_history(db, user=user, course_id=course_id, keyword=keyword)]
+    items = [
+        QAHistoryItem.model_validate(item).model_dump(mode="json")
+        for item in list_history(db, user=user, course_id=course_id, lesson_id=lesson_id, keyword=keyword)
+    ]
     return success_response(data=items, request_id=request.state.request_id)
 
 
