@@ -9,7 +9,7 @@ export default defineConfig({
         manualChunks: {
           vue: ["vue"],
           charts: ["echarts"],
-          icons: ["lucide-vue-next"]
+          icons: ["@phosphor-icons/vue"]
         }
       }
     }

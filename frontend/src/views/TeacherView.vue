@@ -45,7 +45,7 @@
         <button type="button" class="icon-btn" aria-label="帮助" @click="openHelp"><HelpCircle :size="20" /><span>帮助</span></button>
         <i></i>
         <div ref="userMenuRef" class="user-menu">
-          <button type="button" aria-haspopup="menu" :aria-expanded="userMenuOpen" @click="userMenuOpen = !userMenuOpen"><span class="avatar">{{ firstChar(teacherName) }}</span><b>{{ teacherName }}</b><ChevronDown :size="16" /></button>
+          <button type="button" aria-haspopup="menu" :aria-expanded="userMenuOpen" @click="userMenuOpen = !userMenuOpen"><span class="avatar" :class="{ 'has-image': teacherAvatarUrl }"><img v-if="teacherAvatarUrl" :src="teacherAvatarUrl" alt="" /><template v-else>{{ firstChar(teacherName) }}</template></span><b>{{ teacherName }}</b><ChevronDown :size="16" /></button>
           <Transition name="top-menu">
             <div v-if="userMenuOpen" class="user-popover top-menu-panel" role="menu">
               <button type="button" role="menuitem" @click="go('teacherProfile')"><User :size="15" />个人中心</button>
@@ -320,69 +320,92 @@
           <div class="weak-quiz-layout">
             <aside class="panel-card weak-config-card">
               <div class="panel-head rich-head"><div><h2><Settings :size="18" />生成设置</h2><small>一次生成一套测验，可重复生成多套</small></div></div>
-              <label>题目总数<input v-model.number="weakQuizForm.question_count" class="input" type="number" min="1" max="20" /></label>
-              <div class="weak-type-grid">
-                <label v-for="item in weakQuestionTypes" :key="item.value">{{ item.label }}<input v-model.number="weakQuizForm.question_type_counts[item.value]" class="input" type="number" min="0" max="20" /></label>
-              </div>
-              <div class="weak-type-status" :class="{ invalid: !weakQuizFormValid }"><strong>{{ weakQuizTypeTotal }}</strong><span>题型合计 / 总题量 {{ weakQuizForm.question_count }}</span></div>
-              <button class="btn btn-primary full" :data-loading="weakQuizGenerating && weakQuizGenerationMode === 'all'" :disabled="weakQuizGenerating || !weakQuizFormValid || !weakQuizPoints.length" @click="generateTeacherWeakQuiz()"><Sparkles :size="15" />按全部薄弱点生成</button>
-              <button class="btn btn-ghost full" :data-loading="isPending('load-weak-quizzes')" :disabled="isPending('load-weak-quizzes')" @click="loadWeakQuizzes(true)"><RefreshCw :size="15" />刷新列表</button>
-            </aside>
-            <section class="weak-quiz-main">
-              <article v-if="weakQuizAllSets.length" class="panel-card weak-set-section">
-                <div class="panel-head rich-head"><div><h2><ClipboardList :size="18" />综合测验</h2><small>覆盖全部薄弱知识点的测验套卷</small></div></div>
-                <div class="weak-set-grid">
-                  <button v-for="quiz in weakQuizAllSets" :key="quiz.id" type="button" class="weak-set-card" :class="{ active: weakQuizSelectedSetId === quiz.id }" @click="selectWeakQuizSet(quiz)">
-                    <strong>{{ quiz.title }}</strong><span class="tag" :class="statusClass(quiz.status)">{{ statusText(quiz.status) }}</span><small>{{ quiz.question_count }}题 · {{ quiz.attempt_count }}次作答 · 平均 {{ quiz.average_accuracy }}%</small>
-                  </button>
+              <div class="weak-config-body">
+                <label>题目总数<input v-model.number="weakQuizForm.question_count" class="input" type="number" min="1" max="20" /></label>
+                <div class="weak-type-grid">
+                  <label v-for="item in weakQuestionTypes" :key="item.value">{{ item.label }}<input v-model.number="weakQuizForm.question_type_counts[item.value]" class="input" type="number" min="0" max="20" /></label>
                 </div>
-              </article>
-              <TransitionGroup name="card-list" tag="div" class="weak-point-card-list">
-                <article v-for="(point, index) in weakQuizPoints" :key="point.knowledge_point_id" class="panel-card weak-point-card">
-                  <header>
-                    <b>{{ rankNumber(index) }}</b>
-                    <div><h2>{{ point.knowledge_point }}</h2><p>{{ point.description || '暂无知识点说明' }}</p></div>
-                    <span class="tag tag-danger">{{ point.wrong_count }} 错题</span>
-                    <button class="btn btn-secondary btn-sm" :data-loading="weakQuizGeneratingTopic === point.knowledge_point" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(point)"><Sparkles :size="14" />生成新套题</button>
-                  </header>
-                  <div v-if="point.quiz_sets?.length" class="weak-set-grid">
-                    <button v-for="quiz in point.quiz_sets" :key="quiz.id" type="button" class="weak-set-card" :class="{ active: weakQuizSelectedSetId === quiz.id }" @click="selectWeakQuizSet(quiz)">
+                <div class="weak-type-status" :class="{ invalid: !weakQuizFormValid }"><strong>{{ weakQuizTypeTotal }}</strong><span>题型合计 / 总题量 {{ weakQuizForm.question_count }}</span></div>
+                <button class="btn btn-primary full" :data-loading="weakQuizGenerating && weakQuizGenerationMode === 'all'" :disabled="weakQuizGenerating || !weakQuizFormValid || !weakQuizPoints.length" @click="generateTeacherWeakQuiz()"><Sparkles :size="15" />按全部薄弱点生成</button>
+                <button class="btn btn-ghost full" :data-loading="isPending('load-weak-quizzes')" :disabled="isPending('load-weak-quizzes')" @click="loadWeakQuizzes(true)"><RefreshCw :size="15" />刷新列表</button>
+              </div>
+            </aside>
+            <section class="panel-card weak-selection-card">
+              <div class="panel-head rich-head"><div><h2><ClipboardList :size="18" />题目选择</h2><small>选择综合测验或按薄弱知识点选择专项套题</small></div></div>
+              <div class="weak-selection-scroll">
+                <section v-if="weakQuizAllSets.length" class="weak-set-section">
+                  <div class="weak-section-title"><strong>综合测验</strong><small>覆盖全部薄弱知识点的测验套卷</small></div>
+                  <div class="weak-set-grid">
+                    <button v-for="quiz in weakQuizAllSets" :key="quiz.id" type="button" class="weak-set-card" :class="{ active: weakQuizSelectedSetId === quiz.id }" @click="selectWeakQuizSet(quiz)">
                       <strong>{{ quiz.title }}</strong><span class="tag" :class="statusClass(quiz.status)">{{ statusText(quiz.status) }}</span><small>{{ quiz.question_count }}题 · {{ quiz.attempt_count }}次作答 · 平均 {{ quiz.average_accuracy }}%</small>
                     </button>
                   </div>
-                  <div v-else class="weak-empty-line"><span>还没有为这个薄弱点生成题目</span><button class="link-btn" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(point)">立即生成</button></div>
-                </article>
-              </TransitionGroup>
-              <EmptyState v-if="!weakQuizPoints.length" text="暂无薄弱知识点" />
+                </section>
+                <section v-if="selectedWeakQuizPoint" class="weak-point-switcher">
+                  <div class="weak-point-switcher-head">
+                    <button type="button" class="icon-action" :disabled="weakQuizPointCount <= 1" @click="stepWeakQuizPoint(-1)"><ChevronLeft :size="15" />上一个</button>
+                    <div class="weak-point-switcher-title">
+                      <small>知识点 {{ weakQuizPointIndex + 1 }} / {{ weakQuizPointCount }}</small>
+                      <strong>{{ selectedWeakQuizPoint.knowledge_point }}</strong>
+                    </div>
+                    <button type="button" class="icon-action" :disabled="weakQuizPointCount <= 1" @click="stepWeakQuizPoint(1)">下一个<ChevronRight :size="15" /></button>
+                  </div>
+                  <article :key="selectedWeakQuizPoint.knowledge_point_id" class="weak-point-card weak-point-active">
+                    <header>
+                      <b>{{ rankNumber(weakQuizPointIndex) }}</b>
+                      <div><h2>{{ selectedWeakQuizPoint.knowledge_point }}</h2><p>{{ selectedWeakQuizPoint.description || '暂无知识点说明' }}</p></div>
+                      <span class="tag tag-danger">{{ selectedWeakQuizPoint.wrong_count }} 错题</span>
+                      <button class="btn btn-secondary btn-sm" :data-loading="weakQuizGeneratingTopic === selectedWeakQuizPoint.knowledge_point" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(selectedWeakQuizPoint)"><Sparkles :size="14" />生成新套题</button>
+                    </header>
+                    <div v-if="selectedWeakQuizPoint.quiz_sets?.length" class="weak-set-list">
+                      <button v-for="quiz in selectedWeakQuizPoint.quiz_sets" :key="quiz.id" type="button" class="weak-set-card" :class="{ active: weakQuizSelectedSetId === quiz.id }" @click="selectWeakQuizSet(quiz)">
+                        <strong>{{ quiz.title }}</strong><span class="tag" :class="statusClass(quiz.status)">{{ statusText(quiz.status) }}</span><small>{{ quiz.question_count }}题 · {{ quiz.attempt_count }}次作答 · 平均 {{ quiz.average_accuracy }}%</small>
+                      </button>
+                    </div>
+                    <div v-else class="weak-empty-line"><span>还没有为这个薄弱点生成题目</span><button class="link-btn" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(selectedWeakQuizPoint)">立即生成</button></div>
+                  </article>
+                </section>
+                <EmptyState v-else text="暂无薄弱知识点" />
+              </div>
             </section>
             <aside class="panel-card weak-detail-card">
               <div class="panel-head rich-head"><div><h2><Eye :size="18" />题目与作答</h2><small>{{ weakQuizAttemptDetail?.quiz?.title || '选择一套题查看详情' }}</small></div></div>
-              <template v-if="weakQuizAttemptDetail">
-                <div class="weak-detail-actions"><button class="btn btn-secondary btn-sm" @click="openWeakQuizEditor"><Eye :size="14" />查看题目</button><button v-if="weakQuizAttemptDetail.quiz?.status !== 'published'" class="btn btn-primary btn-sm" @click="openWeakQuizEditor"><Check :size="14" />审核发布</button></div>
-                <div class="weak-question-preview"><div v-for="(question, index) in weakQuizAttemptDetail.questions || []" :key="question.id"><b>{{ rankPlain(index) }}</b><span>{{ question.stem }}</span><em>{{ questionTypeText(question.question_type) }}</em></div></div>
-                <div class="weak-attempt-list">
-                  <article v-for="attempt in weakQuizAttemptDetail.attempts || []" :key="attempt.id" class="weak-attempt-row">
-                    <span class="avatar mini">{{ firstChar(attempt.student?.nickname) }}</span>
-                    <div><strong>{{ attempt.student?.nickname || '学生' }}</strong><small>{{ formatTime(attempt.submitted_at) }}</small></div>
-                    <b>{{ attempt.score }}/{{ attempt.total_score }}</b>
-                    <em>{{ attempt.correct_count }}/{{ attempt.answer_count }}</em>
-                    <div v-if="attempt.answers?.length" class="weak-answer-mini">
-                      <span v-for="(answer, index) in attempt.answers" :key="answer.id" :class="{ correct: answer.is_correct }">
-                        <b>{{ rankPlain(index) }}</b><strong>{{ answer.is_correct ? '正确' : '错误' }}</strong><small>{{ answer.user_answer ?? '未作答' }}</small>
-                      </span>
+              <div class="weak-detail-scroll">
+                <template v-if="weakQuizAttemptDetail">
+                  <div class="weak-detail-actions"><button class="btn btn-secondary btn-sm" @click="openWeakQuizEditor"><Eye :size="14" />查看题目</button><button v-if="weakQuizAttemptDetail.quiz?.status !== 'published'" class="btn btn-primary btn-sm" @click="openWeakQuizEditor"><Check :size="14" />审核发布</button></div>
+                  <section class="weak-detail-section">
+                    <strong>题目预览</strong>
+                    <div class="weak-question-preview"><div v-for="(question, index) in weakQuizAttemptDetail.questions || []" :key="question.id"><b>{{ rankPlain(index) }}</b><span>{{ question.stem }}</span><em>{{ questionTypeText(question.question_type) }}</em></div></div>
+                  </section>
+                  <section class="weak-detail-section">
+                    <strong>作答记录</strong>
+                    <div class="weak-attempt-list">
+                      <article v-for="attempt in weakQuizAttemptDetail.attempts || []" :key="attempt.id" class="weak-attempt-row">
+                        <div class="weak-attempt-summary">
+                          <span class="avatar mini">{{ firstChar(attempt.student?.nickname) }}</span>
+                          <div class="weak-attempt-student"><strong>{{ attempt.student?.nickname || '学生' }}</strong><small>{{ formatTime(attempt.submitted_at) }}</small></div>
+                          <b>{{ attempt.score }}/{{ attempt.total_score }}</b>
+                          <em>{{ attempt.correct_count }}/{{ attempt.answer_count }}</em>
+                        </div>
+                        <div v-if="attempt.answers?.length" class="weak-answer-mini">
+                          <span v-for="(answer, index) in attempt.answers" :key="answer.id" :class="{ correct: answer.is_correct }">
+                            <b>{{ rankPlain(index) }}</b><strong>{{ answer.is_correct ? '正确' : '错误' }}</strong><small>{{ answer.user_answer ?? '未作答' }}</small>
+                          </span>
+                        </div>
+                      </article>
+                      <EmptyState v-if="!(weakQuizAttemptDetail.attempts || []).length" text="暂无学生作答" />
                     </div>
-                  </article>
-                  <EmptyState v-if="!(weakQuizAttemptDetail.attempts || []).length" text="暂无学生作答" />
-                </div>
-              </template>
-              <EmptyState v-else text="请选择一套薄弱题目" />
+                  </section>
+                </template>
+                <EmptyState v-else text="请选择一套薄弱题目" />
+              </div>
             </aside>
           </div>
         </template>
       </section>
 
       <section v-if="active === 'teacherProfile'" key="teacherProfile" class="teacher-content profile-content">
-        <article class="profile-card"><span class="avatar large">{{ firstChar(teacherName) }}<Camera :size="18" /></span><div><h1>{{ profileForm.nickname }}<span class="tag tag-primary">教师</span></h1><p><Mail :size="15" />{{ user.email }}</p><p><IdCard :size="15" />{{ user.employee_no || '-' }}</p><small><Clock :size="14" />{{ registeredDays }} 天</small></div><button class="btn btn-secondary btn-sm" @click="profileEditing = true"><Pencil :size="14" />编辑信息</button></article>
+        <article class="profile-card"><button type="button" class="avatar large profile-avatar-button" :class="{ 'has-image': teacherAvatarUrl }" :data-loading="isPending('upload-avatar')" :disabled="isPending('upload-avatar')" title="更换头像" aria-label="更换头像" @click="teacherAvatarInput?.click()"><img v-if="teacherAvatarUrl" :src="teacherAvatarUrl" alt="" /><template v-else>{{ firstChar(teacherName) }}</template><Camera :size="18" /></button><input ref="teacherAvatarInput" class="visually-hidden-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" @change="uploadProfileAvatar" /><div><h1>{{ profileForm.nickname }}<span class="tag tag-primary">教师</span></h1><p><Mail :size="15" />{{ user.email }}</p><p><IdCard :size="15" />{{ user.employee_no || '-' }}</p><small><Clock :size="14" />{{ registeredDays }} 天</small></div><button class="btn btn-secondary btn-sm" @click="profileEditing = true"><Pencil :size="14" />编辑信息</button></article>
         <div class="profile-tabs"><button :class="{ active: profileTab === 'base' }" @click="profileTab = 'base'"><User :size="16" />基本信息</button><button :class="{ active: profileTab === 'security' }" @click="profileTab = 'security'"><Lock :size="16" />账号安全</button><button :class="{ active: profileTab === 'notice' }" @click="profileTab = 'notice'"><Bell :size="16" />通知设置</button></div>
         <Transition name="fade-slide" mode="out-in">
           <article v-if="profileTab === 'base'" key="base" class="panel-card profile-form"><label>姓名<input v-model="profileForm.nickname" class="input" :readonly="!profileEditing" /></label><label>邮箱<input :value="user.email" class="input" readonly /></label><label>学校/单位<input v-model="profileForm.organization" class="input" :readonly="!profileEditing" /></label><label>所在院系<input v-model="profileForm.department" class="input" :readonly="!profileEditing" /></label><label>个人简介<textarea v-model="profileForm.bio" class="textarea" :readonly="!profileEditing"></textarea></label><footer><button class="btn btn-ghost" @click="profileEditing = false">取消</button><button class="btn btn-primary" :data-loading="isPending('save-profile')" :disabled="isPending('save-profile')" @click="saveProfile">保存修改</button></footer></article>
@@ -584,10 +607,11 @@ import {
   Lock, LogOut, Mail, Maximize, MessageCircle, Pencil, Plus, PlusCircle, Presentation, RefreshCw,
   Save, Search, Settings, Share2, SkipBack, SkipForward, Sparkles, Trash2, TrendingDown, Upload, User, UserPlus, UserX,
   Users, Volume2, Wand2, X, XCircle, ZoomIn
-} from "lucide-vue-next";
+} from "../icons";
 import { api } from "../api/client";
 import { routeByPage } from "../router";
 import type { Course, CourseDetail, MaterialDetail, User as UserType } from "../types";
+import { copyToClipboard } from "../utils/clipboard";
 import { extractStructuredText, renderRichText } from "../utils/richText";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
@@ -597,7 +621,7 @@ import PasswordField from "../components/PasswordField.vue";
 import AdminChart from "./admin/AdminChart.vue";
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
-const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
+const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string]; authed: [user: UserType] }>();
 const router = useRouter();
 
 const active = ref(props.pageKey || "teacherDashboard");
@@ -676,12 +700,15 @@ const weakQuizGenerationMode = ref<"all" | "single" | "">("");
 const weakQuizStatus = ref("");
 const weakQuizData = ref<any>({ stats: {}, weak_points: [], all_sets: [] });
 const weakQuizSelectedSetId = ref(0);
+const weakQuizPointIndex = ref(0);
 const weakQuizAttemptDetail = ref<any | null>(null);
 const quizEditor = reactive({ id: 0, status: "", title: "", description: "", questions: [] as any[] });
 let freshChapterTimer = 0;
 let freshMaterialChapterTimer = 0;
 let editorPulseTimer = 0;
 let materialRefreshTimers: number[] = [];
+const weakQuizTaskPollIntervalMs = 2500;
+const weakQuizTaskMaxPolls = 240;
 
 const courseFilter = reactive({ keyword: "", term: "", status: "" });
 const materialFilter = reactive({ keyword: "", type: "", status: "" });
@@ -699,7 +726,8 @@ const weakQuizForm = reactive({
   } as Record<string, number>,
 });
 const reminderForm = reactive({ title: "", message: "" });
-const profileForm = reactive({ nickname: props.user.nickname, organization: "", department: "", bio: props.user.bio || "" });
+const profileForm = reactive({ nickname: props.user.nickname, avatar_url: props.user.avatar_url || "", organization: "", department: "", bio: props.user.bio || "" });
+const teacherAvatarInput = ref<HTMLInputElement | null>(null);
 const passwordForm = reactive({ old_password: "", new_password: "" });
 const noticeSettings = reactive([{ key: "join", label: "学生加入课程", enabled: true }, { key: "ppt", label: "PPT 解析完成", enabled: true }, { key: "script", label: "脚本生成完成", enabled: false }, { key: "tts", label: "TTS 合成失败", enabled: true }, { key: "qa", label: "学生问答汇总", enabled: true }, { key: "ai", label: "AI 任务状态", enabled: true }, { key: "peak", label: "提问高峰", enabled: true }, { key: "system", label: "系统公告", enabled: true }]);
 
@@ -829,6 +857,8 @@ const weakSeries = computed(() => [{ name: "错题", data: (analysis.value.weak_
 const weakMax = computed(() => Math.max(1, ...(analysis.value.weak_points || []).map((item: any) => item.wrong_count || 0)));
 const weakQuizPoints = computed(() => weakQuizData.value.weak_points || []);
 const weakQuizAllSets = computed(() => weakQuizData.value.all_sets || []);
+const weakQuizPointCount = computed(() => weakQuizPoints.value.length);
+const selectedWeakQuizPoint = computed(() => weakQuizPoints.value[Math.min(weakQuizPointIndex.value, Math.max(weakQuizPoints.value.length - 1, 0))] || null);
 const weakQuizTypeTotal = computed(() => weakQuestionTypes.reduce((sum, item) => sum + Number(weakQuizForm.question_type_counts[item.value] || 0), 0));
 const weakQuizFormValid = computed(() => Number(weakQuizForm.question_count || 0) > 0 && weakQuizTypeTotal.value === Number(weakQuizForm.question_count || 0));
 const scoreLabels = computed(() => (analysis.value.score_distribution || []).map((item: any) => item.range));
@@ -836,12 +866,20 @@ const scoreSeries = computed(() => [{ name: "人数", data: (analysis.value.scor
 const registeredDays = computed(() => props.user.created_at ? Math.max(1, Math.floor((Date.now() - new Date(props.user.created_at).getTime()) / 86400000)) : 1);
 const passwordStrength = computed(() => Math.min(100, Math.max(20, passwordForm.new_password.length * 10)));
 const teacherName = computed(() => profileForm.nickname || props.user.nickname);
+const teacherAvatarUrl = computed(() => profileForm.avatar_url || props.user.avatar_url || "");
 
 watch(activePage, (page) => {
   scriptDraft.value = page?.script_text || "";
   scriptUndoStack.value = [];
   scriptRedoStack.value = [];
 }, { immediate: true });
+watch(weakQuizPoints, (points) => {
+  if (!points.length) {
+    weakQuizPointIndex.value = 0;
+    return;
+  }
+  if (weakQuizPointIndex.value >= points.length) weakQuizPointIndex.value = points.length - 1;
+});
 watch(() => props.pageKey, (key) => { active.value = key || "teacherDashboard"; loadActive(); });
 watch(currentCourseId, (id) => { if (id) localStorage.setItem("teacher_current_course_id", String(id)); });
 watch(sidebarCollapsed, (value) => { localStorage.setItem("teacher_sidebar_collapsed", value ? "1" : "0"); });
@@ -878,11 +916,15 @@ function openNotifications() {
   userMenuOpen.value = false;
   teacherNoticeOpen.value = !teacherNoticeOpen.value;
 }
-function openTeacherNotification(item: any) {
+async function openTeacherNotification(item: any) {
   emit("notice", item.type?.includes("failed") ? "warning" : "success", item.message ? `${item.title}：${item.message}` : item.title);
   if (item.resource_type === "quiz") {
     teacherNoticeOpen.value = false;
-    void go("teacherWeakQuizzes");
+    const courseId = Number(item.course_id || 0);
+    if (courseId && currentCourseId.value !== courseId) currentCourseId.value = courseId;
+    await go("teacherWeakQuizzes");
+    const quizId = Number(item.resource_id || 0);
+    if (quizId) await openGeneratedWeakQuiz(quizId);
   }
 }
 async function markTeacherNotificationsRead(item?: any) {
@@ -932,7 +974,24 @@ async function setAnalysisRange(value: string) {
   analysisRange.value = value;
   await withAction("analysis-range", () => loadAnalysis());
 }
-async function loadTeacherProfile() { const data = await run<any>(() => api.get("/teacher/profile")); if (!data) return; Object.assign(profileForm, { nickname: data.user?.nickname || profileForm.nickname, bio: data.user?.bio || "", organization: data.teacher_profile?.organization || "", department: data.teacher_profile?.department || "" }); if (Array.isArray(data.notification_settings)) noticeSettings.splice(0, noticeSettings.length, ...data.notification_settings); }
+function applyTeacherProfile(data: any) {
+  if (!data) return;
+  Object.assign(profileForm, {
+    nickname: data.user?.nickname || profileForm.nickname,
+    avatar_url: data.user?.avatar_url || "",
+    bio: data.user?.bio || "",
+    organization: data.teacher_profile?.organization || "",
+    department: data.teacher_profile?.department || "",
+  });
+  if (data.user) emit("authed", {
+    ...props.user,
+    nickname: data.user.nickname || props.user.nickname,
+    avatar_url: data.user.avatar_url || null,
+    bio: data.user.bio || null,
+    updated_at: data.user.updated_at || props.user.updated_at,
+  });
+}
+async function loadTeacherProfile() { const data = await run<any>(() => api.get("/teacher/profile")); if (!data) return; applyTeacherProfile(data); if (Array.isArray(data.notification_settings)) noticeSettings.splice(0, noticeSettings.length, ...data.notification_settings); }
 async function loadActive() {
   pageLoading.value = true;
   try {
@@ -1243,6 +1302,57 @@ function weakQuizTypeCountsPayload() {
   }
   return counts;
 }
+function setWeakQuizPointIndex(index: number) {
+  const total = weakQuizPoints.value.length;
+  weakQuizPointIndex.value = total ? (index + total) % total : 0;
+}
+function stepWeakQuizPoint(offset: number) {
+  setWeakQuizPointIndex(weakQuizPointIndex.value + offset);
+}
+function syncWeakQuizPointIndexForQuiz(quizId: number) {
+  const index = weakQuizPoints.value.findIndex((point: any) => (point.quiz_sets || []).some((quiz: any) => Number(quiz.id) === Number(quizId)));
+  if (index >= 0) weakQuizPointIndex.value = index;
+}
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+function generationTaskId(payload: any) {
+  return Number(payload?.task_id || payload?.generation_task?.id || 0);
+}
+function generatedQuizId(payload: any) {
+  return Number(payload?.id || payload?.target_id || payload?.detail?.quiz_id || payload?.generation_task?.target_id || 0);
+}
+function generationTaskStatus(payload: any) {
+  return String(payload?.task_status || payload?.status || payload?.generation_task?.status || "");
+}
+async function waitForGeneratedQuiz(initial: any) {
+  if (initial?.id) return initial;
+  const taskId = generationTaskId(initial);
+  if (!taskId) return null;
+  emit("notice", "info", "薄弱题目已进入生成队列，完成后将自动打开审核弹窗");
+  for (let attempt = 0; attempt < weakQuizTaskMaxPolls; attempt += 1) {
+    const task = await api.get<any>(`/learning/generation-tasks/${taskId}`);
+    if (task?.id) return task;
+    const status = generationTaskStatus(task);
+    if (status === "failed") {
+      const message = String(task?.detail?.error || task?.detail?.notification?.message || "薄弱题目生成失败");
+      throw new Error(message);
+    }
+    const quizId = generatedQuizId(task);
+    if (status === "ready" && quizId) return { id: quizId };
+    await wait(weakQuizTaskPollIntervalMs);
+  }
+  emit("notice", "info", "薄弱题目仍在生成中，完成后可从通知或刷新列表查看");
+  return null;
+}
+async function openGeneratedWeakQuiz(quizOrId: any) {
+  const quizId = Number(typeof quizOrId === "number" ? quizOrId : quizOrId?.id || generatedQuizId(quizOrId));
+  if (!quizId) return;
+  await loadWeakQuizzes(true);
+  await selectWeakQuizSet({ id: quizId });
+  const detail = await run<any>(() => api.get(`/learning/quizzes/${quizId}`));
+  if (detail) openQuizEditor(detail);
+}
 async function generateTeacherWeakQuiz(point?: any) {
   if (!currentCourse.value) return emit("notice", "warning", "请先选择课程");
   if (!weakQuizFormValid.value) return emit("notice", "warning", "题型数量合计必须等于总题量");
@@ -1264,16 +1374,16 @@ async function generateTeacherWeakQuiz(point?: any) {
       question_type_counts: weakQuizTypeCountsPayload(),
     }));
     if (!quiz) return;
-    if (!quiz.id) {
-      emit("notice", "info", "薄弱题目已加入生成队列，生成成功后会通知老师");
+    const generatedQuiz = await waitForGeneratedQuiz(quiz);
+    if (!generatedQuiz) {
       await loadDashboard();
       return;
     }
-    await loadWeakQuizzes(true);
-    await selectWeakQuizSet(quiz);
-    const detail = await run<any>(() => api.get(`/learning/quizzes/${quiz.id}`));
-    if (detail) openQuizEditor(detail);
+    await openGeneratedWeakQuiz(generatedQuiz);
+    await loadDashboard();
     emit("notice", "success", "薄弱题目已生成，请审核后发布");
+  } catch (error) {
+    emit("notice", "error", (error as Error).message);
   } finally {
     weakQuizGenerating.value = false;
     weakQuizGeneratingTopic.value = "";
@@ -1284,6 +1394,7 @@ async function generateTeacherWeakQuiz(point?: any) {
 async function selectWeakQuizSet(quiz: any) {
   if (!quiz?.id) return;
   weakQuizSelectedSetId.value = quiz.id;
+  syncWeakQuizPointIndexForQuiz(quiz.id);
   weakQuizAttemptDetail.value = await run<any>(() => api.get(`/learning/teacher/weak-quizzes/${quiz.id}/attempts`));
 }
 async function openWeakQuizEditor() {
@@ -1587,8 +1698,37 @@ async function sendReminder() {
 function clearStudentFilter() { Object.assign(studentFilter, { keyword: "", progress: "", active: "" }); }
 async function exportCurrent() { if (!currentCourse.value) return; await withAction(`export-${active.value}`, async () => { if (active.value === "teacherStudents") await run(() => api.download(`/teacher/courses/${currentCourse.value!.id}/students/export`, `students-${currentCourse.value!.course_code}.csv`), "已导出"); if (active.value === "teacherAnalytics") { const days = analysisRange.value === "本周" ? 7 : analysisRange.value === "本月" ? 30 : 120; await run(() => api.download(`/teacher/courses/${currentCourse.value!.id}/analysis/export`, `analysis-${currentCourse.value!.course_code}.csv`, { days }), "已导出"); } }); }
 function retryTask() { emit("notice", "info", "已重试"); }
-function copyText(text: string) { navigator.clipboard?.writeText(text); emit("notice", "success", "已复制"); }
-async function saveProfile() { const data = await withAction<any>("save-profile", () => api.patch("/teacher/profile", { nickname: profileForm.nickname, bio: profileForm.bio, organization: profileForm.organization, department: profileForm.department }), "已保存"); if (data) Object.assign(profileForm, { nickname: data.user?.nickname || profileForm.nickname, bio: data.user?.bio || "", organization: data.teacher_profile?.organization || "", department: data.teacher_profile?.department || "" }); profileEditing.value = false; }
+async function copyText(text: unknown) {
+  const copied = await copyToClipboard(text);
+  emit("notice", copied ? "success" : "warning", copied ? "已复制" : "复制失败，请手动复制");
+}
+function validAvatarFile(file: File) {
+  const nameOk = /\.(jpe?g|png|webp|gif)$/i.test(file.name || "");
+  const typeOk = !file.type || file.type.startsWith("image/");
+  if (!nameOk || !typeOk) {
+    emit("notice", "warning", "请上传 JPG、PNG、WEBP 或 GIF 图片");
+    return false;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    emit("notice", "warning", "头像不能超过 5MB");
+    return false;
+  }
+  return true;
+}
+async function uploadProfileAvatar(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file || !validAvatarFile(file)) return;
+  await withAction("upload-avatar", async () => {
+    const form = new FormData();
+    form.set("file", file);
+    const data = await api.post<any>("/teacher/profile/avatar", form);
+    applyTeacherProfile(data);
+    return data;
+  }, "头像已更新");
+}
+async function saveProfile() { const data = await withAction<any>("save-profile", () => api.patch("/teacher/profile", { nickname: profileForm.nickname, avatar_url: profileForm.avatar_url, bio: profileForm.bio, organization: profileForm.organization, department: profileForm.department }), "已保存"); if (data) applyTeacherProfile(data); profileEditing.value = false; }
 async function changePassword() { if (passwordForm.new_password !== passwordConfirm.value) return emit("notice", "warning", "密码不一致"); await withAction("change-password", async () => { await run(() => api.post("/auth/me/password", passwordForm), "已保存"); Object.assign(passwordForm, { old_password: "", new_password: "" }); passwordConfirm.value = ""; }); }
 async function saveNotice() { const data = await withAction<any[]>("save-notice", () => api.put("/teacher/profile/notifications", { settings: noticeSettings.map((item) => ({ key: item.key, enabled: item.enabled })) }), "已保存"); if (data) noticeSettings.splice(0, noticeSettings.length, ...data); }
 

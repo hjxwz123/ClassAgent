@@ -249,7 +249,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { ArrowDown, ArrowRight, BookOpen, Check, GraduationCap, Presentation, SlidersHorizontal, WandSparkles } from "lucide-vue-next";
+import { ArrowDown, ArrowRight, BookOpen, Check, GraduationCap, Presentation, SlidersHorizontal, WandSparkles } from "../icons";
 import { defaultRouteForRole } from "../router/pageMap";
 import type { User } from "../types";
 

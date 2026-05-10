@@ -22,7 +22,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from "vue";
-import { AlertTriangle, Info } from "lucide-vue-next";
+import { AlertTriangle, Info } from "../icons";
 
 const props = withDefaults(defineProps<{
   open: boolean;

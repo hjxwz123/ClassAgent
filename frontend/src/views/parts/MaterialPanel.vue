@@ -34,7 +34,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
-import { Volume2 } from "lucide-vue-next";
+import { Volume2 } from "../../icons";
 import AppSelect from "../../components/AppSelect.vue";
 import ModalPanel from "../../components/ModalPanel.vue";
 import type { MaterialDetail } from "../../types";

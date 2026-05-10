@@ -248,6 +248,17 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
     assert update_user_resp.status_code == 200, update_user_resp.text
     assert update_user_resp.json()["data"]["status"] == "disabled"
 
+    update_role_resp = client.patch(
+        f"/api/v1/admin/users/{target_student['id']}",
+        json={"role": "teacher"},
+        headers=admin_headers,
+    )
+    assert update_role_resp.status_code == 400, update_role_resp.text
+    assert update_role_resp.json()["message"] == "用户角色创建后不可更改"
+    unchanged_user_resp = client.get(f"/api/v1/admin/users/{target_student['id']}", headers=admin_headers)
+    assert unchanged_user_resp.status_code == 200, unchanged_user_resp.text
+    assert unchanged_user_resp.json()["data"]["user"]["role"] == "student"
+
     reset_pwd_resp = client.post(
         f"/api/v1/admin/users/{target_student['id']}/reset-password",
         json={"new_password": "Student999"},

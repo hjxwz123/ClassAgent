@@ -1,5 +1,5 @@
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, Transition, type PropType } from "vue";
-import { MoreHorizontal } from "lucide-vue-next";
+import { MoreHorizontal } from "../icons";
 import type { SelectMenuOption } from "./SelectMenu";
 
 export default defineComponent({

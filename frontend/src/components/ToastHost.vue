@@ -20,7 +20,7 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, reactive, watch } from "vue";
-import { AlertTriangle, CheckCircle, Info, X, XCircle } from "lucide-vue-next";
+import { AlertTriangle, CheckCircle, Info, X, XCircle } from "../icons";
 
 const props = defineProps<{ items: Array<{ id: number; type: "success" | "warning" | "error" | "info"; text: string }> }>();
 const emit = defineEmits<{ close: [id: number] }>();

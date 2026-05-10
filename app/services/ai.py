@@ -1536,7 +1536,7 @@ class AIService:
             json_mode=False,
             allow_fallback=False,
             max_tokens=completion_limit,
-            timeout_seconds=max(self.settings.external_service_timeout_seconds, 180),
+            timeout_seconds=max(self.settings.external_service_timeout_seconds, 300),
         )
         if content is None:
             raise bad_request("AI 出题失败：模型未返回题目内容")
@@ -1580,7 +1580,7 @@ class AIService:
             json_mode=False,
             allow_fallback=False,
             max_tokens=max(2400, min(5200, 340 * retry_count + 1600)),
-            timeout_seconds=max(self.settings.external_service_timeout_seconds, 180),
+            timeout_seconds=max(self.settings.external_service_timeout_seconds, 300),
         )
         if retry_content:
             try:

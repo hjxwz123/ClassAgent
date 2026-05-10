@@ -904,12 +904,16 @@
 }
 
 .weak-config-card,
+.weak-selection-card,
 .weak-detail-card,
-.weak-point-card,
-.weak-set-section {
+.weak-point-card {
   border-color: var(--ca-color-paper-border);
   background: var(--ca-color-paper-card);
   box-shadow: var(--ca-shadow-paper);
+}
+
+.weak-set-section {
+  border-bottom-color: var(--ca-color-paper-border);
 }
 
 .weak-set-card {

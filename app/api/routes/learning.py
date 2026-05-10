@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.errors import forbidden, not_found
 from app.core.responses import success_response
 from app.db.models import AsyncTaskLog, KnowledgePoint, Quiz, QuizAnswer, QuizQuestion, User
 from app.db.session import get_db
@@ -177,6 +178,22 @@ def generate_teacher_weak_quiz_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     task = enqueue_teacher_weak_quiz(db, user=user, payload=payload)
+    return success_response(data=_generation_task_response(db, task), request_id=request.state.request_id)
+
+
+@router.get("/generation-tasks/{task_id}")
+def get_generation_task_endpoint(
+    task_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    task = db.get(AsyncTaskLog, task_id)
+    if task is None:
+        raise not_found("生成任务不存在")
+    detail = task.detail if isinstance(task.detail, dict) else {}
+    if user.role != "admin" and int(detail.get("user_id") or 0) != user.id:
+        raise forbidden("无权查看该生成任务")
     return success_response(data=_generation_task_response(db, task), request_id=request.state.request_id)
 
 

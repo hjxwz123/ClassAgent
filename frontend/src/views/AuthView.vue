@@ -73,7 +73,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { AlertCircle, ArrowLeft, BookOpen, KeyRound, LogIn, UserPlus } from "lucide-vue-next";
+import { AlertCircle, ArrowLeft, BookOpen, KeyRound, LogIn, UserPlus } from "../icons";
 import { api } from "../api/client";
 import { defaultRouteForRole } from "../router";
 import { useSessionStore } from "../stores/session";
@@ -182,7 +182,47 @@ async function resetPassword() {
 </script>
 
 <style scoped>
+@font-face {
+  font-family: "ClassAgent Chalk";
+  src: url("../assets/fonts/home/classagent-chalk.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "ClassAgent Serif";
+  src: url("../assets/fonts/home/classagent-serif.woff") format("woff");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "ClassAgent Sans";
+  src: url("../assets/fonts/home/classagent-sans.woff") format("woff");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "ClassAgent Mono";
+  src: url("../assets/fonts/home/classagent-mono.woff") format("woff");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+}
+
 .auth {
+  --ca-font-chalk: "ClassAgent Chalk", "ClassAgent Serif", "ClassAgent Sans",
+    "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai",
+    "华文行楷", "PingFang SC", sans-serif;
+  --ca-font-serif: "ClassAgent Serif", "Songti SC", "STSong", "SimSun", "宋体", serif;
+  --ca-font-sans: "ClassAgent Sans", -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --ca-font-mono: "ClassAgent Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
+    monospace;
   --shared-title-left: max(24px, calc((100vw - 1040px) / 2));
   --shared-title-top: clamp(190px, calc(50vh - 190px), 290px);
   --home-logo-left: max(24px, calc((100vw - 1280px) / 2 + 24px));

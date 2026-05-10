@@ -130,7 +130,7 @@
                 <tr v-for="item in users" :key="item.id" :class="{ disabled: item.status === 'disabled', selected: selectedUsers.includes(item.id) }">
                   <td><AppCheckbox :model-value="selectedUsers.includes(item.id)" @update:model-value="toggleSelect(selectedUsers, item.id)" /></td>
                   <td><div class="identity"><span class="avatar small">{{ firstChar(item.nickname) }}</span><div><strong>{{ item.nickname }}</strong><span>{{ item.email }}</span></div></div></td>
-                  <td><AppSelect class="role-select" :model-value="item.role" :options="userRoleOptions" :disabled="isPending(`role:${item.id}`)" @update:model-value="selectUserRole(item, $event)" /></td>
+                  <td><span class="tag" :class="roleClass(item.role)">{{ roleText(item.role) }}</span></td>
                   <td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td>
                   <td>
                     <div v-if="item.course_count" class="course-chip-list">
@@ -470,7 +470,7 @@
           </section>
           <section>
             <h3>账号权限</h3>
-            <label class="drawer-field">用户角色<AppSelect :model-value="userDrawer.user.role" :options="userRoleOptions" :disabled="isPending(`role:${userDrawer.user.id}`)" @update:model-value="selectUserRole(userDrawer.user, $event)" /></label>
+            <label class="drawer-field">用户角色<span class="tag" :class="roleClass(userDrawer.user.role)">{{ roleText(userDrawer.user.role) }}</span></label>
           </section>
           <section>
             <h3>关联课程</h3>
@@ -593,10 +593,11 @@ import {
   Inbox, KeyRound, Layers, LayoutDashboard, List, LogOut, MoreHorizontal, Pencil, Plus, RefreshCw,
   Save, Scan, Search, Server, Settings, Shield, ShieldCheck, Sparkles, Trash2, Upload, User, UserCheck,
   Users, Volume2, X, XCircle
-} from "lucide-vue-next";
+} from "../icons";
 import { api } from "../api/client";
 import { routeByPage } from "../router";
 import type { Role, User as UserType } from "../types";
+import { copyToClipboard } from "../utils/clipboard";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppSelect from "../components/AppSelect.vue";
 import AppSlider from "../components/AppSlider.vue";
@@ -863,6 +864,11 @@ function statusText(status: unknown) {
 function roleText(role: string) {
   return { student: "学生", teacher: "教师", admin: "管理员" }[role] || role;
 }
+function roleClass(role: string) {
+  if (role === "admin") return "tag-danger";
+  if (role === "teacher") return "tag-success";
+  return "tag-primary";
+}
 function firstChar(value: string) {
   return (value || "-").slice(0, 1);
 }
@@ -1078,28 +1084,13 @@ function generateTempPassword() {
   const random = Math.random().toString(36).slice(2, 8);
   return `Agent${random}9`;
 }
-async function updateUserRole(item: any, role: Role) {
-  if (!userRoleOptions.some((option) => option.value === role)) return emit("notice", "warning", "角色不合法");
-  if (item.role === role) return;
-  await withPending(`role:${item.id}`, async () => {
-    const updated = await run<any>(() => api.patch(`/admin/users/${item.id}`, { role }), "已更新");
-    if (!updated) return;
-    item.role = updated.role;
-    if (userDrawer.value?.user?.id === item.id) userDrawer.value.user.role = updated.role;
-    await loadUsers();
-  });
-}
 function checkedValue(value: boolean | Event) {
   return typeof value === "boolean" ? value : (value.target as HTMLInputElement).checked;
 }
-function selectUserRole(item: any, value: unknown) {
-  const role = typeof value === "string" ? value : value && (value as Event).target ? ((value as Event).target as HTMLSelectElement).value : "";
-  void updateUserRole(item, role as Role);
-}
-function copyPassword() {
+async function copyPassword() {
   if (!resetPasswordResult.value) return;
-  navigator.clipboard?.writeText(resetPasswordResult.value);
-  emit("notice", "success", "已复制");
+  const copied = await copyToClipboard(resetPasswordResult.value);
+  emit("notice", copied ? "success" : "warning", copied ? "已复制" : "复制失败，请手动复制");
 }
 function openResetPasswordModal(item: any) {
   resetPasswordResult.value = "";

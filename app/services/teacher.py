@@ -5,6 +5,7 @@ from collections import Counter
 from datetime import UTC, datetime, timedelta
 from io import StringIO
 
+from fastapi import UploadFile
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
@@ -33,6 +34,7 @@ from app.db.models import (
 )
 from app.services.analytics import get_course_analytics
 from app.services.audit import log_operation
+from app.services.avatar import upload_avatar_file
 from app.services.courses import _assert_course_owner, _get_course_or_404, list_teaching_courses
 from app.services.notifications import active_system_announcement, apply_user_notification_reads, list_user_notifications, mark_user_notifications_read
 from app.services.storage import storage_service
@@ -63,12 +65,15 @@ def _aware_utc(value):
 def _as_dict(item) -> dict:
     data = dict(item.__dict__)
     data.pop("_sa_instance_state", None)
+    data.pop("password_hash", None)
     if "preview_url" in data:
         data["preview_url"] = storage_service.normalize_public_url(data["preview_url"])
     if "audio_url" in data:
         data["audio_url"] = storage_service.normalize_public_url(data["audio_url"])
     if "cover_url" in data:
         data["cover_url"] = storage_service.normalize_public_url(data["cover_url"])
+    if "avatar_url" in data:
+        data["avatar_url"] = storage_service.normalize_public_url(data["avatar_url"])
     return data
 
 
@@ -291,6 +296,7 @@ def update_teacher_profile(
     *,
     user: User,
     nickname: str | None,
+    avatar_url: str | None,
     bio: str | None,
     organization: str | None,
     department: str | None,
@@ -298,6 +304,8 @@ def update_teacher_profile(
     _assert_teacher(user)
     if nickname is not None:
         user.nickname = nickname
+    if avatar_url is not None:
+        user.avatar_url = avatar_url
     if bio is not None:
         user.bio = bio
     current = _get_preference(db, user_id=user.id, key=TEACHER_PROFILE_KEY) or {}
@@ -310,6 +318,22 @@ def update_teacher_profile(
     db.add(user)
     _set_preference(db, user_id=user.id, key=TEACHER_PROFILE_KEY, value=current)
     log_operation(db, user_id=user.id, action="teacher.profile.update", target_type="user", target_id=user.id)
+    db.commit()
+    db.refresh(user)
+    return get_teacher_profile(db, user)
+
+
+def upload_teacher_avatar(db: Session, *, user: User, upload: UploadFile) -> dict:
+    _assert_teacher(user)
+    meta = upload_avatar_file(db, user=user, upload=upload)
+    log_operation(
+        db,
+        user_id=user.id,
+        action="teacher.avatar.upload",
+        target_type="user",
+        target_id=user.id,
+        detail={"filename": upload.filename, "size_bytes": meta["size_bytes"]},
+    )
     db.commit()
     db.refresh(user)
     return get_teacher_profile(db, user)

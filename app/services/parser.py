@@ -11,7 +11,7 @@ import re
 import time
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -28,6 +28,9 @@ SERVICE_TYPE = "doc_parser"
 DEFAULT_ENDPOINT = "docmind-api.cn-hangzhou.aliyuncs.com"
 DEFAULT_REGION = "cn-hangzhou"
 DEFAULT_LAYOUT_STEP_SIZE = 100
+DEFAULT_DOC_PARSER_TIMEOUT_SECONDS = 7200
+MAX_DOC_PARSER_TIMEOUT_SECONDS = 7200
+DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS = 10
 SUPPORTED_MATERIAL_TYPES = {MaterialType.PPTX.value, MaterialType.PDF.value, MaterialType.DOCX.value, MaterialType.TXT.value}
 MARKDOWN_IMAGE_URL_PATTERN = re.compile(
     r"!\[(?P<alt>[^\]]*)]\(\s*(?:<(?P<angle>[^>]+)>|(?P<plain>[^)\s]+))(?:\s+['\"][^'\"]*['\"])?\s*\)"
@@ -234,6 +237,38 @@ def _layout_title(layout: dict, fallback: str | None = None) -> str | None:
         content = _layout_text(layout)
         text = content.splitlines()[0].strip("# ").strip() if content else ""
     return text[:120] or None
+
+
+def _markdown_title(content: str, fallback: str = "文档内容") -> str:
+    for line in content.splitlines():
+        clean = line.strip()
+        if clean.startswith("#"):
+            title = clean.lstrip("#").strip()
+            if title:
+                return title[:120]
+        if clean:
+            return clean[:120]
+    return fallback
+
+
+def _pages_from_markdown(content: str) -> list[dict]:
+    text = content.strip()
+    if not text:
+        return []
+    page_markers = list(re.finditer(r"(?m)^\s*(?:<!--\s*pagebreak\s*-->|-{3,}\s*$)", text))
+    if not page_markers:
+        return [_normalize_page(_markdown_title(text), text, 1)]
+    pages: list[dict] = []
+    cursor = 0
+    for marker in page_markers:
+        chunk = text[cursor : marker.start()].strip()
+        if chunk:
+            pages.append(_normalize_page(_markdown_title(chunk, f"第{len(pages) + 1}页"), chunk, len(pages) + 1))
+        cursor = marker.end()
+    tail = text[cursor:].strip()
+    if tail:
+        pages.append(_normalize_page(_markdown_title(tail, f"第{len(pages) + 1}页"), tail, len(pages) + 1))
+    return pages
 
 
 def _markdown_image_urls(content: str) -> list[str]:
@@ -514,6 +549,7 @@ class DocParserService:
             output_html_table=_as_bool(config.get("output_html_table"), False),
             output_format=_output_formats(config.get("output_format")),
             page_index=str(config.get("page_index")).strip() if config.get("page_index") else None,
+            enable_event_callback=_as_bool(config.get("enable_event_callback"), False),
         )
         if llm_enhancement and config.get("enhancement_mode", "VLM"):
             request.enhancement_mode = str(config.get("enhancement_mode") or "VLM")
@@ -544,21 +580,89 @@ class DocParserService:
             return body.get("Data") or body.get("data") or body
         return {}
 
-    def _wait_for_success(self, task_id: str, config: dict) -> dict:
-        timeout_seconds = _bounded_int(config.get("timeout_seconds") or config.get("timeout"), default=600, minimum=30, maximum=7200)
-        poll_interval = _bounded_int(config.get("poll_interval_seconds"), default=5, minimum=1, maximum=60)
+    def _output_format_results(self, status: dict) -> list[dict]:
+        items = status.get("OutputFormatResult") or status.get("outputFormatResult") or status.get("output_format_result") or []
+        if not isinstance(items, list):
+            return []
+        return [item for item in items if isinstance(item, dict)]
+
+    def _markdown_result_url(self, status: dict) -> str | None:
+        for item in self._output_format_results(status):
+            output_type = str(item.get("OutputType") or item.get("outputType") or item.get("output_type") or "").lower()
+            url = item.get("OutputFileUrl") or item.get("outputFileUrl") or item.get("output_file_url")
+            if output_type == "markdown" and url:
+                return str(url)
+        return None
+
+    def _wait_for_success(
+        self,
+        task_id: str,
+        config: dict,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
+    ) -> dict:
+        timeout_seconds = _bounded_int(
+            config.get("timeout_seconds") or config.get("timeout"),
+            default=DEFAULT_DOC_PARSER_TIMEOUT_SECONDS,
+            minimum=30,
+            maximum=MAX_DOC_PARSER_TIMEOUT_SECONDS,
+        )
+        poll_interval = _bounded_int(
+            config.get("poll_interval_seconds"),
+            default=DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS,
+            minimum=1,
+            maximum=60,
+        )
         deadline = time.monotonic() + timeout_seconds
         last_status: dict = {}
+        attempt = 0
         while time.monotonic() < deadline:
+            attempt += 1
             last_status = self._query_status(task_id, config)
             status = str(last_status.get("Status") or last_status.get("status") or "").lower()
+            progress = _safe_int(last_status.get("Processing") or last_status.get("processing"), 0)
+            message = last_status.get("Message") or last_status.get("message") or last_status.get("Code")
+            if on_progress:
+                on_progress(
+                    {
+                        "stage": "waiting",
+                        "docmind_task_id": task_id,
+                        "status": status or "unknown",
+                        "progress": progress,
+                        "attempt": attempt,
+                        "timeout_seconds": timeout_seconds,
+                        "poll_interval_seconds": poll_interval,
+                        "message": str(message) if message else None,
+                    }
+                )
             if status == "success":
+                if on_progress:
+                    on_progress(
+                        {
+                            "stage": "success",
+                            "docmind_task_id": task_id,
+                            "status": status,
+                            "progress": progress or 100,
+                            "attempt": attempt,
+                            "timeout_seconds": timeout_seconds,
+                        }
+                    )
                 return last_status
             if status in {"fail", "failed"}:
                 message = last_status.get("Message") or last_status.get("message") or last_status.get("Code") or "处理失败"
                 raise bad_request(f"文档解析失败: {message}")
             time.sleep(poll_interval)
         progress = last_status.get("Processing") or last_status.get("processing") or 0
+        if on_progress:
+            on_progress(
+                {
+                    "stage": "timeout",
+                    "docmind_task_id": task_id,
+                    "status": str(last_status.get("Status") or last_status.get("status") or "timeout").lower(),
+                    "progress": _safe_int(progress, 0),
+                    "attempt": attempt,
+                    "timeout_seconds": timeout_seconds,
+                }
+            )
         raise bad_request(f"文档解析超时，当前进度 {progress}%")
 
     def _get_result_batch(self, task_id: str, config: dict, layout_num: int, step_size: int) -> list[dict]:
@@ -599,6 +703,32 @@ class DocParserService:
             if len(batch) < step_size:
                 break
         return layouts
+
+    def _download_markdown_result(self, status: dict) -> str:
+        url = self._markdown_result_url(status)
+        if not url:
+            return ""
+        try:
+            with httpx.Client(
+                timeout=httpx.Timeout(60.0, connect=10.0),
+                follow_redirects=True,
+                headers={"User-Agent": "class-agent-doc-parser/1.0"},
+            ) as client:
+                response = client.get(url)
+                response.raise_for_status()
+        except httpx.HTTPError:
+            return ""
+        return response.text.strip()
+
+    def _pages_from_successful_task(self, task_id: str, config: dict, status: dict, db: Session | None) -> list[dict]:
+        pages = self._pages_from_layouts(self._collect_layouts(task_id, config))
+        markdown = self._download_markdown_result(status)
+        if markdown and (not pages or len(markdown) > sum(len(page.get("page_text") or "") for page in pages)):
+            pages = _pages_from_markdown(markdown)
+        image_cache: dict[str, str | None] = {}
+        for page in pages:
+            page["page_text"] = _localize_markdown_images(page.get("page_text") or "", db, image_cache)
+        return pages
 
     def _pages_from_layouts(self, layouts: list[dict]) -> list[dict]:
         grouped: dict[int, list[dict]] = defaultdict(list)
@@ -652,7 +782,15 @@ class DocParserService:
         text = str(config.get("mock_text") or default_text)
         return [_normalize_page(f"模拟解析第{index}页", text, index) for index in range(1, count + 1)]
 
-    def parse(self, path: Path, material_type: str, db: Session | None, filename: str | None = None) -> list[dict]:
+    def parse(
+        self,
+        path: Path,
+        material_type: str,
+        db: Session | None,
+        filename: str | None = None,
+        resume_task_id: str | None = None,
+        on_progress: Callable[[dict[str, Any]], None] | None = None,
+    ) -> list[dict]:
         if material_type not in SUPPORTED_MATERIAL_TYPES:
             raise bad_request("暂不支持该资料类型解析")
         service = get_enabled_service_config(db, SERVICE_TYPE)
@@ -665,19 +803,69 @@ class DocParserService:
         if service.provider != "aliyun":
             raise bad_request(f"暂不支持的文档解析服务提供方: {service.provider}")
 
+        if resume_task_id:
+            try:
+                status = self._query_status(resume_task_id, service.config)
+                if str(status.get("Status") or status.get("status") or "").lower() == "success":
+                    if on_progress:
+                        on_progress({"stage": "resuming", "docmind_task_id": resume_task_id, "status": "success", "progress": 100})
+                    pages = self._pages_from_successful_task(resume_task_id, service.config, status, db)
+                    if pages:
+                        if on_progress:
+                            on_progress(
+                                {
+                                    "stage": "parsed",
+                                    "docmind_task_id": resume_task_id,
+                                    "status": "success",
+                                    "progress": 100,
+                                    "page_count": len(pages),
+                                    "resumed": True,
+                                }
+                            )
+                        return pages
+            except Exception as exc:
+                if on_progress:
+                    on_progress(
+                        {
+                            "stage": "resume_failed",
+                            "docmind_task_id": resume_task_id,
+                            "status": "failed",
+                            "progress": 0,
+                            "message": str(exc),
+                        }
+                    )
+
         task_id = self._submit_job(path, filename or path.name, service.config)
-        self._wait_for_success(task_id, service.config)
-        pages = self._pages_from_layouts(self._collect_layouts(task_id, service.config))
-        image_cache: dict[str, str | None] = {}
-        for page in pages:
-            page["page_text"] = _localize_markdown_images(page.get("page_text") or "", db, image_cache)
+        if on_progress:
+            on_progress({"stage": "submitted", "docmind_task_id": task_id, "status": "submitted", "progress": 0})
+        status = self._wait_for_success(task_id, service.config, on_progress=on_progress)
+        if on_progress:
+            on_progress({"stage": "collecting", "docmind_task_id": task_id, "status": "success", "progress": 100})
+        pages = self._pages_from_successful_task(task_id, service.config, status, db)
         if not pages:
             raise bad_request("文档解析未返回有效内容")
+        if on_progress:
+            on_progress(
+                {
+                    "stage": "parsed",
+                    "docmind_task_id": task_id,
+                    "status": "success",
+                    "progress": 100,
+                    "page_count": len(pages),
+                }
+            )
         return pages
 
 
 doc_parser_service = DocParserService()
 
 
-def parse_material(path: Path, material_type: str, db: Session | None = None, filename: str | None = None) -> list[dict]:
-    return doc_parser_service.parse(path, material_type, db, filename=filename)
+def parse_material(
+    path: Path,
+    material_type: str,
+    db: Session | None = None,
+    filename: str | None = None,
+    resume_task_id: str | None = None,
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
+) -> list[dict]:
+    return doc_parser_service.parse(path, material_type, db, filename=filename, resume_task_id=resume_task_id, on_progress=on_progress)
