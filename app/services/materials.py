@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from queue import Queue
 import re
-from threading import Thread
+from threading import Lock, Thread
 from typing import Any
 
 from fastapi import UploadFile
@@ -45,6 +46,9 @@ ALLOWED_EXTENSIONS = {
 KNOWLEDGE_CHUNK_TARGET_CHARS = 900
 KNOWLEDGE_CHUNK_OVERLAP_CHARS = 180
 KNOWLEDGE_CHUNK_MIN_TAIL_CHARS = 120
+_material_processing_queue: Queue[int] = Queue()
+_material_processing_worker_lock = Lock()
+_material_processing_worker_started = False
 
 
 def _assert_material_owner(db: Session, material: CourseMaterial, user: User) -> None:
@@ -500,6 +504,57 @@ def _build_page_knowledge_chunks(*, material: CourseMaterial, page: LessonPage) 
     return chunks
 
 
+def _task_detail(task: AsyncTaskLog) -> dict:
+    return dict(task.detail) if isinstance(task.detail, dict) else {}
+
+
+def _find_docmind_task_id(value: Any) -> str | None:
+    if isinstance(value, dict):
+        direct = value.get("docmind_task_id")
+        if direct:
+            return str(direct)
+        for item in value.values():
+            found = _find_docmind_task_id(item)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _find_docmind_task_id(item)
+            if found:
+                return found
+    elif isinstance(value, str):
+        match = re.search(r"docmind-\d{8}-[A-Za-z0-9]+", value)
+        if match:
+            return match.group(0)
+    return None
+
+
+def _latest_docmind_task_id(db: Session, *, material_id: int, exclude_task_id: int | None = None) -> str | None:
+    statement = (
+        select(AsyncTaskLog)
+        .where(
+            AsyncTaskLog.task_name == "material.process",
+            AsyncTaskLog.target_type == "material",
+            AsyncTaskLog.target_id == material_id,
+        )
+        .order_by(AsyncTaskLog.updated_at.desc(), AsyncTaskLog.id.desc())
+        .limit(10)
+    )
+    if exclude_task_id is not None:
+        statement = statement.where(AsyncTaskLog.id != exclude_task_id)
+    for task in db.scalars(statement):
+        found = _find_docmind_task_id(task.detail)
+        if found:
+            return found
+    return None
+
+
+def _update_task_detail(db: Session, task: AsyncTaskLog, **updates: Any) -> None:
+    task.detail = {**_task_detail(task), **updates, "detail_updated_at": datetime.now(UTC).isoformat()}
+    db.add(task)
+    db.commit()
+
+
 def process_material_pipeline(db: Session, material_id: int) -> None:
     material = db.get(CourseMaterial, material_id)
     if material is None or material.deleted_at is not None:
@@ -510,14 +565,25 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
     material.vector_status = ProcessStatus.PROCESSING.value
     db.add(material)
     db.commit()
+
+    def record_parser_progress(progress: dict[str, Any]) -> None:
+        _update_task_detail(
+            db,
+            task,
+            doc_parser={**progress, "updated_at": datetime.now(UTC).isoformat()},
+        )
+
     try:
         warnings: list[str] = []
         artifact_count = 0
+        resume_task_id = _latest_docmind_task_id(db, material_id=material.id, exclude_task_id=task.id)
         pages = parse_material(
             storage_service.absolute_path(material.storage_path),
             material.material_type,
             db=db,
             filename=material.original_filename,
+            resume_task_id=resume_task_id,
+            on_progress=record_parser_progress,
         )
         if not pages:
             pages = [{"page_number": 1, "page_title": material.title, "page_text": "未提取到资料内容。"}]
@@ -610,14 +676,20 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
             error_message="；".join(warnings)[:500] if warnings else None,
         )
         task.status = ProcessStatus.READY.value
-        task.detail = {"page_count": len(created_pages), "pedagogy_artifact_count": artifact_count, "warnings": warnings}
+        task.detail = {
+            **_task_detail(task),
+            "page_count": len(created_pages),
+            "pedagogy_artifact_count": artifact_count,
+            "warnings": warnings,
+            "finished_at": datetime.now(UTC).isoformat(),
+        }
         db.add(task)
         db.commit()
     except Exception as exc:
         material.parse_status = ProcessStatus.FAILED.value
         material.vector_status = ProcessStatus.FAILED.value
         task.status = ProcessStatus.FAILED.value
-        task.detail = {"error": str(exc)}
+        task.detail = {**_task_detail(task), "error": str(exc), "failed_at": datetime.now(UTC).isoformat()}
         db.add_all([material, task])
         log_ai_usage(
             db,
@@ -631,6 +703,25 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         raise
 
 
+def _ensure_material_processing_worker() -> None:
+    global _material_processing_worker_started
+
+    with _material_processing_worker_lock:
+        if _material_processing_worker_started:
+            return
+        Thread(target=_material_processing_worker, name="material-processing-worker", daemon=True).start()
+        _material_processing_worker_started = True
+
+
+def _material_processing_worker() -> None:
+    while True:
+        material_id = _material_processing_queue.get()
+        try:
+            _process_material_in_background(material_id)
+        finally:
+            _material_processing_queue.task_done()
+
+
 def dispatch_material_processing(material_id: int) -> None:
     from app.tasks.materials import process_material_task
 
@@ -641,7 +732,8 @@ def dispatch_material_processing(material_id: int) -> None:
         with db_session.SessionLocal() as db:
             parser_config = get_enabled_service_config(db, "doc_parser")
         if parser_config is not None and parser_config.provider != "mock":
-            Thread(target=_process_material_in_background, args=(material_id,), daemon=True).start()
+            _ensure_material_processing_worker()
+            _material_processing_queue.put(material_id)
             return
 
     try:
@@ -711,6 +803,10 @@ def reprocess_material(db: Session, *, material_id: int, user: User) -> CourseMa
     if material is None or material.deleted_at is not None:
         raise not_found("资料不存在")
     _assert_material_owner(db, material, user)
+    material.parse_status = ProcessStatus.PENDING.value
+    material.vector_status = ProcessStatus.PENDING.value
+    db.add(material)
+    db.commit()
     dispatch_material_processing(material.id)
     db.refresh(material)
     return material

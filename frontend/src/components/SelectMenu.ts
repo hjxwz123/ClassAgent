@@ -1,5 +1,5 @@
 import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref, Transition, type PropType } from "vue";
-import { ChevronDown } from "lucide-vue-next";
+import { ChevronDown } from "../icons";
 
 export type SelectMenuOption = { label: string; value: string | number; danger?: boolean };
 

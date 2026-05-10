@@ -15,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { Check } from "lucide-vue-next";
+import { Check } from "../icons";
 
 const props = withDefaults(defineProps<{
   modelValue: boolean;

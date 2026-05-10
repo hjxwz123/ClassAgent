@@ -162,7 +162,7 @@
               <form class="chat-input compact" @submit.prevent="askInClass">
                 <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
                 <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
-                <textarea v-model="classQuestion" placeholder="问问 AI 这一页..." rows="1"></textarea>
+                <textarea v-model="classQuestion" placeholder="问问 AI 这一页..." rows="1" @keydown="handleClassQuestionKeydown"></textarea>
                 <button :disabled="(!classQuestion.trim() && !classQaAttachments.length) || classThinking || classQaImageUploading" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
               </form>
               <div class="quick-tags">
@@ -563,7 +563,7 @@
                   <section class="input-box">
                     <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
                     <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
-                    <textarea v-model="globalQuestion" placeholder="输入问题" rows="1"></textarea>
+                    <textarea v-model="globalQuestion" placeholder="输入问题" rows="1" @keydown="handleGlobalQuestionKeydown"></textarea>
                     <button :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || globalThinking || globalQaImageUploading" :data-loading="globalThinking" class="send-btn"><Send :size="20" /></button>
                   </section>
                 </div>
@@ -958,11 +958,12 @@
                 <aside class="profile-side">
                   <article class="profile-identity-card">
                     <div class="profile-cover">
-                      <span class="big-avatar">
+                      <button type="button" class="big-avatar avatar-upload-control" :data-loading="avatarUploading" :disabled="avatarUploading" title="更换头像" aria-label="更换头像" @click="studentAvatarInput?.click()">
                         <img v-if="currentAvatarUrl" :src="currentAvatarUrl" alt="" />
                         <DefaultUserAvatar v-else />
                         <Camera :size="14" class="camera-badge" />
-                      </span>
+                      </button>
+                      <input ref="studentAvatarInput" class="visually-hidden-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" @change="uploadProfileAvatar" />
                     </div>
                     <div class="profile-header-info">
                       <section>
@@ -1077,10 +1078,11 @@ import {
   Eye, History, IdCard, Info, Flag, Layers, ListChecks, Loader2, LogOut, Mail, Maximize, MessageCircle, PanelRight,
   Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings,
   Shield, Sparkles, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
-} from "lucide-vue-next";
+} from "../icons";
 import { api } from "../api/client";
 import { routeByPage } from "../router";
 import type { Lesson, LessonPage, PageActivity, Quiz, User as UserType } from "../types";
+import { copyToClipboard } from "../utils/clipboard";
 import { extractStructuredText, renderRichText } from "../utils/richText";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
@@ -1118,7 +1120,7 @@ type StudentSearchResult = {
 };
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
-const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
+const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string]; authed: [user: UserType] }>();
 const route = useRoute();
 const router = useRouter();
 
@@ -1279,6 +1281,8 @@ const checkinDays = ref<string[]>([]);
 
 const profileTab = ref<"info" | "records" | "account">("info");
 const profileForm = reactive({ nickname: props.user.nickname, avatar_url: props.user.avatar_url || "", school: "", bio: props.user.bio || "" });
+const studentAvatarInput = ref<HTMLInputElement | null>(null);
+const avatarUploading = ref(false);
 const passwordForm = reactive({ old_password: "", new_password: "" });
 const passwordConfirm = ref("");
 const noticeSettings = reactive<any[]>([]);
@@ -1769,7 +1773,24 @@ async function loadCourseHome() {
     if (loadSeq === courseHomeLoadSeq && isCourseRoute) courseHomeLoading.value = false;
   }
 }
-async function loadProfile() { profilePayload.value = (await run(() => api.get("/student/profile"))) || {}; Object.assign(profileForm, { nickname: profilePayload.value.user?.nickname || props.user.nickname, avatar_url: profilePayload.value.user?.avatar_url || "", school: profilePayload.value.student_profile?.school || "", bio: profilePayload.value.user?.bio || "" }); noticeSettings.splice(0, noticeSettings.length, ...(profilePayload.value.notification_settings || [])); }
+function applyStudentProfile(data: any) {
+  if (!data) return;
+  profilePayload.value = data;
+  Object.assign(profileForm, {
+    nickname: data.user?.nickname || props.user.nickname,
+    avatar_url: data.user?.avatar_url || "",
+    school: data.student_profile?.school || "",
+    bio: data.user?.bio || "",
+  });
+  if (data.user) emit("authed", {
+    ...props.user,
+    nickname: data.user.nickname || props.user.nickname,
+    avatar_url: data.user.avatar_url || null,
+    bio: data.user.bio || null,
+    updated_at: data.user.updated_at || props.user.updated_at,
+  });
+}
+async function loadProfile() { const data: any = (await run<any>(() => api.get("/student/profile"))) || {}; applyStudentProfile(data); noticeSettings.splice(0, noticeSettings.length, ...(data.notification_settings || [])); }
 async function loadActive() {
   if (active.value === "studentLessonStudy") {
     await loadLessonStudyRoute();
@@ -2213,14 +2234,17 @@ function activityQuestion(activity: PageActivity) {
 function activityHtml(activity: PageActivity) {
   return renderRichText(activity.content || activity.summary || "");
 }
-function copyText(text: string) { navigator.clipboard?.writeText(text); emit("notice", "success", "已复制"); }
+async function copyText(text: unknown) {
+  const copied = await copyToClipboard(text);
+  emit("notice", copied ? "success" : "warning", copied ? "已复制" : "复制失败，请手动复制");
+}
 function chapterName(id?: number | null) { return (courseHome.value.chapters || []).find((item: any) => item.id === id)?.title || "课程章节"; }
 function isOpeningLesson(id?: number | null) { return openingLessonId.value === Number(id || 0); }
 
 function formatJoinCode() { joinCode.value = joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12); joinPreview.value = null; joinError.value = ""; if (joinTimer) window.clearTimeout(joinTimer); if (joinCode.value.length >= 5) joinTimer = window.setTimeout(validateJoinCode, 350); }
 async function validateJoinCode() { joinChecking.value = true; joinError.value = ""; const data = await run<any>(() => api.get("/student/courses/preview", { course_code: joinCode.value })); joinChecking.value = false; if (!data) { joinError.value = "课程码不存在或已停用"; return; } joinPreview.value = data; if (data.already_joined) joinError.value = "你已加入该课程"; }
 async function confirmJoin() { if (!joinPreview.value) return; await run(() => api.post("/courses/join", { course_code: joinCode.value }), "已加入"); joinOpen.value = false; joinCode.value = ""; joinPreview.value = null; await loadDashboard(); }
-async function handleCourseMenu(action: string, course: any) { if (action === "detail") await openCourse(course.id); if (action === "qa") { selectedCourseId.value = course.id; await go("studentQa"); } if (action === "share") copyText(course.course_code); if (action === "leave") await run(() => api.post(`/courses/${course.id}/leave`), "已退出"); await loadCourses(); }
+async function handleCourseMenu(action: string, course: any) { if (action === "detail") await openCourse(course.id); if (action === "qa") { selectedCourseId.value = course.id; await go("studentQa"); } if (action === "share") await copyText(course.course_code); if (action === "leave") await run(() => api.post(`/courses/${course.id}/leave`), "已退出"); await loadCourses(); }
 
 function hasCourseRouteParam() {
   return route.params.courseId !== undefined;
@@ -2518,6 +2542,13 @@ async function askInClass() {
   }
 }
 function sendQuickClass(text: string) { classQuestion.value = text; askInClass(); }
+function submitQuestionOnEnter(event: KeyboardEvent, submit: () => Promise<void>) {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  void submit();
+}
+function handleClassQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, askInClass); }
+function handleGlobalQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, askGlobal); }
 async function askGlobal() {
   if ((!globalQuestion.value.trim() && !globalQaAttachments.value.length) || !selectedCourseId.value || globalThinking.value || globalQaImageUploading.value) return;
   const question = globalQuestion.value.trim() || "请分析这张图片";
@@ -2829,7 +2860,38 @@ async function createPlan() {
 }
 async function checkinTask(id: number) { await run(() => api.post(`/learning/tasks/${id}/checkin`, { notes: "" }), "已打卡"); await loadDashboard(); await loadPlans(); }
 
-async function saveProfile() { const data = await run<any>(() => api.patch("/student/profile", { nickname: profileForm.nickname, avatar_url: profileForm.avatar_url, bio: profileForm.bio, school: profileForm.school }), "已保存"); if (data) profilePayload.value = data; }
+function validAvatarFile(file: File) {
+  const nameOk = /\.(jpe?g|png|webp|gif)$/i.test(file.name || "");
+  const typeOk = !file.type || file.type.startsWith("image/");
+  if (!nameOk || !typeOk) {
+    emit("notice", "warning", "请上传 JPG、PNG、WEBP 或 GIF 图片");
+    return false;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    emit("notice", "warning", "头像不能超过 5MB");
+    return false;
+  }
+  return true;
+}
+async function uploadProfileAvatar(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file || !validAvatarFile(file)) return;
+  avatarUploading.value = true;
+  try {
+    const form = new FormData();
+    form.set("file", file);
+    const data = await api.post<any>("/student/profile/avatar", form);
+    applyStudentProfile(data);
+    emit("notice", "success", "头像已更新");
+  } catch (error) {
+    emit("notice", "error", (error as Error).message);
+  } finally {
+    avatarUploading.value = false;
+  }
+}
+async function saveProfile() { const data = await run<any>(() => api.patch("/student/profile", { nickname: profileForm.nickname, avatar_url: profileForm.avatar_url, bio: profileForm.bio, school: profileForm.school }), "已保存"); if (data) applyStudentProfile(data); }
 async function changePassword() { if (passwordForm.new_password !== passwordConfirm.value) return emit("notice", "warning", "密码不一致"); await run(() => api.post("/auth/me/password", passwordForm), "已保存"); Object.assign(passwordForm, { old_password: "", new_password: "" }); passwordConfirm.value = ""; }
 async function saveNotices() { await run(() => api.put("/student/notifications", { settings: noticeSettings }), "已保存"); }
 

@@ -29,7 +29,7 @@
 
 <script setup lang="ts">
 import { computed, ref, useAttrs } from "vue";
-import { Eye, EyeOff, X } from "lucide-vue-next";
+import { Eye, EyeOff, X } from "../icons";
 
 defineOptions({ inheritAttrs: false });
 

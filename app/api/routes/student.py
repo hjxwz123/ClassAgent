@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.services.student import (
     mark_student_notifications_read,
     preview_course_by_code,
     save_page_note,
+    upload_student_avatar,
     update_student_notifications,
     update_student_profile,
 )
@@ -137,6 +138,16 @@ def update_profile_endpoint(
         ),
         request_id=request.state.request_id,
     )
+
+
+@router.post("/profile/avatar")
+def upload_profile_avatar_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    file: UploadFile = File(...),
+):
+    return success_response(data=upload_student_avatar(db, user=user, upload=file), request_id=request.state.request_id)
 
 
 @router.get("/notifications")

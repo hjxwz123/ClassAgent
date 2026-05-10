@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
+from fastapi import UploadFile
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -32,6 +33,7 @@ from app.db.models import (
     WrongQuestion,
 )
 from app.services.ai import ai_service
+from app.services.avatar import upload_avatar_file
 from app.services.courses import _get_course_or_404
 from app.services.notifications import active_system_announcement, apply_user_notification_reads, list_user_notifications, mark_user_notifications_read
 from app.services.storage import storage_service
@@ -58,12 +60,15 @@ def _published_lesson_order():
 def _as_dict(item) -> dict:
     data = dict(item.__dict__)
     data.pop("_sa_instance_state", None)
+    data.pop("password_hash", None)
     if "preview_url" in data:
         data["preview_url"] = storage_service.normalize_public_url(data["preview_url"])
     if "audio_url" in data:
         data["audio_url"] = storage_service.normalize_public_url(data["audio_url"])
     if "cover_url" in data:
         data["cover_url"] = storage_service.normalize_public_url(data["cover_url"])
+    if "avatar_url" in data:
+        data["avatar_url"] = storage_service.normalize_public_url(data["avatar_url"])
     return data
 
 
@@ -623,6 +628,14 @@ def update_student_profile(
         current["bio"] = bio
     db.add(user)
     _set_preference(db, user_id=user.id, key=STUDENT_PROFILE_KEY, value=current)
+    db.commit()
+    db.refresh(user)
+    return get_student_profile(db, user)
+
+
+def upload_student_avatar(db: Session, *, user: User, upload: UploadFile) -> dict:
+    _assert_student(user)
+    upload_avatar_file(db, user=user, upload=upload)
     db.commit()
     db.refresh(user)
     return get_student_profile(db, user)

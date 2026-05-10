@@ -12,7 +12,13 @@ from sqlalchemy import select
 from app.db import session as db_session
 from app.db.models import AsyncTaskLog, CourseMaterial, KnowledgeChunk, Lesson, LessonPage
 from app.services.materials import _split_knowledge_text, recover_stale_material_processing_tasks
-from app.services.parser import _localize_markdown_images, doc_parser_service, parse_material, sanitize_temporary_docmind_images
+from app.services.parser import (
+    DEFAULT_DOC_PARSER_TIMEOUT_SECONDS,
+    _localize_markdown_images,
+    doc_parser_service,
+    parse_material,
+    sanitize_temporary_docmind_images,
+)
 from app.services.tts import markdown_to_speech_text, tts_service
 from app.services.vector_store import vector_store
 
@@ -119,6 +125,27 @@ def test_doc_parser_layouts_group_into_ordered_pages():
     assert pages[0]["page_text"].startswith("# 第一页标题")
     assert pages[1]["page_number"] == 2
     assert "第二页正文" in pages[1]["page_text"]
+
+
+def test_doc_parser_progress_callback_reports_task_status(monkeypatch):
+    statuses = iter(
+        [
+            {"Status": "running", "Processing": 12},
+            {"Status": "success", "Processing": 100},
+        ]
+    )
+    events: list[dict] = []
+
+    monkeypatch.setattr(doc_parser_service, "_query_status", lambda task_id, config: next(statuses))
+    monkeypatch.setattr("app.services.parser.time.sleep", lambda seconds: None)
+
+    result = doc_parser_service._wait_for_success("docmind-task-1", {}, on_progress=events.append)
+
+    assert result["Status"] == "success"
+    assert events[0]["docmind_task_id"] == "docmind-task-1"
+    assert events[0]["progress"] == 12
+    assert events[0]["timeout_seconds"] == DEFAULT_DOC_PARSER_TIMEOUT_SECONDS
+    assert events[-1]["stage"] == "success"
 
 
 def test_docmind_markdown_images_are_persisted_to_configured_storage(monkeypatch):

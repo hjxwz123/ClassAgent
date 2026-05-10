@@ -39,6 +39,11 @@ from app.db.models import (
 )
 from app.services.bootstrap import default_system_settings
 from app.services.email import email_service
+from app.services.parser import (
+    DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS,
+    DEFAULT_DOC_PARSER_TIMEOUT_SECONDS,
+    MAX_DOC_PARSER_TIMEOUT_SECONDS,
+)
 from app.services.storage import storage_service
 from app.services.tts import tts_service
 from app.services.vector_store import vector_store
@@ -307,7 +312,8 @@ def update_user(db: Session, *, user_id: int, status: str | None, role: str | No
     if role is not None:
         if role not in {item.value for item in UserRole}:
             raise bad_request("角色不合法")
-        user.role = role
+        if role != user.role:
+            raise bad_request("用户角色创建后不可更改")
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -795,6 +801,17 @@ def save_service_config(
         }.get(service_type, set())
         for key in sdk_managed_keys:
             config.pop(key, None)
+    if service_type == "doc_parser" and provider == "aliyun":
+        try:
+            timeout_seconds = int(config.get("timeout_seconds") or config.get("timeout") or DEFAULT_DOC_PARSER_TIMEOUT_SECONDS)
+        except (TypeError, ValueError):
+            timeout_seconds = DEFAULT_DOC_PARSER_TIMEOUT_SECONDS
+        config["timeout_seconds"] = max(DEFAULT_DOC_PARSER_TIMEOUT_SECONDS, min(MAX_DOC_PARSER_TIMEOUT_SECONDS, timeout_seconds))
+        try:
+            poll_interval_seconds = int(config.get("poll_interval_seconds") or DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS)
+        except (TypeError, ValueError):
+            poll_interval_seconds = DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS
+        config["poll_interval_seconds"] = max(1, min(60, poll_interval_seconds))
     record.scope = ConfigScope.SERVICE.value
     record.service_type = service_type
     record.provider = provider

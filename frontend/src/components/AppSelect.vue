@@ -39,7 +39,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Check, ChevronDown } from "lucide-vue-next";
+import { Check, ChevronDown } from "../icons";
 
 type SelectValue = string | number | boolean | null;
 type SelectOption = { label: string; value: SelectValue; danger?: boolean };
@@ -198,7 +198,7 @@ onBeforeUnmount(() => {
 }
 .app-select-pop {
   position: fixed;
-  z-index: var(--z-popover);
+  z-index: calc(var(--z-tooltip) + 10);
   min-width: 0;
   box-sizing: border-box;
   overflow: auto;

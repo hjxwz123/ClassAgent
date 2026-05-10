@@ -25,7 +25,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { Clock, Users } from "lucide-vue-next";
+import { Clock, Users } from "../icons";
 import type { Course } from "../types";
 
 const props = defineProps<{ course: Course; count?: number | string }>();

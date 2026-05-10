@@ -1,5 +1,5 @@
 import { defineComponent, h, ref, Transition, type PropType } from "vue";
-import { BookMarked, BookOpen, Check, ChevronDown, Copy, Sparkles, User } from "lucide-vue-next";
+import { BookMarked, BookOpen, Check, ChevronDown, Copy, Sparkles, User } from "../../../icons";
 import { renderRichText } from "../../../utils/richText";
 
 type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };

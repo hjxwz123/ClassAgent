@@ -700,6 +700,12 @@ def test_teacher_weak_quiz_management_flow(client, monkeypatch):
     assert weak_quiz["task_id"]
     assert weak_quiz["metadata_json"]["weak_quiz"] is True
     assert weak_quiz["metadata_json"]["question_type_counts"] == {"single_choice": 1, "judge": 1}
+    generation_task_resp = client.get(
+        f"/api/v1/learning/generation-tasks/{weak_quiz['task_id']}",
+        headers=teacher_headers,
+    )
+    assert generation_task_resp.status_code == 200, generation_task_resp.text
+    assert generation_task_resp.json()["data"]["id"] == weak_quiz["id"]
     teacher_dashboard_resp = client.get("/api/v1/teacher/dashboard", headers=teacher_headers)
     assert teacher_dashboard_resp.status_code == 200, teacher_dashboard_resp.text
     assert any(

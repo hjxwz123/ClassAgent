@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,7 @@ from app.services.teacher import (
     mark_teacher_notifications_read,
     remind_student,
     remove_student,
+    upload_teacher_avatar,
     update_chapter,
     update_lesson,
     update_teacher_notifications,
@@ -52,6 +53,7 @@ class LessonUpdateRequest(BaseModel):
 
 class TeacherProfileUpdateRequest(BaseModel):
     nickname: str | None = Field(default=None, min_length=2, max_length=50)
+    avatar_url: str | None = Field(default=None, max_length=500)
     bio: str | None = Field(default=None, max_length=2000)
     organization: str | None = Field(default=None, max_length=120)
     department: str | None = Field(default=None, max_length=120)
@@ -113,10 +115,22 @@ def update_profile_endpoint(
         db,
         user=user,
         nickname=payload.nickname,
+        avatar_url=payload.avatar_url,
         bio=payload.bio,
         organization=payload.organization,
         department=payload.department,
     )
+    return success_response(data=data, request_id=request.state.request_id)
+
+
+@router.post("/profile/avatar")
+def upload_profile_avatar_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    file: UploadFile = File(...),
+):
+    data = upload_teacher_avatar(db, user=user, upload=file)
     return success_response(data=data, request_id=request.state.request_id)
 
 
