@@ -55,6 +55,7 @@ import {
   PhMagnifyingGlass,
   PhMagnifyingGlassPlus,
   PhMedal,
+  PhMoon,
   PhNotePencil,
   PhPaperPlaneRight,
   PhPause,
@@ -173,6 +174,7 @@ export const Mail = icon(PhEnvelope);
 export const Maximize = icon(PhCornersOut);
 export const MessageCircle = icon(PhChatCircle);
 export const MoreHorizontal = icon(PhDotsThree);
+export const Moon = icon(PhMoon);
 export const PanelRight = icon(PhSidebarSimple);
 export const Pause = icon(PhPause);
 export const Pencil = icon(PhPencil);

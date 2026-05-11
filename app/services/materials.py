@@ -731,7 +731,7 @@ def dispatch_material_processing(material_id: int) -> None:
 
         with db_session.SessionLocal() as db:
             parser_config = get_enabled_service_config(db, "doc_parser")
-        if parser_config is not None and parser_config.provider != "mock":
+        if parser_config is not None:
             _ensure_material_processing_worker()
             _material_processing_queue.put(material_id)
             return

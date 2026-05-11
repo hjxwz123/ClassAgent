@@ -232,7 +232,7 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .checkbox-label.inline { min-height: 36px; }
 .check-grid { display: flex; flex-wrap: wrap; gap: 10px; }
 .monitor-top { justify-content: flex-end; color: var(--color-text-secondary); font-size: var(--text-body-sm); }
-.spin { animation: spin var(--duration-slower) linear infinite; }
+.spin { animation: loading-node-pulse 1.5s ease-in-out infinite; }
 .service-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .monitor-service { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; min-height: 72px; border-left: 4px solid var(--color-primary-600); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 12px; }
 .monitor-service.tag-danger { border-left-color: var(--color-danger-500); background: var(--color-danger-50); }
@@ -776,4 +776,156 @@ pre { max-height: 420px; overflow: auto; border-radius: var(--radius-md); backgr
   .modal.preview-modal {
     width: min(94vw, 640px);
   }
+}
+
+/* Theme guard: this scoped chunk is loaded after the global theme file. */
+html.theme-light .admin-shell .admin-sidebar {
+  background: var(--color-bg-surface) !important;
+  color: var(--color-text-body) !important;
+  border-right-color: var(--color-border-default) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-light .admin-shell .admin-sidebar::before {
+  opacity: 0 !important;
+}
+
+html.theme-light .admin-shell .admin-sidebar .teacher-sidebar-toggle,
+html.theme-light .admin-shell .admin-sidebar .nav-group button {
+  background: transparent !important;
+  color: var(--color-text-secondary) !important;
+  border-color: var(--color-border-default) !important;
+}
+
+html.theme-light .admin-shell .admin-sidebar .teacher-sidebar-toggle:hover,
+html.theme-light .admin-shell .admin-sidebar .nav-group button:hover,
+html.theme-light .admin-shell .admin-sidebar .nav-group button.active {
+  background: var(--color-primary-50) !important;
+  color: var(--color-primary-700) !important;
+}
+
+html.theme-light .admin-shell .admin-sidebar .nav-group > span {
+  color: var(--color-text-muted) !important;
+}
+
+html.theme-light .admin-shell .admin-sidebar .nav-group button.active svg {
+  background: transparent !important;
+  color: var(--ca-role-admin-primary) !important;
+}
+
+html.theme-light .admin-shell .admin-sidebar .nav-group button.active::before {
+  background: var(--ca-role-admin-primary) !important;
+}
+
+html.theme-light .admin-shell .btn-primary,
+html.theme-light .admin-shell .view-toggle .active,
+html.theme-light .admin-shell .view-toggle button.active,
+html.theme-light .admin-shell .bulk-bar {
+  background: var(--ca-role-admin-primary) !important;
+  color: #FFFFFF !important;
+}
+
+html.theme-dark .admin-shell {
+  --ca-role-admin-primary: #FDE68A;
+  --ca-role-admin-primary-hover: #FEF3C7;
+  --ca-role-admin-light: rgba(217, 160, 91, .16);
+}
+
+html.theme-dark .admin-shell .btn-primary,
+html.theme-dark .admin-shell .view-toggle .active,
+html.theme-dark .admin-shell .view-toggle button.active,
+html.theme-dark .admin-shell .bulk-bar,
+html.theme-dark .admin-shell .bulk-bar button {
+  background: #A16207 !important;
+  color: #F8FAFC !important;
+  border-color: #B45309 !important;
+}
+
+html.theme-dark .admin-shell .btn-primary:hover,
+html.theme-dark .admin-shell .view-toggle .active:hover,
+html.theme-dark .admin-shell .view-toggle button.active:hover {
+  background: #854D0E !important;
+  color: #F8FAFC !important;
+}
+
+html.theme-dark .admin-shell .notice-btn,
+html.theme-dark .admin-shell .icon-action,
+html.theme-dark .admin-shell .text-action,
+html.theme-dark .admin-shell .segment-btn,
+html.theme-dark .admin-shell .view-toggle button,
+html.theme-dark .admin-shell .admin-account-menu button,
+html.theme-dark .admin-shell .course-more,
+html.theme-dark .admin-shell .vertical-tabs button,
+html.theme-dark .admin-shell .config-nav-item,
+html.theme-dark .admin-shell .log-tabs button,
+html.theme-dark .admin-shell .course-chip,
+html.theme-dark .admin-shell .course-chip em {
+  background: #111827 !important;
+  color: #E2E8F0 !important;
+  border-color: rgba(148, 163, 184, .24) !important;
+}
+
+html.theme-dark .admin-shell .notice-btn:hover,
+html.theme-dark .admin-shell .icon-action:hover,
+html.theme-dark .admin-shell .text-action:hover,
+html.theme-dark .admin-shell .segment-btn.active,
+html.theme-dark .admin-shell .admin-account-menu button:hover,
+html.theme-dark .admin-shell .course-more:hover,
+html.theme-dark .admin-shell .vertical-tabs button:hover,
+html.theme-dark .admin-shell .vertical-tabs button.active,
+html.theme-dark .admin-shell .config-nav-item:hover,
+html.theme-dark .admin-shell .config-nav-item.active,
+html.theme-dark .admin-shell .log-tabs button:hover,
+html.theme-dark .admin-shell .log-tabs button.active,
+html.theme-dark .admin-shell .course-chip {
+  background: rgba(217, 160, 91, .16) !important;
+  color: #FDE68A !important;
+  border-color: rgba(251, 191, 36, .34) !important;
+}
+
+.admin-shell .admin-theme-toggle {
+  color: var(--color-text-secondary);
+}
+
+html.theme-dark .admin-shell .admin-theme-toggle {
+  color: #CBD5E1;
+}
+
+/* Icon audit: keep icons transparent while preserving their existing dimensions. */
+.admin-shell :where(
+  .notice-btn,
+  .welcome-icon,
+  .metric-icon,
+  .aliyun-card-icon,
+  .password-target-icon,
+  .course-modal-icon,
+  .admin-sidebar .nav-group button svg
+),
+html.theme-light .admin-shell :where(
+  .notice-btn,
+  .welcome-icon,
+  .metric-icon,
+  .aliyun-card-icon,
+  .password-target-icon,
+  .course-modal-icon,
+  .admin-sidebar .nav-group button svg
+),
+html.theme-dark .admin-shell :where(
+  .notice-btn,
+  .welcome-icon,
+  .metric-icon,
+  .aliyun-card-icon,
+  .password-target-icon,
+  .course-modal-icon,
+  .admin-sidebar .nav-group button svg
+) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.admin-shell .notice-btn:hover,
+html.theme-light .admin-shell .notice-btn:hover,
+html.theme-dark .admin-shell .notice-btn:hover {
+  background: transparent !important;
+  box-shadow: none !important;
 }

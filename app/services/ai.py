@@ -584,9 +584,7 @@ class AIService:
         self.settings = get_settings()
 
     def _fallback_allowed(self) -> bool:
-        if self.settings.external_ai_mode == "mock":
-            return True
-        return self.settings.external_ai_mode == "auto" and self.settings.app_env != "production"
+        return False
 
     def _chat_endpoint(self, endpoint: str) -> str:
         endpoint = endpoint.rstrip("/")
@@ -672,7 +670,7 @@ class AIService:
         timeout_seconds: float | None = None,
     ) -> ChatResult | None:
         config = get_default_model_config(db, purpose)
-        if config is None or config.provider == "mock":
+        if config is None:
             if allow_fallback and self._fallback_allowed():
                 return None
             raise bad_request(f"缺少 {purpose} 模型配置，请先在管理员模型配置中启用模型")
@@ -753,7 +751,7 @@ class AIService:
         json_mode: bool = False,
     ) -> Iterator[ChatDelta]:
         config = get_default_model_config(db, purpose)
-        if config is None or config.provider == "mock":
+        if config is None:
             if self._fallback_allowed():
                 return
             raise bad_request(f"缺少 {purpose} 模型配置，请先在管理员模型配置中启用模型")
@@ -870,7 +868,7 @@ class AIService:
             return []
         config = get_default_model_config(db, "embedding")
         dimension = self._configured_embedding_dimension(config)
-        if config is None or config.provider == "mock" or config.purpose != "embedding":
+        if config is None or config.purpose != "embedding":
             if self._fallback_allowed():
                 return [self._local_embedding(text, dimension=dimension) for text in texts]
             raise bad_request("缺少 embedding 模型配置，请先在管理员模型配置中启用 embedding")
@@ -1239,18 +1237,7 @@ class AIService:
         )
         if result:
             return result.content.strip(), False, result.reasoning
-        context = context[:320]
-        history_hint = ""
-        history_items = self._history_hint_items(history)
-        if history_items:
-            history_hint = f"\n结合前序对话，可继续沿着“{history_items[-1][:30]}”这个方向理解。"
-        answer = (
-            f"根据当前课程资料，问题“{question}”可以这样理解：\n"
-            f"{context}\n"
-            "如果你要继续追问，建议从定义、适用条件、典型例题三个角度继续展开。"
-            f"{history_hint}"
-        )
-        return answer, False, "本次使用本地降级逻辑：根据检索到的课程片段生成回答，未收到上游模型思考过程。"
+        raise bad_request("AI 问答模型未返回有效回答")
 
     def answer_general_question(
         self,
@@ -1283,16 +1270,7 @@ class AIService:
         )
         if result:
             return result.content.strip(), result.reasoning
-        history_hint = ""
-        history_items = self._history_hint_items(history)
-        if history_items:
-            history_hint = f"\n可结合前序问题“{history_items[-1][:40]}”继续核对你的理解。"
-        answer = (
-            f"这是一个需要依赖通用知识来回答的问题：{question}\n"
-            "建议先明确题目对象、已知条件、目标，再选择相应概念、公式、方法或题型模板。"
-            f"{history_hint}"
-        )
-        return answer, "本次未检索到课程资料依据，使用通用知识降级回答。"
+        raise bad_request("AI 问答模型未返回有效回答")
 
     def stream_answer_question(
         self,
@@ -1319,18 +1297,7 @@ class AIService:
             yield delta
         if emitted:
             return
-        context_excerpt = context[:320]
-        history_hint = ""
-        history_items = self._history_hint_items(history)
-        if history_items:
-            history_hint = f"\n结合你前面的问题（{'；'.join(history_items[-2:])}），可以把本题和前序概念一起对照。"
-        yield ChatDelta(
-            "content",
-            "根据已检索到的课程资料，可以这样理解："
-            f"{context_excerpt}"
-            "\n\n如果你要继续追问，建议从定义、适用条件、典型例题三个角度继续展开。"
-            f"{history_hint}",
-        )
+        raise bad_request("AI 问答模型未返回有效回答")
 
     def extract_knowledge_points(self, text: str, db: Session | None = None) -> list[str]:
         payload = self._call_json(

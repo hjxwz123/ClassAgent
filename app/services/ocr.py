@@ -56,9 +56,6 @@ class OCRService:
     def __init__(self) -> None:
         self.settings = get_settings()
 
-    def _mock_result(self, upload: UploadFile) -> str:
-        return f"未配置 OCR 服务，已接收图片 {upload.filename or 'unknown'}，请学生手动修正识别结果。"
-
     def _recognize_aliyun(self, content: bytes, config: dict) -> str:
         required = ["access_key_id", "access_key_secret"]
         missing = [key for key in required if not config.get(key)]
@@ -96,9 +93,7 @@ class OCRService:
     def recognize(self, upload: UploadFile, db: Session | None = None) -> str:
         service = get_enabled_service_config(db, "ocr")
         if service is None:
-            if self.settings.app_env == "production":
-                raise bad_request("OCR 服务未配置，请先在管理员服务配置中启用 ocr")
-            return self._mock_result(upload)
+            raise bad_request("OCR 服务未配置，请先在管理员服务配置中启用 ocr")
         content = upload.file.read()
         upload.file.seek(0)
         if service.provider == "aliyun":

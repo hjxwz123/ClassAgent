@@ -319,11 +319,11 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
     model_save_resp = client.post(
         "/api/v1/admin/model-configs",
         json={
-            "provider": "mock",
-            "model_name": "mock-v1",
+            "provider": "qwen",
+            "model_name": "qwen-plus",
             "purpose": "qa",
             "endpoint": None,
-            "api_key": "mock-key",
+            "api_key": "test-key",
             "is_default": True,
             "extra_config": {"note": "test"},
         },
@@ -334,16 +334,16 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
 
     model_test_resp = client.post(f"/api/v1/admin/model-configs/{model_id}/test", headers=admin_headers)
     assert model_test_resp.status_code == 200, model_test_resp.text
-    assert model_test_resp.json()["data"]["success"] is True
+    assert model_test_resp.json()["data"]["success"] is False
 
     embedding_save_resp = client.post(
         "/api/v1/admin/model-configs",
         json={
-            "provider": "mock",
-            "model_name": "mock-embedding",
+            "provider": "openai",
+            "model_name": "text-embedding-3-small",
             "purpose": "embedding",
             "endpoint": None,
-            "api_key": "mock-key",
+            "api_key": "test-key",
             "is_default": True,
             "extra_config": {"dimensions": 384},
         },
@@ -353,14 +353,14 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
     embedding_id = embedding_save_resp.json()["data"]["id"]
     embedding_test_resp = client.post(f"/api/v1/admin/model-configs/{embedding_id}/test", headers=admin_headers)
     assert embedding_test_resp.status_code == 200, embedding_test_resp.text
-    assert embedding_test_resp.json()["data"]["success"] is True
+    assert embedding_test_resp.json()["data"]["success"] is False
 
     service_save_resp = client.post(
         "/api/v1/admin/service-configs",
         json={
             "service_type": "tts",
-            "provider": "mock",
-            "name": "mock-tts",
+            "provider": "aliyun",
+            "name": "aliyun-tts",
             "config": {"voice": "xiaoyun"},
             "is_enabled": True,
         },
@@ -371,7 +371,7 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
 
     service_test_resp = client.post(f"/api/v1/admin/service-configs/{service_id}/test", headers=admin_headers)
     assert service_test_resp.status_code == 200, service_test_resp.text
-    assert service_test_resp.json()["data"]["success"] is True
+    assert service_test_resp.json()["data"]["success"] is False
 
     doc_parser_save_resp = client.post(
         "/api/v1/admin/service-configs",
@@ -398,9 +398,9 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
         "/api/v1/admin/service-configs",
         json={
             "service_type": "email",
-            "provider": "mock",
-            "name": "mock-email",
-            "config": {"host": "localhost", "port": 25, "sender": "noreply@example.com"},
+            "provider": "smtp",
+            "name": "smtp-email",
+            "config": {"host": "localhost"},
             "is_enabled": True,
         },
         headers=admin_headers,
@@ -409,7 +409,7 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
     email_id = email_save_resp.json()["data"]["id"]
     email_test_resp = client.post(f"/api/v1/admin/service-configs/{email_id}/test", headers=admin_headers)
     assert email_test_resp.status_code == 200, email_test_resp.text
-    assert email_test_resp.json()["data"]["success"] is True
+    assert email_test_resp.json()["data"]["success"] is False
 
     settings_resp = client.get("/api/v1/admin/system-settings", headers=admin_headers)
     assert settings_resp.status_code == 200, settings_resp.text

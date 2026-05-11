@@ -44,6 +44,7 @@ from app.services.parser import (
     DEFAULT_DOC_PARSER_TIMEOUT_SECONDS,
     MAX_DOC_PARSER_TIMEOUT_SECONDS,
 )
+from app.services.provider_policy import is_supported_model_provider, is_supported_service_provider
 from app.services.storage import storage_service
 from app.services.tts import tts_service
 from app.services.vector_store import vector_store
@@ -612,6 +613,8 @@ def list_model_configs(db: Session) -> list[dict]:
     configs = list(db.scalars(select(ModelConfig).where(ModelConfig.deleted_at.is_(None)).order_by(ModelConfig.created_at.desc())))
     items = []
     for config in configs:
+        if not is_supported_model_provider(config.provider, config.purpose):
+            continue
         items.append(
             {
                 "id": config.id,
@@ -639,6 +642,8 @@ def save_model_config(
     is_default: bool,
     extra_config: dict | None,
 ) -> ModelConfig:
+    if not is_supported_model_provider(provider, purpose):
+        raise bad_request("暂不支持的模型提供方")
     config = db.get(ModelConfig, config_id) if config_id else ModelConfig()
     if config is None:
         raise not_found("模型配置不存在")
@@ -668,8 +673,8 @@ def test_model_config(db: Session, *, config_id: int) -> dict:
     config = db.get(ModelConfig, config_id)
     if config is None or config.deleted_at is not None:
         raise not_found("模型配置不存在")
-    if config.provider == "mock":
-        return {"success": True, "message": "mock 模型配置可用"}
+    if not is_supported_model_provider(config.provider, config.purpose):
+        return {"success": False, "message": "暂不支持的模型提供方"}
     if not config.endpoint:
         return {"success": False, "message": "缺少 endpoint"}
     headers = {"Content-Type": "application/json"}
@@ -742,6 +747,8 @@ def list_service_configs(db: Session) -> list[dict]:
     configs = list(db.scalars(select(ServiceConfig).where(ServiceConfig.deleted_at.is_(None)).order_by(ServiceConfig.created_at.desc())))
     items = []
     for config in configs:
+        if not is_supported_service_provider(config.provider, config.service_type):
+            continue
         raw = json.loads(decrypt_secret(config.config_encrypted))
         items.append(
             {
@@ -767,6 +774,8 @@ def save_service_config(
     config: dict,
     is_enabled: bool,
 ) -> ServiceConfig:
+    if not is_supported_service_provider(provider, service_type):
+        raise bad_request("暂不支持的服务提供方")
     record = db.get(ServiceConfig, config_id) if config_id else ServiceConfig()
     if record is None:
         raise not_found("服务配置不存在")
@@ -786,7 +795,7 @@ def save_service_config(
                 continue
             merged[key] = value
         config = merged
-    if service_type == "oss" and provider in {"local", "mock"}:
+    if service_type == "oss" and provider == "local":
         config = {
             key: value
             for key, value in config.items()
@@ -838,8 +847,8 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
     if record is None or record.deleted_at is not None:
         raise not_found("服务配置不存在")
     config = json.loads(decrypt_secret(record.config_encrypted))
-    if record.provider == "mock":
-        return {"success": True, "message": "mock 服务配置可用"}
+    if not is_supported_service_provider(record.provider, record.service_type):
+        return {"success": False, "message": "暂不支持的服务提供方"}
     if record.provider == "local":
         return {"success": True, "message": "本地存储可用"}
     required_keys = {
@@ -948,6 +957,7 @@ def get_service_health(db: Session) -> dict:
     service_by_type = {
         item.service_type: item
         for item in db.scalars(select(ServiceConfig).where(ServiceConfig.deleted_at.is_(None), ServiceConfig.is_enabled.is_(True)))
+        if is_supported_service_provider(item.provider, item.service_type)
     }
     for service_type, name in [
         ("oss", "阿里云 OSS"),
@@ -962,15 +972,22 @@ def get_service_health(db: Session) -> dict:
             detail = "未配置"
             metric = "-"
         else:
-            status = "ok" if config.provider in {"mock", "local"} else "configured"
+            status = "ok" if config.provider == "local" else "configured"
             detail = config.name
             metric = config.provider
         items.append({"key": service_type, "name": name, "status": status, "metric": metric, "detail": detail})
 
-    llm = db.scalar(
-        select(ModelConfig)
-        .where(ModelConfig.deleted_at.is_(None), ModelConfig.purpose != "embedding")
-        .order_by(ModelConfig.is_default.desc(), ModelConfig.updated_at.desc())
+    llm = next(
+        (
+            item
+            for item in db.scalars(
+                select(ModelConfig)
+                .where(ModelConfig.deleted_at.is_(None), ModelConfig.purpose != "embedding")
+                .order_by(ModelConfig.is_default.desc(), ModelConfig.updated_at.desc())
+            )
+            if is_supported_model_provider(item.provider, item.purpose)
+        ),
+        None,
     )
     items.append(
         {
@@ -988,9 +1005,13 @@ def get_service_health(db: Session) -> dict:
 def test_all_services(db: Session) -> dict:
     results = []
     for config in db.scalars(select(ServiceConfig).where(ServiceConfig.deleted_at.is_(None), ServiceConfig.is_enabled.is_(True))):
+        if not is_supported_service_provider(config.provider, config.service_type):
+            continue
         result = test_service_config(db, config_id=config.id)
         results.append({"type": config.service_type, "name": config.name, **result})
     for config in db.scalars(select(ModelConfig).where(ModelConfig.deleted_at.is_(None), ModelConfig.is_default.is_(True))):
+        if not is_supported_model_provider(config.provider, config.purpose):
+            continue
         result = test_model_config(db, config_id=config.id)
         results.append({"type": f"model:{config.purpose}", "name": config.model_name, **result})
     return {"success": all(item["success"] for item in results) if results else False, "items": results, "checked_at": datetime.now(UTC).isoformat()}

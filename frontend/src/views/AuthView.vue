@@ -1,6 +1,10 @@
 <template>
-  <main class="auth">
-    <RouterLink to="/" class="auth-home-link"><ArrowLeft :size="17" />返回首页</RouterLink>
+  <PageLoader v-if="loginRedirecting" />
+  <main v-else class="auth" :class="authThemeClass">
+    <div class="auth-toolbar">
+      <RouterLink to="/" class="auth-home-link"><ArrowLeft :size="17" />返回首页</RouterLink>
+      <ThemeToggle class="auth-theme-toggle" />
+    </div>
     <div class="auth-formulas" aria-hidden="true">
       <span class="auth-formula formula-force">F = m · a</span>
       <span class="auth-formula formula-integral">∫ f(x) dx = F(x) + C</span>
@@ -71,20 +75,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { AlertCircle, ArrowLeft, BookOpen, KeyRound, LogIn, UserPlus } from "../icons";
 import { api } from "../api/client";
 import { defaultRouteForRole } from "../router";
 import { useSessionStore } from "../stores/session";
+import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
+import ThemeToggle from "../components/ThemeToggle.vue";
+import { readStoredTheme, subscribeAppTheme, type AppTheme } from "../theme";
 import type { User } from "../types";
 
 const emit = defineEmits<{ authed: [user: User]; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
 
 const mode = ref<"login" | "register" | "reset">("login");
 const loading = ref(false);
+const loginRedirecting = ref(false);
 const formError = ref("");
+const authTheme = ref<AppTheme>(readStoredTheme());
 const loginForm = reactive({ email: "", password: "" });
 const registerForm = reactive({ email: "", password: "", nickname: "" });
 const studentNo = ref("");
@@ -92,10 +101,18 @@ const resetForm = reactive({ email: "", code: "", new_password: "" });
 const session = useSessionStore();
 const router = useRouter();
 const modeTitle = computed(() => (mode.value === "login" ? "欢迎回来" : mode.value === "register" ? "加入学习空间" : "找回密码"));
+const authThemeClass = computed(() => `auth-${authTheme.value}`);
+let unsubscribeTheme: (() => void) | null = null;
 
-function delay(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
+onMounted(() => {
+  unsubscribeTheme = subscribeAppTheme((theme) => {
+    authTheme.value = theme;
+  });
+});
+
+onBeforeUnmount(() => {
+  unsubscribeTheme?.();
+});
 
 function setMode(value: "login" | "register" | "reset") {
   mode.value = value;
@@ -113,14 +130,14 @@ async function login() {
   formError.value = "";
   if (!validatePassword(loginForm.password)) return;
   loading.value = true;
+  loginRedirecting.value = true;
   try {
     const data = await api.post<{ access_token: string; user: User }>("/auth/login", loginForm);
     session.setSession(data.access_token, data.user);
     emit("authed", data.user);
-    emit("notice", "success", "已登录，正在进入工作台");
-    await delay(1000);
     await router.replace(defaultRouteForRole(data.user.role));
   } catch (error) {
+    loginRedirecting.value = false;
     formError.value = (error as Error).message;
     emit("notice", "error", (error as Error).message);
   } finally {
@@ -215,10 +232,8 @@ async function resetPassword() {
 }
 
 .auth {
-  --ca-font-chalk: "ClassAgent Chalk", "ClassAgent Serif", "ClassAgent Sans",
-    "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai",
-    "华文行楷", "PingFang SC", sans-serif;
-  --ca-font-serif: "ClassAgent Serif", "Songti SC", "STSong", "SimSun", "宋体", serif;
+  --ca-font-chalk: "ClassAgent Chalk", "ClassAgent Sans", sans-serif;
+  --ca-font-serif: "ClassAgent Serif", serif;
   --ca-font-sans: "ClassAgent Sans", -apple-system, BlinkMacSystemFont, "PingFang SC",
     "Microsoft YaHei", "Helvetica Neue", sans-serif;
   --ca-font-mono: "ClassAgent Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
@@ -227,7 +242,8 @@ async function resetPassword() {
   --shared-title-top: clamp(190px, calc(50vh - 190px), 290px);
   --home-logo-left: max(24px, calc((100vw - 1280px) / 2 + 24px));
   --home-logo-top: 16px;
-  --title-to-logo-x: calc(var(--home-logo-left) - var(--shared-title-left));
+  --home-logo-text-offset: 68px;
+  --title-to-logo-x: calc(var(--home-logo-left) + var(--home-logo-text-offset) - var(--shared-title-left));
   --title-to-logo-y: calc(var(--home-logo-top) - var(--shared-title-top));
 
   min-height: 100vh;
@@ -308,11 +324,19 @@ async function resetPassword() {
   --r: -2deg;
   font-size: clamp(17px, 2.2vw, 28px);
 }
-.auth-home-link {
+.auth-toolbar {
   position: fixed;
   top: 24px;
   left: 28px;
+  right: 28px;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+.auth-home-link {
   display: inline-flex;
   min-height: 38px;
   align-items: center;
@@ -324,10 +348,15 @@ async function resetPassword() {
   padding: 0 14px;
   text-decoration: none;
   backdrop-filter: blur(10px);
+  pointer-events: auto;
 }
 .auth-home-link:hover {
   border-color: rgba(255,255,255,.28);
   background: rgba(255,255,255,.12);
+}
+.auth-theme-toggle {
+  color: var(--ca-color-chalk);
+  pointer-events: auto;
 }
 .auth-board {
   position: relative;
@@ -352,6 +381,7 @@ async function resetPassword() {
   font-family: var(--ca-font-chalk);
   font-size: clamp(64px, 10vw, 128px);
   font-weight: 500;
+  font-synthesis: none;
   letter-spacing: 0;
   line-height: .9;
   text-shadow: 0 0 16px rgba(244,244,240,.2);
@@ -403,9 +433,10 @@ async function resetPassword() {
   height: 42px;
   align-items: center;
   justify-content: center;
-  color: var(--ca-color-chalk);
+  color: #0891B2;
   border-radius: 8px;
-  background: var(--ca-color-slate);
+  background: transparent;
+  box-shadow: none;
 }
 .brand div {
   display: grid;
@@ -415,8 +446,10 @@ async function resetPassword() {
   color: var(--ca-color-paper-ink);
   font-family: var(--ca-font-chalk);
   font-size: 26px;
-  font-weight: 600;
+  font-weight: 500;
+  font-synthesis: none;
   letter-spacing: 0;
+  line-height: .95;
 }
 .brand small {
   color: var(--ca-color-paper-sub);
@@ -500,7 +533,7 @@ form {
   color: var(--ca-color-paper-muted);
 }
 :deep(.password-tool:hover) {
-  background: rgba(18,22,20,.08);
+  background: transparent;
   color: var(--ca-color-paper-ink);
 }
 .auth-submit,
@@ -553,6 +586,11 @@ form {
 
 @media (max-width: 520px) {
   .auth { padding: 78px 18px 24px; }
+  .auth-toolbar {
+    top: 18px;
+    left: 18px;
+    right: 18px;
+  }
   .auth-card {
     padding: 24px;
   }
@@ -562,10 +600,235 @@ form {
   .auth-copy p {
     font-size: 15px;
   }
-  .auth-home-link {
-    left: 18px;
-    top: 18px;
-  }
+}
+
+.auth.auth-light {
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+.auth.auth-light::before {
+  background-image: none !important;
+  opacity: 0 !important;
+}
+
+.auth.auth-light .auth-formula {
+  color: rgba(15,23,42, calc(var(--o) * 1.2)) !important;
+  text-shadow: none !important;
+}
+
+.auth.auth-light .auth-home-link {
+  border-color: #CBD5E1 !important;
+  background: #FFFFFF !important;
+  color: #334155 !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 8px 20px rgba(15,23,42,.06) !important;
+}
+
+.auth.auth-light .auth-home-link:hover {
+  border-color: rgba(8,145,178,.38) !important;
+  background: #F8FAFC !important;
+}
+
+.auth.auth-light .auth-theme-toggle {
+  color: #334155 !important;
+}
+
+.auth.auth-light .auth-copy h1,
+.auth.auth-light .brand strong,
+.auth.auth-light .tabs button.active {
+  color: #0F172A !important;
+  text-shadow: none !important;
+}
+
+.auth.auth-light .auth-copy p,
+.auth.auth-light .chalk-line,
+.auth.auth-light .label,
+.auth.auth-light .brand small,
+.auth.auth-light .tabs button,
+.auth.auth-light :deep(.password-tool) {
+  color: #334155 !important;
+}
+
+.auth.auth-light .chalk-line i {
+  background: #94A3B8 !important;
+}
+
+.auth.auth-light .auth-card {
+  border-color: #CBD5E1 !important;
+  background: #FFFFFF !important;
+  box-shadow: 0 24px 58px rgba(15,23,42,.1) !important;
+}
+
+.auth.auth-light .brand,
+.auth.auth-light .brand span {
+  color: #0891B2 !important;
+}
+
+.auth.auth-light .brand span {
+  background: transparent !important;
+}
+
+.auth.auth-light .tabs {
+  border-color: #CBD5E1 !important;
+  background: #E2E8F0 !important;
+}
+
+.auth.auth-light .tabs button.active {
+  background: #FFFFFF !important;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, .06) !important;
+}
+
+.auth.auth-light .input,
+.auth.auth-light :deep(.password-field) {
+  border-color: #94A3B8 !important;
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+.auth.auth-light .input::placeholder,
+.auth.auth-light :deep(.password-field input)::placeholder {
+  color: #64748B !important;
+}
+
+.auth.auth-light :deep(.password-field input) {
+  color: #0F172A !important;
+}
+
+.auth.auth-light .input:hover,
+.auth.auth-light :deep(.password-field:hover) {
+  border-color: #64748B !important;
+}
+
+.auth.auth-light .input:focus,
+.auth.auth-light :deep(.password-field:focus-within) {
+  border-color: #0891B2 !important;
+  box-shadow: 0 0 0 3px rgba(8,145,178,.16) !important;
+}
+
+.auth.auth-light :deep(.password-tool:hover) {
+  background: transparent !important;
+  color: #0F172A !important;
+}
+
+.auth.auth-light .form-error {
+  border-color: #FCA5A5 !important;
+  background: #FEF2F2 !important;
+  color: #991B1B !important;
+}
+
+.auth.auth-light .auth-submit,
+.auth.auth-light .send-code-btn {
+  background: #0891B2 !important;
+  color: #FFFFFF !important;
+}
+
+.auth.auth-light .auth-submit:hover,
+.auth.auth-light .send-code-btn:hover {
+  background: #0E7490 !important;
+}
+
+.auth.auth-dark {
+  background:
+    radial-gradient(circle at 16% 18%, rgba(0, 240, 255, .12), transparent 28%),
+    radial-gradient(circle at 84% 78%, rgba(59, 130, 246, .14), transparent 32%),
+    #030712;
+  color: #F8FAFC;
+}
+
+.auth.auth-dark .auth-card {
+  border-color: rgba(148,163,184,.26);
+  background: rgba(15,23,42,.9);
+  box-shadow: 0 30px 80px rgba(0,0,0,.46);
+}
+
+.auth.auth-dark .auth-home-link {
+  border-color: rgba(148,163,184,.24);
+  background: rgba(15,23,42,.62);
+  color: #E2E8F0;
+}
+
+.auth.auth-dark .auth-theme-toggle {
+  color: #CBD5E1;
+}
+
+.auth.auth-dark .auth-copy h1,
+.auth.auth-dark .brand strong {
+  color: #F8FAFC;
+}
+
+.auth.auth-dark .auth-copy p,
+.auth.auth-dark .chalk-line,
+.auth.auth-dark .label,
+.auth.auth-dark .brand small {
+  color: #CBD5E1;
+}
+
+.auth.auth-dark .brand,
+.auth.auth-dark .brand span {
+  color: #67E8F9;
+}
+
+.auth.auth-dark .brand span {
+  background: transparent;
+}
+
+.auth.auth-dark .tabs {
+  border-color: rgba(148,163,184,.24);
+  background: #0F172A;
+}
+
+.auth.auth-dark .tabs button {
+  color: #CBD5E1;
+}
+
+.auth.auth-dark .tabs button.active {
+  background: rgba(0,240,255,.14);
+  color: #67E8F9;
+  box-shadow: none;
+}
+
+.auth.auth-dark .input,
+.auth.auth-dark :deep(.password-field) {
+  border-color: rgba(148,163,184,.28);
+  background: #0F172A;
+  color: #F8FAFC;
+}
+
+.auth.auth-dark :deep(.password-field input) {
+  color: #F8FAFC;
+}
+
+.auth.auth-dark .input:focus,
+.auth.auth-dark :deep(.password-field:focus-within) {
+  border-color: #22D3EE;
+  box-shadow: 0 0 0 3px rgba(34,211,238,.16);
+}
+
+.auth.auth-dark :deep(.password-tool) {
+  color: #CBD5E1;
+}
+
+.auth.auth-dark :deep(.password-tool:hover) {
+  background: transparent;
+  color: #F8FAFC;
+}
+
+.auth.auth-dark .form-error {
+  border-color: rgba(248,113,113,.36);
+  background: rgba(127,29,29,.28);
+  color: #FECACA;
+}
+
+.auth.auth-dark .auth-submit,
+.auth.auth-dark .send-code-btn {
+  background: #0891B2;
+  color: #F8FAFC;
+}
+
+.auth.auth-dark .auth-submit:hover,
+.auth.auth-dark .send-code-btn:hover {
+  background: #0E7490;
 }
 
 /* ====== 页面进入：黑板底色常驻，标题从左上承接，登录卡右侧滑入 ====== */

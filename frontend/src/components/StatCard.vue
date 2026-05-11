@@ -47,8 +47,9 @@ const trendClass = computed(() => (props.danger ? "danger" : "success"));
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
-  background: var(--color-primary-50);
+  background: transparent;
   color: var(--color-primary-600);
+  box-shadow: none;
 }
 strong {
   display: block;
