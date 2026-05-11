@@ -19,6 +19,7 @@ from app.schemas.course import (
     JoinCourseRequest,
 )
 from app.services.courses import (
+    activate_course,
     create_chapter,
     create_course,
     deactivate_course,
@@ -169,4 +170,15 @@ def deactivate_course_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     course = deactivate_course(db, user, course_id)
+    return success_response(data=CourseResponse.model_validate(course).model_dump(), request_id=request.state.request_id)
+
+
+@router.post("/{course_id}/activate")
+def activate_course_endpoint(
+    course_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    course = activate_course(db, user, course_id)
     return success_response(data=CourseResponse.model_validate(course).model_dump(), request_id=request.state.request_id)

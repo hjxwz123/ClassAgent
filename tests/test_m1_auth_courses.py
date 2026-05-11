@@ -137,6 +137,83 @@ def test_public_register_rejects_teacher_role(client):
     assert response.json()["message"] == "当前角色不允许自助注册"
 
 
+def test_teacher_can_toggle_course_and_inactive_course_rules(client):
+    register_user(
+        client,
+        email="toggle-teacher@example.com",
+        password="Teacher123",
+        nickname="上下架教师",
+        role="teacher",
+        employee_no="T-TOGGLE",
+    )
+    register_user(
+        client,
+        email="joined-student@example.com",
+        password="Student123",
+        nickname="已加入学生",
+        role="student",
+        student_no="S-JOINED",
+    )
+    register_user(
+        client,
+        email="new-student@example.com",
+        password="Student123",
+        nickname="新学生",
+        role="student",
+        student_no="S-NEW",
+    )
+
+    teacher_headers = auth_headers(login_user(client, email="toggle-teacher@example.com", password="Teacher123")["access_token"])
+    joined_headers = auth_headers(login_user(client, email="joined-student@example.com", password="Student123")["access_token"])
+    new_student_headers = auth_headers(login_user(client, email="new-student@example.com", password="Student123")["access_token"])
+
+    course_response = client.post(
+        "/api/v1/courses",
+        json={"name": "上下架课程", "description": "状态规则", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_response.status_code == 200, course_response.text
+    course = course_response.json()["data"]
+
+    join_response = client.post("/api/v1/courses/join", json={"course_code": course["course_code"]}, headers=joined_headers)
+    assert join_response.status_code == 200, join_response.text
+
+    deactivate_response = client.post(f"/api/v1/courses/{course['id']}/deactivate", headers=teacher_headers)
+    assert deactivate_response.status_code == 200, deactivate_response.text
+    assert deactivate_response.json()["data"]["status"] == "inactive"
+
+    enrolled_response = client.get("/api/v1/courses/enrolled", headers=joined_headers)
+    assert enrolled_response.status_code == 200, enrolled_response.text
+    assert enrolled_response.json()["data"][0]["id"] == course["id"]
+
+    detail_response = client.get(f"/api/v1/courses/{course['id']}", headers=joined_headers)
+    assert detail_response.status_code == 200, detail_response.text
+
+    blocked_join = client.post("/api/v1/courses/join", json={"course_code": course["course_code"]}, headers=new_student_headers)
+    assert blocked_join.status_code == 404, blocked_join.text
+
+    blocked_update = client.patch(f"/api/v1/courses/{course['id']}", json={"name": "下架后编辑"}, headers=teacher_headers)
+    assert blocked_update.status_code == 403, blocked_update.text
+
+    blocked_chapter = client.post(
+        f"/api/v1/courses/{course['id']}/chapters",
+        json={"title": "下架章节", "description": "", "order_index": 1},
+        headers=teacher_headers,
+    )
+    assert blocked_chapter.status_code == 403, blocked_chapter.text
+
+    activate_response = client.post(f"/api/v1/courses/{course['id']}/activate", headers=teacher_headers)
+    assert activate_response.status_code == 200, activate_response.text
+    assert activate_response.json()["data"]["status"] == "active"
+
+    updated_response = client.patch(f"/api/v1/courses/{course['id']}", json={"name": "已上架课程"}, headers=teacher_headers)
+    assert updated_response.status_code == 200, updated_response.text
+    assert updated_response.json()["data"]["name"] == "已上架课程"
+
+    joined_after_activate = client.post("/api/v1/courses/join", json={"course_code": course["course_code"]}, headers=new_student_headers)
+    assert joined_after_activate.status_code == 200, joined_after_activate.text
+
+
 def test_login_error_messages_are_specific(client):
     register_user(
         client,

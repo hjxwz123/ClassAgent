@@ -97,9 +97,9 @@ def _set_preference(db: Session, *, user_id: int, key: str, value) -> UserPrefer
     return item
 
 
-def _assert_course_access(db: Session, *, course_id: int, user: User) -> Course:
+def _assert_course_access(db: Session, *, course_id: int, user: User, require_active: bool = False) -> Course:
     course = _get_course_or_404(db, course_id)
-    _assert_course_owner(course, user)
+    _assert_course_owner(course, user, require_active=require_active)
     return course
 
 
@@ -641,7 +641,7 @@ def get_teacher_student_detail(db: Session, *, course_id: int, student_id: int, 
 
 
 def remind_student(db: Session, *, course_id: int, student_id: int, user: User, title: str | None = None, message: str | None = None) -> dict:
-    course = _assert_course_access(db, course_id=course_id, user=user)
+    course = _assert_course_access(db, course_id=course_id, user=user, require_active=True)
     student = db.get(User, student_id)
     membership = db.scalar(select(CourseMembership).where(CourseMembership.course_id == course_id, CourseMembership.user_id == student_id))
     if student is None or student.role != UserRole.STUDENT.value or membership is None:
@@ -686,7 +686,7 @@ def remind_student(db: Session, *, course_id: int, student_id: int, user: User, 
 
 
 def remove_student(db: Session, *, course_id: int, student_id: int, user: User) -> None:
-    _assert_course_access(db, course_id=course_id, user=user)
+    _assert_course_access(db, course_id=course_id, user=user, require_active=True)
     membership = db.scalar(select(CourseMembership).where(CourseMembership.course_id == course_id, CourseMembership.user_id == student_id))
     if membership is None:
         raise not_found("学生不存在")
@@ -696,7 +696,7 @@ def remove_student(db: Session, *, course_id: int, student_id: int, user: User) 
 
 
 def delete_teacher_course(db: Session, *, course_id: int, user: User) -> None:
-    course = _assert_course_access(db, course_id=course_id, user=user)
+    course = _assert_course_access(db, course_id=course_id, user=user, require_active=True)
     course.deleted_at = datetime.now(UTC)
     db.add(course)
     log_operation(db, user_id=user.id, action="teacher.course.delete", target_type="course", target_id=course_id)
@@ -744,7 +744,7 @@ def export_teacher_analysis_csv(db: Session, *, course_id: int, user: User, days
 
 
 def update_chapter(db: Session, *, course_id: int, chapter_id: int, title: str, description: str | None, order_index: int, user: User) -> Chapter:
-    _assert_course_access(db, course_id=course_id, user=user)
+    _assert_course_access(db, course_id=course_id, user=user, require_active=True)
     chapter = db.get(Chapter, chapter_id)
     if chapter is None or chapter.course_id != course_id:
         raise not_found("章节不存在")
@@ -758,7 +758,7 @@ def update_chapter(db: Session, *, course_id: int, chapter_id: int, title: str, 
 
 
 def delete_chapter(db: Session, *, course_id: int, chapter_id: int, user: User) -> None:
-    _assert_course_access(db, course_id=course_id, user=user)
+    _assert_course_access(db, course_id=course_id, user=user, require_active=True)
     chapter = db.get(Chapter, chapter_id)
     if chapter is None or chapter.course_id != course_id:
         raise not_found("章节不存在")
@@ -785,7 +785,7 @@ def update_lesson(db: Session, *, lesson_id: int, user: User, title: str | None,
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
         raise not_found("课时不存在")
-    _assert_course_access(db, course_id=lesson.course_id, user=user)
+    _assert_course_access(db, course_id=lesson.course_id, user=user, require_active=True)
     if title is not None:
         lesson.title = title
     if chapter_id is not None:
@@ -805,7 +805,7 @@ def delete_lesson(db: Session, *, lesson_id: int, user: User) -> None:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
         raise not_found("课时不存在")
-    _assert_course_access(db, course_id=lesson.course_id, user=user)
+    _assert_course_access(db, course_id=lesson.course_id, user=user, require_active=True)
     db.execute(delete(LearningProgress).where(LearningProgress.lesson_id == lesson_id))
     db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.lesson_id == lesson_id))
     db.execute(delete(LessonPage).where(LessonPage.lesson_id == lesson_id))
@@ -817,7 +817,7 @@ def duplicate_lesson(db: Session, *, lesson_id: int, user: User) -> Lesson:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
         raise not_found("课时不存在")
-    _assert_course_access(db, course_id=lesson.course_id, user=user)
+    _assert_course_access(db, course_id=lesson.course_id, user=user, require_active=True)
     clone = Lesson(
         course_id=lesson.course_id,
         chapter_id=lesson.chapter_id,

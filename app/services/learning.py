@@ -423,7 +423,7 @@ def _validate_quiz_generation_request(db: Session, *, user: User, payload: QuizG
     if user.role == UserRole.STUDENT.value and payload.quiz_type == QuizType.COURSE.value:
         raise forbidden("学生不能直接生成课程测验")
     if user.role == UserRole.TEACHER.value:
-        _assert_course_owner(course, user)
+        _assert_course_owner(course, user, require_active=True)
     if user.role == UserRole.STUDENT.value:
         _assert_student_course_access(db, course_id=payload.course_id, user=user)
     return course, question_type_counts
@@ -577,7 +577,7 @@ def publish_quiz(db: Session, *, quiz_id: int, user: User) -> Quiz:
     if quiz is None:
         raise not_found("测验不存在")
     course = _get_course_or_404(db, quiz.course_id)
-    _assert_course_owner(course, user)
+    _assert_course_owner(course, user, require_active=True)
     quiz.status = QuizStatus.PUBLISHED.value
     quiz.published_at = datetime.now(UTC)
     db.add(quiz)
@@ -586,9 +586,9 @@ def publish_quiz(db: Session, *, quiz_id: int, user: User) -> Quiz:
     return quiz
 
 
-def _assert_quiz_teacher_access(db: Session, *, quiz: Quiz, user: User) -> None:
+def _assert_quiz_teacher_access(db: Session, *, quiz: Quiz, user: User, require_active: bool = False) -> None:
     course = _get_course_or_404(db, quiz.course_id)
-    _assert_course_owner(course, user)
+    _assert_course_owner(course, user, require_active=require_active)
 
 
 def _validate_reference_answer(question_type: str, reference_answer) -> None:
@@ -620,7 +620,7 @@ def update_quiz_content(db: Session, *, quiz_id: int, user: User, payload: QuizE
     quiz = db.get(Quiz, quiz_id)
     if quiz is None:
         raise not_found("测验不存在")
-    _assert_quiz_teacher_access(db, quiz=quiz, user=user)
+    _assert_quiz_teacher_access(db, quiz=quiz, user=user, require_active=True)
     existing_questions = list(db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id).order_by(QuizQuestion.id)))
     existing_by_id = {item.id: item for item in existing_questions}
     seen_ids: set[int] = set()
@@ -738,13 +738,13 @@ def get_student_quiz_attempt(db: Session, *, attempt_id: int, user: User) -> Qui
     return attempt
 
 
-def _assert_teacher_course_access(db: Session, *, course_id: int, user: User):
+def _assert_teacher_course_access(db: Session, *, course_id: int, user: User, require_active: bool = False):
     course = _get_course_or_404(db, course_id)
     if user.role == UserRole.ADMIN.value:
         return course
     if user.role != UserRole.TEACHER.value:
         raise forbidden("仅教师可管理薄弱题目")
-    _assert_course_owner(course, user)
+    _assert_course_owner(course, user, require_active=require_active)
     return course
 
 
@@ -846,7 +846,7 @@ def list_teacher_weak_quizzes(db: Session, *, course_id: int, user: User) -> dic
 
 
 def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGenerateRequest) -> Quiz:
-    course = _assert_teacher_course_access(db, course_id=payload.course_id, user=user)
+    course = _assert_teacher_course_access(db, course_id=payload.course_id, user=user, require_active=True)
     if payload.weak_point_id:
         point_ids = [payload.weak_point_id]
         scope = "single"
@@ -894,7 +894,7 @@ def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGene
 
 
 def enqueue_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGenerateRequest) -> AsyncTaskLog:
-    course = _assert_teacher_course_access(db, course_id=payload.course_id, user=user)
+    course = _assert_teacher_course_access(db, course_id=payload.course_id, user=user, require_active=True)
     type_counts = _normalize_question_type_counts(payload.question_type_counts)
     if type_counts and sum(type_counts.values()) != payload.question_count:
         raise bad_request("题型数量合计必须等于总题量")
