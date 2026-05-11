@@ -1,17 +1,35 @@
 <template>
-  <main class="product-home">
+  <main class="product-home" :class="[homeThemeClass, { 'is-workbench-loading': enteringWorkbench }]">
+    <PageLoader v-if="enteringWorkbench" />
+    <template v-else>
     <div class="board-texture"></div>
     <div class="board-smudge"></div>
 
     <nav id="hero" class="product-nav">
       <div class="product-nav-inner">
-        <RouterLink to="/" class="product-logo">智学黑板<span>.</span></RouterLink>
+        <RouterLink to="/" class="product-logo" aria-label="智学黑板首页">
+          <BrandLogo class="product-logo-mark" />
+          <span class="product-logo-text">智学黑板</span>
+        </RouterLink>
         <div class="product-nav-links">
           <a href="#hero">核心指引</a>
           <a href="#book-section">伴学魔法</a>
           <a href="#roles">多端教室</a>
         </div>
         <div class="product-nav-actions">
+          <button
+            type="button"
+            class="theme-toggle"
+            role="switch"
+            :aria-checked="isDarkHomeTheme"
+            :aria-label="homeThemeToggleLabel"
+            :title="homeThemeToggleLabel"
+            @click="toggleHomeTheme"
+          >
+            <Sun class="theme-toggle-icon theme-toggle-sun" :size="16" />
+            <Moon class="theme-toggle-icon theme-toggle-moon" :size="16" />
+            <span class="theme-toggle-thumb" aria-hidden="true"></span>
+          </button>
           <template v-if="user">
             <button
               type="button"
@@ -21,7 +39,7 @@
               :disabled="enteringWorkbench"
               @click="openWorkbench"
             >
-              {{ enteringWorkbench ? "进入中..." : "进入工作台" }}
+              进入工作台
             </button>
           </template>
           <template v-else>
@@ -243,14 +261,18 @@
         <a href="/docs/api" class="docs-link">审阅 API 开发文档</a>
       </div>
     </footer>
+    </template>
   </main>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { ArrowDown, ArrowRight, BookOpen, Check, GraduationCap, Presentation, SlidersHorizontal, WandSparkles } from "../icons";
+import BrandLogo from "../components/BrandLogo.vue";
+import PageLoader from "../components/PageLoader.vue";
+import { ArrowDown, ArrowRight, BookOpen, Check, GraduationCap, Moon, Presentation, SlidersHorizontal, Sun, WandSparkles } from "../icons";
 import { defaultRouteForRole } from "../router/pageMap";
+import { applyAppTheme, readStoredTheme, setStoredTheme, subscribeAppTheme, type AppTheme } from "../theme";
 import type { User } from "../types";
 
 const props = defineProps<{ user: User | null }>();
@@ -271,12 +293,19 @@ const shadow2BackRef = ref<HTMLElement | null>(null);
 const enteringWorkbench = ref(false);
 const user = computed(() => props.user);
 const workbenchPath = computed(() => defaultRouteForRole(props.user?.role));
+const homeTheme = ref<AppTheme>(readStoredTheme());
+const homeThemeClass = computed(() => `product-home-${homeTheme.value}`);
+const isDarkHomeTheme = computed(() => homeTheme.value === "dark");
+const homeThemeToggleLabel = computed(() => (isDarkHomeTheme.value ? "切换浅色主题" : "切换深色主题"));
+let unsubscribeTheme: (() => void) | null = null;
 
 let frameId = 0;
 let formulaFrameId = 0;
 let formulaCycleStart = 0;
 let homeMounted = false;
 const homeActiveClass = "product-home-active";
+const homeLightActiveClass = "product-home-light-active";
+const homeDarkActiveClass = "product-home-dark-active";
 const homeCanvasFonts = [
   '32px "ClassAgent Chalk"',
   '32px "ClassAgent Serif"',
@@ -292,6 +321,25 @@ const dynamicFormulas = [
   { text: "E = hν = mc²", x: 0.62, y: 0.42, size: 36, rotate: 2 },
   { text: "pV = nRT", x: 0.18, y: 0.46, size: 40, rotate: -3 },
 ];
+
+function syncHomeThemeClass() {
+  const isDark = homeTheme.value === "dark";
+  [document.documentElement, document.body, document.getElementById("app")].forEach((element) => {
+    if (!element) return;
+    element.classList.toggle(homeDarkActiveClass, isDark);
+    element.classList.toggle(homeLightActiveClass, !isDark);
+  });
+}
+
+function setHomeTheme(value: AppTheme) {
+  homeTheme.value = value;
+  setStoredTheme(value);
+  syncHomeThemeClass();
+}
+
+function toggleHomeTheme() {
+  setHomeTheme(homeTheme.value === "dark" ? "light" : "dark");
+}
 
 function prepareFormulaCanvas(canvas: HTMLCanvasElement) {
   const rect = canvas.getBoundingClientRect();
@@ -312,13 +360,21 @@ function prepareFormulaCanvas(canvas: HTMLCanvasElement) {
 }
 
 function formulaFont(size: number) {
-  return `${size}px "ClassAgent Chalk", "ClassAgent Serif", "ClassAgent Sans", "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai", "华文行楷", "PingFang SC", serif`;
+  return `${size}px "ClassAgent Chalk", "ClassAgent Sans", sans-serif`;
+}
+
+function homeCssVar(name: string, fallback: string) {
+  const root = stageRef.value?.closest(".product-home") || document.querySelector(".product-home");
+  if (!(root instanceof HTMLElement)) return fallback;
+  return getComputedStyle(root).getPropertyValue(name).trim() || fallback;
 }
 
 function drawChalkBackground(context: CanvasRenderingContext2D, width: number, height: number, now: number) {
+  const lineColor = homeCssVar("--home-canvas-line", "rgba(15, 23, 42, .16)");
+  const formulaColor = homeCssVar("--home-canvas-muted", "rgba(15, 23, 42, .2)");
   context.save();
   context.globalAlpha = 0.055;
-  context.strokeStyle = "rgba(244,244,240,.13)";
+  context.strokeStyle = lineColor;
   context.lineWidth = 1;
   for (let index = 0; index < 7; index += 1) {
     const y = ((index * 117 + (now / 70)) % (height + 120)) - 60;
@@ -328,7 +384,7 @@ function drawChalkBackground(context: CanvasRenderingContext2D, width: number, h
     context.stroke();
   }
   context.globalAlpha = 0.035;
-  context.fillStyle = "#f4f4f0";
+  context.fillStyle = formulaColor;
   context.font = formulaFont(Math.max(16, Math.min(24, width * 0.022)));
   dynamicFormulas.forEach((formula, index) => {
     const x = width * formula.x;
@@ -348,6 +404,11 @@ function drawWritingFormula(
   height: number,
   now: number,
 ) {
+  const mainTextColor = homeCssVar("--home-canvas-text", "rgba(15, 23, 42, .72)");
+  const ghostTextColor = homeCssVar("--home-canvas-ghost", "rgba(15, 23, 42, .12)");
+  const cursorColor = homeCssVar("--home-canvas-cursor", "rgba(0, 151, 167, .46)");
+  const eraserColor = homeCssVar("--home-bg", "#F8FAFC");
+  const dustColor = homeCssVar("--home-canvas-dust", "rgba(15, 23, 42, .24)");
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const cycleMs = reduceMotion ? 1 : 7600;
   const elapsed = reduceMotion ? 0 : now - formulaCycleStart;
@@ -380,15 +441,16 @@ function drawWritingFormula(
     const jitterX = Math.sin(index * 1.7 + now / 110) * 0.35;
     const jitterY = Math.cos(index * 1.3 + now / 130) * 0.45;
     context.globalAlpha = 0.46;
-    context.fillStyle = "rgba(244,244,240,.82)";
+    context.fillStyle = mainTextColor;
     context.fillText(char, cursor + jitterX, jitterY);
     context.globalAlpha = 0.08;
+    context.fillStyle = ghostTextColor;
     context.fillText(char, cursor + jitterX + 1.1, jitterY + 0.8);
     cursor += context.measureText(char).width;
     if (!reduceMotion && index === visibleCount - 1 && eraseProgress === 0 && writeProgress < 1) {
       context.save();
       context.globalAlpha = 0.32;
-      context.strokeStyle = "rgba(244,244,240,.58)";
+      context.strokeStyle = cursorColor;
       context.beginPath();
       context.moveTo(cursor + 8, -size * 0.35);
       context.lineTo(cursor + 18, size * 0.25);
@@ -408,10 +470,10 @@ function drawWritingFormula(
 
     context.save();
     context.globalAlpha = 0.88;
-    context.fillStyle = "#121614";
+    context.fillStyle = eraserColor;
     context.fillRect(-size * 0.72, -size * 1.08, eraseWidth, size * 2.16);
     context.globalAlpha = 0.24 * (1 - eraseProgress * 0.45);
-    context.fillStyle = "rgba(244,244,240,.72)";
+    context.fillStyle = dustColor;
     context.fillRect(eraseWidth - size * 0.5, -size * 0.82, size * 0.34, size * 1.64);
     context.globalAlpha = 0.18 * (1 - eraseProgress);
     for (let index = 0; index < 18; index += 1) {
@@ -538,6 +600,8 @@ async function openWorkbench() {
   if (enteringWorkbench.value) return;
   enteringWorkbench.value = true;
   try {
+    await nextTick();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await router.push(workbenchPath.value);
   } catch {
     enteringWorkbench.value = false;
@@ -555,6 +619,12 @@ onMounted(() => {
   document.documentElement.classList.add(homeActiveClass);
   document.body.classList.add(homeActiveClass);
   document.getElementById("app")?.classList.add(homeActiveClass);
+  applyAppTheme(homeTheme.value);
+  syncHomeThemeClass();
+  unsubscribeTheme = subscribeAppTheme((theme) => {
+    homeTheme.value = theme;
+    syncHomeThemeClass();
+  });
   if (document.fonts) {
     Promise.all(homeCanvasFonts.map((font) => document.fonts.load(font)))
       .then(startFormulaLoop)
@@ -570,6 +640,12 @@ onBeforeUnmount(() => {
   document.documentElement.classList.remove(homeActiveClass);
   document.body.classList.remove(homeActiveClass);
   document.getElementById("app")?.classList.remove(homeActiveClass);
+  [document.documentElement, document.body, document.getElementById("app")].forEach((element) => {
+    if (!element) return;
+    element.classList.remove(homeLightActiveClass, homeDarkActiveClass);
+  });
+  unsubscribeTheme?.();
+  unsubscribeTheme = null;
   if (frameId) cancelAnimationFrame(frameId);
   if (formulaFrameId) cancelAnimationFrame(formulaFrameId);
 });
@@ -622,10 +698,8 @@ onBeforeUnmount(() => {
 
 /* ====== 全局 & 字体变量 ====== */
 .product-home {
-  --ca-font-chalk: "ClassAgent Chalk", "ClassAgent Serif", "ClassAgent Sans",
-    "Hannotate SC", "HanziPen SC", "Wawati SC", "STXingkai",
-    "华文行楷", "PingFang SC", sans-serif;
-  --ca-font-serif: "ClassAgent Serif", "Songti SC", "STSong", "SimSun", "宋体", serif;
+  --ca-font-chalk: "ClassAgent Chalk", "ClassAgent Sans", sans-serif;
+  --ca-font-serif: "ClassAgent Serif", serif;
   --ca-font-sans: "ClassAgent Sans", -apple-system, BlinkMacSystemFont, "PingFang SC",
     "Microsoft YaHei", "Helvetica Neue", sans-serif;
   --ca-font-mono: "ClassAgent Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
@@ -634,7 +708,9 @@ onBeforeUnmount(() => {
   --shared-title-top: clamp(190px, calc(50vh - 190px), 290px);
   --home-logo-left: max(24px, calc((100vw - 1280px) / 2 + 24px));
   --home-logo-top: 16px;
+  --home-logo-text-offset: 68px;
   --logo-to-title-x: calc(var(--shared-title-left) - var(--home-logo-left));
+  --logo-text-to-title-x: calc(var(--logo-to-title-x) - var(--home-logo-text-offset));
   --logo-to-title-y: calc(var(--shared-title-top) - var(--home-logo-top));
 
   min-height: 100vh;
@@ -691,6 +767,13 @@ onBeforeUnmount(() => {
   justify-content: space-between;
 }
 .product-logo {
+  width: auto;
+  height: 44px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
   color: #f4f4f0;
   font-family: var(--ca-font-chalk);
   font-size: 20px;
@@ -698,8 +781,14 @@ onBeforeUnmount(() => {
   letter-spacing: 0;
   line-height: .9;
 }
-.product-logo span {
-  color: #00e5ff;
+.product-logo-mark {
+  width: 58px;
+  height: 44px;
+  display: block;
+}
+.product-logo-text {
+  color: #f4f4f0;
+  white-space: nowrap;
 }
 .product-nav-links {
   display: flex;
@@ -766,6 +855,53 @@ onBeforeUnmount(() => {
 .workbench-link:disabled {
   cursor: wait;
   opacity: .78;
+}
+.theme-toggle {
+  --theme-toggle-shift: 30px;
+
+  position: relative;
+  width: 64px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(244, 244, 240, 0.06);
+  padding: 0 10px;
+  color: #f4f4f0;
+  cursor: pointer;
+  transition: border-color 240ms, background-color 240ms, box-shadow 240ms;
+}
+.theme-toggle:hover {
+  border-color: transparent;
+  background: rgba(244, 244, 240, 0.1);
+}
+.theme-toggle-icon {
+  position: relative;
+  z-index: 2;
+  transition: color 240ms, opacity 240ms;
+}
+.theme-toggle-sun {
+  color: #8c948f;
+}
+.theme-toggle-moon {
+  color: #bfdbfe;
+}
+.theme-toggle-thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(248, 250, 252, 0.92);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
+  transform: translateX(var(--theme-toggle-shift));
+  transition: transform 260ms cubic-bezier(.22, .61, .36, 1), background-color 240ms, box-shadow 240ms;
 }
 
 /* ====== 滚动轨道 ====== */
@@ -1534,15 +1670,15 @@ onBeforeUnmount(() => {
   margin-bottom: 32px;
 }
 .role-card.student .role-icon {
-  background: rgba(0, 229, 255, 0.1);
+  background: transparent;
   color: #00e5ff;
 }
 .role-card.teacher .role-icon {
-  background: rgba(255, 87, 34, 0.1);
+  background: transparent;
   color: #ff5722;
 }
 .role-card.admin .role-icon {
-  background: rgba(217, 160, 91, 0.1);
+  background: transparent;
   color: #d9a05b;
 }
 .role-card h3 {
@@ -1636,6 +1772,259 @@ onBeforeUnmount(() => {
   border-color: #f4f4f0;
 }
 
+/* ====== 首页主题 ====== */
+:global(html.product-home-active.product-home-light-active),
+:global(body.product-home-active.product-home-light-active),
+:global(#app.product-home-active.product-home-light-active) {
+  background: #f8fafc !important;
+}
+
+:global(html.product-home-active.product-home-dark-active),
+:global(body.product-home-active.product-home-dark-active),
+:global(#app.product-home-active.product-home-dark-active) {
+  background: #121614 !important;
+}
+
+.product-home.product-home-dark {
+  --home-bg: #121614;
+  --home-canvas-line: rgba(244, 244, 240, 0.13);
+  --home-canvas-muted: #f4f4f0;
+  --home-canvas-text: rgba(244, 244, 240, 0.82);
+  --home-canvas-ghost: rgba(244, 244, 240, 0.3);
+  --home-canvas-cursor: rgba(244, 244, 240, 0.58);
+  --home-canvas-dust: rgba(244, 244, 240, 0.72);
+}
+
+.product-home.product-home-light {
+  --home-bg: #ffffff;
+  --home-surface: #ffffff;
+  --home-surface-soft: #f8fafc;
+  --home-ink: #0f172a;
+  --home-text: #1e293b;
+  --home-muted: #64748b;
+  --home-subtle: #94a3b8;
+  --home-border: rgba(15, 23, 42, 0.1);
+  --home-border-strong: rgba(15, 23, 42, 0.16);
+  --home-cyan: #0097a7;
+  --home-cyan-bright: #00b8d4;
+  --home-blue: #2563eb;
+  --home-warm: #b45309;
+  --home-orange: #ea580c;
+  --home-canvas-line: rgba(15, 23, 42, 0.2);
+  --home-canvas-muted: rgba(15, 23, 42, 0.28);
+  --home-canvas-text: rgba(15, 23, 42, 0.88);
+  --home-canvas-ghost: rgba(15, 23, 42, 0.2);
+  --home-canvas-cursor: rgba(0, 151, 167, 0.5);
+  --home-canvas-dust: rgba(15, 23, 42, 0.3);
+
+  background: var(--home-bg);
+  color: var(--home-ink);
+}
+
+.product-home.is-workbench-loading {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.product-home.is-workbench-loading :deep(.page-loader) {
+  pointer-events: auto;
+}
+
+.product-home.product-home-light .board-texture,
+.product-home.product-home-light .board-smudge {
+  opacity: 0;
+  background: none;
+}
+
+.product-home.product-home-light .product-nav {
+  border-bottom-color: var(--home-border);
+  background: #ffffff;
+  backdrop-filter: none;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+}
+
+.product-home.product-home-light .product-logo,
+.product-home.product-home-light .product-logo-text,
+.product-home.product-home-light .product-nav a:hover,
+.product-home.product-home-light .login-link:hover {
+  color: var(--home-ink);
+}
+
+.product-home.product-home-light .product-nav-links,
+.product-home.product-home-light .login-link {
+  color: var(--home-muted);
+}
+
+.product-home.product-home-light .theme-toggle {
+  border-color: transparent;
+  background: rgba(15, 23, 42, 0.05);
+  box-shadow: none;
+}
+
+.product-home.product-home-light .theme-toggle:hover {
+  border-color: transparent;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.product-home.product-home-light .theme-toggle-sun {
+  color: #b45309;
+}
+
+.product-home.product-home-light .theme-toggle-moon {
+  color: #64748b;
+}
+
+.product-home.product-home-light .theme-toggle-thumb {
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.16);
+  transform: translateX(0);
+}
+
+.product-home.product-home-light .register-link,
+.product-home.product-home-light .workbench-link {
+  border: 1px solid rgba(8, 145, 178, 0.34);
+  background: #0891B2;
+  color: #ffffff !important;
+  box-shadow: 0 12px 24px rgba(8, 145, 178, 0.14);
+}
+
+.product-home.product-home-light .register-link:hover,
+.product-home.product-home-light .workbench-link:hover:not(:disabled) {
+  background: #0E7490;
+  color: #ffffff !important;
+}
+
+.product-home.product-home-light .scroll-track,
+.product-home.product-home-light .home-stage,
+.product-home.product-home-light .scene-blackboard,
+.product-home.product-home-light .scene-book {
+  background: var(--home-bg);
+}
+
+.product-home.product-home-light .formula-writing-canvas {
+  opacity: 0.45;
+}
+
+.product-home.product-home-light .formula-corner {
+  opacity: 0.2;
+}
+
+.product-home.product-home-light .chalk-svg {
+  stroke: rgba(15, 23, 42, 0.62);
+}
+
+.product-home.product-home-light .formula-text {
+  fill: rgba(15, 23, 42, 0.72);
+}
+
+.product-home.product-home-light .classic-quote,
+.product-home.product-home-light .chalk-kicker,
+.product-home.product-home-light .ai-scanner-container {
+  color: var(--home-ink);
+  text-shadow: none;
+}
+
+.product-home.product-home-light .ai-reveal-layer {
+  color: var(--home-cyan);
+  text-shadow: 0 0 18px rgba(0, 184, 212, 0.45);
+}
+
+.product-home.product-home-light .hero-copy,
+.product-home.product-home-light .teacher-console-link,
+.product-home.product-home-light .scroll-hint {
+  color: var(--home-muted);
+}
+
+.product-home.product-home-light .hero-copy strong,
+.product-home.product-home-light .hand-drawn-link {
+  color: var(--home-ink);
+}
+
+.product-home.product-home-light .hand-drawn-link:hover,
+.product-home.product-home-light .teacher-console-link:hover {
+  color: var(--home-cyan);
+}
+
+.product-home.product-home-light .scroll-hint i {
+  background: linear-gradient(to bottom, var(--home-muted), transparent);
+}
+
+.product-home.product-home-light .book {
+  box-shadow:
+    0 28px 56px -18px rgba(15, 23, 42, 0.28),
+    0 16px 32px -24px rgba(15, 23, 42, 0.22),
+    0 5px 0 -1px #e5e0d5,
+    0 5px 0 0 #d1ccc0,
+    0 10px 0 -2px #e5e0d5,
+    0 10px 0 -1px #d1ccc0;
+}
+
+.product-home.product-home-light .roles-section {
+  border-top-color: var(--home-border);
+  background: var(--home-surface-soft);
+}
+
+.product-home.product-home-light .roles-section h2,
+.product-home.product-home-light .role-card h3 {
+  color: var(--home-ink);
+}
+
+.product-home.product-home-light .roles-section header p,
+.product-home.product-home-light .role-card ul {
+  color: var(--home-muted);
+}
+
+.product-home.product-home-light .role-card {
+  border-color: var(--home-border);
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.05);
+}
+
+.product-home.product-home-light .role-card.student:hover {
+  border-color: rgba(0, 151, 167, 0.46);
+}
+
+.product-home.product-home-light .role-card.teacher:hover {
+  border-color: rgba(234, 88, 12, 0.42);
+}
+
+.product-home.product-home-light .role-card.admin:hover {
+  border-color: rgba(180, 83, 9, 0.38);
+}
+
+.product-home.product-home-light .product-footer {
+  border-top-color: var(--home-border);
+  background: var(--home-surface);
+}
+
+.product-home.product-home-light .product-footer h2 {
+  color: var(--home-ink);
+  letter-spacing: 0;
+}
+
+.product-home.product-home-light .product-footer > p {
+  color: var(--home-muted);
+}
+
+.product-home.product-home-light .trial-link {
+  background: #0891B2;
+  color: #ffffff;
+}
+
+.product-home.product-home-light .trial-link:hover {
+  background: #0E7490;
+  box-shadow: 0 18px 34px rgba(8, 145, 178, 0.2);
+}
+
+.product-home.product-home-light .docs-link {
+  border-color: var(--home-border-strong);
+  color: var(--home-ink);
+}
+
+.product-home.product-home-light .docs-link:hover {
+  border-color: var(--home-ink);
+}
+
 /* ====== 动画 ====== */
 @keyframes draw {
   to {
@@ -1698,10 +2087,14 @@ onBeforeUnmount(() => {
 }
 .product-home.route-home-auth-leave-active .product-logo {
   transform-origin: left center;
-  animation: home-logo-to-auth-title 940ms cubic-bezier(.22, .61, .36, 1) forwards;
 }
-.product-home.route-home-auth-leave-active .product-logo span {
-  animation: home-logo-dot-out 220ms ease-out forwards;
+.product-home.route-home-auth-leave-active .product-logo-mark {
+  transform-origin: center;
+  animation: home-logo-mark-to-auth-title 940ms cubic-bezier(.22, .61, .36, 1) forwards;
+}
+.product-home.route-home-auth-leave-active .product-logo-text {
+  transform-origin: left center;
+  animation: home-logo-text-to-auth-title 940ms cubic-bezier(.22, .61, .36, 1) forwards;
 }
 .product-home.route-auth-home-enter-active .formula-corner.left {
   animation: home-enter-corner-left 760ms cubic-bezier(.22, .61, .36, 1) both;
@@ -1733,10 +2126,14 @@ onBeforeUnmount(() => {
 }
 .product-home.route-auth-home-enter-active .product-logo {
   transform-origin: left center;
-  animation: home-auth-title-to-logo 940ms cubic-bezier(.22, .61, .36, 1) both;
 }
-.product-home.route-auth-home-enter-active .product-logo span {
-  animation: home-logo-dot-in 220ms ease-out 720ms both;
+.product-home.route-auth-home-enter-active .product-logo-mark {
+  transform-origin: center;
+  animation: home-logo-mark-from-auth-title 940ms cubic-bezier(.22, .61, .36, 1) both;
+}
+.product-home.route-auth-home-enter-active .product-logo-text {
+  transform-origin: left center;
+  animation: home-auth-title-to-logo-text 940ms cubic-bezier(.22, .61, .36, 1) both;
 }
 
 @keyframes home-leave-corner-left {
@@ -1792,24 +2189,26 @@ onBeforeUnmount(() => {
   from { opacity: 0; transform: translateY(-12px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@keyframes home-logo-to-auth-title {
+@keyframes home-logo-text-to-auth-title {
   0% { transform: translate(0, 0); font-size: 20px; opacity: 1; }
-  78% { transform: translate(var(--logo-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 1; }
-  100% { transform: translate(var(--logo-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 1; }
+  78% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 1; }
+  100% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 1; }
 }
-@keyframes home-auth-title-to-logo {
-  0% { transform: translate(var(--logo-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 0; }
-  84% { transform: translate(var(--logo-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 0; }
+@keyframes home-logo-mark-to-auth-title {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  42% { transform: translate(calc(var(--logo-text-to-title-x) * .22), calc(var(--logo-to-title-y) * .22)) scale(.78); opacity: .68; }
+  100% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)) scale(.08); opacity: 0; }
+}
+@keyframes home-auth-title-to-logo-text {
+  0% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 0; }
+  72% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 0; }
   100% { transform: translate(0, 0); font-size: 20px; opacity: 1; }
 }
-@keyframes home-logo-dot-out {
-  to { opacity: 0; }
+@keyframes home-logo-mark-from-auth-title {
+  0% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)) scale(.08); opacity: 0; }
+  64% { transform: translate(calc(var(--logo-text-to-title-x) * .18), calc(var(--logo-to-title-y) * .18)) scale(.72); opacity: 0; }
+  100% { transform: translate(0, 0) scale(1); opacity: 1; }
 }
-@keyframes home-logo-dot-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
 /* ====== 响应式 ====== */
 @media (min-width: 640px) {
   .hero-actions {
@@ -1826,6 +2225,17 @@ onBeforeUnmount(() => {
   }
   .product-nav-actions {
     gap: 10px;
+  }
+  .theme-toggle {
+    --theme-toggle-shift: 24px;
+
+    width: 56px;
+    height: 32px;
+    padding: 0 9px;
+  }
+  .theme-toggle-thumb {
+    width: 24px;
+    height: 24px;
   }
   .register-link {
     padding: 0 14px;

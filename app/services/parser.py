@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.enums import MaterialType
 from app.core.errors import bad_request
-from app.services.runtime_config import RuntimeServiceConfig, get_enabled_service_config
+from app.services.runtime_config import get_enabled_service_config
 from app.services.storage import storage_service
 
 
@@ -753,35 +753,6 @@ class DocParserService:
             pages.append(_normalize_page(title or f"第{page_number}页", "\n\n".join(pieces), page_number))
         return pages
 
-    def _mock_pages(self, material_type: str, service: RuntimeServiceConfig) -> list[dict]:
-        config = service.config
-        configured_pages = config.get("mock_pages_by_type", {}).get(material_type) if isinstance(config.get("mock_pages_by_type"), dict) else None
-        configured_pages = configured_pages or config.get("mock_pages")
-        if isinstance(configured_pages, list) and configured_pages:
-            pages = []
-            for index, page in enumerate(configured_pages, start=1):
-                if isinstance(page, dict):
-                    pages.append(
-                        _normalize_page(
-                            str(page.get("page_title") or page.get("title") or f"第{index}页"),
-                            str(page.get("page_text") or page.get("content") or page.get("text") or ""),
-                            _safe_int(page.get("page_number"), index),
-                        )
-                    )
-                else:
-                    pages.append(_normalize_page(f"第{index}页", str(page), index))
-            return pages
-
-        default_counts = {MaterialType.PPTX.value: 2, MaterialType.PDF.value: 1, MaterialType.DOCX.value: 1, MaterialType.TXT.value: 2}
-        counts = config.get("mock_page_counts") if isinstance(config.get("mock_page_counts"), dict) else {}
-        count = _bounded_int(counts.get(material_type), default=default_counts.get(material_type, 1), minimum=1, maximum=20)
-        default_text = (
-            "极限定义\n极限描述函数在某点附近的变化趋势。\n矩阵可以表示线性变换。\n"
-            "连续函数在区间内没有跳跃。行列式反映缩放系数。"
-        )
-        text = str(config.get("mock_text") or default_text)
-        return [_normalize_page(f"模拟解析第{index}页", text, index) for index in range(1, count + 1)]
-
     def parse(
         self,
         path: Path,
@@ -796,10 +767,6 @@ class DocParserService:
         service = get_enabled_service_config(db, SERVICE_TYPE)
         if service is None:
             raise bad_request("文档解析服务未配置，请先在管理员后台配置阿里云文档解析服务")
-        if service.provider == "mock":
-            if self.settings.app_env == "production":
-                raise bad_request("生产环境不允许使用 Mock 文档解析服务")
-            return self._mock_pages(material_type, service)
         if service.provider != "aliyun":
             raise bad_request(f"暂不支持的文档解析服务提供方: {service.provider}")
 

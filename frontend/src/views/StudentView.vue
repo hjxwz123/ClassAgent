@@ -1,10 +1,11 @@
 <template>
-  <section v-if="active === 'studentLessonStudy' && (!classroomOpen || lessonStudyLoading || lessonStudyError)" class="study-room study-route-state">
+  <PageLoader v-if="studentFullscreenLoading" />
+
+  <section v-else-if="active === 'studentLessonStudy' && lessonStudyError" class="study-room study-route-state">
     <div class="study-route-center">
-      <Loader2 v-if="!lessonStudyError" :size="42" class="lesson-loading-icon" />
-      <AlertTriangle v-else :size="42" />
-      <h1>{{ lessonStudyError ? '课时加载失败' : '正在打开课时' }}</h1>
-      <p>{{ lessonStudyError || '课件内容较大，正在加载页面、进度和笔记。' }}</p>
+      <AlertTriangle :size="42" />
+      <h1>课时加载失败</h1>
+      <p>{{ lessonStudyError }}</p>
       <button class="glass-btn" @click="returnCourse"><ArrowLeft :size="17" />返回课程</button>
     </div>
   </section>
@@ -149,7 +150,7 @@
           </section>
           <section v-else-if="classroomTab === 'qa'" key="qa" class="class-chat">
             <div class="class-chat-scroll">
-              <ChatList :messages="classMessages" :thinking="classThinking" @toggle-thought="toggleThought" @copy="copyText" />
+              <ChatList :messages="classMessages" :thinking="classThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" @toggle-thought="toggleThought" @copy="copyText" />
             </div>
             <div class="class-chat-dock">
               <div v-if="classQaAttachments.length" class="qa-attachment-strip compact">
@@ -209,9 +210,12 @@
     </transition>
   </section>
 
-  <section v-else class="student-shell">
+  <section v-else class="student-shell" :class="{ 'route-loading': studentPageLoading }">
     <header class="student-top">
-      <button class="brand" @click="go('studentHome')"><span class="brand-mark">智学</span><strong>黑板</strong></button>
+      <button type="button" class="brand" aria-label="返回学生首页" @click="go('studentHome')">
+        <BrandLogo class="student-brand-logo" />
+        <strong>智学黑板</strong>
+      </button>
       <Teleport to="body">
         <transition name="search-expand">
           <div v-if="searchOpen" class="global-search" @click.self="closeSearch">
@@ -231,7 +235,7 @@
               </div>
               <div class="global-search-results">
                 <div v-if="searchLoading" class="global-search-state">
-                  <Loader2 :size="18" class="lesson-loading-icon" />
+                  <LoadingMark :label="false" class="inline-loading-mark" />
                   <span>正在搜索</span>
                 </div>
                 <div v-else-if="searchError" class="global-search-state error">
@@ -278,13 +282,20 @@
           </div>
         </transition>
       </Teleport>
-      <nav class="student-nav-links" aria-label="学生端主导航">
+      <nav ref="topNavRef" class="student-nav-links" aria-label="学生端主导航">
+        <span
+          class="student-nav-indicator"
+          :class="{ ready: topNavIndicator.ready }"
+          :style="{ width: `${topNavIndicator.width}px`, transform: `translateX(${topNavIndicator.left}px)` }"
+          aria-hidden="true"
+        ></span>
         <button
           v-for="item in topNavTabs"
           :key="item.key"
           type="button"
           class="student-nav-link"
           :class="{ active: isStudentNavActive(item.key), ai: item.key === 'studentQa' }"
+          :aria-current="isStudentNavActive(item.key) ? 'page' : undefined"
           @click="handleStudentNav(item.key)"
         >
           <component :is="item.icon" :size="16" />
@@ -294,6 +305,7 @@
       <div ref="topActionsRef" class="top-actions">
         <button class="top-icon" title="全局搜索" aria-label="全局搜索" @click="openSearch"><Search :size="19" /></button>
         <button class="top-icon" title="通知中心" aria-label="通知中心" :data-loading="notificationLoading" @click="toggleNotifications"><Bell :size="19" /><em v-if="unreadCount">{{ unreadCount }}</em></button>
+        <ThemeToggle class="top-theme-toggle" />
         <button class="avatar-btn" title="个人档案" aria-label="个人档案" @click="userMenuOpen = !userMenuOpen">
           <img v-if="currentAvatarUrl" :src="currentAvatarUrl" alt="" />
           <DefaultUserAvatar v-else />
@@ -325,9 +337,10 @@
       </transition>
     </header>
 
-    <main class="student-main">
-      <transition name="page-switch" mode="out-in">
-        <section :key="active" class="student-page">
+    <main class="student-main" :class="{ 'student-main-qa': active === 'studentQa' }">
+      <div class="student-page-stage">
+        <transition :name="pageTransitionName">
+          <section :key="active" class="student-page" :class="{ 'student-page-qa': active === 'studentQa' }">
           <template v-if="active === 'studentHome'">
             <article class="hello-card">
               <div><Sun :size="24" /><section><h1>{{ greeting }}，{{ user.nickname }}</h1><p>{{ todayText }} · 距本学期结束还有 {{ termLeftDays }} 天</p></section></div>
@@ -345,7 +358,7 @@
                 <p>第 {{ continueProgressPage }} 页 / 共 {{ continueLesson.lesson.page_count || 1 }} 页</p>
                 <AppProgress :value="continueProgress" />
                 <small>{{ continueTime }}</small>
-                <button class="btn btn-primary" :disabled="isLessonOpening" @click="openLesson(continueLesson.lesson.id)"><Loader2 v-if="isOpeningLesson(continueLesson.lesson.id)" :size="16" class="lesson-loading-icon" /><Play v-else :size="16" />{{ isOpeningLesson(continueLesson.lesson.id) ? '正在打开' : '继续学习' }}</button>
+                <button class="btn btn-primary" :disabled="isLessonOpening" @click="openLesson(continueLesson.lesson.id)"><LoadingMark v-if="isOpeningLesson(continueLesson.lesson.id)" :label="false" class="inline-loading-mark" /><Play v-else :size="16" />{{ isOpeningLesson(continueLesson.lesson.id) ? '正在打开' : '继续学习' }}</button>
               </section>
               <section v-else class="empty-continue"><BookOpen :size="42" /><h2>还没有学习</h2><button class="btn btn-primary" @click="go('studentCourses')">浏览课程</button></section>
             </article>
@@ -490,12 +503,7 @@
           </template>
 
           <template v-else-if="active === 'studentCourseHome'">
-            <article v-if="courseHomeLoading" class="course-route-state">
-              <span class="course-route-icon loading"><Loader2 :size="34" /></span>
-              <h1>正在打开课程</h1>
-              <p>正在加载课时、资料和学习数据。</p>
-            </article>
-            <article v-else-if="courseHomeError" class="course-route-state error">
+            <article v-if="courseHomeError" class="course-route-state error">
               <span class="course-route-icon error"><AlertTriangle :size="34" /></span>
               <h1>课程加载失败</h1>
               <p>{{ courseHomeError }}</p>
@@ -508,7 +516,7 @@
             <template v-else>
               <article class="course-hero-student" :class="{ 'has-image': courseHome.course.cover_url }" :style="courseHeroStyle(courseHome.course)">
                 <section><h1>{{ courseHome.course.name }}</h1><p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p><div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div></section>
-                <aside><div class="slide-mini course-hero-cover-text">{{ courseCoverText(courseHome.course) }}</div><button class="btn white-fill" :disabled="isLessonOpening || !latestLesson" @click="latestLesson && openLesson(Number(latestLesson.id))"><Loader2 v-if="latestLesson && isOpeningLesson(Number(latestLesson.id))" :size="16" class="lesson-loading-icon" /><Play v-else :size="16" />{{ latestLesson && isOpeningLesson(Number(latestLesson.id)) ? '正在打开' : '进入课时' }}</button></aside>
+                <aside><div class="slide-mini course-hero-cover-text">{{ courseCoverText(courseHome.course) }}</div><button class="btn white-fill" :disabled="isLessonOpening || !latestLesson" @click="latestLesson && openLesson(Number(latestLesson.id))"><LoadingMark v-if="latestLesson && isOpeningLesson(Number(latestLesson.id))" :label="false" class="inline-loading-mark" /><Play v-else :size="16" />{{ latestLesson && isOpeningLesson(Number(latestLesson.id)) ? '正在打开' : '进入课时' }}</button></aside>
               </article>
               <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="openQuizSelection('practice')" /></div>
               <div class="course-layout">
@@ -546,7 +554,7 @@
                     </div>
                   </div>
                   <div v-if="!globalMessages.length" class="qa-welcome"><Sparkles :size="48" /><h2>{{ courseScopeName }}专属问答</h2></div>
-                  <ChatList v-else :messages="globalMessages" :thinking="globalThinking" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
+                  <ChatList v-else :messages="globalMessages" :thinking="globalThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
                   <div v-if="!globalMessages.length" class="prompt-grid"><button v-for="item in promptCards" :key="item.text" @click="sendGlobalQuick(item.text)"><component :is="item.icon" :size="18" />{{ item.text }}</button></div>
                 </div>
               </div>
@@ -1030,8 +1038,9 @@
             <PageTitle title="课程资料"><CourseSelect /></PageTitle>
             <article class="panel-card"><MaterialRow v-for="item in courseHome.materials || []" :key="item.id" :item="item" /><EmptyState v-if="!(courseHome.materials || []).length" text="暂无资料" /></article>
           </template>
-        </section>
-      </transition>
+          </section>
+        </transition>
+      </div>
     </main>
 
     <nav class="bottom-tabs">
@@ -1046,7 +1055,7 @@
           <article class="join-modal">
             <div class="modal-head"><PlusCircle :size="22" /><h2>加入新课程</h2><button @click="joinOpen = false"><X :size="16" /></button></div>
             <label>课程码</label>
-            <div class="code-input" :class="{ ok: joinPreview && !joinPreview.already_joined, error: joinError }"><input v-model="joinCode" maxlength="12" @input="formatJoinCode" /><Loader2 v-if="joinChecking" :size="18" /><CheckCircle v-if="joinPreview && !joinChecking" :size="18" /><XCircle v-if="joinError" :size="18" /></div>
+            <div class="code-input" :class="{ ok: joinPreview && !joinPreview.already_joined, error: joinError }"><input v-model="joinCode" maxlength="12" @input="formatJoinCode" /><LoadingMark v-if="joinChecking" :label="false" class="inline-loading-mark" /><CheckCircle v-if="joinPreview && !joinChecking" :size="18" /><XCircle v-if="joinError" :size="18" /></div>
             <small class="field-error" v-if="joinError">{{ joinError }}</small>
             <article v-if="joinPreview" class="preview-course"><span :class="{ 'has-image': joinPreview.course.cover_url }" :style="courseCoverStyle(joinPreview.course)"><strong v-if="!joinPreview.course.cover_url" class="course-cover-mini-text">{{ courseCoverText(joinPreview.course) }}</strong></span><div><strong>{{ joinPreview.course.name }}</strong><small>{{ joinPreview.teacher?.nickname || '教师' }} · {{ joinPreview.course.term }} · {{ joinPreview.student_count }}人</small></div></article>
             <div class="hint-line"><Info :size="14" />加入后即可学习课程内容</div>
@@ -1075,7 +1084,7 @@ import { useRoute, useRouter } from "vue-router";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Award, BarChart2, Bell, BookMarked, BookOpen, CalendarCheck, Camera, Check,
   CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Cpu, Download, FileText, Flame, FolderOpen, GitBranch, Grid2X2,
-  Eye, History, IdCard, Info, Flag, Layers, ListChecks, Loader2, LogOut, Mail, Maximize, MessageCircle, PanelRight,
+  Eye, History, IdCard, Info, Flag, Layers, ListChecks, LogOut, Mail, Maximize, MessageCircle, PanelRight,
   Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings,
   Shield, Sparkles, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
 } from "../icons";
@@ -1087,9 +1096,13 @@ import { extractStructuredText, renderRichText } from "../utils/richText";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
 import AppSlider from "../components/AppSlider.vue";
+import BrandLogo from "../components/BrandLogo.vue";
 import DropdownMenu from "../components/DropdownMenu";
+import LoadingMark from "../components/LoadingMark.vue";
+import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
 import SelectMenu from "../components/SelectMenu";
+import ThemeToggle from "../components/ThemeToggle.vue";
 import ChatList from "./student/components/ChatList";
 import "../styles/student/base.css";
 import "../styles/student/study-room.css";
@@ -1140,6 +1153,8 @@ const active = ref(currentRoutePageKey());
 const dashboard = ref<any>({});
 const profilePayload = ref<any>({});
 const courses = ref<any[]>([]);
+const studentPageLoading = ref(true);
+const initialStudentLoading = ref(true);
 const courseHome = ref<any>({});
 const courseHomeLoading = ref(false);
 const courseHomeError = ref("");
@@ -1168,6 +1183,9 @@ const noticeOpen = ref(false);
 const notificationLoading = ref(false);
 const notificationReading = ref(false);
 const userMenuOpen = ref(false);
+const topNavRef = ref<HTMLElement | null>(null);
+const topNavIndicator = reactive({ left: 0, width: 0, ready: false });
+const pageTransitionName = ref("student-page-forward");
 const topActionsRef = ref<HTMLElement | null>(null);
 const noticePopRef = ref<HTMLElement | null>(null);
 const userPopRef = ref<HTMLElement | null>(null);
@@ -1178,6 +1196,7 @@ const joinChecking = ref(false);
 const joinError = ref("");
 let joinTimer: number | undefined;
 let notificationTimer: number | undefined;
+let topNavIndicatorFrame = 0;
 
 const courseKeyword = ref("");
 const termFilter = ref("");
@@ -1188,6 +1207,11 @@ const classroomOpen = ref(false);
 const classroomLesson = ref<{ lesson: Lesson; pages: LessonPage[] } | null>(null);
 const lessonStudyLoading = ref(active.value === "studentLessonStudy");
 const lessonStudyError = ref("");
+const studentFullscreenLoading = computed(() => initialStudentLoading.value || (
+  active.value === "studentCourseHome" && courseHomeLoading.value
+) || (
+  active.value === "studentLessonStudy" && !lessonStudyError.value && (!classroomOpen.value || lessonStudyLoading.value)
+));
 const openingLessonId = ref<number | null>(null);
 const studyMainRef = ref<HTMLElement | null>(null);
 const lessonPanelRatio = ref(savedLessonPanelRatio());
@@ -1294,6 +1318,7 @@ const bottomTabs = [
   { key: "studentWrongBook", label: "错题本", icon: BookMarked },
   { key: "studentProfile", label: "我的", icon: User }
 ];
+const studentCourseNavKeys = ["studentCourses", "studentCourseHome", "studentMaterials", "studentKnowledge", "studentQuizzes", "studentTutoring", "studentPlans"];
 const topNavTabs = [
   { key: "studentHome", label: "工作台", icon: BookOpen },
   { key: "studentCourses", label: "我的课程", icon: Presentation },
@@ -1312,6 +1337,43 @@ const studentSearchTypeMeta: Record<StudentSearchResultType, { label: string; ic
   knowledge: { label: "知识点", icon: Layers },
   qa: { label: "问答", icon: MessageCircle },
 };
+
+function studentTopNavGroupKey(key: string) {
+  return studentCourseNavKeys.includes(key) ? "studentCourses" : key;
+}
+
+function studentTopNavIndex(key: string) {
+  const groupKey = studentTopNavGroupKey(key);
+  return topNavTabs.findIndex((item) => item.key === groupKey);
+}
+
+function setStudentPageTransition(nextKey: string, fromKey = active.value) {
+  const fromIndex = studentTopNavIndex(fromKey);
+  const nextIndex = studentTopNavIndex(nextKey);
+  if (fromIndex < 0 || nextIndex < 0 || fromIndex === nextIndex) {
+    pageTransitionName.value = "student-page-forward";
+    return;
+  }
+  pageTransitionName.value = nextIndex < fromIndex ? "student-page-back" : "student-page-forward";
+}
+
+function updateTopNavIndicator() {
+  void nextTick(() => {
+    if (topNavIndicatorFrame) window.cancelAnimationFrame(topNavIndicatorFrame);
+    topNavIndicatorFrame = window.requestAnimationFrame(() => {
+      topNavIndicatorFrame = 0;
+      const nav = topNavRef.value;
+      const activeButton = nav?.querySelector<HTMLElement>(".student-nav-link.active");
+      if (!nav || !activeButton || activeButton.offsetWidth <= 0) {
+        topNavIndicator.ready = false;
+        return;
+      }
+      topNavIndicator.left = activeButton.offsetLeft;
+      topNavIndicator.width = activeButton.offsetWidth;
+      topNavIndicator.ready = true;
+    });
+  });
+}
 
 const stats = computed(() => dashboard.value.stats || profilePayload.value.stats || {});
 const planTodayTasks = computed(() => tasks.value.filter((task: any) => taskDateKey(task) === todayTaskKey()));
@@ -1598,6 +1660,7 @@ function resetCourseScopedState() {
 }
 
 watch(() => [props.pageKey, route.fullPath], async () => { await syncRouteState(); });
+watch(active, () => updateTopNavIndicator(), { flush: "post" });
 watch(selectedCourseId, async (id, previousId) => {
   if (id) localStorage.setItem("student_current_course_id", String(id));
   if (id === previousId) return;
@@ -1664,6 +1727,7 @@ async function go(key: string) { await router.push(pageRoute(key)); }
 async function syncRouteState() {
   const nextPageKey = currentRoutePageKey();
   const leavingLessonStudy = active.value === "studentLessonStudy" && nextPageKey !== "studentLessonStudy";
+  setStudentPageTransition(nextPageKey);
   active.value = nextPageKey;
   if (leavingLessonStudy || (classroomOpen.value && nextPageKey !== "studentLessonStudy")) {
     lessonLoadSeq += 1;
@@ -1676,6 +1740,7 @@ async function handleStudentNav(key: string) {
     await openQuizSelection("practice");
     return;
   }
+  setStudentPageTransition(key);
   await go(key);
 }
 function pruneSearchCache() {
@@ -1792,32 +1857,38 @@ function applyStudentProfile(data: any) {
 }
 async function loadProfile() { const data: any = (await run<any>(() => api.get("/student/profile"))) || {}; applyStudentProfile(data); noticeSettings.splice(0, noticeSettings.length, ...(data.notification_settings || [])); }
 async function loadActive() {
-  if (active.value === "studentLessonStudy") {
-    await loadLessonStudyRoute();
-    return;
-  }
-  if (active.value === "studentHome") await loadDashboard();
-  if (active.value === "studentCourses") await loadCourses();
-  if (["studentQa", "studentWrongBook", "studentTutoring", "studentKnowledge", "studentQuizzes"].includes(active.value) && !courses.value.length) await loadCourses();
-  if (["studentCourseHome", "studentMaterials"].includes(active.value)) await loadCourseHome();
-  if (active.value === "studentQa") {
-    if (routeQaConversationId()) await loadQaRouteConversation();
-    else {
-      if (globalConversationId.value) {
-        globalConversationId.value = null;
-        globalMessages.value = [];
-        globalQaAttachments.value = [];
-      }
-      await loadCourseHome();
-      await loadQaHistory();
+  studentPageLoading.value = true;
+  try {
+    if (active.value === "studentLessonStudy") {
+      await loadLessonStudyRoute();
+      return;
     }
+    if (active.value === "studentHome") await loadDashboard();
+    if (active.value === "studentCourses") await loadCourses();
+    if (["studentQa", "studentWrongBook", "studentTutoring", "studentKnowledge", "studentQuizzes"].includes(active.value) && !courses.value.length) await loadCourses();
+    if (["studentCourseHome", "studentMaterials"].includes(active.value)) await loadCourseHome();
+    if (active.value === "studentQa") {
+      if (routeQaConversationId()) await loadQaRouteConversation();
+      else {
+        if (globalConversationId.value) {
+          globalConversationId.value = null;
+          globalMessages.value = [];
+          globalQaAttachments.value = [];
+        }
+        await loadCourseHome();
+        await loadQaHistory();
+      }
+    }
+    if (active.value === "studentTutoring") await loadProblemHistory();
+    if (active.value === "studentKnowledge") await loadKnowledge();
+    if (active.value === "studentQuizzes") await loadQuizPage();
+    if (active.value === "studentWrongBook") await loadWrongBook();
+    if (active.value === "studentPlans") await loadPlans();
+    if (active.value === "studentProfile") await loadProfile();
+  } finally {
+    studentPageLoading.value = false;
+    initialStudentLoading.value = false;
   }
-  if (active.value === "studentTutoring") await loadProblemHistory();
-  if (active.value === "studentKnowledge") await loadKnowledge();
-  if (active.value === "studentQuizzes") await loadQuizPage();
-  if (active.value === "studentWrongBook") await loadWrongBook();
-  if (active.value === "studentPlans") await loadPlans();
-  if (active.value === "studentProfile") await loadProfile();
 }
 async function openCourse(id: number) {
   const courseId = Number(id);
@@ -2175,8 +2246,7 @@ function shiftPlanMonth(offset: number) {
   planCalendarDate.value = new Date(current.getFullYear(), current.getMonth() + offset, 1);
 }
 function isStudentNavActive(key: string) {
-  const courseKeys = ["studentCourses", "studentCourseHome", "studentMaterials", "studentKnowledge", "studentQuizzes", "studentTutoring", "studentPlans"];
-  if (key === "studentCourses") return courseKeys.includes(active.value);
+  if (key === "studentCourses") return studentCourseNavKeys.includes(active.value);
   return active.value === key;
 }
 function courseGradient(id = 1) { const items = ["linear-gradient(135deg,#121614,#00B8D4)", "linear-gradient(135deg,#121614,#2E7D32)", "linear-gradient(135deg,#121614,#D9A05B)", "linear-gradient(135deg,#121614,#D94925)"]; return items[id % items.length]; }
@@ -3072,7 +3142,7 @@ const LessonItem = defineComponent({
     return () => h("button", { type: "button", class: ["lesson-item", p.lesson.progress_percent > 0 && p.lesson.progress_percent < 100 ? "current" : "", p.loading ? "loading" : ""], disabled: p.disabled || p.loading, onClick: () => update("open") }, [
       h("b", String(p.index + 1).padStart(2, "0")),
       h("div", [h("strong", p.lesson.title), h("small", p.loading ? "正在打开课时..." : `第 ${p.lesson.current_page || 1} 页 · ${p.lesson.progress_percent || 0}%`)]),
-      p.loading ? h(Loader2, { size: 18, class: "lesson-loading-icon" }) : p.lesson.progress_percent >= 100 ? h(CheckCircle, { size: 18 }) : h(Play, { size: 18 })
+      p.loading ? h(LoadingMark, { label: false, class: "inline-loading-mark" }) : p.lesson.progress_percent >= 100 ? h(CheckCircle, { size: 18 }) : h(Play, { size: 18 })
     ]);
   }
 });
@@ -3531,6 +3601,7 @@ onMounted(async () => {
   document.addEventListener("keydown", onStudentDocumentKeydown);
   document.addEventListener("visibilitychange", onStudentVisibilityChange);
   window.addEventListener("focus", onStudentWindowFocus);
+  window.addEventListener("resize", updateTopNavIndicator);
   if (active.value === "studentLessonStudy") {
     await loadActive();
     await loadCourses();
@@ -3538,6 +3609,7 @@ onMounted(async () => {
     await loadCourses();
     await loadActive();
   }
+  updateTopNavIndicator();
   await loadNotifications(true);
   notificationTimer = window.setInterval(() => {
     if (!document.hidden) void loadNotifications(true);
@@ -3548,6 +3620,8 @@ onBeforeUnmount(() => {
   document.removeEventListener("keydown", onStudentDocumentKeydown);
   document.removeEventListener("visibilitychange", onStudentVisibilityChange);
   window.removeEventListener("focus", onStudentWindowFocus);
+  window.removeEventListener("resize", updateTopNavIndicator);
+  if (topNavIndicatorFrame) window.cancelAnimationFrame(topNavIndicatorFrame);
   stopLessonResize();
   stopStudyClock();
   if (chromeTimer) clearTimeout(chromeTimer);

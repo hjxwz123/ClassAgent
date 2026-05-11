@@ -3,6 +3,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 
 const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const codeLanguagePattern = /[^\w#+.-]/g;
 const textPayloadKeys = [
   "markdownContent",
   "markdown_content",
@@ -13,6 +14,31 @@ const textPayloadKeys = [
   "content",
   "text"
 ] as const;
+
+function codeLanguageLabel(info: string) {
+  const language = info.trim().split(/\s+/)[0]?.replace(codeLanguagePattern, "").slice(0, 32);
+  return language || "代码";
+}
+
+function renderCodeBlock(tokens: any[], index: number) {
+  const token = tokens[index];
+  const language = codeLanguageLabel(String(token.info || ""));
+  const escapedLanguage = markdownRenderer.utils.escapeHtml(language);
+  const className = language === "代码" ? "" : ` class="language-${markdownRenderer.utils.escapeHtml(language)}"`;
+  const code = markdownRenderer.utils.escapeHtml(String(token.content || ""));
+  return [
+    `<div class="markdown-code-frame">`,
+    `<div class="markdown-code-toolbar">`,
+    `<span class="markdown-code-lang">${escapedLanguage}</span>`,
+    `<button type="button" class="markdown-code-copy" data-markdown-copy-code aria-label="复制代码块">复制</button>`,
+    `</div>`,
+    `<pre><code${className}>${code}</code></pre>`,
+    `</div>`,
+  ].join("");
+}
+
+markdownRenderer.renderer.rules.fence = renderCodeBlock;
+markdownRenderer.renderer.rules.code_block = renderCodeBlock;
 
 function renderMath(source: string, displayMode: boolean) {
   try {

@@ -182,23 +182,6 @@ class TTSService:
         self._token_cache[cache_key] = (token, expire_time)
         return token
 
-    def _synthesize_mock(self, text: str, db: Session | None) -> tuple[str, float]:
-        duration = max(2.0, min(30.0, round(max(len(text), 40) / 20, 2)))
-        frame_count = int(self.sample_rate * duration)
-        buffer = BytesIO()
-        with wave.open(buffer, "wb") as wav_file:
-            wav_file.setnchannels(1)
-            wav_file.setsampwidth(2)
-            wav_file.setframerate(self.sample_rate)
-            wav_file.writeframes(b"\x00\x00" * frame_count)
-        relative_path = storage_service.save_bytes(
-            buffer.getvalue(),
-            folder="generated/audio",
-            filename=f"{uuid4().hex}.wav",
-            db=db,
-        )
-        return storage_service.public_url(relative_path, db=db), duration
-
     def _synthesize_aliyun_bytes(self, text: str, config: dict) -> tuple[bytes, str]:
         config = self._clean_config(config)
         required = ["access_key_id", "access_key_secret", "appkey", "voice"]
@@ -273,14 +256,10 @@ class TTSService:
         speech_text = markdown_to_speech_text(text) or "本页暂无可朗读内容。"
         service = get_enabled_service_config(db, "tts")
         if service is not None:
-            if service.provider == "mock":
-                return self._synthesize_mock(speech_text, db)
             if service.provider == "aliyun":
                 return self._synthesize_aliyun(speech_text, db, self._clean_config(service.config))
             raise bad_request(f"暂不支持的 TTS 服务提供方: {service.provider}")
-        if self.settings.app_env == "production":
-            raise bad_request("TTS 服务未配置，请先在管理员服务配置中启用 tts")
-        return self._synthesize_mock(speech_text, db)
+        raise bad_request("TTS 服务未配置，请先在管理员服务配置中启用 tts")
 
 
 tts_service = TTSService()

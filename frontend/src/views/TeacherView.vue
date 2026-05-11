@@ -1,5 +1,6 @@
 <template>
-  <section class="teacher-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+  <PageLoader v-if="initialPageLoading" />
+  <section v-else class="teacher-shell" :class="{ 'sidebar-collapsed': sidebarCollapsed, 'page-loading': pageLoading }">
     <header class="teacher-header">
       <div class="brand">
         <span class="logo-mark"><Sparkles :size="17" /></span>
@@ -42,6 +43,7 @@
             </div>
           </Transition>
         </div>
+        <ThemeToggle class="header-theme-toggle" />
         <button type="button" class="icon-btn" aria-label="帮助" @click="openHelp"><HelpCircle :size="20" /><span>帮助</span></button>
         <i></i>
         <div ref="userMenuRef" class="user-menu">
@@ -111,10 +113,6 @@
           <button v-if="active === 'teacherAnalytics'" class="btn btn-ghost" :data-loading="isPending('export-teacherAnalytics')" :disabled="isPending('export-teacherAnalytics')" @click="exportCurrent"><Download :size="16" />导出报告</button>
         </section>
       </div>
-      <Transition name="fade-slide">
-        <div v-if="pageLoading" class="teacher-page-loading"><span class="spinner"></span></div>
-      </Transition>
-
       <TransitionGroup name="page-switch" tag="div" class="teacher-page-stack">
       <section v-if="active === 'teacherDashboard'" key="teacherDashboard" class="teacher-content">
         <article class="welcome">
@@ -502,7 +500,7 @@
             <button class="icon-action" @click="closePreview"><X :size="16" />关闭</button>
           </div>
           <div class="preview-content">
-            <div v-if="previewItem && isPending(`preview-material-${previewItem.id}`)" class="preview-loading"><span class="spinner"></span>正在读取解析内容</div>
+            <div v-if="previewItem && isPending(`preview-material-${previewItem.id}`)" class="preview-loading"><LoadingMark :label="false" class="inline-loading-mark" />正在读取解析内容</div>
             <div v-else-if="previewMode === 'markdown' && hasPreviewMarkdown" class="markdown-preview markdown-body" v-html="previewMarkdownHtml"></div>
             <iframe v-else-if="previewMode === 'file' && previewItem.preview_url" :src="previewItem.preview_url"></iframe>
             <EmptyState v-else text="暂无可预览内容" />
@@ -617,7 +615,10 @@ import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
 import AppSelect from "../components/AppSelect.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import LoadingMark from "../components/LoadingMark.vue";
+import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
+import ThemeToggle from "../components/ThemeToggle.vue";
 import AdminChart from "./admin/AdminChart.vue";
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
@@ -640,6 +641,7 @@ const studentPayload = ref<any>({ stats: {}, items: [] });
 const studentDrawer = ref<any | null>(null);
 const analysis = ref<any>({});
 const analysisCache = reactive<Record<string, { fetchedAt: number; data: any }>>({});
+const initialPageLoading = ref(true);
 const pageLoading = ref(false);
 const currentCourseId = ref<number>(Number(localStorage.getItem("teacher_current_course_id") || 0));
 const courseMenuOpen = ref(false);
@@ -993,7 +995,7 @@ function applyTeacherProfile(data: any) {
 }
 async function loadTeacherProfile() { const data = await run<any>(() => api.get("/teacher/profile")); if (!data) return; applyTeacherProfile(data); if (Array.isArray(data.notification_settings)) noticeSettings.splice(0, noticeSettings.length, ...data.notification_settings); }
 async function loadActive() {
-  pageLoading.value = true;
+  pageLoading.value = !initialPageLoading.value;
   try {
     if (active.value === "teacherDashboard") await loadDashboard();
     if (active.value === "teacherCourses") await loadCourses();
@@ -1006,6 +1008,7 @@ async function loadActive() {
     if (active.value === "teacherProfile") await loadTeacherProfile();
   } finally {
     pageLoading.value = false;
+    initialPageLoading.value = false;
   }
 }
 async function selectCourse(id: number, target = active.value) {

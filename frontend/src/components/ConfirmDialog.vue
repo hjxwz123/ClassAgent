@@ -83,11 +83,12 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onDocumentKeydown)
   display: grid;
   place-items: center;
   border-radius: var(--radius-md);
-  background: var(--color-primary-50);
+  background: transparent;
   color: var(--color-primary-700);
+  box-shadow: none;
 }
 .confirm-icon.danger {
-  background: var(--color-danger-50);
+  background: transparent;
   color: var(--color-danger-700);
 }
 .confirm-card h2 {

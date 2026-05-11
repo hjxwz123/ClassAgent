@@ -1,0 +1,1785 @@
+/* Dark theme color layer. Keep this file to color, border, shadow and token overrides only. */
+html.theme-light,
+body.theme-light,
+#app.theme-light {
+  opacity: 1 !important;
+  visibility: visible !important;
+  filter: none !important;
+  color-scheme: light;
+}
+
+:root.theme-dark {
+  color-scheme: dark;
+
+  --dark-page: #030712;
+  --dark-surface: #0F172A;
+  --dark-surface-2: #111827;
+  --dark-surface-3: #1E293B;
+  --dark-border: rgba(148, 163, 184, .24);
+  --dark-border-strong: rgba(203, 213, 225, .34);
+  --dark-text: #F8FAFC;
+  --dark-body: #E2E8F0;
+  --dark-sub: #CBD5E1;
+  --dark-muted: #94A3B8;
+  --dark-cyan-soft: rgba(0, 240, 255, .12);
+  --dark-cyan-border: rgba(0, 240, 255, .26);
+  --dark-cyan-text: #67E8F9;
+  --dark-teacher-soft: rgba(249, 115, 22, .14);
+  --dark-admin-soft: rgba(217, 160, 91, .16);
+
+  --ca-color-slate: #030712;
+  --ca-color-chalk: #F8FAFC;
+  --ca-color-dust: #94A3B8;
+  --ca-role-student-light: var(--dark-cyan-soft);
+  --ca-role-teacher-light: var(--dark-teacher-soft);
+  --ca-role-admin-light: var(--dark-admin-soft);
+  --ca-color-paper-bg: var(--dark-page);
+  --ca-color-paper-card: var(--dark-surface);
+  --ca-color-paper-card-hover: var(--dark-surface-2);
+  --ca-color-paper-border: var(--dark-border);
+  --ca-color-paper-border-strong: var(--dark-border-strong);
+  --ca-color-paper-ink: var(--dark-text);
+  --ca-color-paper-ink-soft: var(--dark-body);
+  --ca-color-paper-sub: var(--dark-sub);
+  --ca-color-paper-muted: var(--dark-muted);
+  --ca-color-success-light: rgba(16, 185, 129, .14);
+  --ca-color-success-border: rgba(52, 211, 153, .34);
+  --ca-color-warning-light: rgba(245, 158, 11, .16);
+  --ca-color-warning-border: rgba(251, 191, 36, .34);
+  --ca-color-error-light: rgba(239, 68, 68, .16);
+  --ca-color-error-border: rgba(248, 113, 113, .34);
+  --ca-color-info-light: rgba(59, 130, 246, .16);
+  --ca-color-info-border: rgba(96, 165, 250, .34);
+  --ca-shadow-paper: 0 18px 36px rgba(0, 0, 0, .28);
+  --ca-shadow-paper-hover: 0 24px 46px rgba(0, 0, 0, .38);
+  --ca-shadow-card: 0 18px 36px rgba(0, 0, 0, .28);
+  --ca-shadow-button: 0 10px 22px rgba(0, 0, 0, .28);
+  --ca-shadow-dropdown: 0 22px 52px rgba(0, 0, 0, .42);
+
+  --color-primary-50: var(--dark-cyan-soft);
+  --color-primary-100: rgba(103, 232, 249, .22);
+  --color-primary-200: rgba(103, 232, 249, .34);
+  --color-primary-300: #67E8F9;
+  --color-primary-400: #22D3EE;
+  --color-primary-500: #00B8D4;
+  --color-primary-600: #00B8D4;
+  --color-primary-700: var(--dark-cyan-text);
+  --color-primary-800: #A5F3FC;
+  --color-primary-900: #CFFAFE;
+  --color-ai-light: var(--dark-cyan-soft);
+  --color-ai-border: var(--dark-cyan-border);
+  --color-bg-page: var(--dark-page);
+  --color-bg-surface: var(--dark-surface);
+  --color-bg-muted: var(--dark-surface-2);
+  --color-bg-overlay: rgba(2, 6, 23, .78);
+  --color-border-default: var(--dark-border);
+  --color-border-strong: var(--dark-border-strong);
+  --color-border-subtle: rgba(148, 163, 184, .16);
+  --color-text-primary: var(--dark-text);
+  --color-text-body: var(--dark-body);
+  --color-text-secondary: var(--dark-sub);
+  --color-text-muted: var(--dark-muted);
+  --color-text-inverse: #F8FAFC;
+  --color-text-link: var(--dark-cyan-text);
+  --color-success-50: rgba(16, 185, 129, .14);
+  --color-success-100: rgba(52, 211, 153, .34);
+  --color-success-700: #86EFAC;
+  --color-warning-50: rgba(245, 158, 11, .16);
+  --color-warning-100: rgba(251, 191, 36, .34);
+  --color-warning-700: #FCD34D;
+  --color-danger-50: rgba(239, 68, 68, .16);
+  --color-danger-100: rgba(248, 113, 113, .34);
+  --color-danger-700: #FCA5A5;
+  --color-info-50: rgba(59, 130, 246, .16);
+  --color-info-100: rgba(96, 165, 250, .34);
+  --color-info-700: #93C5FD;
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, .22);
+  --shadow-sm: 0 10px 24px rgba(0, 0, 0, .24);
+  --shadow-md: 0 16px 34px rgba(0, 0, 0, .30);
+  --shadow-lg: 0 22px 48px rgba(0, 0, 0, .38);
+  --shadow-xl: 0 28px 72px rgba(0, 0, 0, .50);
+  --shadow-focus: 0 0 0 3px rgba(0, 240, 255, .22);
+  --shadow-focus-danger: 0 0 0 3px rgba(248, 113, 113, .24);
+}
+
+html.theme-dark,
+body.theme-dark,
+#app.theme-dark {
+  background: var(--dark-page) !important;
+  color: var(--dark-body);
+}
+
+body.theme-dark {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(0, 240, 255, .08), transparent 32%),
+    radial-gradient(circle at 86% 18%, rgba(217, 160, 91, .08), transparent 30%),
+    var(--dark-page) !important;
+}
+
+html.theme-dark img {
+  background: linear-gradient(135deg, var(--dark-surface-2), var(--dark-surface-3));
+}
+
+html.theme-dark input,
+html.theme-dark textarea,
+html.theme-dark select,
+html.theme-dark .input,
+html.theme-dark .select,
+html.theme-dark .textarea {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+}
+
+html.theme-dark input::placeholder,
+html.theme-dark textarea::placeholder {
+  color: var(--dark-muted) !important;
+}
+
+html.theme-dark input:disabled,
+html.theme-dark select:disabled,
+html.theme-dark textarea:disabled {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-muted) !important;
+}
+
+html.theme-dark .card,
+html.theme-dark .table-wrap,
+html.theme-dark .toast,
+html.theme-dark .modal,
+html.theme-dark .confirm-card,
+html.theme-dark .drawer,
+html.theme-dark .history-drawer,
+html.theme-dark .app-select-pop,
+html.theme-dark .select-pop,
+html.theme-dark .dropdown-pop,
+html.theme-dark .top-menu-panel {
+  background: rgba(15, 23, 42, .96) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+html.theme-dark .card-title,
+html.theme-dark .page-title,
+html.theme-dark .card h1,
+html.theme-dark .card h2,
+html.theme-dark .card h3,
+html.theme-dark .modal h1,
+html.theme-dark .modal h2,
+html.theme-dark .modal h3,
+html.theme-dark .confirm-card h2 {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .btn-secondary,
+html.theme-dark .btn-ghost:hover,
+html.theme-dark .select-pop button:hover,
+html.theme-dark .select-pop button.active,
+html.theme-dark .dropdown-pop button:hover,
+html.theme-dark .app-select-pop button:hover,
+html.theme-dark .app-select-pop button.focused,
+html.theme-dark .app-select-pop button.active,
+html.theme-dark .tag,
+html.theme-dark .tag-primary,
+html.theme-dark .tag-ai,
+html.theme-dark .tag-success,
+html.theme-dark .tag-warning,
+html.theme-dark .tag-danger {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .btn-primary,
+html.theme-dark .btn-ai,
+html.theme-dark .btn-danger {
+  color: #F8FAFC !important;
+}
+
+html.theme-dark .table th,
+html.theme-dark .admin-table th,
+html.theme-dark .teacher-table th {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-sub) !important;
+}
+
+html.theme-dark .table tbody tr:nth-child(even),
+html.theme-dark .admin-table tbody tr:nth-child(even):not(.selected):not(.disabled),
+html.theme-dark .teacher-table tbody tr:nth-child(even):not(.inactive) {
+  background: rgba(15, 23, 42, .62) !important;
+}
+
+html.theme-dark .table tbody tr:hover,
+html.theme-dark .admin-table tbody tr:hover,
+html.theme-dark .teacher-table tbody tr:hover {
+  background: rgba(0, 184, 212, .12) !important;
+}
+
+html.theme-dark .password-field {
+  background: var(--dark-surface) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .password-field input {
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .password-tool:hover {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .app-slider .slider-thumb,
+html.theme-dark .app-checkbox .check-box,
+html.theme-dark .app-checkbox .switch-track i {
+  background: var(--dark-surface-2) !important;
+}
+
+html.theme-dark .app-progress {
+  background: var(--dark-surface-3) !important;
+}
+
+html.theme-dark .chart-empty {
+  background: rgba(15, 23, 42, .82) !important;
+  color: var(--dark-muted) !important;
+  border-color: var(--dark-border) !important;
+}
+
+/* Student workspace */
+html.theme-dark .student-shell,
+html.theme-dark .student-modal-scope,
+html.theme-dark .global-search {
+  --s-primary-50: var(--dark-cyan-soft) !important;
+  --s-primary-100: rgba(103, 232, 249, .22) !important;
+  --s-primary-400: #22D3EE !important;
+  --s-primary-500: #00B8D4 !important;
+  --s-primary-600: #67E8F9 !important;
+  --s-ai-light: linear-gradient(135deg, rgba(0, 240, 255, .12), rgba(59, 130, 246, .16)) !important;
+  --s-bg: var(--dark-page) !important;
+  --s-card: var(--dark-surface) !important;
+  --s-glass: rgba(15, 23, 42, .86) !important;
+  --s-text: var(--dark-text) !important;
+  --s-muted: var(--dark-sub) !important;
+  --s-hint: var(--dark-muted) !important;
+  --s-border: var(--dark-border) !important;
+  --s-shadow-card: 0 18px 38px rgba(0, 0, 0, .32) !important;
+  --s-shadow-float: 0 26px 56px rgba(0, 0, 0, .42) !important;
+  --s-shadow-glass: 0 22px 48px rgba(0, 0, 0, .40) !important;
+  background-color: var(--dark-page) !important;
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .student-shell .qa-modern-page,
+html.theme-dark .student-shell .class-chat,
+html.theme-dark .qa-modern-page,
+html.theme-dark .class-chat {
+  --qa-primary-50: var(--dark-cyan-soft) !important;
+  --qa-primary-100: rgba(103, 232, 249, .22) !important;
+  --qa-primary-400: #22D3EE !important;
+  --qa-primary-500: #00B8D4 !important;
+  --qa-primary-600: #67E8F9 !important;
+  --qa-ai-light: rgba(0, 240, 255, .12) !important;
+  --qa-bg: var(--dark-page) !important;
+  --qa-surface: var(--dark-surface) !important;
+  --qa-muted-bg: var(--dark-surface-2) !important;
+  --qa-border: var(--dark-border) !important;
+  --qa-text: var(--dark-text) !important;
+  --qa-secondary: var(--dark-sub) !important;
+  --qa-hint: var(--dark-muted) !important;
+  --qa-shadow-sm: var(--shadow-sm) !important;
+  --qa-shadow-float: var(--shadow-lg) !important;
+  --class-chat-primary-50: var(--dark-cyan-soft) !important;
+  --class-chat-border: var(--dark-border) !important;
+  --class-chat-text: var(--dark-text) !important;
+  --class-chat-muted: var(--dark-muted) !important;
+}
+
+html.theme-dark .quiz-modern-page,
+html.theme-dark .exam-answer-page,
+html.theme-dark .exam-modal-scope {
+  --quiz-primary-50: var(--dark-cyan-soft) !important;
+  --quiz-primary-100: rgba(103, 232, 249, .22) !important;
+  --quiz-primary-500: #00B8D4 !important;
+  --quiz-primary-600: #67E8F9 !important;
+  --quiz-ai-light: rgba(0, 240, 255, .12) !important;
+  --quiz-bg: var(--dark-page) !important;
+  --quiz-surface: var(--dark-surface) !important;
+  --quiz-muted: var(--dark-surface-2) !important;
+  --quiz-border: var(--dark-border) !important;
+  --quiz-text: var(--dark-text) !important;
+  --quiz-secondary: var(--dark-sub) !important;
+  --quiz-hint: var(--dark-muted) !important;
+  --quiz-shadow-sm: var(--shadow-sm) !important;
+  --quiz-shadow-card: var(--shadow-md) !important;
+  --quiz-shadow-float: var(--shadow-lg) !important;
+  --exam-primary-50: var(--dark-cyan-soft) !important;
+  --exam-primary-100: rgba(103, 232, 249, .22) !important;
+  --exam-primary-400: #22D3EE !important;
+  --exam-primary-500: #00B8D4 !important;
+  --exam-primary-600: #67E8F9 !important;
+  --exam-success-50: rgba(16, 185, 129, .14) !important;
+  --exam-warning-50: rgba(245, 158, 11, .16) !important;
+  --exam-warning-700: #FCD34D !important;
+  --exam-bg-page: var(--dark-page) !important;
+  --exam-bg-card: var(--dark-surface) !important;
+  --exam-border-light: rgba(148, 163, 184, .16) !important;
+  --exam-border-default: var(--dark-border) !important;
+  --exam-border-strong: var(--dark-border-strong) !important;
+  --exam-text-main: var(--dark-text) !important;
+  --exam-text-sec: var(--dark-sub) !important;
+  --exam-text-hint: var(--dark-muted) !important;
+  --exam-shadow-sm: var(--shadow-sm) !important;
+  --exam-shadow-card: var(--shadow-md) !important;
+}
+
+html.theme-dark .student-plan-page {
+  --plan-primary-50: var(--dark-cyan-soft) !important;
+  --plan-primary-100: rgba(103, 232, 249, .22) !important;
+  --plan-primary-500: #00B8D4 !important;
+  --plan-primary-600: #67E8F9 !important;
+  --plan-ai-light: rgba(0, 240, 255, .12) !important;
+  --plan-success-50: rgba(16, 185, 129, .14) !important;
+  --plan-bg: var(--dark-page) !important;
+  --plan-card: var(--dark-surface) !important;
+  --plan-muted-bg: var(--dark-surface-2) !important;
+  --plan-border-light: rgba(148, 163, 184, .16) !important;
+  --plan-border: var(--dark-border) !important;
+  --plan-text: var(--dark-text) !important;
+  --plan-secondary: var(--dark-sub) !important;
+  --plan-hint: var(--dark-muted) !important;
+  --plan-shadow-sm: var(--shadow-sm) !important;
+  --plan-shadow-card: var(--shadow-md) !important;
+}
+
+html.theme-dark .tutoring-page {
+  --tutor-primary-50: var(--dark-cyan-soft) !important;
+  --tutor-primary-100: rgba(103, 232, 249, .22) !important;
+  --tutor-primary-500: #00B8D4 !important;
+  --tutor-primary-600: #67E8F9 !important;
+  --tutor-ai-light: rgba(0, 240, 255, .12) !important;
+  --tutor-success-50: rgba(16, 185, 129, .14) !important;
+  --tutor-warning-50: rgba(245, 158, 11, .16) !important;
+  --tutor-card: var(--dark-surface) !important;
+  --tutor-muted: var(--dark-surface-2) !important;
+  --tutor-border: var(--dark-border) !important;
+  --tutor-text: var(--dark-text) !important;
+  --tutor-secondary: var(--dark-sub) !important;
+  --tutor-hint: var(--dark-muted) !important;
+  --tutor-shadow-card: var(--shadow-md) !important;
+}
+
+html.theme-dark .student-top,
+html.theme-dark .bottom-tabs,
+html.theme-dark .global-search-bar,
+html.theme-dark .global-search-results,
+html.theme-dark .notice-pop,
+html.theme-dark .user-pop,
+html.theme-dark .settings-pop {
+  background: rgba(15, 23, 42, .88) !important;
+  border-color: var(--dark-border) !important;
+  color: var(--dark-body) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+html.theme-dark .student-nav-links,
+html.theme-dark .underline-tabs,
+html.theme-dark .seg-tabs,
+html.theme-dark .study-tabs,
+html.theme-dark .profile-tabs,
+html.theme-dark .segmented,
+html.theme-dark .student-plan-page .tutor-mode-tabs,
+html.theme-dark .tutoring-page .tutor-mode-tabs {
+  background: rgba(15, 23, 42, .78) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: inset 0 0 0 1px var(--dark-border) !important;
+}
+
+html.theme-dark .student-nav-link,
+html.theme-dark .bottom-tabs button,
+html.theme-dark .top-icon,
+html.theme-dark .avatar-btn,
+html.theme-dark .notice-item,
+html.theme-dark .user-pop button,
+html.theme-dark .global-search-item {
+  background: transparent !important;
+  color: var(--dark-sub) !important;
+}
+
+html.theme-dark .student-nav-link:hover,
+html.theme-dark .student-nav-link.active,
+html.theme-dark .bottom-tabs button.active,
+html.theme-dark .top-icon:hover,
+html.theme-dark .avatar-btn:hover,
+html.theme-dark .notice-item:hover,
+html.theme-dark .notice-item.unread,
+html.theme-dark .global-search-item:hover,
+html.theme-dark .global-search-item.active,
+html.theme-dark .underline-tabs .active,
+html.theme-dark .seg-tabs .active,
+html.theme-dark .study-tabs .active,
+html.theme-dark .profile-tabs .active,
+html.theme-dark .segmented .active {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-cyan-text) !important;
+}
+
+html.theme-dark .today-plan,
+html.theme-dark .continue-card,
+html.theme-dark .home-course,
+html.theme-dark .panel-card,
+html.theme-dark .course-tools,
+html.theme-dark .student-course-card,
+html.theme-dark .knowledge-head,
+html.theme-dark .knowledge-body,
+html.theme-dark .badge-card,
+html.theme-dark .knowledge-tree,
+html.theme-dark .wrong-tree,
+html.theme-dark .quiz-card,
+html.theme-dark .wrong-card,
+html.theme-dark .quick-tile,
+html.theme-dark .material-row,
+html.theme-dark .home-ai-recommend-card,
+html.theme-dark .home-action-task-card,
+html.theme-dark .home-activity-card,
+html.theme-dark .home-ac-content-wrap,
+html.theme-dark .course-route-state,
+html.theme-dark .course-qa-wide .ask-card,
+html.theme-dark .course-qa-wide .recent-qa-card,
+html.theme-dark .course-qa-wide .qa-mini,
+html.theme-dark .profile-identity-card,
+html.theme-dark .profile-main-card,
+html.theme-dark .profile-form,
+html.theme-dark .student-plan-page .card,
+html.theme-dark .student-plan-page .ai-prompt-bar,
+html.theme-dark .student-plan-page .plan-task-row,
+html.theme-dark .student-plan-page .plan-task-tag,
+html.theme-dark .student-plan-page .badge-item,
+html.theme-dark .tutoring-page .tutor-input,
+html.theme-dark .tutoring-page .guide-card,
+html.theme-dark .tutoring-page .guide-step,
+html.theme-dark .tutoring-page .guide-step > button,
+html.theme-dark .tutoring-page .guide-body,
+html.theme-dark .tutoring-page .active-problem-card,
+html.theme-dark .tutoring-page .image-drop,
+html.theme-dark .tutoring-page .problem-text,
+html.theme-dark .tutoring-history-card,
+html.theme-dark .tutoring-history-item,
+html.theme-dark .guide-step,
+html.theme-dark .guide-step > button,
+html.theme-dark .history-strip button,
+html.theme-dark .practice-modern-card,
+html.theme-dark .practice-history-item,
+html.theme-dark .practice-settings-row,
+html.theme-dark .practice-chip,
+html.theme-dark .practice-feature-card,
+html.theme-dark .practice-feature-icon,
+html.theme-dark .wrong-dashboard-head,
+html.theme-dark .wrong-book-page .wrong-hero div,
+html.theme-dark .wrong-book-page .wrong-tree,
+html.theme-dark .wrong-book-page .wrong-card,
+html.theme-dark .wrong-filter-state,
+html.theme-dark .wrong-filter-state button,
+html.theme-dark .wrong-times,
+html.theme-dark .exam-shell,
+html.theme-dark .exam-header,
+html.theme-dark .exam-nav-card,
+html.theme-dark .exam-q-card,
+html.theme-dark .exam-q-btn,
+html.theme-dark .exam-mark-btn,
+html.theme-dark .exam-answer-input,
+html.theme-dark .exam-answer-textarea,
+html.theme-dark .exam-action-footer,
+html.theme-dark .exam-confirm-card,
+html.theme-dark .exam-result-summary,
+html.theme-dark .exam-analysis-card,
+html.theme-dark .exam-analysis-item,
+html.theme-dark .exam-empty-shell .empty,
+html.theme-dark .class-chat,
+html.theme-dark .class-chat-dock,
+html.theme-dark .class-chat .chat-bubble,
+html.theme-dark .class-chat .thinking,
+html.theme-dark .qa-modern-page .history-drawer,
+html.theme-dark .qa-modern-page .history-favorite-toggle,
+html.theme-dark .qa-modern-page .history-favorite-toggle .favorite-check-box,
+html.theme-dark .qa-modern-page .prompt-grid button,
+html.theme-dark .qa-modern-page .thinking-process,
+html.theme-dark .qa-modern-page .thought-toggle,
+html.theme-dark .qa-modern-page .thinking,
+html.theme-dark .qa-modern-page .ai-content-card,
+html.theme-dark .qa-modern-page .qa-new-chat-link,
+html.theme-dark .qa-modern-page .action-circle-btn {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-dark .home-ai-recommend-card::before {
+  background: radial-gradient(circle, rgba(0, 240, 255, .10), transparent 70%) !important;
+}
+
+html.theme-dark .home-ac-content-wrap:hover,
+html.theme-dark .home-course:hover,
+html.theme-dark .material-row:hover,
+html.theme-dark .practice-history-item:hover,
+html.theme-dark .tutoring-history-item:hover,
+html.theme-dark .student-plan-page .plan-task-row:hover {
+  background: var(--dark-surface-2) !important;
+}
+
+html.theme-dark .home-ai-rec-header h2,
+html.theme-dark .home-ai-rec-content strong,
+html.theme-dark .home-task-title,
+html.theme-dark .home-ac-title,
+html.theme-dark .home-ac-action-name,
+html.theme-dark .home-mp-text,
+html.theme-dark .course-route-state h1,
+html.theme-dark .student-shell .course-card-title h2,
+html.theme-dark .student-shell .course-progress-panel strong,
+html.theme-dark .student-shell .course-card-stats strong,
+html.theme-dark .wrong-title-block h1,
+html.theme-dark .wrong-book-page .wrong-hero,
+html.theme-dark .wrong-book-page .wrong-hero strong,
+html.theme-dark .student-plan-page .card-title,
+html.theme-dark .student-plan-page .cal-month,
+html.theme-dark .student-plan-page .empty-task-state h3,
+html.theme-dark .student-plan-page .plan-task-body strong,
+html.theme-dark .student-plan-page .total-hours,
+html.theme-dark .profile-header-info h1,
+html.theme-dark .tutoring-page .tutor-card-head h2,
+html.theme-dark .tutoring-page .image-drop strong,
+html.theme-dark .tutoring-page .guide-step strong,
+html.theme-dark .tutoring-history-head h2,
+html.theme-dark .tutoring-history-item strong,
+html.theme-dark .quiz-modern-title h1,
+html.theme-dark .practice-card-header h2,
+html.theme-dark .practice-config-label,
+html.theme-dark .practice-history-title,
+html.theme-dark .practice-history-left strong,
+html.theme-dark .exam-title,
+html.theme-dark .exam-q-stem,
+html.theme-dark .exam-opt-text,
+html.theme-dark .exam-result-summary h2,
+html.theme-dark .exam-analysis-head h2,
+html.theme-dark .qa-modern-page .qa-title h1,
+html.theme-dark .qa-modern-page .drawer-head h2,
+html.theme-dark .qa-modern-page .qa-welcome h2,
+html.theme-dark .qa-modern-page .ai-text,
+html.theme-dark .class-chat .ai-text {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .home-ai-rec-content,
+html.theme-dark .home-task-type,
+html.theme-dark .home-ac-detail,
+html.theme-dark .home-ac-time,
+html.theme-dark .course-route-state p,
+html.theme-dark .student-shell .course-card-title p,
+html.theme-dark .student-shell .course-progress-panel span,
+html.theme-dark .student-shell .student-course-card .course-meta span,
+html.theme-dark .student-shell .course-card-stats span,
+html.theme-dark .wrong-title-block p,
+html.theme-dark .student-plan-page .card-subtitle,
+html.theme-dark .student-plan-page .empty-task-state p,
+html.theme-dark .student-plan-page .plan-task-body small,
+html.theme-dark .student-plan-page .bar-label,
+html.theme-dark .profile-header-info p,
+html.theme-dark .tutoring-page .image-drop small,
+html.theme-dark .tutoring-page .active-problem-card span,
+html.theme-dark .tutoring-history-item small,
+html.theme-dark .quiz-modern-title p,
+html.theme-dark .practice-generate-hint,
+html.theme-dark .practice-history-left small,
+html.theme-dark .exam-prog-text,
+html.theme-dark .exam-stat-label,
+html.theme-dark .exam-confirm-card p,
+html.theme-dark .exam-analysis-body p,
+html.theme-dark .exam-analysis-body small,
+html.theme-dark .qa-modern-page .qa-title p,
+html.theme-dark .qa-modern-page .history-row small,
+html.theme-dark .qa-modern-page .qa-welcome p {
+  color: var(--dark-muted) !important;
+}
+
+html.theme-dark .quick-tags button,
+html.theme-dark .student-shell .course-progress-panel,
+html.theme-dark .student-shell .student-course-card .course-meta span,
+html.theme-dark .student-shell .course-card-stats span,
+html.theme-dark .course-art span,
+html.theme-dark .course-art em,
+html.theme-dark .student-shell .student-course-card .course-term-pill,
+html.theme-dark .home-data-tag,
+html.theme-dark .home-ai-icon-wrap,
+html.theme-dark .home-ac-icon-wrapper,
+html.theme-dark .practice-chip.active,
+html.theme-dark .practice-segmented-control button.active,
+html.theme-dark .quiz-modern-tabs button.active,
+html.theme-dark .exam-q-btn.current,
+html.theme-dark .exam-opt-input:checked + .exam-opt-card,
+html.theme-dark .exam-tag,
+html.theme-dark .exam-btn-outline,
+html.theme-dark .qa-modern-page .ref-tag,
+html.theme-dark .qa-modern-page .source-tags .tag {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-cyan-text) !important;
+  border-color: var(--dark-cyan-border) !important;
+}
+
+html.theme-dark .exam-btn-outline {
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .class-chat .chat-msg.user .chat-bubble,
+html.theme-dark .qa-modern-page .bubble-user,
+html.theme-dark .student-plan-page .btn-ai-gen,
+html.theme-dark .practice-generate-btn,
+html.theme-dark .tutoring-page .tutor-submit-btn {
+  color: #F8FAFC !important;
+}
+
+html.theme-dark .lesson-ai,
+html.theme-dark .activity-view,
+html.theme-dark .note-view,
+html.theme-dark .note-tools,
+html.theme-dark .note-editor,
+html.theme-dark .settings-pop,
+html.theme-dark .complete-modal,
+html.theme-dark .join-modal,
+html.theme-dark .slide-card,
+html.theme-dark .player-bar {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .study-room .study-tabs,
+html.theme-dark .study-room .activity-band section,
+html.theme-dark .study-room .activity-item,
+html.theme-dark .study-room .note-tools button,
+html.theme-dark .study-room .player-bar .popover-button.select-menu > button {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+}
+
+/* Teacher workspace */
+html.theme-dark .teacher-shell {
+  background: var(--dark-page) !important;
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .teacher-header,
+html.theme-dark .teacher-sidebar,
+html.theme-dark .teacher-shell .breadcrumb,
+html.theme-dark .fixed-actions,
+html.theme-dark .course-popover,
+html.theme-dark .user-popover,
+html.theme-dark .teacher-notice-popover,
+html.theme-dark .teacher-shell .metric-card,
+html.theme-dark .teacher-shell .panel-card,
+html.theme-dark .teacher-shell .filter-card,
+html.theme-dark .teacher-shell .table-card,
+html.theme-dark .teacher-shell .profile-card,
+html.theme-dark .teacher-shell .ai-suggestion,
+html.theme-dark .teacher-shell .quick-action,
+html.theme-dark .teacher-shell .course-card,
+html.theme-dark .home-lesson-card,
+html.theme-dark .material-overview-card,
+html.theme-dark .lesson-row,
+html.theme-dark .type-list,
+html.theme-dark .material-health,
+html.theme-dark .material-status-tile,
+html.theme-dark .materials-layout,
+html.theme-dark .teacher-shell .material-row,
+html.theme-dark .ppt-head,
+html.theme-dark .thumb-column,
+html.theme-dark .script-panel,
+html.theme-dark .thumb-card,
+html.theme-dark .slide-preview,
+html.theme-dark .ppt-status,
+html.theme-dark .lesson-card,
+html.theme-dark .weak-point-card,
+html.theme-dark .weak-set-card,
+html.theme-dark .teacher-shell .modal,
+html.theme-dark .teacher-shell .drawer,
+html.theme-dark .page-empty,
+html.theme-dark .quiz-editor-stats,
+html.theme-dark .quiz-edit-card,
+html.theme-dark .markdown-preview,
+html.theme-dark .lesson-preview-layout aside button,
+html.theme-dark .preview-content,
+html.theme-dark .preview-tabs button.active,
+html.theme-dark .editor-toolbar button,
+html.theme-dark .upload-drop,
+html.theme-dark .dashed-btn,
+html.theme-dark .search-box {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-dark .home-lesson-card,
+html.theme-dark .material-overview-card,
+html.theme-dark .material-health,
+html.theme-dark .teacher-shell .material-row.processing {
+  background: linear-gradient(180deg, var(--dark-surface), var(--dark-surface-2)) !important;
+}
+
+html.theme-dark .teacher-shell .metric-card.danger,
+html.theme-dark .teacher-table tr.inactive {
+  background: rgba(239, 68, 68, .14) !important;
+  border-color: rgba(248, 113, 113, .34) !important;
+}
+
+html.theme-dark .teacher-notice-main:hover,
+html.theme-dark .nav-group button:hover,
+html.theme-dark .course-title:hover,
+html.theme-dark .course-switch > button:hover,
+html.theme-dark .course-switch > button.active,
+html.theme-dark .icon-btn:hover,
+html.theme-dark .icon-action:hover,
+html.theme-dark .segment-btn.active,
+html.theme-dark .view-toggle button,
+html.theme-dark .teacher-shell .layer-card,
+html.theme-dark .preview-tabs button:hover:not(:disabled) {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .nav-group button.active,
+html.theme-dark .icon-action.active {
+  background: rgba(249, 115, 22, .14) !important;
+  color: #FDBA74 !important;
+}
+
+html.theme-dark .teacher-shell h1,
+html.theme-dark .teacher-shell h2,
+html.theme-dark .teacher-shell h3,
+html.theme-dark .teacher-shell strong,
+html.theme-dark .teacher-shell .brand strong,
+html.theme-dark .teacher-shell .panel-head h2,
+html.theme-dark .teacher-shell .course-card h2,
+html.theme-dark .teacher-shell .lesson-title-line strong,
+html.theme-dark .teacher-shell .type-body strong,
+html.theme-dark .teacher-shell .drawer-head h2,
+html.theme-dark .teacher-shell .modal-head h2 {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .teacher-shell p,
+html.theme-dark .teacher-shell small,
+html.theme-dark .teacher-shell span,
+html.theme-dark .teacher-shell td,
+html.theme-dark .teacher-shell label,
+html.theme-dark .teacher-shell code {
+  color: inherit;
+}
+
+html.theme-dark .preview-loading {
+  background: rgba(15, 23, 42, .82) !important;
+  color: var(--dark-sub) !important;
+}
+
+/* Admin workspace */
+html.theme-dark .admin-shell {
+  background: var(--dark-page) !important;
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .admin-topbar,
+html.theme-dark .admin-account-menu,
+html.theme-dark .welcome-card,
+html.theme-dark .admin-shell .panel-card,
+html.theme-dark .admin-shell .filter-card,
+html.theme-dark .admin-shell .table-card,
+html.theme-dark .backup-summary,
+html.theme-dark .danger-zone,
+html.theme-dark .admin-shell .metric-card,
+html.theme-dark .search-field,
+html.theme-dark .course-admin-card,
+html.theme-dark .vertical-tabs,
+html.theme-dark .config-nav,
+html.theme-dark .config-card,
+html.theme-dark .aliyun-card,
+html.theme-dark .aliyun-field-grid,
+html.theme-dark .aliyun-field-grid label,
+html.theme-dark .monitor-service,
+html.theme-dark .admin-shell .drawer,
+html.theme-dark .admin-shell .modal,
+html.theme-dark .password-target-card,
+html.theme-dark .password-target-icon,
+html.theme-dark .password-tools-row,
+html.theme-dark .course-modal-row,
+html.theme-dark .course-modal-icon,
+html.theme-dark .purpose-card,
+html.theme-dark .form-panel,
+html.theme-dark .settings-card,
+html.theme-dark .password-box,
+html.theme-dark .admin-shell .form-control,
+html.theme-dark .text-action,
+html.theme-dark .course-chip em {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-dark .admin-shell .metric-card.danger,
+html.theme-dark .admin-table tr.disabled,
+html.theme-dark .danger-zone,
+html.theme-dark .monitor-service.tag-danger {
+  background: rgba(239, 68, 68, .14) !important;
+  border-color: rgba(248, 113, 113, .34) !important;
+}
+
+html.theme-dark .monitor-service.tag-warning {
+  background: rgba(245, 158, 11, .14) !important;
+  border-color: rgba(251, 191, 36, .34) !important;
+}
+
+html.theme-dark .admin-account-menu button:hover,
+html.theme-dark .text-action:hover,
+html.theme-dark .vertical-tabs button:hover,
+html.theme-dark .vertical-tabs button.active,
+html.theme-dark .config-nav-item:hover,
+html.theme-dark .config-nav-item.active,
+html.theme-dark .course-more,
+html.theme-dark .admin-table tr.selected {
+  background: var(--dark-surface-2) !important;
+  color: #FDE68A !important;
+}
+
+html.theme-dark .admin-shell h1,
+html.theme-dark .admin-shell h2,
+html.theme-dark .admin-shell h3,
+html.theme-dark .admin-shell strong,
+html.theme-dark .admin-shell .page-header .breadcrumb span:last-child,
+html.theme-dark .admin-shell .identity strong,
+html.theme-dark .admin-shell .panel-head h2,
+html.theme-dark .admin-shell .card-title,
+html.theme-dark .admin-shell .drawer-head h2,
+html.theme-dark .admin-shell .modal-head h2,
+html.theme-dark .admin-shell .metric-card strong,
+html.theme-dark .admin-shell .course-admin-card strong,
+html.theme-dark .admin-shell .setting-row strong,
+html.theme-dark .admin-shell .param-title {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .admin-shell .metric-card.danger strong,
+html.theme-dark .admin-shell .metric-card.danger small,
+html.theme-dark .danger-zone strong,
+html.theme-dark .stale,
+html.theme-dark .icon-action.danger,
+html.theme-dark .text-action.danger {
+  color: #FCA5A5 !important;
+}
+
+html.theme-dark .admin-shell .metric-card small,
+html.theme-dark .admin-shell .breadcrumb,
+html.theme-dark .admin-shell .breadcrumb > div,
+html.theme-dark .admin-shell .identity span,
+html.theme-dark .admin-shell .course-admin-card p,
+html.theme-dark .admin-shell .mini-metrics span,
+html.theme-dark .admin-shell .setting-row span,
+html.theme-dark .admin-shell .setting-row small,
+html.theme-dark .admin-shell .param-desc,
+html.theme-dark .admin-shell .param-current,
+html.theme-dark .admin-shell .info-row span {
+  color: var(--dark-muted) !important;
+}
+
+/* Auth */
+html.theme-dark .auth-card {
+  background: rgba(15, 23, 42, .94) !important;
+  border-color: rgba(148, 163, 184, .28) !important;
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .auth-card .brand,
+html.theme-dark .auth-card .brand strong,
+html.theme-dark .auth-card .label {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .auth-card .brand small {
+  color: var(--dark-muted) !important;
+}
+
+html.theme-dark .auth-card .tabs {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .auth-card .tabs button {
+  color: var(--dark-sub) !important;
+}
+
+html.theme-dark .auth-card .tabs button.active,
+html.theme-dark .auth-submit,
+html.theme-dark .send-code-btn {
+  background: linear-gradient(135deg, #00B8D4, #3B82F6) !important;
+  color: #F8FAFC !important;
+}
+
+html.theme-dark .auth-card .input,
+html.theme-dark .auth-card .password-field {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .auth-card .password-field input {
+  color: var(--dark-body) !important;
+}
+
+/* Product home paper and CTA dark pass */
+html.theme-dark .product-home.product-home-dark .register-link,
+html.theme-dark .product-home.product-home-dark .workbench-link {
+  background: rgba(0, 184, 212, .18) !important;
+  color: #F8FAFC !important;
+  border: 1px solid rgba(0, 240, 255, .28) !important;
+}
+
+html.theme-dark .product-home.product-home-dark .book {
+  --book-paper: #0F172A !important;
+  --book-ink: #F8FAFC !important;
+  --book-muted: #CBD5E1 !important;
+  background: var(--dark-surface) !important;
+}
+
+html.theme-dark .product-home.product-home-dark .book-base-left,
+html.theme-dark .product-home.product-home-dark .book-base-right,
+html.theme-dark .product-home.product-home-dark .page-front,
+html.theme-dark .product-home.product-home-dark .page-back,
+html.theme-dark .product-home.product-home-dark .dark-page,
+html.theme-dark .product-home.product-home-dark .wrong-paper,
+html.theme-dark .product-home.product-home-dark .paper-note,
+html.theme-dark .product-home.product-home-dark .radar-demo,
+html.theme-dark .product-home.product-home-dark .formula-span {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .product-home.product-home-dark .book-page h3,
+html.theme-dark .product-home.product-home-dark .book-final-left h2,
+html.theme-dark .product-home.product-home-dark .book-final-right h2,
+html.theme-dark .product-home.product-home-dark .data-network h3,
+html.theme-dark .product-home.product-home-dark .turn-hint strong {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .product-home.product-home-dark .book-copy,
+html.theme-dark .product-home.product-home-dark .wrong-text,
+html.theme-dark .product-home.product-home-dark .book-final-right > p,
+html.theme-dark .product-home.product-home-dark .data-network p,
+html.theme-dark .product-home.product-home-dark .paper-note,
+html.theme-dark .product-home.product-home-dark .book-final-left p,
+html.theme-dark .product-home.product-home-dark .book-final-right footer p {
+  color: var(--dark-sub) !important;
+}
+
+/* Additional dark pass for dense scoped chunks and teleported controls. */
+html.theme-dark .student-shell .empty,
+html.theme-dark .student-shell .empty svg,
+html.theme-dark .student-shell .sticky-tools,
+html.theme-dark .student-shell .join-dashed,
+html.theme-dark .student-shell .image-drop,
+html.theme-dark .student-shell .ask-card > svg,
+html.theme-dark .student-shell .big-avatar,
+html.theme-dark .student-shell .badges span,
+html.theme-dark .student-shell .streak,
+html.theme-dark .student-shell .hint-line,
+html.theme-dark .student-shell .context-bar,
+html.theme-dark .student-shell .reading,
+html.theme-dark .student-shell .ai-summary,
+html.theme-dark .student-shell .modal-head button,
+html.theme-dark .student-shell .preview-course,
+html.theme-dark .student-shell .code-input,
+html.theme-dark .student-shell .select-menu-empty,
+html.theme-dark .student-shell .ask-card form,
+html.theme-dark .student-shell .chat-input,
+html.theme-dark .student-shell .pretty-input,
+html.theme-dark .student-shell .course-layout > aside .ask-card,
+html.theme-dark .student-shell .course-layout > aside .recent-qa-card,
+html.theme-dark .student-shell .qa-modern-page .input-dock-container,
+html.theme-dark .student-shell .qa-modern-page .input-box,
+html.theme-dark .student-shell .qa-attachment-chip,
+html.theme-dark .student-shell .qa-modern-page .ai-action-btn,
+html.theme-dark .student-shell .qa-modern-page .msg-actions button,
+html.theme-dark .student-shell .class-chat .msg-actions button,
+html.theme-dark .student-shell .class-chat .thought-toggle,
+html.theme-dark .student-shell .class-chat .thought,
+html.theme-dark .student-shell .tutoring-page .empty-guide,
+html.theme-dark .student-shell .tutoring-page .guide-body .markdown-body blockquote,
+html.theme-dark .student-shell .tutoring-page .guide-body.markdown-body blockquote,
+html.theme-dark .student-shell .tutoring-page .guide-body .markdown-body th,
+html.theme-dark .student-shell .tutoring-page .guide-body.markdown-body th,
+html.theme-dark .student-shell .student-plan-page .plan-task-check,
+html.theme-dark .student-shell .student-plan-page .badge-item.unlocked,
+html.theme-dark .student-shell .student-plan-page .cal-arr-btn,
+html.theme-dark .student-shell .student-plan-page .cal-day:hover:not(:disabled),
+html.theme-dark .student-shell .profile-cover,
+html.theme-dark .student-shell .profile-header-info aside,
+html.theme-dark .student-shell .profile-tabs,
+html.theme-dark .student-shell .wrong-book-page .wrong-layout > aside,
+html.theme-dark .student-shell .quiz-modern-page .empty {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-dark .student-shell .qa-modern-page .input-dock-container {
+  background: linear-gradient(to bottom, rgba(3, 7, 18, 0), var(--dark-page) 42%) !important;
+  box-shadow: none !important;
+}
+
+html.theme-dark .student-shell .input-box textarea,
+html.theme-dark .student-shell .chat-input textarea,
+html.theme-dark .student-shell .ask-card input,
+html.theme-dark .student-shell .pretty-input input,
+html.theme-dark .student-shell .code-input input,
+html.theme-dark .student-shell .global-search input {
+  background: transparent !important;
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .student-shell .default-user-avatar rect {
+  fill: var(--dark-surface-2) !important;
+}
+
+html.theme-dark .student-shell .default-user-avatar path,
+html.theme-dark .student-shell .default-user-avatar circle {
+  fill: var(--dark-cyan-text) !important;
+}
+
+html.theme-dark .student-shell .continue-cover span,
+html.theme-dark .student-shell .page-badge,
+html.theme-dark .student-shell .knowledge-dot {
+  background: rgba(15, 23, 42, .82) !important;
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .student-shell .student-plan-page .badge-item.unlocked,
+html.theme-dark .student-shell .practice-feature-card,
+html.theme-dark .student-shell .practice-feature-card:hover:not(:disabled),
+html.theme-dark .student-shell .practice-feature-card:disabled > span {
+  background: rgba(245, 158, 11, .16) !important;
+  color: #FCD34D !important;
+  border-color: rgba(251, 191, 36, .34) !important;
+}
+
+html.theme-dark .student-shell .practice-feature-card h2,
+html.theme-dark .student-shell .practice-feature-card p {
+  color: #FDE68A !important;
+}
+
+html.theme-dark .student-shell .practice-switch::after,
+html.theme-dark .student-shell .switch span::after,
+html.theme-dark .teacher-shell .switch span::after {
+  background: var(--dark-surface-2) !important;
+}
+
+html.theme-dark .teacher-shell .course-preview-frame,
+html.theme-dark .teacher-shell .course-preview-cover span,
+html.theme-dark .teacher-shell .form-section,
+html.theme-dark .teacher-shell .advanced.open,
+html.theme-dark .teacher-shell .chapter-edit,
+html.theme-dark .teacher-shell .stage-top .icon-action.active,
+html.theme-dark .teacher-shell .stage-controls .icon-action.active,
+html.theme-dark .teacher-shell .preview-content iframe,
+html.theme-dark .teacher-shell .script-editor,
+html.theme-dark .teacher-shell .script-editor:focus,
+html.theme-dark .teacher-shell .markdown-preview pre,
+html.theme-dark .teacher-shell .preview-tabs button,
+html.theme-dark .teacher-shell .question-row,
+html.theme-dark .teacher-shell .weak-row,
+html.theme-dark .teacher-shell .weak-answer-mini,
+html.theme-dark .teacher-shell .course-preview-body {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .teacher-shell .course-preview-cover span,
+html.theme-dark .teacher-shell .stage-top .icon-action.active,
+html.theme-dark .teacher-shell .stage-controls .icon-action.active {
+  background: var(--dark-surface-2) !important;
+  color: #FDBA74 !important;
+}
+
+html.theme-dark .teacher-shell .course-preview-body h3,
+html.theme-dark .teacher-shell .question-row span,
+html.theme-dark .teacher-shell .weak-row span,
+html.theme-dark .teacher-shell .weak-set-card strong,
+html.theme-dark .teacher-shell .weak-question-preview span,
+html.theme-dark .teacher-shell .weak-attempt-student strong,
+html.theme-dark .teacher-shell .course-preview-body strong {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .admin-shell .segment-btn.active,
+html.theme-dark .admin-shell .view-toggle button,
+html.theme-dark .admin-shell .view-toggle button.active,
+html.theme-dark .admin-shell .course-chip,
+html.theme-dark .admin-shell .health-pill,
+html.theme-dark .admin-shell .form-error,
+html.theme-dark .admin-shell .alert,
+html.theme-dark .admin-shell .aliyun-field-grid .input,
+html.theme-dark .admin-shell .aliyun-field-grid .select,
+html.theme-dark .admin-shell .purpose-card,
+html.theme-dark .admin-shell .bulk-bar {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .admin-shell .bulk-bar,
+html.theme-dark .admin-shell .view-toggle button.active {
+  background: var(--ca-role-admin-primary) !important;
+  color: #F8FAFC !important;
+}
+
+html.theme-dark .product-home.product-home-dark .trial-link,
+html.theme-dark .product-home.product-home-dark .docs-link {
+  background: rgba(15, 23, 42, .82) !important;
+  color: #F8FAFC !important;
+  border: 1px solid rgba(148, 163, 184, .28) !important;
+}
+
+/* Theme audit pass: keep role pages readable without changing layout metrics. */
+html.theme-dark .student-shell,
+html.theme-dark .student-modal-scope,
+html.theme-dark .global-search {
+  --s-primary-600: var(--dark-cyan-text) !important;
+  --s-primary-700: #A5F3FC !important;
+  --s-ai-main: linear-gradient(135deg, #0891B2, #2563EB) !important;
+}
+
+html.theme-dark .student-shell .qa-modern-page,
+html.theme-dark .student-shell .class-chat,
+html.theme-dark .qa-modern-page,
+html.theme-dark .class-chat {
+  --qa-primary-600: var(--dark-cyan-text) !important;
+  --class-chat-primary: var(--dark-cyan-text) !important;
+  --class-chat-primary-50: var(--dark-cyan-soft) !important;
+  --class-chat-ai: linear-gradient(135deg, #0891B2, #2563EB) !important;
+}
+
+html.theme-dark .quiz-modern-page,
+html.theme-dark .exam-answer-page,
+html.theme-dark .exam-modal-scope,
+html.theme-dark .student-plan-page,
+html.theme-dark .tutoring-page {
+  --quiz-primary-600: var(--dark-cyan-text) !important;
+  --exam-primary-600: var(--dark-cyan-text) !important;
+  --plan-primary-600: var(--dark-cyan-text) !important;
+  --tutor-primary-600: var(--dark-cyan-text) !important;
+}
+
+html.theme-dark .teacher-shell {
+  --ca-role-teacher-primary: #FDBA74 !important;
+  --ca-role-teacher-primary-hover: #FED7AA !important;
+  --ca-role-teacher-light: rgba(249, 115, 22, .14) !important;
+  --color-primary-600: #C2410C !important;
+  --color-primary-700: #FDBA74 !important;
+}
+
+html.theme-dark .admin-shell {
+  --ca-role-admin-primary: #FDE68A !important;
+  --ca-role-admin-primary-hover: #FEF3C7 !important;
+  --ca-role-admin-light: rgba(217, 160, 91, .16) !important;
+  --color-primary-600: #A16207 !important;
+  --color-primary-700: #FDE68A !important;
+}
+
+html.theme-dark :where(.student-shell, .student-modal-scope, .teacher-shell, .admin-shell)
+  :where(button, a.icon-action, .btn, .link-btn, .text-action) > :where(span, strong, small, b) {
+  color: inherit !important;
+}
+
+html.theme-dark :where(.student-shell, .teacher-shell, .admin-shell)
+  :where(button, a.icon-action, .btn, .link-btn, .text-action) svg {
+  color: currentColor;
+}
+
+html.theme-dark .student-shell :where(
+  .btn-secondary,
+  .btn-ghost,
+  .link-btn,
+  .ghost-row,
+  .section-head button,
+  .notice-head button,
+  .notice-read-btn,
+  .home-refresh-btn,
+  .home-ac-view-all,
+  .home-action-task-card,
+  .home-task-arrow,
+  .course-card-link,
+  .course-art .dropdown-trigger:hover,
+  .student-course-card .course-art .dropdown-trigger:hover,
+  .course-art .dropdown-pop,
+  .student-course-card .course-art .dropdown-pop,
+  .select-menu > button,
+  .dropdown-trigger,
+  .select-menu-empty,
+  .quick-tags button,
+  .history-strip button,
+  .mini-metric,
+  .streak,
+  .knowledge-block div,
+  .knowledge-box,
+  .badges span,
+  .notice-settings-grid .toggle-line,
+  .profile-tabs .active,
+  .underline-tabs .active,
+  .seg-tabs .active,
+  .study-tabs .active,
+  .profile-form .password-field,
+  .wrong-title-icon,
+  .wrong-filter-state,
+  .wrong-filter-state button,
+  .wrong-tree button,
+  .wrong-tree button em,
+  .wrong-state,
+  .wrong-times,
+  .qa-modern-page .prompt-grid button,
+  .qa-modern-page .ai-action-btn,
+  .qa-modern-page .msg-actions button,
+  .qa-modern-page .drawer-head .drawer-close-btn,
+  .qa-modern-page .history-row,
+  .qa-modern-page .attach-btn,
+  .qa-attachment-chip button,
+  .class-chat-dock .quick-tags button,
+  .class-chat .msg-actions button,
+  .tutoring-page .course-select .select-menu > button,
+  .tutoring-page .tutor-mode-tabs button,
+  .tutoring-page .tutor-mode-tabs button.active,
+  .tutoring-page .guide-step,
+  .tutoring-page .guide-step > button,
+  .tutoring-page .knowledge-box,
+  .tutoring-page .guide-answer,
+  .tutoring-history-card,
+  .practice-chip,
+  .practice-segmented-control button,
+  .practice-segmented-control button.active,
+  .practice-switch-wrapper,
+  .quiz-modern-tabs button,
+  .quiz-modern-tabs button.active,
+  .exam-mark-btn,
+  .exam-q-btn,
+  .exam-btn-outline,
+  .exam-analysis-trigger,
+  .student-plan-page .cal-arr-btn,
+  .student-plan-page .plan-task-tag,
+  .student-plan-page .ai-prompt-bar
+) {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-dark .student-shell :where(
+  .home-refresh-btn:hover,
+  .home-ac-view-all:hover,
+  .course-card-link:hover,
+  .section-head button:hover,
+  .notice-head button:hover,
+  .notice-read-btn:hover,
+  .quick-tags button:hover,
+  .wrong-filter-state button:hover,
+  .wrong-tree button:hover,
+  .wrong-tree button.active,
+  .qa-modern-page .prompt-grid button:hover,
+  .qa-modern-page .ai-action-btn:hover,
+  .qa-modern-page .msg-actions button:hover,
+  .class-chat .msg-actions button:hover,
+  .tutoring-page .tutor-mode-tabs button:hover,
+  .tutoring-page .tutor-mode-tabs button.active,
+  .tutoring-page .guide-step > button:hover,
+  .practice-chip:hover,
+  .practice-chip.active,
+  .practice-segmented-control button:hover,
+  .practice-segmented-control button.active,
+  .practice-switch-wrapper:hover,
+  .quiz-modern-tabs button:hover,
+  .quiz-modern-tabs button.active,
+  .exam-mark-btn:hover,
+  .exam-mark-btn.is-marked,
+  .exam-q-btn:hover,
+  .exam-q-btn.current,
+  .exam-q-btn.answered,
+  .exam-analysis-trigger:hover
+) {
+  background: rgba(0, 240, 255, .12) !important;
+  color: var(--dark-cyan-text) !important;
+  border-color: var(--dark-cyan-border) !important;
+}
+
+html.theme-dark .student-shell :where(
+  .btn-primary,
+  .round-btn.primary,
+  .ask-card button:not(.quick-tags button),
+  .send-btn,
+  .qa-modern-page .send-btn,
+  .qa-modern-page .bubble-user,
+  .class-chat .chat-msg.user .chat-bubble,
+  .week-check .done,
+  .segmented .active,
+  .practice-cta button,
+  .practice-generate-btn,
+  .student-plan-page .btn-ai-gen,
+  .student-plan-page .cal-day.today.checked,
+  .student-plan-page .plan-task-row.done .plan-task-check,
+  .tutoring-page .tutor-submit-btn,
+  .tutoring-page .guide-step b,
+  .guide-step b,
+  .exam-btn-primary,
+  .exam-opt-input:checked + .exam-opt-card .exam-opt-letter,
+  .qa-modern-page .history-favorite-toggle.checked .favorite-check-box,
+  .quick-tile:hover span,
+  .wrong-book-page .wrong-tree button.active em,
+  .bottom-tabs .ai span
+) {
+  background: linear-gradient(135deg, #0891B2, #2563EB) !important;
+  color: #F8FAFC !important;
+  border-color: transparent !important;
+  box-shadow: 0 12px 24px rgba(0, 184, 212, .22) !important;
+}
+
+html.theme-dark .student-shell :where(
+  .slide-mini,
+  .lesson-item,
+  .lesson-item.loading,
+  .lesson-item:hover,
+  .study-room .player-bar .popover-button.select-menu > button,
+  .study-room .study-tabs,
+  .study-room .study-tabs button:hover:not(.active),
+  .study-room .activity-band section,
+  .study-room .activity-item,
+  .study-room .activity-question:hover,
+  .study-room .note-tools,
+  .study-room .note-tools button,
+  .study-room .note-editor
+) {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .student-shell :where(
+  .home-task-title,
+  .home-ac-action-name,
+  .wrong-title-block h1,
+  .wrong-book-page .wrong-hero,
+  .wrong-book-page .wrong-hero strong,
+  .course-card-title h2,
+  .mini-metric strong,
+  .knowledge-block h3,
+  .profile-form label,
+  .qa-modern-page .history-row span,
+  .tutoring-page .guide-step strong,
+  .tutoring-page .knowledge-box strong,
+  .practice-switch-wrapper strong,
+  .exam-analysis-trigger,
+  .exam-stat-val
+) {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .student-shell :where(
+  .home-task-type,
+  .home-ac-detail,
+  .wrong-title-block p,
+  .wrong-book-page .wrong-hero span,
+  .mini-metric span,
+  .profile-form label small,
+  .qa-modern-page .history-row small,
+  .tutoring-page .knowledge-box,
+  .exam-stat-label
+) {
+  color: var(--dark-muted) !important;
+}
+
+html.theme-dark .teacher-shell :where(
+  .teacher-notice-head button,
+  .notice-read-btn,
+  .teacher-notice-main,
+  .teacher-notice-item.unread,
+  .teacher-notice-empty,
+  .course-popover button,
+  .user-popover button,
+  .user-menu > button,
+  .course-switch > button,
+  .teacher-sidebar-toggle,
+  .link-btn,
+  .dashed-btn,
+  .upload-drop,
+  .segment-btn,
+  .segment-btn.active,
+  .view-toggle button,
+  .view-toggle button.active,
+  .lesson-row,
+  .lesson-index b,
+  .lesson-open-label,
+  .material-health,
+  .material-status-tile,
+  .type-list,
+  .materials-layout,
+  .chapter-tree,
+  .chapter-tree button,
+  .chapter-tree-row,
+  .chapter-tree-count,
+  .chapter-tree-delete,
+  .material-filter,
+  .material-row,
+  .material-row.processing,
+  .ppt-empty-state,
+  .thumb-card,
+  .thumb-card div,
+  .editor-toolbar button,
+  .ai-strip,
+  .ai-strip button,
+  .weak-generating,
+  .weak-row,
+  .weak-row button,
+  .weak-point-switcher-head,
+  .weak-set-card,
+  .weak-question-preview div,
+  .weak-answer-mini span,
+  .word-cloud,
+  .layer-card,
+  .reminder-recipients,
+  .preview-tabs button,
+  .lesson-preview-layout aside button,
+  .lesson-preview-stage article,
+  .quiz-editor-side,
+  .quiz-editor-stats,
+  .option-edit-row > span,
+  .drawer-stats,
+  .page-empty,
+  .tag-primary,
+  .tag-ai
+) {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-dark .teacher-shell :where(
+  .teacher-notice-main:hover,
+  .teacher-notice-head button:hover,
+  .notice-read-btn:hover,
+  .course-popover button:hover,
+  .course-popover button.active,
+  .user-popover button:hover,
+  .user-menu > button:hover,
+  .course-switch > button:hover,
+  .course-switch > button.active,
+  .teacher-sidebar-toggle:hover,
+  .link-btn:hover,
+  .dashed-btn:hover,
+  .upload-drop:hover,
+  .segment-btn:hover,
+  .segment-btn.active,
+  .view-toggle button:hover,
+  .chapter-tree button:hover,
+  .chapter-tree button.active,
+  .chapter-tree-row:hover,
+  .chapter-tree-row.active,
+  .editor-toolbar button:hover,
+  .editor-toolbar button.active,
+  .weak-generating,
+  .weak-row.generating,
+  .weak-row button:hover:not(:disabled),
+  .weak-set-card:hover,
+  .weak-set-card.active,
+  .preview-tabs button:hover:not(:disabled),
+  .preview-tabs button.active,
+  .lesson-preview-layout aside button:hover,
+  .lesson-preview-layout aside button.active,
+  .tag-primary,
+  .tag-ai
+) {
+  background: rgba(249, 115, 22, .14) !important;
+  color: #FDBA74 !important;
+  border-color: rgba(251, 146, 60, .34) !important;
+}
+
+html.theme-dark .teacher-shell :where(
+  .btn-primary,
+  .btn-ai:hover:not(:disabled),
+  .view-toggle .active,
+  .view-toggle button.active,
+  .lesson-row:hover .lesson-open-label,
+  .question-row b,
+  .thumb-card span
+) {
+  background: #C2410C !important;
+  color: #F8FAFC !important;
+  border-color: #EA580C !important;
+}
+
+html.theme-dark .teacher-shell :where(
+  .teacher-notice-main strong,
+  .lesson-title-line strong,
+  .material-status-tile strong,
+  .type-body strong,
+  .chapter-tree-title,
+  .weak-point-switcher-title strong,
+  .weak-set-card strong,
+  .weak-question-preview span,
+  .lesson-preview-layout aside strong,
+  .quiz-editor-stats span,
+  .markdown-preview,
+  .markdown-preview h1,
+  .markdown-preview h2,
+  .markdown-preview h3
+) {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .teacher-shell :where(
+  .teacher-notice-main small,
+  .teacher-notice-main em,
+  .lesson-body small,
+  .material-status-tile,
+  .type-row b,
+  .activity-item span,
+  .activity-item small,
+  .weak-point-switcher-title small,
+  .weak-set-card small,
+  .weak-question-preview em,
+  .lesson-preview-layout aside span,
+  .quiz-editor-stats small
+) {
+  color: var(--dark-muted) !important;
+}
+
+html.theme-dark .admin-shell :where(
+  .notice-btn,
+  .user-trigger,
+  .admin-account-menu button,
+  .link-btn,
+  .text-action,
+  .segment-btn,
+  .segment-btn.active,
+  .view-toggle button,
+  .view-toggle button.active,
+  .search-field,
+  .metric-card.danger .metric-icon,
+  .course-chip,
+  .course-chip em,
+  .course-more,
+  .vertical-tabs button,
+  .vertical-tabs button.active,
+  .config-nav-item,
+  .config-nav-item.active,
+  .log-tabs button,
+  .log-tabs button.active,
+  .card-header,
+  .aliyun-card-head,
+  .aliyun-field-grid,
+  .aliyun-field-grid label,
+  .aliyun-field-grid .input,
+  .aliyun-field-grid .select,
+  .aliyun-card-icon,
+  .setting-row,
+  .param-row,
+  .alert-info,
+  .alert-danger,
+  .form-error,
+  .monitor-service,
+  .backup-summary div,
+  .danger-zone,
+  .drawer-foot,
+  .password-target-card,
+  .password-target-icon,
+  .password-tools-row,
+  .course-modal-row,
+  .course-modal-icon,
+  .purpose-card,
+  .health-pill,
+  .bulk-bar
+) {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-dark .admin-shell :where(
+  .notice-btn:hover,
+  .user-trigger:hover,
+  .admin-account-menu button:hover,
+  .link-btn:hover,
+  .text-action:hover,
+  .segment-btn:hover,
+  .segment-btn.active,
+  .view-toggle button:hover,
+  .course-more:hover,
+  .vertical-tabs button:hover,
+  .vertical-tabs button.active,
+  .config-nav-item:hover,
+  .config-nav-item.active,
+  .log-tabs button:hover,
+  .log-tabs button.active,
+  .course-chip,
+  .course-more,
+  .aliyun-card-icon,
+  .health-pill.ok
+) {
+  background: rgba(217, 160, 91, .16) !important;
+  color: #FDE68A !important;
+  border-color: rgba(251, 191, 36, .34) !important;
+}
+
+html.theme-dark .admin-shell :where(
+  .btn-primary,
+  .view-toggle .active,
+  .view-toggle button.active,
+  .bulk-bar,
+  .bulk-bar button
+) {
+  background: #A16207 !important;
+  color: #F8FAFC !important;
+  border-color: #B45309 !important;
+}
+
+html.theme-dark .admin-shell :where(
+  .metric-card.danger,
+  .health-pill.warn,
+  .alert-danger,
+  .form-error,
+  .danger-zone,
+  .monitor-service.tag-danger,
+  .text-action.danger,
+  .icon-action.danger
+) {
+  background: rgba(239, 68, 68, .16) !important;
+  color: #FCA5A5 !important;
+  border-color: rgba(248, 113, 113, .34) !important;
+}
+
+html.theme-dark .admin-shell :where(
+  .welcome-card h1,
+  .timeline-item strong,
+  .mini-user strong,
+  .service-row span:nth-child(2),
+  .course-admin-card strong,
+  .config-card h2,
+  .form-section h3,
+  .monitor-service strong,
+  .backup-summary strong,
+  .password-target-card strong,
+  .course-modal-row strong
+) {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .admin-shell :where(
+  .welcome-card p,
+  .timeline-item span,
+  .mini-user span,
+  .service-row small,
+  .course-admin-card p,
+  .form-label,
+  .form-grid label,
+  .policy-form label,
+  .monitor-service span,
+  .backup-summary span,
+  .backup-summary small,
+  .password-target-card p,
+  .password-tools-row span,
+  .course-modal-row small
+) {
+  color: var(--dark-muted) !important;
+}
+
+html.theme-dark .app-checkbox.checked .check-box,
+html.theme-dark .app-checkbox.switch.checked .switch-track {
+  background: #0891B2 !important;
+  border-color: #22D3EE !important;
+}
+
+html.theme-dark .app-select-pop button.active,
+html.theme-dark .app-select-pop button.focused,
+html.theme-dark .app-select-pop button:hover {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-text) !important;
+}
+
+/* Light theme audit: role shells should not keep forced blackboard surfaces. */
+html.theme-light .teacher-shell .teacher-sidebar,
+html.theme-light .admin-shell .admin-sidebar {
+  background: var(--color-bg-surface) !important;
+  color: var(--color-text-body) !important;
+  border-right-color: var(--color-border-default) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-light .teacher-shell .teacher-sidebar::before,
+html.theme-light .admin-shell .admin-sidebar::before {
+  opacity: 0 !important;
+}
+
+html.theme-light .teacher-shell :where(.teacher-sidebar-toggle, .nav-group button, .course-title),
+html.theme-light .admin-shell .admin-sidebar :where(.teacher-sidebar-toggle, .nav-group button) {
+  background: transparent !important;
+  color: var(--color-text-secondary) !important;
+  border-color: var(--color-border-default) !important;
+}
+
+html.theme-light .teacher-shell :where(.teacher-sidebar-toggle:hover, .nav-group button:hover, .nav-group button.active, .course-title:hover),
+html.theme-light .admin-shell .admin-sidebar :where(.teacher-sidebar-toggle:hover, .nav-group button:hover, .nav-group button.active) {
+  background: var(--color-primary-50) !important;
+  color: var(--color-primary-700) !important;
+}
+
+html.theme-light .teacher-shell :where(.nav-group > span, .course-title),
+html.theme-light .admin-shell .admin-sidebar .nav-group > span {
+  color: var(--color-text-muted) !important;
+}
+
+html.theme-light .teacher-shell .welcome {
+  background: linear-gradient(135deg, #FFF7ED, #FFEDD5) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid rgba(249, 115, 22, .18) !important;
+}
+
+html.theme-light .teacher-shell .welcome h1 {
+  color: var(--color-text-primary) !important;
+}
+
+html.theme-light .teacher-shell .welcome p {
+  color: var(--color-text-secondary) !important;
+}
+
+html.theme-light .teacher-shell .white-btn {
+  background: rgba(255, 255, 255, .72) !important;
+  color: var(--color-primary-700) !important;
+  border-color: rgba(249, 115, 22, .24) !important;
+}
+
+html.theme-light .teacher-shell .btn-ai {
+  background: var(--ca-role-teacher-primary) !important;
+  color: #FFFFFF !important;
+}
+
+html.theme-light .teacher-shell :where(.cover, .mini-cover, .lesson-thumb, .course-cover:not(.has-image)) {
+  background: var(--color-bg-muted) !important;
+  color: var(--color-primary-700) !important;
+}
+
+html.theme-light .admin-shell .admin-sidebar .nav-group button.active svg,
+html.theme-light .admin-shell .admin-sidebar .nav-group button.active::before {
+  color: var(--ca-role-admin-primary) !important;
+  background: var(--ca-role-admin-primary) !important;
+}

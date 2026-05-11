@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import decrypt_secret
 from app.db.models import ModelConfig, ServiceConfig
+from app.services.provider_policy import is_supported_model_provider, is_supported_service_provider
 
 
 @dataclass(frozen=True)
@@ -33,7 +34,7 @@ class RuntimeServiceConfig:
 def get_enabled_service_config(db: Session | None, service_type: str) -> RuntimeServiceConfig | None:
     if db is None:
         return None
-    record = db.scalar(
+    records = db.scalars(
         select(ServiceConfig)
         .where(
             ServiceConfig.service_type == service_type,
@@ -42,6 +43,7 @@ def get_enabled_service_config(db: Session | None, service_type: str) -> Runtime
         )
         .order_by(ServiceConfig.updated_at.desc(), ServiceConfig.created_at.desc())
     )
+    record = next((item for item in records if is_supported_service_provider(item.provider, item.service_type)), None)
     if record is None:
         return None
     return RuntimeServiceConfig(
@@ -61,13 +63,15 @@ def get_default_model_config(db: Session | None, purpose: str) -> RuntimeModelCo
         .where(ModelConfig.purpose == purpose, ModelConfig.deleted_at.is_(None))
         .order_by(ModelConfig.is_default.desc(), ModelConfig.updated_at.desc(), ModelConfig.created_at.desc())
     )
-    record = db.scalar(statement)
+    records = db.scalars(statement)
+    record = next((item for item in records if is_supported_model_provider(item.provider, item.purpose)), None)
     if record is None and purpose != "general":
-        record = db.scalar(
+        fallback_records = db.scalars(
             select(ModelConfig)
             .where(ModelConfig.purpose == "general", ModelConfig.deleted_at.is_(None))
             .order_by(ModelConfig.is_default.desc(), ModelConfig.updated_at.desc(), ModelConfig.created_at.desc())
         )
+        record = next((item for item in fallback_records if is_supported_model_provider(item.provider, item.purpose)), None)
     if record is None:
         return None
     return RuntimeModelConfig(

@@ -137,6 +137,13 @@
   letter-spacing: 0;
 }
 
+.brand .student-brand-logo {
+  width: 58px;
+  height: 44px;
+  flex: 0 0 auto;
+  display: block;
+}
+
 .brand span {
   width: 32px;
   height: 32px;
@@ -176,42 +183,76 @@
 
 .student-nav-links {
   justify-self: center;
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 4px;
   max-width: 100%;
   overflow-x: auto;
-  border: 1px solid var(--ca-color-paper-border);
+  border: 1px solid rgba(255,255,255,.56);
   border-radius: var(--ca-radius-full);
-  background: var(--ca-color-paper-bg);
-  box-shadow: inset 0 1px 2px rgba(0,0,0,.02);
+  background: rgba(255,255,255,.42);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,.42), 0 8px 26px rgba(15,23,42,.05);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
   padding: 4px;
   scrollbar-width: none;
 }
 
+.student-nav-links::-webkit-scrollbar {
+  display: none;
+}
+
+.student-nav-indicator {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  z-index: 0;
+  width: 0;
+  border: 1px solid rgba(255,255,255,.74);
+  border-radius: var(--ca-radius-full);
+  background: rgba(255,255,255,.68);
+  box-shadow: 0 12px 28px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.8);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .36s cubic-bezier(.16,1,.3,1), width .36s cubic-bezier(.16,1,.3,1), opacity .18s ease;
+  will-change: transform, width;
+}
+
+.student-nav-indicator.ready {
+  opacity: 1;
+}
+
 .student-nav-link {
+  position: relative;
+  z-index: 1;
   min-height: 36px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
   border-radius: var(--ca-radius-full);
+  background: transparent !important;
   color: var(--ca-color-paper-sub);
   font-size: 14px;
   font-weight: 700;
   padding: 0 20px;
+  box-shadow: none !important;
   white-space: nowrap;
+  transition: color .22s ease, transform .22s ease;
 }
 
 .student-nav-link:hover {
-  background: var(--ca-color-paper-card);
+  background: transparent !important;
   color: var(--ca-color-paper-ink);
 }
 
 .student-nav-link.active,
 .student-nav-link.ai.active {
-  background: var(--ca-color-paper-card);
-  color: var(--ca-color-paper-ink);
-  box-shadow: var(--ca-shadow-paper);
+  background: transparent !important;
+  color: var(--ca-role-student-primary-hover);
+  box-shadow: none !important;
 }
 
 .student-nav-link.active svg,
@@ -272,11 +313,63 @@
 .student-main {
   width: min(1100px, 100%);
   max-width: 1100px;
+  overflow-x: clip;
   padding: 32px 24px 80px;
 }
 
+.student-page-stage {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .student-page {
+  animation: none;
   gap: 24px;
+}
+
+.student-page-forward-enter-active,
+.student-page-forward-leave-active,
+.student-page-back-enter-active,
+.student-page-back-leave-active {
+  transition: opacity .34s var(--ease-out), transform .42s cubic-bezier(.16,1,.3,1);
+  will-change: opacity, transform;
+}
+
+.student-page-forward-enter-active,
+.student-page-back-enter-active {
+  position: relative;
+  z-index: 2;
+}
+
+.student-page-forward-leave-active,
+.student-page-back-leave-active {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  pointer-events: none;
+}
+
+.student-page-forward-enter-from {
+  opacity: 0;
+  transform: translateX(64px);
+}
+
+.student-page-forward-leave-to {
+  opacity: 0;
+  transform: translateX(-64px);
+}
+
+.student-page-back-enter-from {
+  opacity: 0;
+  transform: translateX(-64px);
+}
+
+.student-page-back-leave-to {
+  opacity: 0;
+  transform: translateX(64px);
 }
 
 .hello-card {
@@ -879,7 +972,7 @@
 
 .student-shell .qa-modern-page .input-box {
   border-color: var(--ca-color-paper-border) !important;
-  background: rgba(255,255,255,.96) !important;
+  background: rgba(15,23,42,.96) !important;
 }
 
 .student-shell .bottom-tabs .ai span {
@@ -1310,4 +1403,293 @@
 .student-shell .class-chat .chat-input.compact textarea {
   align-self: center !important;
   margin: 0 !important;
+}
+
+/* Theme guard: this late-loaded chunk must respect the global theme. */
+html.theme-light .student-shell .qa-modern-page .input-box,
+html.theme-light .student-shell .class-chat .chat-input.compact,
+html.theme-light .student-shell .chat-input,
+html.theme-light .student-shell .ask-card form,
+html.theme-light .student-shell .input,
+html.theme-light .student-shell .textarea,
+html.theme-light .student-shell .pretty-input,
+html.theme-light .student-shell .select-menu > button,
+html.theme-light .student-shell .dropdown-trigger,
+html.theme-light .student-shell .problem-text {
+  background: var(--ca-color-paper-card) !important;
+  color: var(--ca-color-paper-ink) !important;
+  border-color: var(--ca-color-paper-border) !important;
+}
+
+html.theme-light .student-shell .home-ai-icon-wrap,
+html.theme-light .student-shell .home-ac-icon-wrapper.ai,
+html.theme-light .student-shell .home-ac-icon-wrapper.learning,
+html.theme-light .student-shell .practice-card-icon,
+html.theme-light .student-shell .practice-feature-icon,
+html.theme-light .student-shell .qa-title-icon,
+html.theme-light .student-shell .tutoring-page .empty-guide svg {
+  background: var(--ca-role-student-light) !important;
+  color: var(--ca-role-student-primary-hover) !important;
+}
+
+html.theme-light .student-shell .btn-primary,
+html.theme-light .student-shell .send-btn,
+html.theme-light .student-shell .ask-card button:not(.quick-tags button),
+html.theme-light .student-shell .practice-generate-btn,
+html.theme-light .student-shell .btn-ai,
+html.theme-light .student-shell .tutor-submit-btn,
+html.theme-light .student-shell .qa-modern-page .bubble-user,
+html.theme-light .student-shell .class-chat .chat-msg.user .chat-bubble,
+html.theme-light .student-shell .qa-modern-page .input-box > .send-btn,
+html.theme-light .student-shell .student-plan-page .btn-ai-gen,
+html.theme-light .student-shell .qa-modern-page .qa-tutoring-link,
+html.theme-light .student-shell .exam-btn-primary {
+  background: var(--ca-role-student-primary) !important;
+  color: #FFFFFF !important;
+  border-color: transparent !important;
+}
+
+html.theme-light .student-shell .btn-primary:hover,
+html.theme-light .student-shell .send-btn:hover:not(:disabled),
+html.theme-light .student-shell .ask-card button:not(.quick-tags button):hover,
+html.theme-light .student-shell .practice-generate-btn:hover:not(:disabled),
+html.theme-light .student-shell .btn-ai:hover,
+html.theme-light .student-shell .tutor-submit-btn:hover:not(:disabled),
+html.theme-light .student-shell .qa-modern-page .input-box > .send-btn:hover:not(:disabled),
+html.theme-light .student-shell .exam-btn-primary:hover:not(:disabled) {
+  background: var(--ca-role-student-primary-hover) !important;
+  color: #FFFFFF !important;
+}
+
+html.theme-light .student-shell .qa-modern-page .input-dock-container {
+  background: linear-gradient(to bottom, rgba(249, 248, 246, 0), var(--ca-color-paper-bg) 42%) !important;
+}
+
+html.theme-dark .student-shell .qa-modern-page .input-box,
+html.theme-dark .student-shell .class-chat .chat-input.compact,
+html.theme-dark .student-shell .chat-input,
+html.theme-dark .student-shell .ask-card form,
+html.theme-dark .student-shell .input,
+html.theme-dark .student-shell .textarea,
+html.theme-dark .student-shell .pretty-input,
+html.theme-dark .student-shell .select-menu > button,
+html.theme-dark .student-shell .dropdown-trigger,
+html.theme-dark .student-shell .problem-text {
+  background: #0F172A !important;
+  color: #E2E8F0 !important;
+  border-color: rgba(148, 163, 184, .24) !important;
+}
+
+html.theme-dark .student-shell .btn-primary,
+html.theme-dark .student-shell .send-btn,
+html.theme-dark .student-shell .ask-card button:not(.quick-tags button),
+html.theme-dark .student-shell .practice-generate-btn,
+html.theme-dark .student-shell .btn-ai,
+html.theme-dark .student-shell .tutor-submit-btn,
+html.theme-dark .student-shell .qa-modern-page .bubble-user,
+html.theme-dark .student-shell .class-chat .chat-msg.user .chat-bubble,
+html.theme-dark .student-shell .qa-modern-page .input-box > .send-btn,
+html.theme-dark .student-shell .student-plan-page .btn-ai-gen,
+html.theme-dark .student-shell .qa-modern-page .qa-tutoring-link,
+html.theme-dark .student-shell .exam-btn-primary,
+html.theme-dark .student-shell .exam-opt-input:checked + .exam-opt-card .exam-opt-letter,
+html.theme-dark .student-shell .practice-switch-wrapper.active .practice-switch {
+  background: linear-gradient(135deg, #0891B2, #2563EB) !important;
+  color: #F8FAFC !important;
+  border-color: transparent !important;
+}
+
+html.theme-dark .student-shell .btn-primary:hover,
+html.theme-dark .student-shell .send-btn:hover:not(:disabled),
+html.theme-dark .student-shell .ask-card button:not(.quick-tags button):hover,
+html.theme-dark .student-shell .practice-generate-btn:hover:not(:disabled),
+html.theme-dark .student-shell .btn-ai:hover,
+html.theme-dark .student-shell .tutor-submit-btn:hover:not(:disabled),
+html.theme-dark .student-shell .qa-modern-page .input-box > .send-btn:hover:not(:disabled),
+html.theme-dark .student-shell .exam-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0E7490, #1D4ED8) !important;
+  color: #F8FAFC !important;
+}
+
+html.theme-dark .student-shell .home-ai-icon-wrap,
+html.theme-dark .student-shell .home-ac-icon-wrapper.ai,
+html.theme-dark .student-shell .home-ac-icon-wrapper.learning,
+html.theme-dark .student-shell .practice-card-icon,
+html.theme-dark .student-shell .practice-feature-icon,
+html.theme-dark .student-shell .qa-title-icon,
+html.theme-dark .student-shell .tutoring-page .empty-guide svg,
+html.theme-dark .student-shell .bottom-tabs .ai span {
+  background: #0F172A !important;
+  color: #67E8F9 !important;
+  border-color: rgba(0, 240, 255, .26) !important;
+}
+
+html.theme-dark .student-shell .qa-modern-page .input-dock-container {
+  background: linear-gradient(to bottom, rgba(3, 7, 18, 0), #030712 42%) !important;
+}
+
+html.theme-light .student-shell .student-nav-links {
+  border-color: rgba(255, 255, 255, .58) !important;
+  background: rgba(255, 255, 255, .42) !important;
+  box-shadow: inset 0 1px 2px rgba(255,255,255,.42), 0 8px 26px rgba(15,23,42,.05) !important;
+}
+
+html.theme-light .student-shell .student-nav-link,
+html.theme-light .student-shell .student-nav-link:hover,
+html.theme-light .student-shell .student-nav-link.active,
+html.theme-light .student-shell .student-nav-link.ai.active {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.theme-light .student-shell .student-nav-link.active,
+html.theme-light .student-shell .student-nav-link.ai.active {
+  color: var(--ca-role-student-primary-hover) !important;
+}
+
+html.theme-dark .student-shell .student-nav-links {
+  border-color: rgba(148, 163, 184, .24) !important;
+  background: rgba(15, 23, 42, .54) !important;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14), 0 12px 30px rgba(0, 0, 0, .22) !important;
+}
+
+html.theme-dark .student-shell .student-nav-indicator {
+  border-color: rgba(148, 163, 184, .28);
+  background: rgba(30, 41, 59, .76);
+  box-shadow: 0 14px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+html.theme-dark .student-shell .student-nav-link,
+html.theme-dark .student-shell .student-nav-link:hover,
+html.theme-dark .student-shell .student-nav-link.active,
+html.theme-dark .student-shell .student-nav-link.ai.active {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.theme-dark .student-shell .student-nav-link.active,
+html.theme-dark .student-shell .student-nav-link.ai.active {
+  color: #67E8F9 !important;
+}
+
+/* Keep course card menu triggers transparent over cover art. */
+.student-shell .student-course-card .course-art .dropdown-trigger,
+html.theme-light .student-shell .student-course-card .course-art .dropdown-trigger,
+html.theme-dark .student-shell .student-course-card .course-art .dropdown-trigger {
+  border-color: rgba(255, 255, 255, .62) !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.student-shell .student-course-card .course-art .dropdown-trigger:hover,
+html.theme-light .student-shell .student-course-card .course-art .dropdown-trigger:hover,
+html.theme-dark .student-shell .student-course-card .course-art .dropdown-trigger:hover {
+  border-color: rgba(255, 255, 255, .86) !important;
+  background: transparent !important;
+  color: #FFFFFF !important;
+}
+
+.student-shell .top-theme-toggle {
+  color: var(--ca-color-paper-sub);
+}
+
+html.theme-dark .student-shell .top-theme-toggle {
+  color: #CBD5E1;
+}
+
+/* Icon audit: icons keep their layout box, but never carry a filled tile behind them. */
+.student-shell :where(
+  .top-icon,
+  .brand span,
+  .home-ai-icon-wrap,
+  .home-ac-icon-wrapper,
+  .practice-card-icon,
+  .practice-feature-icon,
+  .practice-history-icon,
+  .qa-title-icon,
+  .quiz-hero-icon,
+  .wrong-title-icon,
+  .student-plan-page .banner-icon,
+  .student-plan-page .badge-icon,
+  .global-search-item-icon,
+  .course-route-icon,
+  .tutoring-page .image-drop .upload-icon,
+  .tutoring-page .empty-guide svg,
+  .bottom-tabs button span
+),
+html.theme-light .student-shell :where(
+  .top-icon,
+  .brand span,
+  .home-ai-icon-wrap,
+  .home-ac-icon-wrapper,
+  .practice-card-icon,
+  .practice-feature-icon,
+  .practice-history-icon,
+  .qa-title-icon,
+  .quiz-hero-icon,
+  .wrong-title-icon,
+  .student-plan-page .banner-icon,
+  .student-plan-page .badge-icon,
+  .global-search-item-icon,
+  .course-route-icon,
+  .tutoring-page .image-drop .upload-icon,
+  .tutoring-page .empty-guide svg,
+  .bottom-tabs button span
+),
+html.theme-dark .student-shell :where(
+  .top-icon,
+  .brand span,
+  .home-ai-icon-wrap,
+  .home-ac-icon-wrapper,
+  .practice-card-icon,
+  .practice-feature-icon,
+  .practice-history-icon,
+  .qa-title-icon,
+  .quiz-hero-icon,
+  .wrong-title-icon,
+  .student-plan-page .banner-icon,
+  .student-plan-page .badge-icon,
+  .global-search-item-icon,
+  .course-route-icon,
+  .tutoring-page .image-drop .upload-icon,
+  .tutoring-page .empty-guide svg,
+  .bottom-tabs button span
+) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.student-shell .top-icon:hover,
+html.theme-light .student-shell .top-icon:hover,
+html.theme-dark .student-shell .top-icon:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.study-room :where(.icon-glass, .knowledge-dot),
+html.theme-light .study-room :where(.icon-glass, .knowledge-dot),
+html.theme-dark .study-room :where(.icon-glass, .knowledge-dot) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .student-nav-indicator,
+  .student-page-forward-enter-active,
+  .student-page-forward-leave-active,
+  .student-page-back-enter-active,
+  .student-page-back-leave-active {
+    transition-duration: .01ms !important;
+  }
+
+  .student-page-forward-enter-from,
+  .student-page-forward-leave-to,
+  .student-page-back-enter-from,
+  .student-page-back-leave-to {
+    transform: none !important;
+    filter: none !important;
+  }
 }

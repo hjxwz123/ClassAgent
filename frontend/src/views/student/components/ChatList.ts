@@ -1,6 +1,7 @@
-import { defineComponent, h, ref, Transition, type PropType } from "vue";
-import { BookMarked, BookOpen, Check, ChevronDown, Copy, Sparkles, User } from "../../../icons";
+import { defineComponent, h, onBeforeUnmount, ref, Transition, type PropType } from "vue";
+import { BookMarked, BookOpen, Check, ChevronDown, Copy, Sparkles } from "../../../icons";
 import { renderRichText } from "../../../utils/richText";
+import BrandLogo from "../../../components/BrandLogo.vue";
 
 type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };
 type ChatMessage = {
@@ -22,11 +23,15 @@ export default defineComponent({
   props: {
     messages: { type: Array as PropType<ChatMessage[]>, default: () => [] },
     thinking: { type: Boolean, default: false },
-    large: { type: Boolean, default: false }
+    large: { type: Boolean, default: false },
+    userAvatarUrl: { type: String, default: "" },
+    userName: { type: String, default: "" }
   },
   emits: ["toggle-thought", "copy", "favorite", "feedback"],
   setup(p, { emit }) {
     const expandedSourceMessageIds = ref<number[]>([]);
+    const burstingMessageIds = ref<number[]>([]);
+    const burstTimers = new Map<number, number>();
     const imageFallback = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='84' viewBox='0 0 84 84'%3E%3Crect width='84' height='84' rx='16' fill='%23F9F8F6'/%3E%3Cpath d='M23 56l12-14 9 10 6-7 11 11H23z' fill='%2300B8D4' opacity='.72'/%3E%3Ccircle cx='56' cy='29' r='7' fill='%23121614' opacity='.82'/%3E%3C/svg%3E";
     function sourceLabel(source: any, index: number) {
       return source?.title || source?.material_title || source?.chapter_title || source?.course_name || `来源${index + 1}`;
@@ -107,6 +112,18 @@ export default defineComponent({
         h("span", item.filename || `图片${index + 1}`)
       ])));
     }
+    function triggerLogoBurst(message: ChatMessage) {
+      if (message.role !== "ai") return;
+      window.clearTimeout(burstTimers.get(message.id));
+      burstingMessageIds.value = burstingMessageIds.value.filter((id) => id !== message.id);
+      requestAnimationFrame(() => {
+        burstingMessageIds.value = [...burstingMessageIds.value, message.id];
+        burstTimers.set(message.id, window.setTimeout(() => {
+          burstingMessageIds.value = burstingMessageIds.value.filter((id) => id !== message.id);
+          burstTimers.delete(message.id);
+        }, 720));
+      });
+    }
     function bubble(message: ChatMessage) {
       if (p.large && message.role === "user") {
         return h("div", { class: "chat-bubble bubble-user" }, [h("p", message.text), attachmentNodes(message)]);
@@ -145,13 +162,43 @@ export default defineComponent({
       ];
       return h("div", { class: "chat-bubble" }, body);
     }
-    function avatar(message: ChatMessage) {
-      return h("span", { class: ["chat-avatar", p.large ? (message.role === "user" ? "avatar-user" : "avatar-ai") : ""] }, [message.role === "user" ? h(User, { size: 16 }) : h(Sparkles, { size: 16 })]);
+    function defaultUserAvatar() {
+      return h("svg", { class: "default-user-avatar", viewBox: "0 0 64 64", role: "img", "aria-label": "默认头像" }, [
+        h("rect", { width: 64, height: 64, rx: 32, fill: "#F9F8F6" }),
+        h("circle", { cx: 32, cy: 25, r: 11, fill: "#00B8D4", opacity: "0.95" }),
+        h("path", { d: "M16 53c2.8-10.2 9-15.4 16-15.4S45.2 42.8 48 53", fill: "#121614", opacity: "0.92" }),
+        h("path", { d: "M48 12l1.8 4.4L54 18l-4.2 1.6L48 24l-1.8-4.4L42 18l4.2-1.6L48 12Z", fill: "#06B6D4" }),
+        h("path", { d: "M18 14l1.1 2.7L22 18l-2.9 1.3L18 22l-1.1-2.7L14 18l2.9-1.3L18 14Z", fill: "#00E5FF" })
+      ]);
     }
+    function avatar(message: ChatMessage) {
+      if (message.role === "user") {
+        return h("span", { class: ["chat-avatar", "avatar-user"] }, [
+          p.userAvatarUrl
+            ? h("img", { class: "chat-avatar-image", src: p.userAvatarUrl, alt: p.userName || "用户头像" })
+            : defaultUserAvatar()
+        ]);
+      }
+      return h(
+        "button",
+        {
+          type: "button",
+          class: ["chat-avatar", "avatar-ai", { "is-bursting": burstingMessageIds.value.includes(message.id) }],
+          title: "智学黑板",
+          "aria-label": "触发助手图标动画",
+          onClick: () => triggerLogoBurst(message)
+        },
+        [h(BrandLogo, { class: "chat-avatar-logo" })]
+      );
+    }
+    onBeforeUnmount(() => {
+      burstTimers.forEach((timer) => window.clearTimeout(timer));
+      burstTimers.clear();
+    });
     return () => {
       const hasStreamingMessage = p.messages.some((message) => message.streaming);
       return h("div", { class: ["chat-list", p.large ? "large" : ""] }, [
-        ...p.messages.map((message) => h("article", { key: message.id, class: ["chat-msg", p.large ? "message-row" : "", message.role] }, message.role === "user" ? [bubble(message), avatar(message)] : [avatar(message), bubble(message)])),
+        ...p.messages.map((message) => h("article", { key: message.id, class: ["chat-msg", p.large ? "message-row" : "", message.role] }, message.role === "user" ? [avatar(message), bubble(message)] : [avatar(message), bubble(message)])),
         p.thinking && !hasStreamingMessage ? h("div", { class: "thinking ai-thinking-border" }, [h("i", { class: "dot-1" }), h("i", { class: "dot-2" }), h("i", { class: "dot-3" }), h("span", "AI 正在思考...")]) : null
       ]);
     };

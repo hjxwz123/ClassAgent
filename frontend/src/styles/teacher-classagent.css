@@ -1154,3 +1154,239 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Theme guard: this scoped chunk is loaded after the global theme file. */
+html.theme-light .teacher-shell .teacher-sidebar {
+  background: var(--color-bg-surface) !important;
+  color: var(--color-text-body) !important;
+  border-right-color: var(--color-border-default) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-light .teacher-shell .teacher-sidebar::before {
+  opacity: 0 !important;
+}
+
+html.theme-light .teacher-shell .teacher-sidebar-toggle,
+html.theme-light .teacher-shell .nav-group button,
+html.theme-light .teacher-shell .course-title {
+  background: transparent !important;
+  color: var(--color-text-secondary) !important;
+  border-color: var(--color-border-default) !important;
+}
+
+html.theme-light .teacher-shell .teacher-sidebar-toggle:hover,
+html.theme-light .teacher-shell .nav-group button:hover,
+html.theme-light .teacher-shell .nav-group button.active,
+html.theme-light .teacher-shell .course-title:hover {
+  background: var(--color-primary-50) !important;
+  color: var(--color-primary-700) !important;
+}
+
+html.theme-light .teacher-shell .nav-group > span,
+html.theme-light .teacher-shell .course-title {
+  color: var(--color-text-muted) !important;
+}
+
+html.theme-light .teacher-shell .welcome {
+  background: linear-gradient(135deg, #FFF7ED, #FFEDD5) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid rgba(249, 115, 22, .18) !important;
+}
+
+html.theme-light .teacher-shell .welcome h1 {
+  color: var(--color-text-primary) !important;
+}
+
+html.theme-light .teacher-shell .welcome p {
+  color: var(--color-text-secondary) !important;
+}
+
+html.theme-light .teacher-shell .white-btn {
+  background: rgba(255, 255, 255, .72) !important;
+  color: var(--color-primary-700) !important;
+  border-color: rgba(249, 115, 22, .24) !important;
+}
+
+html.theme-light .teacher-shell .btn-ai {
+  background: var(--ca-role-teacher-primary) !important;
+  color: #FFFFFF !important;
+}
+
+html.theme-light .teacher-shell .btn-primary,
+html.theme-light .teacher-shell .view-toggle .active,
+html.theme-light .teacher-shell .view-toggle button.active {
+  background: var(--ca-role-teacher-primary) !important;
+  color: #FFFFFF !important;
+}
+
+html.theme-light .teacher-shell .cover,
+html.theme-light .teacher-shell .mini-cover,
+html.theme-light .teacher-shell .lesson-thumb,
+html.theme-light .teacher-shell .course-cover:not(.has-image) {
+  background: var(--color-bg-muted) !important;
+  color: var(--color-primary-700) !important;
+}
+
+html.theme-dark .teacher-shell {
+  --ca-role-teacher-primary: #FDBA74;
+  --ca-role-teacher-primary-hover: #FED7AA;
+  --ca-role-teacher-light: rgba(249, 115, 22, .14);
+}
+
+html.theme-dark .teacher-shell .btn-primary,
+html.theme-dark .teacher-shell .view-toggle .active,
+html.theme-dark .teacher-shell .view-toggle button.active,
+html.theme-dark .teacher-shell .btn-ai:hover:not(:disabled),
+html.theme-dark .teacher-shell .lesson-row:hover .lesson-open-label,
+html.theme-dark .teacher-shell .question-row b,
+html.theme-dark .teacher-shell .thumb-card span {
+  background: #C2410C !important;
+  color: #F8FAFC !important;
+  border-color: #EA580C !important;
+}
+
+html.theme-dark .teacher-shell .btn-primary:hover,
+html.theme-dark .teacher-shell .view-toggle .active:hover,
+html.theme-dark .teacher-shell .view-toggle button.active:hover {
+  background: #9A3412 !important;
+  color: #F8FAFC !important;
+}
+
+html.theme-dark .teacher-shell .btn-secondary,
+html.theme-dark .teacher-shell .btn-ghost,
+html.theme-dark .teacher-shell .icon-action,
+html.theme-dark .teacher-shell .weak-row button,
+html.theme-dark .teacher-shell .editor-toolbar button,
+html.theme-dark .teacher-shell .preview-tabs button,
+html.theme-dark .teacher-shell .lesson-preview-layout aside button,
+html.theme-dark .teacher-shell .segment-btn,
+html.theme-dark .teacher-shell .view-toggle button {
+  background: #111827 !important;
+  color: #E2E8F0 !important;
+  border-color: rgba(148, 163, 184, .24) !important;
+}
+
+html.theme-dark .teacher-shell .btn-secondary:hover,
+html.theme-dark .teacher-shell .btn-ghost:hover,
+html.theme-dark .teacher-shell .icon-action:hover,
+html.theme-dark .teacher-shell .weak-row button:hover:not(:disabled),
+html.theme-dark .teacher-shell .editor-toolbar button:hover,
+html.theme-dark .teacher-shell .editor-toolbar button.active,
+html.theme-dark .teacher-shell .preview-tabs button:hover:not(:disabled),
+html.theme-dark .teacher-shell .preview-tabs button.active,
+html.theme-dark .teacher-shell .lesson-preview-layout aside button:hover,
+html.theme-dark .teacher-shell .lesson-preview-layout aside button.active,
+html.theme-dark .teacher-shell .segment-btn.active {
+  background: rgba(249, 115, 22, .14) !important;
+  color: #FDBA74 !important;
+  border-color: rgba(251, 146, 60, .34) !important;
+}
+
+.teacher-shell .header-theme-toggle {
+  color: var(--ca-color-paper-sub);
+}
+
+html.theme-dark .teacher-shell .header-theme-toggle {
+  color: #CBD5E1;
+}
+
+/* Icon audit: remove filled tiles from icon containers without changing sizing. */
+.teacher-shell :where(
+  .logo-mark,
+  .header-actions > .icon-btn,
+  .welcome > svg,
+  .metric-icon,
+  .cover > svg,
+  .course-cover > svg,
+  .course-preview-cover svg,
+  .type-icon,
+  .nav-group button svg
+),
+html.theme-light .teacher-shell :where(
+  .logo-mark,
+  .header-actions > .icon-btn,
+  .welcome > svg,
+  .metric-icon,
+  .cover > svg,
+  .course-cover > svg,
+  .course-preview-cover svg,
+  .type-icon,
+  .nav-group button svg
+),
+html.theme-dark .teacher-shell :where(
+  .logo-mark,
+  .header-actions > .icon-btn,
+  .welcome > svg,
+  .metric-icon,
+  .cover > svg,
+  .course-cover > svg,
+  .course-preview-cover svg,
+  .type-icon,
+  .nav-group button svg
+) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.teacher-shell .header-actions > .icon-btn:hover,
+html.theme-light .teacher-shell .header-actions > .icon-btn:hover,
+html.theme-dark .teacher-shell .header-actions > .icon-btn:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Header course selector: show the selected course as plain text, not as a filled chip. */
+.teacher-shell .teacher-header .brand {
+  overflow: visible;
+}
+
+.teacher-shell .course-switch {
+  flex: 1 1 auto;
+  max-width: none !important;
+  overflow: visible;
+}
+
+.teacher-shell .course-switch > button,
+.teacher-shell .course-switch > button:hover,
+.teacher-shell .course-switch > button.active,
+html.theme-light .teacher-shell .course-switch > button,
+html.theme-light .teacher-shell .course-switch > button:hover,
+html.theme-light .teacher-shell .course-switch > button.active,
+html.theme-dark .teacher-shell .course-switch > button,
+html.theme-dark .teacher-shell .course-switch > button:hover,
+html.theme-dark .teacher-shell .course-switch > button.active {
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--ca-color-paper-ink) !important;
+  box-shadow: none !important;
+  padding: 0;
+}
+
+html.theme-dark .teacher-shell .course-switch > button,
+html.theme-dark .teacher-shell .course-switch > button:hover,
+html.theme-dark .teacher-shell .course-switch > button.active {
+  color: #F8FAFC !important;
+}
+
+.teacher-shell .course-switch > button span,
+html.theme-light .teacher-shell .course-switch > button span,
+html.theme-dark .teacher-shell .course-switch > button span {
+  display: inline;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0;
+  max-width: none;
+  overflow: visible;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: inherit !important;
+  box-shadow: none !important;
+  text-overflow: clip;
+  white-space: nowrap;
+}

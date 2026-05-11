@@ -44,13 +44,7 @@ class EmailService:
     def send_password_reset_code(self, db: Session | None, *, to_email: str, code: str) -> None:
         service = get_enabled_service_config(db, "email")
         if service is None:
-            if self.settings.app_env == "production":
-                raise bad_request("邮件服务未配置，请先在管理员服务配置中启用 email")
-            return
-        if service.provider == "mock":
-            if self.settings.app_env == "production":
-                raise bad_request("生产环境不能使用 mock 邮件服务")
-            return
+            raise bad_request("邮件服务未配置，请先在管理员服务配置中启用 email")
         if service.provider != "smtp":
             raise bad_request(f"暂不支持的邮件服务提供方: {service.provider}")
         body = f"你的课程学习助手验证码是：{code}，10 分钟内有效。若非本人操作，请忽略本邮件。"

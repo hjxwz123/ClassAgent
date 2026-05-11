@@ -26,21 +26,30 @@ const chartHeight = computed(() => `${props.height || 260}px`);
 const isEmpty = computed(() => !props.labels.length || !props.series.some((item) => item.data.some((value) => Number(value) > 0)));
 let chart: ECharts | null = null;
 
+function getTokenColor(property: string, fallback: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(property).trim() || fallback;
+}
+
 function draw() {
   if (!el.value) return;
   chart ||= init(el.value);
   const isHorizontal = props.type === "hbar";
+  const surface = getTokenColor("--color-bg-surface", "#0F172A");
+  const border = getTokenColor("--color-border-default", "#334155");
+  const subtle = getTokenColor("--color-border-subtle", "#1E293B");
+  const body = getTokenColor("--color-text-body", "#E2E8F0");
+  const secondary = getTokenColor("--color-text-secondary", "#CBD5E1");
   chart.setOption({
     color: props.series.map((item) => item.color).filter((color): color is string => Boolean(color)),
-    tooltip: { trigger: "axis", backgroundColor: "#FFFFFF", borderColor: "#E2E8F0", textStyle: { color: "#334155" } },
-    legend: { top: 0, right: 0, textStyle: { color: "#64748B", fontSize: 12 } },
+    tooltip: { trigger: "axis", backgroundColor: surface, borderColor: border, textStyle: { color: body } },
+    legend: { top: 0, right: 0, textStyle: { color: secondary, fontSize: 12 } },
     grid: { left: 36, right: 24, top: 42, bottom: 28, containLabel: true },
     xAxis: isHorizontal
-      ? { type: "value", axisLine: { show: false }, splitLine: { lineStyle: { color: "#F1F5F9" } } }
-      : { type: "category", data: props.labels, axisTick: { show: false }, axisLabel: { color: "#64748B", fontSize: 12 } },
+      ? { type: "value", axisLine: { show: false }, splitLine: { lineStyle: { color: subtle } }, axisLabel: { color: secondary, fontSize: 12 } }
+      : { type: "category", data: props.labels, axisTick: { show: false }, axisLabel: { color: secondary, fontSize: 12 } },
     yAxis: isHorizontal
-      ? { type: "category", data: props.labels, axisTick: { show: false }, axisLabel: { color: "#64748B", fontSize: 12 } }
-      : { type: "value", axisLine: { show: false }, splitLine: { lineStyle: { color: "#F1F5F9" } }, axisLabel: { color: "#64748B", fontSize: 12 } },
+      ? { type: "category", data: props.labels, axisTick: { show: false }, axisLabel: { color: secondary, fontSize: 12 } }
+      : { type: "value", axisLine: { show: false }, splitLine: { lineStyle: { color: subtle } }, axisLabel: { color: secondary, fontSize: 12 } },
     series: props.series.map((item) => ({
       name: item.name,
       type: props.type === "line" ? "line" : "bar",

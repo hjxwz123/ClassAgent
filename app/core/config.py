@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
     celery_task_always_eager: bool = True
-    external_ai_mode: Literal["auto", "mock", "strict"] = "auto"
+    external_ai_mode: Literal["auto", "strict"] = "auto"
     external_storage_mode: Literal["auto", "local", "oss"] = "auto"
     external_service_timeout_seconds: float = 30.0
     public_base_url: str = "http://127.0.0.1:8000"
@@ -80,8 +80,6 @@ def validate_production_settings(settings: Settings | None = None) -> None:
         errors.append("DATABASE_URL 生产环境不能使用 SQLite")
     if current.celery_task_always_eager:
         errors.append("CELERY_TASK_ALWAYS_EAGER 生产环境必须为 false")
-    if current.external_ai_mode == "mock":
-        errors.append("EXTERNAL_AI_MODE 生产环境不能使用 mock")
     if not current.celery_broker_url.startswith("redis://") and not current.celery_broker_url.startswith("rediss://"):
         errors.append("CELERY_BROKER_URL 应配置为 Redis 地址")
     if errors:

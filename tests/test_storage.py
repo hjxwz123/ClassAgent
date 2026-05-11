@@ -156,40 +156,12 @@ def test_aliyun_oss_service_config_trims_and_removes_endpoint(client):
     assert "endpoint" not in raw
 
 
-def test_tts_mock_provider_does_not_call_aliyun(client, monkeypatch):
+def test_tts_requires_enabled_service(client):
     with db_session.SessionLocal() as db:
-        db.add(
-            ServiceConfig(
-                service_type="tts",
-                provider="mock",
-                name="Mock TTS",
-                config_encrypted=encrypt_secret(
-                    json.dumps(
-                        {
-                            "access_key_id": "ak",
-                            "access_key_secret": "secret",
-                            "appkey": "app",
-                            "voice": "xiaoyun",
-                        },
-                        ensure_ascii=False,
-                    )
-                ),
-                is_enabled=True,
-            )
-        )
-        db.commit()
+        with pytest.raises(AppError) as exc:
+            tts_service.synthesize("测试语音", db=db)
 
-    monkeypatch.setattr(
-        tts_service,
-        "_synthesize_aliyun",
-        lambda *args, **kwargs: pytest.fail("mock TTS provider must not call Aliyun"),
-    )
-
-    with db_session.SessionLocal() as db:
-        url, duration = tts_service.synthesize("测试语音", db=db)
-
-    assert url.endswith(".wav")
-    assert duration >= 2
+    assert "TTS 服务未配置" in exc.value.detail["message"]
 
 
 def test_tts_aliyun_config_is_trimmed():

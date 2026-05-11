@@ -328,7 +328,7 @@
 .student-page{width:100%;min-width:0;align-items:stretch;gap:32px}
 .student-page>*,.student-shell section,.student-shell article,.student-shell aside,.student-shell form,.student-shell div{min-width:0}
 .student-shell button:disabled,.student-shell input:disabled,.student-shell textarea:disabled,.student-shell [aria-disabled=true]{cursor:not-allowed!important;opacity:.56!important;transform:none!important;box-shadow:none!important;filter:grayscale(.08)}
-.student-shell .btn-secondary[data-loading=true]:after,.student-shell .btn-ghost[data-loading=true]:after,.student-shell .btn-outline[data-loading=true]:after{border-color:#00b8d438;border-top-color:var(--s-primary-600, #0097A7)}
+.student-shell .btn-secondary[data-loading=true]:after,.student-shell .btn-ghost[data-loading=true]:after,.student-shell .btn-outline[data-loading=true]:after{background:var(--s-primary-600, #0097A7)}
 .student-shell input[aria-invalid=true],.student-shell textarea[aria-invalid=true],.student-shell .input.error,.student-shell .textarea.error,.student-shell .code-input.error,.student-shell .is-error{border-color:var(--student-audit-error)!important;box-shadow:0 0 0 4px #dc26261f!important}
 .student-shell .code-input.ok,.student-shell .is-success{border-color:var(--student-audit-success)!important;box-shadow:0 0 0 4px #0596691f!important}
 .student-top{grid-template-columns:minmax(180px,.8fr) minmax(0,auto) minmax(160px,.8fr)}
@@ -338,7 +338,7 @@
 .bottom-tabs button{min-width:0;line-height:1.2}
 .bottom-tabs .ai span{flex:0 0 auto}
 .problem-editor-wrap{display:grid;min-height:260px}
-@keyframes student-audit-spin-c9e07e67{to{transform:rotate(360deg)}}
+@keyframes student-audit-node-pulse-c9e07e67{0%,to{opacity:.28;transform:rotate(45deg) scale(.9)}35%{opacity:1;transform:rotate(45deg) scale(1.18)}}
 .empty{min-height:132px;display:grid;place-items:center;align-content:center;gap:10px;border:1px dashed #CBD5E1;border-radius:16px;background:#fff;color:#94a3b8;box-shadow:0 8px 24px #0f172a09;padding:28px;text-align:center}
 .empty svg{width:40px;height:40px;border-radius:14px;background:#f8fafc;color:#94a3b8;padding:8px}
 .empty span{color:#64748b;font-size:14px;font-weight:700}
@@ -347,4 +347,4 @@
 .top-icon[data-loading=true]{color:var(--s-muted)!important}
 .top-icon[data-loading=true]>*{opacity:1!important;visibility:visible!important}
 .top-icon[data-loading=true]:after{content:none!important;display:none!important}
-@keyframes render-audit-spin{to{transform:rotate(360deg)}}
+@keyframes render-audit-node-pulse{0%,to{opacity:.28;transform:rotate(45deg) scale(.9)}35%{opacity:1;transform:rotate(45deg) scale(1.18)}}

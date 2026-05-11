@@ -1,5 +1,6 @@
 <template>
-  <section class="admin-shell" :class="{ collapsed, 'sidebar-collapsed': collapsed, 'sidebar-scrollable': sidebarScrollable }">
+  <PageLoader v-if="initialPageLoading" />
+  <section v-else class="admin-shell" :class="{ collapsed, 'sidebar-collapsed': collapsed, 'sidebar-scrollable': sidebarScrollable, 'page-loading': pageLoading }">
     <aside class="admin-sidebar">
       <button
         type="button"
@@ -28,6 +29,7 @@
       <div class="top-actions">
         <span class="health-pill" :class="health?.status === 'ok' ? 'ok' : 'warn'"><i></i>{{ health?.status === 'ok' ? '运行正常' : '服务异常' }}</span>
         <button type="button" class="notice-btn" aria-label="通知" @click="openAdminNotifications"><Bell :size="20" /><span>通知</span><em v-if="alertCount">{{ alertCount }}</em></button>
+        <ThemeToggle class="admin-theme-toggle" />
         <span class="divider"></span>
         <div ref="userMenuRef" class="user-menu">
           <button type="button" class="user-trigger" aria-haspopup="menu" :aria-expanded="userMenuOpen" @click="userMenuOpen = !userMenuOpen">
@@ -601,7 +603,9 @@ import { copyToClipboard } from "../utils/clipboard";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppSelect from "../components/AppSelect.vue";
 import AppSlider from "../components/AppSlider.vue";
+import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
+import ThemeToggle from "../components/ThemeToggle.vue";
 import AdminChart from "./admin/AdminChart.vue";
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
@@ -617,6 +621,8 @@ const userMenuRef = ref<HTMLElement | null>(null);
 const sidebarScrollable = ref(false);
 const pendingAction = ref("");
 const active = ref(props.pageKey || "adminDashboard");
+const initialPageLoading = ref(true);
+const pageLoading = ref(false);
 const trendOptions = ["7天", "30天", "90天"];
 const trendRange = ref("30天");
 const usageOptions = ["次数", "Token", "费用"];
@@ -682,13 +688,13 @@ const userStatusOptions = [{ label: "全部", value: "" }, { label: "正常", va
 const courseStatusOptions = [{ label: "全部", value: "" }, { label: "正常", value: "active" }, { label: "下架", value: "inactive" }];
 const materialTypeOptions = [{ label: "全部", value: "" }, { label: "PPT", value: "pptx" }, { label: "PDF", value: "pdf" }, { label: "Word", value: "docx" }, { label: "TXT", value: "txt" }];
 const materialCategoryOptions = [{ label: "分类", value: "" }, { label: "课件", value: "courseware" }, { label: "讲义", value: "handout" }, { label: "练习", value: "exercise" }, { label: "参考", value: "reference" }];
-const modelProviderOptions = [{ label: "通义千问", value: "qwen" }, { label: "DeepSeek", value: "deepseek" }, { label: "OpenAI", value: "openai" }, { label: "Azure", value: "azure" }, { label: "Mock", value: "mock" }, { label: "自定义", value: "custom" }];
-const embeddingProviderOptions = [{ label: "通义千问", value: "qwen" }, { label: "OpenAI", value: "openai" }, { label: "Mock", value: "mock" }];
-const ossProviderOptions = [{ label: "阿里云 OSS", value: "aliyun" }, { label: "本地存储", value: "local" }, { label: "Mock", value: "mock" }];
-const aliyunProviderOptions = [{ label: "阿里云 OCR", value: "aliyun" }, { label: "Mock", value: "mock" }];
-const docParserProviderOptions = [{ label: "阿里云 DocMind", value: "aliyun" }, { label: "Mock", value: "mock" }];
-const ttsProviderOptions = [{ label: "阿里云 TTS", value: "aliyun" }, { label: "Mock", value: "mock" }];
-const emailProviderOptions = [{ label: "SMTP", value: "smtp" }, { label: "Mock", value: "mock" }];
+const modelProviderOptions = [{ label: "通义千问", value: "qwen" }, { label: "DeepSeek", value: "deepseek" }, { label: "OpenAI", value: "openai" }, { label: "Azure", value: "azure" }, { label: "自定义", value: "custom" }];
+const embeddingProviderOptions = [{ label: "通义千问", value: "qwen" }, { label: "OpenAI", value: "openai" }];
+const ossProviderOptions = [{ label: "阿里云 OSS", value: "aliyun" }, { label: "本地存储", value: "local" }];
+const aliyunProviderOptions = [{ label: "阿里云 OCR", value: "aliyun" }];
+const docParserProviderOptions = [{ label: "阿里云 DocMind", value: "aliyun" }];
+const ttsProviderOptions = [{ label: "阿里云 TTS", value: "aliyun" }];
+const emailProviderOptions = [{ label: "SMTP", value: "smtp" }];
 const ocrAccuracyOptions = [{ label: "普通", value: "normal" }, { label: "高精度", value: "high" }];
 const enhancementModeOptions = [{ label: "VLM", value: "VLM" }, { label: "关闭", value: "" }];
 const logSuccessOptions = [{ label: "全部", value: "" }, { label: "成功", value: "true" }, { label: "失败", value: "false" }];
@@ -1017,16 +1023,22 @@ async function loadBackups() {
   await loadSettings();
 }
 async function loadActive() {
-  if (active.value === "adminDashboard") await loadDashboard();
-  if (active.value === "adminUsers") await loadUsers();
-  if (active.value === "adminCourses") await loadCourses();
-  if (active.value === "adminMaterials") await loadMaterials();
-  if (active.value === "adminModels") await loadModels();
-  if (active.value === "adminServices") await loadServices();
-  if (active.value === "adminSystem") await loadSettings();
-  if (active.value === "adminMonitor") await loadMonitor();
-  if (active.value === "adminLogs") await loadLogs();
-  if (active.value === "adminBackups") await loadBackups();
+  pageLoading.value = !initialPageLoading.value;
+  try {
+    if (active.value === "adminDashboard") await loadDashboard();
+    if (active.value === "adminUsers") await loadUsers();
+    if (active.value === "adminCourses") await loadCourses();
+    if (active.value === "adminMaterials") await loadMaterials();
+    if (active.value === "adminModels") await loadModels();
+    if (active.value === "adminServices") await loadServices();
+    if (active.value === "adminSystem") await loadSettings();
+    if (active.value === "adminMonitor") await loadMonitor();
+    if (active.value === "adminLogs") await loadLogs();
+    if (active.value === "adminBackups") await loadBackups();
+  } finally {
+    pageLoading.value = false;
+    initialPageLoading.value = false;
+  }
 }
 function defaultValueForSetting(row: any) {
   if (row.type === "number" || row.type === "range") return 0;
@@ -1201,7 +1213,7 @@ function serviceConfigPayload(type: ServiceKey) {
 function serviceMissing(type: ServiceKey) {
   const draft = serviceDrafts[type];
   if (!draft.name || !draft.provider) return "服务必填";
-  if (["mock", "local"].includes(draft.provider)) return "";
+  if (draft.provider === "local") return "";
   const required: Record<ServiceKey, string[]> = { oss: ["access_key_id", "access_key_secret", "bucket"], ocr: ["access_key_id", "access_key_secret"], doc_parser: ["access_key_id", "access_key_secret"], tts: ["access_key_id", "access_key_secret", "appkey", "voice"], email: ["host", "port", "sender"] };
   const missing = required[type].filter((key) => !draft[key]);
   return missing.length ? `缺少 ${missing.join(",")}` : "";
