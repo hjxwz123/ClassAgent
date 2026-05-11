@@ -310,6 +310,8 @@ def _local_docmind_image_url(value: str) -> str | None:
         parsed = urlsplit(html.unescape(value))
     except ValueError:
         return None
+    if parsed.netloc and not storage_service._is_loopback_url(value):
+        return None
     path = parsed.path.lstrip("/")
     marker = "docmind_images/"
     if marker not in path:

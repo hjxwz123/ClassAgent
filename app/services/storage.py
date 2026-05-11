@@ -21,6 +21,15 @@ OSS_STRING_KEYS = (
     "cdn_domain",
 )
 
+OSS_DELETE_LOCAL_AFTER_UPLOAD_PREFIXES = (
+    "uploads/avatars/",
+    "uploads/course_covers/",
+    "uploads/problem_images/",
+    "uploads/qa_images/",
+    "generated/audio/",
+    "docmind_images/",
+)
+
 
 class StorageService:
     def __init__(self) -> None:
@@ -135,6 +144,25 @@ class StorageService:
         endpoint = endpoint.removeprefix("https://").removeprefix("http://").rstrip("/")
         return f"https://{bucket}.{endpoint}/{relative_path}"
 
+    def _should_delete_local_after_oss_upload(self, relative_path: str) -> bool:
+        normalized = relative_path.lstrip("/")
+        return any(normalized.startswith(prefix) for prefix in OSS_DELETE_LOCAL_AFTER_UPLOAD_PREFIXES)
+
+    def _delete_local_after_oss_upload(self, target_path: Path, relative_path: str) -> None:
+        if not self._should_delete_local_after_oss_upload(relative_path):
+            return
+        try:
+            target_path.unlink(missing_ok=True)
+        except OSError:
+            return
+        current = target_path.parent
+        while current != STORAGE_DIR and STORAGE_DIR in current.parents:
+            try:
+                current.rmdir()
+            except OSError:
+                break
+            current = current.parent
+
     def save_upload(self, upload: UploadFile, *, folder: str, db: Session | None = None) -> tuple[str, int]:
         target_dir = STORAGE_DIR / "uploads" / folder
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -148,6 +176,7 @@ class StorageService:
         oss_config = self._resolve_oss_config(db)
         if oss_config is not None:
             self._upload_to_oss(relative_path, content, oss_config)
+            self._delete_local_after_oss_upload(target_path, relative_path)
         return relative_path, len(content)
 
     def save_bytes(self, content: bytes, *, folder: str, filename: str, db: Session | None = None) -> str:
@@ -159,6 +188,7 @@ class StorageService:
         oss_config = self._resolve_oss_config(db)
         if oss_config is not None:
             self._upload_to_oss(relative_path, content, oss_config)
+            self._delete_local_after_oss_upload(target_path, relative_path)
         return relative_path
 
     def absolute_path(self, relative_path: str) -> Path:

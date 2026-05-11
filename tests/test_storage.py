@@ -97,6 +97,78 @@ def test_aliyun_oss_upload_failure_returns_bad_request(client, monkeypatch):
     assert "OSS 上传失败" in exc_info.value.detail["message"]
 
 
+def test_aliyun_oss_deletes_disposable_local_upload_copy(client, monkeypatch):
+    _add_service_config(
+        provider="aliyun",
+        config={
+            "access_key_id": "ak",
+            "access_key_secret": "secret",
+            "bucket": "bucket",
+            "region": "cn-hangzhou",
+        },
+    )
+    uploaded: list[tuple[str, bytes]] = []
+    monkeypatch.setattr(
+        storage_service,
+        "_upload_to_oss",
+        lambda relative_path, content, service: uploaded.append((relative_path, content)),
+    )
+
+    upload = UploadFile(file=BytesIO(b"avatar"), filename="avatar.png")
+    with db_session.SessionLocal() as db:
+        relative_path, size = storage_service.save_upload(upload, folder="avatars/user_1", db=db)
+        public_url = storage_service.public_url(relative_path, db=db)
+
+    assert size == 6
+    assert uploaded == [(relative_path, b"avatar")]
+    assert not storage_service.absolute_path(relative_path).exists()
+    assert public_url == f"https://bucket.oss-cn-hangzhou.aliyuncs.com/{relative_path}"
+
+
+def test_aliyun_oss_keeps_material_source_local_copy(client, monkeypatch):
+    _add_service_config(
+        provider="aliyun",
+        config={
+            "access_key_id": "ak",
+            "access_key_secret": "secret",
+            "bucket": "bucket",
+            "region": "cn-hangzhou",
+        },
+    )
+    monkeypatch.setattr(storage_service, "_upload_to_oss", lambda *args, **kwargs: None)
+
+    upload = UploadFile(file=BytesIO(b"material"), filename="lesson.pdf")
+    with db_session.SessionLocal() as db:
+        relative_path, size = storage_service.save_upload(upload, folder="course_1", db=db)
+
+    assert size == 8
+    assert storage_service.absolute_path(relative_path).exists()
+
+
+def test_aliyun_oss_deletes_generated_audio_local_copy(client, monkeypatch):
+    _add_service_config(
+        provider="aliyun",
+        config={
+            "access_key_id": "ak",
+            "access_key_secret": "secret",
+            "bucket": "bucket",
+            "region": "cn-hangzhou",
+        },
+    )
+    uploaded: list[tuple[str, bytes]] = []
+    monkeypatch.setattr(
+        storage_service,
+        "_upload_to_oss",
+        lambda relative_path, content, service: uploaded.append((relative_path, content)),
+    )
+
+    with db_session.SessionLocal() as db:
+        relative_path = storage_service.save_bytes(b"audio", folder="generated/audio", filename="demo.wav", db=db)
+
+    assert uploaded == [(relative_path, b"audio")]
+    assert not storage_service.absolute_path(relative_path).exists()
+
+
 def test_local_oss_service_config_drops_oss_credentials(client):
     with db_session.SessionLocal() as db:
         record = save_service_config(
