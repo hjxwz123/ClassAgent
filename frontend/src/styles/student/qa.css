@@ -27,7 +27,6 @@
 .qa-modern-page button{font-family:inherit;cursor:pointer;transition:background var(--duration-fast) var(--ease-out),color var(--duration-fast) var(--ease-out),border-color var(--duration-fast) var(--ease-out),box-shadow var(--duration-fast) var(--ease-out),transform var(--duration-fast) var(--ease-out),opacity var(--duration-fast) var(--ease-out)}
 .qa-modern-page textarea{font-family:inherit}
 .qa-modern-page.is-empty{display:block;place-items:initial;gap:0;color:var(--qa-text);text-align:initial}
-.qa-modern-page .qa-scroll-area{width:100%}
 .qa-modern-page .chat-wrapper{width:100%;max-width:var(--qa-content-width);display:flex;flex-direction:column;gap:32px;margin:0 auto;padding:32px 24px 40px}
 .qa-modern-page .qa-header{position:static;inset:auto;display:flex;align-items:center;justify-content:space-between;gap:24px;margin:0 0 16px;padding-bottom:32px;border-bottom:1px dashed var(--qa-border)}
 .qa-modern-page .qa-title-group{display:flex;align-items:center;gap:16px;min-width:0}

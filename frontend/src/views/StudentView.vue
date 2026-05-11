@@ -163,7 +163,14 @@
               <form class="chat-input compact" @submit.prevent="askInClass">
                 <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
                 <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
-                <textarea v-model="classQuestion" placeholder="问问 AI 这一页..." rows="1" @keydown="handleClassQuestionKeydown"></textarea>
+                <textarea
+                  v-model="classQuestion"
+                  placeholder="问问 AI 这一页..."
+                  rows="1"
+                  @compositionstart="handleQuestionCompositionStart('class')"
+                  @compositionend="handleQuestionCompositionEnd('class')"
+                  @keydown="handleClassQuestionKeydown"
+                ></textarea>
                 <button :disabled="(!classQuestion.trim() && !classQaAttachments.length) || classThinking || classQaImageUploading" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
               </form>
               <div class="quick-tags">
@@ -338,8 +345,20 @@
     </header>
 
     <main class="student-main" :class="{ 'student-main-qa': active === 'studentQa' }">
-      <div class="student-page-stage">
-        <transition :name="pageTransitionName">
+      <div
+        ref="pageStageRef"
+        class="student-page-stage"
+        :class="{ 'is-switching': pageSwitching }"
+        :style="pageStageStyle"
+      >
+        <transition
+          :name="pageTransitionName"
+          @before-leave="beforeStudentPageLeave"
+          @before-enter="beforeStudentPageEnter"
+          @after-enter="finishStudentPageTransition"
+          @enter-cancelled="finishStudentPageTransition"
+          @leave-cancelled="finishStudentPageTransition"
+        >
           <section :key="active" class="student-page" :class="{ 'student-page-qa': active === 'studentQa' }">
           <template v-if="active === 'studentHome'">
             <article class="hello-card">
@@ -514,19 +533,34 @@
             </article>
             <CourseRequired v-else-if="!courseHome.course" />
             <template v-else>
-              <article class="course-hero-student" :class="{ 'has-image': courseHome.course.cover_url }" :style="courseHeroStyle(courseHome.course)">
-                <section><h1>{{ courseHome.course.name }}</h1><p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p><div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div></section>
-                <aside><div class="slide-mini course-hero-cover-text">{{ courseCoverText(courseHome.course) }}</div><button class="btn white-fill" :disabled="isLessonOpening || !latestLesson" @click="latestLesson && openLesson(Number(latestLesson.id))"><LoadingMark v-if="latestLesson && isOpeningLesson(Number(latestLesson.id))" :label="false" class="inline-loading-mark" /><Play v-else :size="16" />{{ latestLesson && isOpeningLesson(Number(latestLesson.id)) ? '正在打开' : '进入课时' }}</button></aside>
+              <article class="course-hero-student course-hero-compact" :class="{ 'has-image': courseHome.course.cover_url }" :style="courseHeroStyle(courseHome.course)">
+                <section>
+                  <h1>{{ courseHome.course.name }}</h1>
+                  <p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p>
+                  <div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div>
+                </section>
+                <aside class="course-hero-action-side">
+                  <button class="btn white-fill" :disabled="isLessonOpening || !latestLesson" @click="latestLesson && openLesson(Number(latestLesson.id))"><LoadingMark v-if="latestLesson && isOpeningLesson(Number(latestLesson.id))" :label="false" class="inline-loading-mark" /><Play v-else :size="16" />{{ latestLesson && isOpeningLesson(Number(latestLesson.id)) ? '正在打开' : '进入课时' }}</button>
+                </aside>
               </article>
               <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="openQuizSelection('practice')" /></div>
-              <div class="course-layout">
-                <section>
-                  <article id="lesson-list" class="panel-card"><div class="section-head"><h2><Presentation :size="18" />课时列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div><LessonItem v-for="(lesson, index) in courseHome.lessons || []" :key="lesson.id" :lesson="lesson" :index="Number(index)" :loading="isOpeningLesson(Number(lesson.id))" :disabled="isLessonOpening && !isOpeningLesson(Number(lesson.id))" @open="openLesson(Number(lesson.id))" /></article>
-                  <article class="panel-card"><div class="section-head"><h2><FolderOpen :size="18" />课程资料</h2><button @click="materialsExpanded = !materialsExpanded">{{ materialsExpanded ? '收起' : '展开' }}</button></div><MaterialRow v-for="item in visibleCourseMaterials" :key="item.id" :item="item" /><button v-if="(courseHome.materials || []).length > 5" class="ghost-row" @click="materialsExpanded = !materialsExpanded"><ChevronDown :size="16" />{{ materialsExpanded ? '收起' : `展开更多` }}</button></article>
-                </section>
-                <aside>
-                  <article class="panel-card"><div class="section-head"><h2><BarChart2 :size="18" />我的数据</h2></div><div class="data-grid"><MiniMetric :icon="Clock" label="学习时长" :value="`${courseHome.stats?.study_hours || 0}h`" /><MiniMetric :icon="CheckCircle" label="完成进度" :value="`${courseHome.stats?.completion_rate || 0}%`" tone="success" /><MiniMetric :icon="MessageCircle" label="问答次数" :value="courseHome.stats?.qa_count || 0" tone="ai" /><MiniMetric :icon="XCircle" label="错题数" :value="courseHome.stats?.wrong_count || 0" tone="danger" /><MiniMetric :icon="Star" label="正确率" :value="`${courseHome.stats?.accuracy || 0}%`" tone="warning" /><MiniMetric :icon="Zap" label="连续打卡" :value="`${courseHome.stats?.streak_days || 0}天`" tone="warning" /></div></article>
-                </aside>
+              <div class="course-layout course-overview-layout">
+                <article id="lesson-list" class="panel-card course-lessons-card"><div class="section-head"><h2><Presentation :size="18" />课时列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div><LessonItem v-for="(lesson, index) in courseHome.lessons || []" :key="lesson.id" :lesson="lesson" :index="Number(index)" :loading="isOpeningLesson(Number(lesson.id))" :disabled="isLessonOpening && !isOpeningLesson(Number(lesson.id))" @open="openLesson(Number(lesson.id))" /></article>
+                <article class="panel-card course-data-card"><div class="section-head"><h2><BarChart2 :size="18" />我的数据</h2></div><div class="data-grid"><MiniMetric :icon="Clock" label="学习时长" :value="`${courseHome.stats?.study_hours || 0}h`" /><MiniMetric :icon="CheckCircle" label="完成进度" :value="`${courseHome.stats?.completion_rate || 0}%`" tone="success" /><MiniMetric :icon="MessageCircle" label="问答次数" :value="courseHome.stats?.qa_count || 0" tone="ai" /><MiniMetric :icon="XCircle" label="错题数" :value="courseHome.stats?.wrong_count || 0" tone="danger" /><MiniMetric :icon="Star" label="正确率" :value="`${courseHome.stats?.accuracy || 0}%`" tone="warning" /><MiniMetric :icon="Zap" label="连续打卡" :value="`${courseHome.stats?.streak_days || 0}天`" tone="warning" /></div></article>
+                <article class="panel-card course-materials-card">
+                  <div class="section-head"><h2><FolderOpen :size="18" />课程资料</h2><button @click="materialsExpanded = !materialsExpanded">{{ materialsExpanded ? '收起' : '展开' }}</button></div>
+                  <div class="course-material-list">
+                    <MaterialRow v-for="item in baseCourseMaterials" :key="item.id" :item="item" />
+                    <Transition name="course-materials-expand">
+                      <div v-if="materialsExpanded && extraCourseMaterials.length" class="course-material-extra">
+                        <div class="course-material-extra-inner">
+                          <MaterialRow v-for="item in extraCourseMaterials" :key="item.id" :item="item" />
+                        </div>
+                      </div>
+                    </Transition>
+                  </div>
+                  <button v-if="extraCourseMaterials.length" class="ghost-row course-material-toggle" :class="{ expanded: materialsExpanded }" @click="materialsExpanded = !materialsExpanded"><ChevronDown :size="16" />{{ materialsExpanded ? '收起' : `展开更多` }}</button>
+                </article>
               </div>
               <div class="course-qa-wide">
                 <article class="ask-card"><Sparkles :size="20" /><h2>向 AI 提问</h2><form @submit.prevent="askCourseQuick"><input v-model="quickCourseQuestion" placeholder="这节课有什么不懂的..." /><button><Send :size="16" /></button></form><div class="quick-tags"><button v-for="item in courseHome.quick_questions || []" :key="item" @click="sendCourseQuick(item)">{{ item }}</button></div></article>
@@ -537,47 +571,26 @@
 
           <template v-else-if="active === 'studentQa'">
             <section class="qa-modern-page" :class="{ 'is-empty': !globalMessages.length }">
-              <div class="qa-scroll-area">
-                <div class="chat-wrapper">
-                  <div class="qa-header">
-                    <div class="qa-title-group">
-                      <div class="qa-title-icon"><Sparkles :size="24" /></div>
-                      <section class="qa-title">
-                        <h1>《{{ courseScopeName }}》AI 问答</h1>
-                      </section>
-                    </div>
-                    <div class="qa-header-actions">
-                      <CourseSelect />
-                      <button class="qa-tutoring-link" type="button" @click="go('studentTutoring')"><Pencil :size="13" />题目辅导</button>
-                      <button class="qa-new-chat-link" type="button" title="新建对话" aria-label="新建对话" @click="startNewQaConversation"><Plus :size="18" /></button>
-                      <button class="action-circle-btn" type="button" :class="{ active: historyOpen }" title="问答历史" aria-label="问答历史" @click="toggleQaHistory"><Clock :size="18" /></button>
-                    </div>
+              <div class="chat-wrapper">
+                <div class="qa-header">
+                  <div class="qa-title-group">
+                    <div class="qa-title-icon"><Sparkles :size="24" /></div>
+                    <section class="qa-title">
+                      <h1>《{{ courseScopeName }}》AI 问答</h1>
+                    </section>
                   </div>
-                  <div v-if="!globalMessages.length" class="qa-welcome"><Sparkles :size="48" /><h2>{{ courseScopeName }}专属问答</h2></div>
-                  <ChatList v-else :messages="globalMessages" :thinking="globalThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
-                  <div v-if="!globalMessages.length" class="prompt-grid"><button v-for="item in promptCards" :key="item.text" @click="sendGlobalQuick(item.text)"><component :is="item.icon" :size="18" />{{ item.text }}</button></div>
+                  <div class="qa-header-actions">
+                    <CourseSelect />
+                    <button class="qa-tutoring-link" type="button" @click="go('studentTutoring')"><Pencil :size="13" />题目辅导</button>
+                    <button class="qa-new-chat-link" type="button" title="新建对话" aria-label="新建对话" @click="startNewQaConversation"><Plus :size="18" /></button>
+                    <button class="action-circle-btn" type="button" :class="{ active: historyOpen }" title="问答历史" aria-label="问答历史" @click="toggleQaHistory"><Clock :size="18" /></button>
+                  </div>
                 </div>
+                <div v-if="!globalMessages.length" class="qa-welcome"><Sparkles :size="48" /><h2>{{ courseScopeName }}专属问答</h2></div>
+                <ChatList v-else :messages="globalMessages" :thinking="globalThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
+                <div v-if="!globalMessages.length" class="prompt-grid"><button v-for="item in promptCards" :key="item.text" @click="sendGlobalQuick(item.text)"><component :is="item.icon" :size="18" />{{ item.text }}</button></div>
+                <div class="qa-latest-anchor" aria-hidden="true"></div>
               </div>
-              <form class="input-dock-container" @submit.prevent="askGlobal">
-                <div class="input-wrapper">
-                  <div class="context-badge"><BookOpen :size="14" />当前课程空间：《{{ courseScopeName }}》</div>
-                  <div v-if="globalQaAttachments.length" class="qa-attachment-strip">
-                    <div v-for="(item, index) in globalQaAttachments" :key="`${item.url}-${index}`" class="qa-attachment-chip">
-                      <img :src="item.url" alt="" />
-                      <span>{{ item.filename || '图片' }}</span>
-                      <button type="button" @click="removeQaAttachment('global', index)"><X :size="13" /></button>
-                    </div>
-                  </div>
-                  <section class="input-box">
-                    <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
-                    <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
-                    <textarea v-model="globalQuestion" placeholder="输入问题" rows="1" @keydown="handleGlobalQuestionKeydown"></textarea>
-                    <button :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || globalThinking || globalQaImageUploading" :data-loading="globalThinking" class="send-btn"><Send :size="20" /></button>
-                  </section>
-                </div>
-              </form>
-              <transition name="fade-slide"><button v-if="historyOpen" type="button" class="history-drawer-backdrop" aria-label="关闭问答历史" @click="closeQaHistory"></button></transition>
-              <transition name="drawer"><aside v-if="historyOpen" class="history-drawer"><div class="drawer-head"><h2>{{ courseScopeName }}问答历史</h2><div class="drawer-head-actions"><button type="button" class="history-favorite-toggle" :class="{ checked: showFavorites }" :aria-pressed="showFavorites" @click="showFavorites = !showFavorites"><span class="favorite-check-box" aria-hidden="true"></span><strong>仅看收藏</strong></button><button class="drawer-close-btn" type="button" @click="closeQaHistory"><X :size="16" /></button></div></div><div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索本课程历史问答" @keyup.enter="loadQaHistory" /></div><button v-for="item in filteredQaHistory" :key="item.conversation_id" class="history-row" :class="{ active: routeQaConversationId() === Number(item.conversation_id) }" type="button" @click="openQaConversation(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}<template v-if="item.record_count > 1"> · {{ item.record_count }} 条</template></small></button><EmptyState v-if="!filteredQaHistory.length" text="本课程暂无问答记录" /></aside></transition>
             </section>
           </template>
 
@@ -669,8 +682,10 @@
           </template>
 
           <template v-else-if="active === 'studentQuizzes'">
-            <div v-if="answeringQuiz" class="exam-answer-page"><QuizAnswerView :quiz="quizDetail" :answers="quizAnswers" :attempt="attempt" :submitting="quizSubmitting" @answer="setQuizAnswer" @submit="submitQuiz" @exit="closeQuizWorkspace" /></div>
-            <section v-else class="quiz-modern-page">
+            <Teleport to="body">
+              <div v-if="answeringQuiz" class="exam-answer-page"><QuizAnswerView :quiz="quizDetail" :answers="quizAnswers" :attempt="attempt" :submitting="quizSubmitting" @answer="setQuizAnswer" @submit="submitQuiz" @exit="closeQuizWorkspace" /></div>
+            </Teleport>
+            <section v-if="!answeringQuiz" class="quiz-modern-page">
               <header class="quiz-modern-header quiz-hero-card">
                 <div class="quiz-hero-copy">
                   <div class="quiz-hero-icon"><ClipboardList :size="26" /></div>
@@ -966,6 +981,7 @@
                 <aside class="profile-side">
                   <article class="profile-identity-card">
                     <div class="profile-cover">
+                      <div class="profile-cover-grid" aria-hidden="true"></div>
                       <button type="button" class="big-avatar avatar-upload-control" :data-loading="avatarUploading" :disabled="avatarUploading" title="更换头像" aria-label="更换头像" @click="studentAvatarInput?.click()">
                         <img v-if="currentAvatarUrl" :src="currentAvatarUrl" alt="" />
                         <DefaultUserAvatar v-else />
@@ -974,18 +990,21 @@
                       <input ref="studentAvatarInput" class="visually-hidden-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" @change="uploadProfileAvatar" />
                     </div>
                     <div class="profile-header-info">
-                      <section>
+                      <section class="profile-name-block">
+                        <span class="profile-role-pill">学生</span>
                         <h1>{{ profileForm.nickname }}</h1>
-                        <p><IdCard :size="15" />{{ user.student_no || '-' }}</p>
-                        <p><Mail :size="15" />{{ user.email }}</p>
+                        <div class="profile-contact-list">
+                          <p><IdCard :size="15" /><span>学号</span><strong>{{ user.student_no || '-' }}</strong></p>
+                          <p><Mail :size="15" /><span>邮箱</span><strong>{{ user.email }}</strong></p>
+                        </div>
                       </section>
-                      <aside>
+                      <aside class="profile-points-card">
                         <strong>{{ learningPoints }}</strong>
                         <span><Star :size="15" />学习积分</span>
                       </aside>
                     </div>
                   </article>
-                  <article class="panel-card badge-card">
+                  <article class="panel-card badge-card profile-achievement-card">
                     <div class="section-head"><h2><Award :size="18" />我的成就</h2></div>
                     <div class="badges"><span v-for="item in profilePayload.achievements || []" :key="item.key" :class="{ locked: !item.unlocked }"><Award :size="22" />{{ item.unlocked ? item.name : '?' }}</span></div>
                     <EmptyState v-if="!(profilePayload.achievements || []).length" text="暂无成就" />
@@ -993,16 +1012,23 @@
                 </aside>
 
                 <section class="profile-main-card">
+                  <div class="profile-main-head">
+                    <div>
+                      <span>学习概览</span>
+                      <h2>我的学习数据</h2>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" @click="loadProfile"><RefreshCw :size="14" />刷新</button>
+                  </div>
                   <div class="achievement-row">
                     <MiniMetric :icon="Clock" label="总学习时长" :value="`${stats.study_hours || 0}h`" />
                     <MiniMetric :icon="CheckCircle" label="课时完成" :value="`${stats.completion_rate || 0}%`" tone="success" />
                     <MiniMetric :icon="MessageCircle" label="知识问答" :value="stats.qa_count || 0" tone="ai" />
-                    <MiniMetric :icon="Star" label="平均得分" :value="`${stats.accuracy || 0}`" tone="warning" />
+                    <MiniMetric :icon="Star" label="平均得分" :value="`${stats.accuracy || 0}%`" tone="warning" />
                   </div>
                   <div class="profile-tabs">
-                    <button :class="{ active: profileTab === 'info' }" @click="profileTab = 'info'">我的资料</button>
-                    <button :class="{ active: profileTab === 'records' }" @click="profileTab = 'records'">学习档案</button>
-                    <button :class="{ active: profileTab === 'account' }" @click="profileTab = 'account'">账号设置</button>
+                    <button :class="{ active: profileTab === 'info' }" @click="profileTab = 'info'"><User :size="15" />我的资料</button>
+                    <button :class="{ active: profileTab === 'records' }" @click="profileTab = 'records'"><Clock :size="15" />学习档案</button>
+                    <button :class="{ active: profileTab === 'account' }" @click="profileTab = 'account'"><Settings :size="15" />账号设置</button>
                   </div>
                   <Transition name="fade-slide" mode="out-in">
                     <article v-if="profileTab === 'info'" key="info" class="panel-card profile-form">
@@ -1050,6 +1076,52 @@
     </nav>
 
     <Teleport to="body">
+      <div v-if="active === 'studentQa'" class="qa-modern-page qa-teleport-layer">
+        <form class="input-dock-container" @submit.prevent="askGlobal">
+          <transition name="qa-jump-latest-pop">
+            <button v-if="showQaLatestButton" class="qa-jump-latest-btn" type="button" title="回到最新消息" aria-label="回到最新消息" @click="scrollQaToLatest()">
+              <ChevronDown :size="20" />
+            </button>
+          </transition>
+          <div class="input-wrapper">
+            <div class="context-badge"><BookOpen :size="14" />当前课程空间：《{{ courseScopeName }}》</div>
+            <div v-if="globalQaAttachments.length" class="qa-attachment-strip">
+              <div v-for="(item, index) in globalQaAttachments" :key="`${item.url}-${index}`" class="qa-attachment-chip">
+                <img :src="item.url" alt="" />
+                <span>{{ item.filename || '图片' }}</span>
+                <button type="button" @click="removeQaAttachment('global', index)"><X :size="13" /></button>
+              </div>
+            </div>
+            <section class="input-box">
+              <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
+              <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
+              <textarea
+                v-model="globalQuestion"
+                placeholder="输入问题"
+                rows="1"
+                @compositionstart="handleQuestionCompositionStart('global')"
+                @compositionend="handleQuestionCompositionEnd('global')"
+                @keydown="handleGlobalQuestionKeydown"
+              ></textarea>
+              <button :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || globalThinking || globalQaImageUploading" :data-loading="globalThinking" class="send-btn"><Send :size="20" /></button>
+            </section>
+          </div>
+        </form>
+        <transition name="fade-slide"><button v-if="historyOpen" type="button" class="history-drawer-backdrop" aria-label="关闭问答历史" @click="closeQaHistory"></button></transition>
+        <transition name="drawer">
+          <aside v-if="historyOpen" class="history-drawer">
+            <div class="history-drawer-sticky">
+              <div class="drawer-head"><h2>{{ courseScopeName }}问答历史</h2><div class="drawer-head-actions"><button type="button" class="history-favorite-toggle" :class="{ checked: showFavorites }" :aria-pressed="showFavorites" @click="showFavorites = !showFavorites"><span class="favorite-check-box" aria-hidden="true"></span><strong>仅看收藏</strong></button><button class="drawer-close-btn" type="button" @click="closeQaHistory"><X :size="16" /></button></div></div>
+              <div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索本课程历史问答" @keyup.enter="loadQaHistory" /></div>
+            </div>
+            <div class="history-drawer-list">
+              <button v-for="item in filteredQaHistory" :key="item.conversation_id" class="history-row" :class="{ active: routeQaConversationId() === Number(item.conversation_id) }" type="button" @click="openQaConversation(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}<template v-if="item.record_count > 1"> · {{ item.record_count }} 条</template></small></button>
+              <EmptyState v-if="!filteredQaHistory.length" text="本课程暂无问答记录" />
+            </div>
+          </aside>
+        </transition>
+      </div>
+
       <transition name="modal-pop">
         <div v-if="joinOpen" class="modal-mask student-modal-scope">
           <article class="join-modal">
@@ -1116,6 +1188,7 @@ import "../styles/student/classagent.css";
 type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };
 type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: any[]; attachments?: QaAttachment[]; thought?: string; thoughtOpen?: boolean; record_id?: number; favorite?: boolean; outOfScope?: boolean; streaming?: boolean };
 type QaHistoryConversation = { id: number; conversation_id: number; question: string; answer: string; created_at: string; attachments?: QaAttachment[]; sources?: any[]; thinking_process?: string; reasoning_content?: string; thought?: string; is_favorite?: boolean; record_count: number };
+type QaInputScope = "class" | "global";
 type StudentSearchResultType = "course" | "lesson" | "material" | "knowledge" | "qa";
 type StudentSearchResult = {
   key: string;
@@ -1186,6 +1259,9 @@ const userMenuOpen = ref(false);
 const topNavRef = ref<HTMLElement | null>(null);
 const topNavIndicator = reactive({ left: 0, width: 0, ready: false });
 const pageTransitionName = ref("student-page-forward");
+const pageStageRef = ref<HTMLElement | null>(null);
+const pageSwitching = ref(false);
+const pageStageHeight = ref(0);
 const topActionsRef = ref<HTMLElement | null>(null);
 const noticePopRef = ref<HTMLElement | null>(null);
 const userPopRef = ref<HTMLElement | null>(null);
@@ -1197,11 +1273,17 @@ const joinError = ref("");
 let joinTimer: number | undefined;
 let notificationTimer: number | undefined;
 let topNavIndicatorFrame = 0;
+let pageTransitionTimer: number | undefined;
 
 const courseKeyword = ref("");
 const termFilter = ref("");
 const courseTab = ref<"active" | "done">("active");
 const quickCourseQuestion = ref("");
+const pageStageStyle = computed(() => (
+  pageSwitching.value && pageStageHeight.value > 0
+    ? { height: `${pageStageHeight.value}px` }
+    : undefined
+));
 
 const classroomOpen = ref(false);
 const classroomLesson = ref<{ lesson: Lesson; pages: LessonPage[] } | null>(null);
@@ -1226,6 +1308,10 @@ const classConversationId = ref<number | null>(null);
 const classQaImageInput = ref<HTMLInputElement | null>(null);
 const classQaAttachments = ref<QaAttachment[]>([]);
 const classQaImageUploading = ref(false);
+const questionCompositionState = reactive<Record<QaInputScope, { active: boolean; endedAt: number }>>({
+  class: { active: false, endedAt: 0 },
+  global: { active: false, endedAt: 0 }
+});
 const aiPanelOpen = ref(true);
 const chromeVisible = ref(true);
 const thumbOpen = ref(false);
@@ -1247,6 +1333,7 @@ let noteTimer: number | undefined;
 let lessonLoadSeq = 0;
 let courseHomeLoadSeq = 0;
 let suppressCourseScopedReset = false;
+let qaScrollFrame = 0;
 
 const globalMessages = ref<ChatMessage[]>([]);
 const globalQuestion = ref("");
@@ -1259,6 +1346,7 @@ const qaHistory = ref<any[]>([]);
 const qaKeyword = ref("");
 const historyOpen = ref(false);
 const showFavorites = ref(false);
+const showQaLatestButton = ref(false);
 
 const problemMode = ref<"text" | "image">("text");
 const problemText = ref("");
@@ -1357,6 +1445,44 @@ function setStudentPageTransition(nextKey: string, fromKey = active.value) {
   pageTransitionName.value = nextIndex < fromIndex ? "student-page-back" : "student-page-forward";
 }
 
+function studentPageElementHeight(el?: Element | null) {
+  if (!(el instanceof HTMLElement)) return 0;
+  return Math.ceil(Math.max(el.scrollHeight, el.offsetHeight, el.getBoundingClientRect().height));
+}
+
+function lockStudentPageStage(height = 0) {
+  if (pageTransitionTimer) {
+    window.clearTimeout(pageTransitionTimer);
+    pageTransitionTimer = undefined;
+  }
+  const stageHeight = pageStageRef.value?.getBoundingClientRect().height || 0;
+  const nextHeight = Math.ceil(Math.max(height, stageHeight, pageStageHeight.value));
+  if (nextHeight > 0) pageStageHeight.value = nextHeight;
+  pageSwitching.value = true;
+}
+
+function beforeStudentPageLeave(el: Element) {
+  lockStudentPageStage(studentPageElementHeight(el));
+}
+
+function beforeStudentPageEnter(el: Element) {
+  pageSwitching.value = true;
+  void nextTick(() => {
+    window.requestAnimationFrame(() => {
+      lockStudentPageStage(studentPageElementHeight(el));
+    });
+  });
+}
+
+function finishStudentPageTransition() {
+  if (pageTransitionTimer) window.clearTimeout(pageTransitionTimer);
+  pageTransitionTimer = window.setTimeout(() => {
+    pageSwitching.value = false;
+    pageStageHeight.value = 0;
+    pageTransitionTimer = undefined;
+  }, 60);
+}
+
 function updateTopNavIndicator() {
   void nextTick(() => {
     if (topNavIndicatorFrame) window.cancelAnimationFrame(topNavIndicatorFrame);
@@ -1431,7 +1557,8 @@ const doneCourses = computed(() => courses.value.filter((course) => (course.prog
 const filteredCourses = computed(() => (courseTab.value === "active" ? activeCourses.value : doneCourses.value).filter((course) => (!courseKeyword.value || course.name.includes(courseKeyword.value)) && (!termFilter.value || course.term === termFilter.value)));
 const latestLesson = computed(() => (courseHome.value.lessons || [])[0] || null);
 const isLessonOpening = computed(() => openingLessonId.value !== null);
-const visibleCourseMaterials = computed(() => materialsExpanded.value ? courseHome.value.materials || [] : (courseHome.value.materials || []).slice(0, 5));
+const baseCourseMaterials = computed(() => (courseHome.value.materials || []).slice(0, 5));
+const extraCourseMaterials = computed(() => (courseHome.value.materials || []).slice(5));
 const searchKeyword = computed(() => globalSearch.value.trim());
 const searchResultGroups = computed(() => (["course", "lesson", "material", "knowledge", "qa"] as StudentSearchResultType[])
   .map((type) => ({
@@ -1708,6 +1835,21 @@ watch(flatSearchResults, (items) => {
   }
   if (searchActiveIndex.value < 0 || searchActiveIndex.value >= items.length) searchActiveIndex.value = 0;
 });
+watch(active, async (page) => {
+  if (page !== "studentQa") {
+    showQaLatestButton.value = false;
+    return;
+  }
+  await nextTick();
+  updateQaLatestButton();
+}, { flush: "post" });
+watch(() => globalMessages.value.length, async (length, previousLength) => {
+  if (active.value !== "studentQa") return;
+  const shouldFollow = previousLength === 0 || isQaNearLatest(360);
+  await nextTick();
+  if (length && shouldFollow) scrollQaToLatest(false);
+  else updateQaLatestButton();
+}, { flush: "post" });
 
 async function run<T>(task: () => Promise<T>, ok?: string) { try { const data = await task(); if (ok) emit("notice", "success", ok); return data; } catch (error) { emit("notice", "error", (error as Error).message); return null; } }
 function queuedQuizMessage(result: any, fallback = "题目已加入生成队列，生成成功后会通知你") {
@@ -1936,6 +2078,46 @@ async function openQuizSelection(tab: "course" | "practice" = "practice") {
   await go("studentQuizzes");
 }
 function scrollToLessons() { document.getElementById("lesson-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+function qaScrollRoot() {
+  return document.scrollingElement || document.documentElement;
+}
+function qaDistanceFromLatest() {
+  const root = qaScrollRoot();
+  const scrollTop = root.scrollTop || window.scrollY || 0;
+  return Math.max(0, root.scrollHeight - root.clientHeight - scrollTop);
+}
+function isQaNearLatest(threshold = 220) {
+  return qaDistanceFromLatest() <= threshold;
+}
+function updateQaLatestButton() {
+  if (active.value !== "studentQa" || !globalMessages.value.length) {
+    showQaLatestButton.value = false;
+    return;
+  }
+  const root = qaScrollRoot();
+  const hasLongConversation = root.scrollHeight - root.clientHeight > 260;
+  showQaLatestButton.value = hasLongConversation && qaDistanceFromLatest() > 260;
+}
+function scheduleQaLatestButtonCheck() {
+  if (qaScrollFrame) return;
+  qaScrollFrame = window.requestAnimationFrame(() => {
+    qaScrollFrame = 0;
+    updateQaLatestButton();
+  });
+}
+function scrollQaToLatest(smooth = true) {
+  void nextTick(() => {
+    const root = qaScrollRoot();
+    const top = Math.max(0, root.scrollHeight - root.clientHeight);
+    window.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+    showQaLatestButton.value = false;
+    window.setTimeout(scheduleQaLatestButtonCheck, smooth ? 360 : 0);
+  });
+}
+function keepQaAtLatestIfNeeded(wasNearLatest: boolean) {
+  if (wasNearLatest) scrollQaToLatest(false);
+  else scheduleQaLatestButtonCheck();
+}
 function searchTypeMeta(type: StudentSearchResultType) { return studentSearchTypeMeta[type]; }
 function searchTeacherName(course: any) { return course?.teacher_name || course?.teacher?.nickname || course?.teacher?.name || ""; }
 function normalizeSearchText(value?: unknown) { return String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase(); }
@@ -2612,13 +2794,29 @@ async function askInClass() {
   }
 }
 function sendQuickClass(text: string) { classQuestion.value = text; askInClass(); }
-function submitQuestionOnEnter(event: KeyboardEvent, submit: () => Promise<void>) {
-  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+function handleQuestionCompositionStart(scope: QaInputScope) {
+  questionCompositionState[scope].active = true;
+}
+function handleQuestionCompositionEnd(scope: QaInputScope) {
+  questionCompositionState[scope].active = false;
+  questionCompositionState[scope].endedAt = Date.now();
+}
+function isImeConfirming(event: KeyboardEvent, scope: QaInputScope) {
+  const legacyCode = event.keyCode || event.which;
+  return questionCompositionState[scope].active || event.isComposing || legacyCode === 229;
+}
+function submitQuestionOnEnter(event: KeyboardEvent, scope: QaInputScope, submit: () => Promise<void>) {
+  if (event.key !== "Enter" || event.shiftKey) return;
+  if (isImeConfirming(event, scope)) return;
+  if (Date.now() - questionCompositionState[scope].endedAt < 120) {
+    event.preventDefault();
+    return;
+  }
   event.preventDefault();
   void submit();
 }
-function handleClassQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, askInClass); }
-function handleGlobalQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, askGlobal); }
+function handleClassQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, "class", askInClass); }
+function handleGlobalQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, "global", askGlobal); }
 async function askGlobal() {
   if ((!globalQuestion.value.trim() && !globalQaAttachments.value.length) || !selectedCourseId.value || globalThinking.value || globalQaImageUploading.value) return;
   const question = globalQuestion.value.trim() || "请分析这张图片";
@@ -2629,6 +2827,7 @@ async function askGlobal() {
   const aiMessageId = Date.now() + 1;
   const aiMessage: ChatMessage = { id: aiMessageId, role: "ai", text: "", thought: "", sources: [], streaming: true };
   globalMessages.value.push(aiMessage);
+  scrollQaToLatest(false);
   globalThinking.value = true;
   try {
     await api.streamPost("/qa/ask/stream", {
@@ -2637,7 +2836,9 @@ async function askGlobal() {
       question,
       attachments
     }, (event, data) => {
+      const shouldFollowLatest = isQaNearLatest(320);
       applyQaStreamEvent(globalMessages, aiMessageId, event, data);
+      keepQaAtLatestIfNeeded(shouldFollowLatest);
       if (event === "final") globalConversationId.value = data.conversation_id;
     });
     if (globalConversationId.value && routeQaConversationId() !== globalConversationId.value) await router.replace(qaConversationRoute(globalConversationId.value));
@@ -2730,6 +2931,7 @@ async function loadQaRouteConversation() {
   globalMessages.value = qaRecordsToMessages(records);
   await loadCourseHome();
   await loadQaHistory();
+  scrollQaToLatest(false);
 }
 async function startNewQaConversation() {
   historyOpen.value = false;
@@ -2737,6 +2939,7 @@ async function startNewQaConversation() {
   globalMessages.value = [];
   globalQuestion.value = "";
   globalQaAttachments.value = [];
+  showQaLatestButton.value = false;
   if (route.path !== "/qa") await router.push("/qa");
 }
 async function openQaConversation(item: any) {
@@ -3070,9 +3273,13 @@ const ActivityTimeline = defineComponent({
       p.items.length
         ? p.items.map((item) => h("div", { class: "profile-timeline-item", key: `${item.type}-${item.title}-${item.time}` }, [
           h("i"),
-          h("strong", item.title || "学习记录"),
-          h("time", relativeTime(item.time)),
-          h("p", item.meta || "")
+          h("div", { class: "profile-timeline-content" }, [
+            h("div", { class: "profile-timeline-head" }, [
+              h("strong", item.title || "学习记录"),
+              h("time", relativeTime(item.time))
+            ]),
+            item.meta ? h("p", item.meta) : null
+          ])
         ]))
         : h(EmptyState, { text: "暂无动态" })
     ]);
@@ -3166,7 +3373,10 @@ const MiniMetric = defineComponent({
     tone: { type: String, default: "primary" }
   },
   setup(p) {
-    return () => h("div", { class: ["mini-metric", p.tone] }, [h(p.icon as any, { size: 18 }), h("div", [h("strong", String(p.value)), h("span", p.label)])]);
+    return () => h("div", { class: ["mini-metric", p.tone] }, [
+      h("span", { class: "mini-metric-icon" }, [h(p.icon as any, { size: 18 })]),
+      h("div", { class: "mini-metric-copy" }, [h("strong", String(p.value)), h("span", p.label)])
+    ]);
   }
 });
 
@@ -3602,6 +3812,8 @@ onMounted(async () => {
   document.addEventListener("visibilitychange", onStudentVisibilityChange);
   window.addEventListener("focus", onStudentWindowFocus);
   window.addEventListener("resize", updateTopNavIndicator);
+  window.addEventListener("resize", scheduleQaLatestButtonCheck);
+  window.addEventListener("scroll", scheduleQaLatestButtonCheck, { passive: true });
   if (active.value === "studentLessonStudy") {
     await loadActive();
     await loadCourses();
@@ -3621,13 +3833,17 @@ onBeforeUnmount(() => {
   document.removeEventListener("visibilitychange", onStudentVisibilityChange);
   window.removeEventListener("focus", onStudentWindowFocus);
   window.removeEventListener("resize", updateTopNavIndicator);
+  window.removeEventListener("resize", scheduleQaLatestButtonCheck);
+  window.removeEventListener("scroll", scheduleQaLatestButtonCheck);
   if (topNavIndicatorFrame) window.cancelAnimationFrame(topNavIndicatorFrame);
+  if (qaScrollFrame) window.cancelAnimationFrame(qaScrollFrame);
   stopLessonResize();
   stopStudyClock();
   if (chromeTimer) clearTimeout(chromeTimer);
   if (joinTimer) clearTimeout(joinTimer);
   if (searchTimer) clearTimeout(searchTimer);
   if (notificationTimer) clearInterval(notificationTimer);
+  if (pageTransitionTimer) clearTimeout(pageTransitionTimer);
   if (noteTimer) clearTimeout(noteTimer);
 });
 </script>

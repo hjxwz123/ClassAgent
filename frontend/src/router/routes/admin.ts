@@ -1,6 +1,13 @@
+import { defineAsyncComponent } from "vue";
 import type { RouteRecordRaw } from "vue-router";
+import PageLoader from "../../components/PageLoader.vue";
 
-const AdminView = () => import("../../views/AdminView.vue");
+const AdminView = defineAsyncComponent({
+  loader: () => import("../../views/AdminView.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+  suspensible: false
+});
 
 const adminRoute = (path: string, pageKey: string): RouteRecordRaw => ({
   path,

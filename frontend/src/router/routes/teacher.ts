@@ -1,6 +1,13 @@
+import { defineAsyncComponent } from "vue";
 import type { RouteRecordRaw } from "vue-router";
+import PageLoader from "../../components/PageLoader.vue";
 
-const TeacherView = () => import("../../views/TeacherView.vue");
+const TeacherView = defineAsyncComponent({
+  loader: () => import("../../views/TeacherView.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+  suspensible: false
+});
 
 const teacherRoute = (path: string, pageKey: string): RouteRecordRaw => ({
   path,

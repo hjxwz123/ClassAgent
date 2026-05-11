@@ -1783,3 +1783,246 @@ html.theme-light .admin-shell .admin-sidebar .nav-group button.active::before {
   color: var(--ca-role-admin-primary) !important;
   background: var(--ca-role-admin-primary) !important;
 }
+
+/* Quizzes dark audit: override late-loaded student quiz chunks without changing layout. */
+html.theme-dark .student-shell .quiz-modern-page,
+html.theme-dark .exam-answer-page,
+html.theme-dark .exam-modal-scope {
+  --quiz-primary-50: rgba(0, 240, 255, .12) !important;
+  --quiz-primary-100: rgba(103, 232, 249, .22) !important;
+  --quiz-primary-500: #22D3EE !important;
+  --quiz-primary-600: var(--dark-cyan-text) !important;
+  --quiz-ai-main: linear-gradient(135deg, #0891B2, #2563EB) !important;
+  --quiz-ai-light: rgba(0, 240, 255, .12) !important;
+  --quiz-bg: var(--dark-page) !important;
+  --quiz-surface: var(--dark-surface) !important;
+  --quiz-muted: var(--dark-surface-2) !important;
+  --quiz-border: var(--dark-border) !important;
+  --quiz-text: var(--dark-text) !important;
+  --quiz-secondary: var(--dark-sub) !important;
+  --quiz-hint: var(--dark-muted) !important;
+  --quiz-shadow-sm: var(--shadow-sm) !important;
+  --quiz-shadow-card: var(--shadow-md) !important;
+  --quiz-shadow-float: var(--shadow-lg) !important;
+  --quiz-shadow-focus: var(--shadow-focus) !important;
+  --exam-primary-50: rgba(0, 240, 255, .12) !important;
+  --exam-primary-100: rgba(103, 232, 249, .22) !important;
+  --exam-primary-400: #22D3EE !important;
+  --exam-primary-500: #00B8D4 !important;
+  --exam-primary-600: var(--dark-cyan-text) !important;
+  --exam-success-50: rgba(16, 185, 129, .14) !important;
+  --exam-warning-50: rgba(245, 158, 11, .16) !important;
+  --exam-warning-500: #F59E0B !important;
+  --exam-warning-700: #FCD34D !important;
+  --exam-bg-page: var(--dark-page) !important;
+  --exam-bg-card: var(--dark-surface) !important;
+  --exam-border-light: rgba(148, 163, 184, .16) !important;
+  --exam-border-default: var(--dark-border) !important;
+  --exam-border-strong: var(--dark-border-strong) !important;
+  --exam-text-main: var(--dark-text) !important;
+  --exam-text-sec: var(--dark-sub) !important;
+  --exam-text-hint: var(--dark-muted) !important;
+  --exam-shadow-sm: var(--shadow-sm) !important;
+  --exam-shadow-card: var(--shadow-md) !important;
+  --exam-shadow-focus: var(--shadow-focus) !important;
+}
+
+html.theme-dark .student-shell .quiz-modern-page {
+  background: transparent !important;
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .student-shell .quiz-hero-card,
+html.theme-dark .student-shell .practice-modern-card,
+html.theme-dark .student-shell .quiz-card,
+html.theme-dark .student-shell .practice-history-item,
+html.theme-dark .exam-answer-page .exam-shell,
+html.theme-dark .exam-answer-page .exam-header,
+html.theme-dark .exam-answer-page .exam-nav-card,
+html.theme-dark .exam-answer-page .exam-q-card,
+html.theme-dark .exam-answer-page .exam-result-summary,
+html.theme-dark .exam-answer-page .exam-analysis-card,
+html.theme-dark .exam-modal-scope .exam-confirm-card,
+html.theme-dark .exam-answer-page .exam-empty-shell .empty {
+  background: var(--dark-surface) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-dark .student-shell .quiz-hero-card {
+  background:
+    linear-gradient(90deg, rgba(0, 240, 255, .08), transparent 38%),
+    var(--dark-surface) !important;
+}
+
+html.theme-dark .student-shell .quiz-hero-pills span,
+html.theme-dark .student-shell .quiz-hero-stats div,
+html.theme-dark .student-shell .quiz-modern-page .course-select .select-menu > button,
+html.theme-dark .student-shell .quiz-modern-page .select-menu-empty,
+html.theme-dark .student-shell .quiz-modern-tabs button,
+html.theme-dark .student-shell .practice-settings-row,
+html.theme-dark .student-shell .practice-chip,
+html.theme-dark .student-shell .practice-segmented-control button,
+html.theme-dark .student-shell .practice-switch-wrapper,
+html.theme-dark .student-shell .practice-history-icon,
+html.theme-dark .exam-answer-page .timer-widget,
+html.theme-dark .exam-answer-page .exam-tag,
+html.theme-dark .exam-answer-page .exam-tag-diff,
+html.theme-dark .exam-answer-page .exam-q-btn,
+html.theme-dark .exam-answer-page .exam-mark-btn,
+html.theme-dark .exam-answer-page .exam-opt-card,
+html.theme-dark .exam-answer-page .exam-opt-letter,
+html.theme-dark .exam-answer-page .exam-answer-input,
+html.theme-dark .exam-answer-page .exam-answer-textarea,
+html.theme-dark .exam-answer-page .exam-btn-outline,
+html.theme-dark .exam-answer-page .exam-analysis-item,
+html.theme-dark .exam-answer-page .exam-analysis-trigger {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: none !important;
+}
+
+html.theme-dark .student-shell .quiz-modern-tabs button:hover,
+html.theme-dark .student-shell .quiz-modern-tabs button.active,
+html.theme-dark .student-shell .practice-chip:hover,
+html.theme-dark .student-shell .practice-chip.active,
+html.theme-dark .student-shell .practice-segmented-control button:hover,
+html.theme-dark .student-shell .practice-segmented-control button.active,
+html.theme-dark .student-shell .practice-switch-wrapper:hover,
+html.theme-dark .exam-answer-page .exam-q-btn:hover,
+html.theme-dark .exam-answer-page .exam-q-btn.current,
+html.theme-dark .exam-answer-page .exam-q-btn.answered,
+html.theme-dark .exam-answer-page .exam-mark-btn:hover,
+html.theme-dark .exam-answer-page .exam-mark-btn.is-marked,
+html.theme-dark .exam-answer-page .exam-opt-input:checked + .exam-opt-card,
+html.theme-dark .exam-answer-page .exam-analysis-trigger:hover {
+  background: rgba(0, 240, 255, .12) !important;
+  color: var(--dark-cyan-text) !important;
+  border-color: var(--dark-cyan-border) !important;
+}
+
+html.theme-dark .student-shell .practice-feature-card,
+html.theme-dark .student-shell .practice-feature-card:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(245, 158, 11, .16), rgba(8, 145, 178, .12)) !important;
+  color: #FDE68A !important;
+  border-color: rgba(251, 191, 36, .34) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+html.theme-dark .student-shell .practice-feature-card:disabled {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-muted) !important;
+  border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .student-shell .practice-feature-card > span,
+html.theme-dark .student-shell .practice-feature-card:disabled > span {
+  background: rgba(245, 158, 11, .18) !important;
+  color: #FDE68A !important;
+  border: 1px solid rgba(251, 191, 36, .34) !important;
+  box-shadow: none !important;
+}
+
+html.theme-dark .student-shell .practice-feature-icon,
+html.theme-dark .student-shell .practice-card-icon,
+html.theme-dark .student-shell .quiz-hero-icon,
+html.theme-dark .student-shell .practice-history-icon,
+html.theme-dark .exam-answer-page .exam-empty-shell .empty svg {
+  background: transparent !important;
+  color: var(--dark-cyan-text) !important;
+  border-color: var(--dark-cyan-border) !important;
+  box-shadow: none !important;
+}
+
+html.theme-dark .student-shell .quiz-modern-title h1,
+html.theme-dark .student-shell .quiz-hero-stats strong,
+html.theme-dark .student-shell .practice-card-header h2,
+html.theme-dark .student-shell .practice-config-label,
+html.theme-dark .student-shell .practice-switch-wrapper strong,
+html.theme-dark .student-shell .practice-history-title,
+html.theme-dark .student-shell .practice-history-left strong,
+html.theme-dark .student-shell .quiz-card h2,
+html.theme-dark .student-shell .practice-feature-card h2,
+html.theme-dark .exam-answer-page .exam-title,
+html.theme-dark .exam-answer-page .exam-stat-val,
+html.theme-dark .exam-answer-page .exam-q-number,
+html.theme-dark .exam-answer-page .exam-q-stem,
+html.theme-dark .exam-answer-page .exam-opt-text,
+html.theme-dark .exam-answer-page .exam-result-summary h2,
+html.theme-dark .exam-answer-page .exam-analysis-head h2,
+html.theme-dark .exam-answer-page .exam-analysis-trigger,
+html.theme-dark .exam-modal-scope .exam-modal-head h2,
+html.theme-dark .exam-answer-page .exam-empty-shell .empty span {
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .student-shell .quiz-modern-title p,
+html.theme-dark .student-shell .quiz-hero-pills span,
+html.theme-dark .student-shell .quiz-hero-stats span,
+html.theme-dark .student-shell .practice-history-left small,
+html.theme-dark .student-shell .quiz-card p,
+html.theme-dark .student-shell .practice-feature-card p,
+html.theme-dark .exam-answer-page .exam-exit-btn,
+html.theme-dark .exam-answer-page .exam-stat-label,
+html.theme-dark .exam-answer-page .exam-prog-text,
+html.theme-dark .exam-answer-page .exam-text-answer small,
+html.theme-dark .exam-answer-page .exam-result-summary p,
+html.theme-dark .exam-answer-page .exam-analysis-body p,
+html.theme-dark .exam-answer-page .exam-analysis-body small,
+html.theme-dark .exam-modal-scope .exam-confirm-card p {
+  color: var(--dark-muted) !important;
+}
+
+html.theme-dark .student-shell .quiz-hero-pills svg,
+html.theme-dark .student-shell .practice-history-title svg,
+html.theme-dark .student-shell .practice-history-item em,
+html.theme-dark .exam-answer-page .timer-text,
+html.theme-dark .exam-answer-page .exam-q-btn.current,
+html.theme-dark .exam-answer-page .exam-q-btn.answered,
+html.theme-dark .exam-answer-page .exam-mark-btn.is-marked,
+html.theme-dark .exam-answer-page .exam-opt-input:checked + .exam-opt-card .exam-opt-text {
+  color: var(--dark-cyan-text) !important;
+}
+
+html.theme-dark .exam-answer-page {
+  background: var(--dark-page) !important;
+}
+
+html.theme-dark .exam-answer-page .exam-container,
+html.theme-dark .exam-answer-page .exam-result-main {
+  background: transparent !important;
+}
+
+html.theme-dark .exam-answer-page .exam-action-footer {
+  background: rgba(3, 7, 18, .84) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: 0 -16px 34px rgba(0, 0, 0, .26) !important;
+}
+
+html.theme-dark .exam-answer-page .exam-analysis-item.open,
+html.theme-dark .exam-answer-page .exam-opt-label:hover .exam-opt-card,
+html.theme-dark .exam-answer-page .exam-exit-btn:hover,
+html.theme-dark .exam-answer-page .exam-btn-outline:hover:not(:disabled) {
+  background: var(--dark-surface-3) !important;
+  color: var(--dark-text) !important;
+  border-color: var(--dark-border-strong) !important;
+}
+
+html.theme-dark .exam-answer-page .exam-opt-input:checked + .exam-opt-card .exam-opt-letter,
+html.theme-dark .exam-answer-page .exam-btn-primary {
+  background: linear-gradient(135deg, #0891B2, #2563EB) !important;
+  color: #F8FAFC !important;
+  border-color: transparent !important;
+}
+
+html.theme-dark .exam-answer-page .exam-q-btn.marked::after {
+  border-color: var(--dark-surface) !important;
+  background: #F59E0B !important;
+}
+
+html.theme-dark .exam-answer-page .exam-modal-mask,
+html.theme-dark .exam-modal-scope .exam-modal-mask {
+  background: rgba(3, 7, 18, .72) !important;
+}
