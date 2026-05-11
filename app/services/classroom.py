@@ -48,7 +48,7 @@ def publish_lesson(db: Session, *, lesson_id: int, user: User, status: str) -> L
     if lesson is None:
         raise not_found("课时不存在")
     course = _get_course_or_404(db, lesson.course_id)
-    _assert_course_owner(course, user)
+    _assert_course_owner(course, user, require_active=True)
     lesson.status = status
     if status == LessonStatus.PUBLISHED.value:
         lesson.published_at = datetime.now(UTC)

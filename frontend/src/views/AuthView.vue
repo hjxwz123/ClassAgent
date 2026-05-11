@@ -20,55 +20,57 @@
       </div>
 
       <section class="auth-card">
-        <div class="brand">
-          <span><BookOpen :size="20" /></span>
-          <div>
-            <strong>{{ modeTitle }}</strong>
-          </div>
-        </div>
-        <div class="tabs" role="tablist">
-          <button type="button" role="tab" :aria-selected="mode === 'login'" :class="{ active: mode === 'login' }" @click="setMode('login')">登录</button>
-          <button type="button" role="tab" :aria-selected="mode === 'register'" :class="{ active: mode === 'register' }" @click="setMode('register')">注册</button>
-          <button type="button" role="tab" :aria-selected="mode === 'reset'" :class="{ active: mode === 'reset' }" @click="setMode('reset')">找回</button>
-        </div>
-        <Transition name="fade-slide">
-          <p v-if="formError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ formError }}</p>
-        </Transition>
-
-        <Transition name="page-switch" mode="out-in">
-          <form v-if="mode === 'login'" key="login" @submit.prevent="login">
-            <label class="label">邮箱</label>
-            <input v-model="loginForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
-            <label class="label">密码</label>
-            <PasswordField v-model="loginForm.password" required :aria-invalid="formError.includes('密码')" />
-            <button class="auth-submit" :data-loading="loading" :disabled="loading"><LogIn :size="17" />{{ loading ? '正在进入...' : '登录' }}</button>
-          </form>
-
-          <form v-else-if="mode === 'register'" key="register" @submit.prevent="register">
-            <label class="label">邮箱</label>
-            <input v-model="registerForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
-            <label class="label">昵称</label>
-            <input v-model="registerForm.nickname" class="input" required :aria-invalid="formError.includes('昵称')" />
-            <label class="label">学号</label>
-            <input v-model="studentNo" class="input" required :aria-invalid="formError.includes('学号')" />
-            <label class="label">密码</label>
-            <PasswordField v-model="registerForm.password" required :aria-invalid="formError.includes('密码')" />
-            <button class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />注册学生账号</button>
-          </form>
-
-          <form v-else key="reset" @submit.prevent="resetPassword">
-            <label class="label">邮箱</label>
-            <input v-model="resetForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
-            <label class="label">验证码</label>
-            <div class="inline">
-              <input v-model="resetForm.code" class="input" placeholder="输入验证码" :aria-invalid="formError.includes('验证码')" />
-              <button type="button" class="send-code-btn" :data-loading="loading" :disabled="loading" @click="sendCode">发送</button>
+        <div class="auth-card-body">
+          <div class="brand">
+            <span><BookOpen :size="20" /></span>
+            <div>
+              <strong>{{ modeTitle }}</strong>
             </div>
-            <label class="label">新密码</label>
-            <PasswordField v-model="resetForm.new_password" required :aria-invalid="formError.includes('密码')" />
-            <button class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />重置密码</button>
-          </form>
-        </Transition>
+          </div>
+          <div class="tabs" role="tablist">
+            <button type="button" role="tab" :aria-selected="mode === 'login'" :class="{ active: mode === 'login' }" @click="setMode('login')">登录</button>
+            <button type="button" role="tab" :aria-selected="mode === 'register'" :class="{ active: mode === 'register' }" @click="setMode('register')">注册</button>
+            <button type="button" role="tab" :aria-selected="mode === 'reset'" :class="{ active: mode === 'reset' }" @click="setMode('reset')">找回</button>
+          </div>
+          <Transition name="fade-slide">
+            <p v-if="formError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ formError }}</p>
+          </Transition>
+
+          <Transition name="page-switch" mode="out-in">
+            <form v-if="mode === 'login'" key="login" @submit.prevent="login">
+              <label class="label">邮箱</label>
+              <input v-model="loginForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
+              <label class="label">密码</label>
+              <PasswordField v-model="loginForm.password" required :aria-invalid="formError.includes('密码')" />
+              <button class="auth-submit" :data-loading="loading" :disabled="loading"><LogIn :size="17" />{{ loading ? '正在进入...' : '登录' }}</button>
+            </form>
+
+            <form v-else-if="mode === 'register'" key="register" @submit.prevent="register">
+              <label class="label">邮箱</label>
+              <input v-model="registerForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
+              <label class="label">昵称</label>
+              <input v-model="registerForm.nickname" class="input" required :aria-invalid="formError.includes('昵称')" />
+              <label class="label">学号</label>
+              <input v-model="studentNo" class="input" required :aria-invalid="formError.includes('学号')" />
+              <label class="label">密码</label>
+              <PasswordField v-model="registerForm.password" required :aria-invalid="formError.includes('密码')" />
+              <button class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />注册学生账号</button>
+            </form>
+
+            <form v-else key="reset" @submit.prevent="resetPassword">
+              <label class="label">邮箱</label>
+              <input v-model="resetForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
+              <label class="label">验证码</label>
+              <div class="inline">
+                <input v-model="resetForm.code" class="input" placeholder="输入验证码" :aria-invalid="formError.includes('验证码')" />
+                <button type="button" class="send-code-btn" :data-loading="loading" :disabled="loading" @click="sendCode">发送</button>
+              </div>
+              <label class="label">新密码</label>
+              <PasswordField v-model="resetForm.new_password" required :aria-invalid="formError.includes('密码')" />
+              <button class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />重置密码</button>
+            </form>
+          </Transition>
+        </div>
       </section>
     </section>
   </main>
@@ -411,13 +413,24 @@ async function resetPassword() {
 .auth-card {
   grid-column: 2;
   justify-self: end;
-  width: min(420px, 100%);
+  width: 420px;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border: 1px solid rgba(255,255,255,.22);
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,244,232,.94)),
     var(--ca-color-paper-card);
   box-shadow: 0 30px 80px rgba(0,0,0,.36);
+  padding: 0;
+  overflow: hidden;
+}
+.auth-card-body {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 28px;
 }
 .brand {
@@ -444,12 +457,12 @@ async function resetPassword() {
 }
 .brand strong {
   color: var(--ca-color-paper-ink);
-  font-family: var(--ca-font-chalk);
-  font-size: 26px;
-  font-weight: 500;
+  font-family: var(--ca-font-sans);
+  font-size: 22px;
+  font-weight: 900;
   font-synthesis: none;
   letter-spacing: 0;
-  line-height: .95;
+  line-height: 1.18;
 }
 .brand small {
   color: var(--ca-color-paper-sub);
@@ -481,17 +494,31 @@ async function resetPassword() {
 .form-error { display: flex; align-items: center; gap: 6px; min-height: 38px; border: 1px solid var(--color-danger-100); border-radius: 8px; background: var(--color-danger-50); color: var(--color-danger-700); padding: 0 10px; font-size: var(--text-body-sm); }
 .label { display: block; margin-top: 16px; color: var(--ca-color-paper-sub); font-size: 13px; font-weight: 800; }
 .inline { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; }
+.inline .input {
+  margin-top: 0;
+}
 
 form {
   display: grid;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 .input {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 44px;
+  margin-top: 8px;
+  box-sizing: border-box;
   border: 1px solid var(--ca-color-paper-border);
   border-radius: 8px;
   background: rgba(255,255,255,.9);
   color: var(--ca-color-paper-ink);
   padding: 0 12px;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .input:focus {
@@ -500,6 +527,11 @@ form {
   box-shadow: 0 0 0 3px rgba(18,22,20,.14);
 }
 :deep(.password-field) {
+  margin-top: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 44px;
   border-color: var(--ca-color-paper-border);
   border-radius: 8px;
@@ -518,10 +550,14 @@ form {
   box-shadow: var(--shadow-focus-danger);
 }
 :deep(.password-field input) {
+  width: 100%;
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--ca-color-paper-ink);
   box-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
 :deep(.password-field input:focus),
 :deep(.password-field input:focus-visible) {
@@ -591,7 +627,7 @@ form {
     left: 18px;
     right: 18px;
   }
-  .auth-card {
+  .auth-card-body {
     padding: 24px;
   }
   .inline {

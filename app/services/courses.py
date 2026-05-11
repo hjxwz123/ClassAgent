@@ -42,11 +42,18 @@ def _get_course_or_404(db: Session, course_id: int) -> Course:
     return course
 
 
-def _assert_course_owner(course: Course, user: User) -> None:
+def _assert_course_active_for_teacher(course: Course, user: User, message: str = "课程已下架，无法执行该操作") -> None:
+    if user.role == UserRole.TEACHER.value and course.status != CourseStatus.ACTIVE.value:
+        raise forbidden(message)
+
+
+def _assert_course_owner(course: Course, user: User, *, require_active: bool = False) -> None:
     if user.role == UserRole.ADMIN.value:
         return
     if course.teacher_id != user.id:
         raise forbidden("仅课程负责人可管理该课程")
+    if require_active:
+        _assert_course_active_for_teacher(course, user)
 
 
 def create_course(db: Session, user: User, payload: CourseCreateRequest) -> Course:
@@ -78,7 +85,7 @@ def create_course(db: Session, user: User, payload: CourseCreateRequest) -> Cour
 
 def update_course(db: Session, user: User, course_id: int, payload: CourseUpdateRequest) -> Course:
     course = _get_course_or_404(db, course_id)
-    _assert_course_owner(course, user)
+    _assert_course_owner(course, user, require_active=True)
     if payload.name is not None:
         course.name = payload.name
     if payload.description is not None:
@@ -86,6 +93,10 @@ def update_course(db: Session, user: User, course_id: int, payload: CourseUpdate
     if payload.term is not None:
         course.term = payload.term
     if payload.status is not None:
+        if user.role != UserRole.ADMIN.value:
+            raise forbidden("请使用课程上架/下架操作修改状态")
+        if payload.status not in {item.value for item in CourseStatus}:
+            raise bad_request("课程状态不合法")
         course.status = payload.status
     if payload.cover_url is not None:
         course.cover_url = payload.cover_url or None
@@ -108,7 +119,7 @@ def update_course(db: Session, user: User, course_id: int, payload: CourseUpdate
 
 def upload_course_cover(db: Session, user: User, course_id: int, upload: UploadFile) -> Course:
     course = _get_course_or_404(db, course_id)
-    _assert_course_owner(course, user)
+    _assert_course_owner(course, user, require_active=True)
     suffix = (upload.filename or "").rsplit(".", 1)[-1].lower() if "." in (upload.filename or "") else ""
     content_type = (upload.content_type or "").lower()
     if not content_type.startswith("image/") and suffix not in {"jpg", "jpeg", "png", "webp", "gif"}:
@@ -133,7 +144,7 @@ def upload_course_cover(db: Session, user: User, course_id: int, upload: UploadF
 
 def create_chapter(db: Session, user: User, course_id: int, payload: ChapterCreateRequest) -> Chapter:
     course = _get_course_or_404(db, course_id)
-    _assert_course_owner(course, user)
+    _assert_course_owner(course, user, require_active=True)
     chapter = Chapter(
         course_id=course_id,
         title=payload.title,
@@ -266,6 +277,24 @@ def deactivate_course(db: Session, user: User, course_id: int) -> Course:
         target_type="course",
         target_id=course.id,
         detail={"deactivated_at": datetime.now(UTC).isoformat()},
+    )
+    db.commit()
+    db.refresh(course)
+    return course
+
+
+def activate_course(db: Session, user: User, course_id: int) -> Course:
+    course = _get_course_or_404(db, course_id)
+    _assert_course_owner(course, user)
+    course.status = CourseStatus.ACTIVE.value
+    db.add(course)
+    log_operation(
+        db,
+        user_id=user.id,
+        action="course.activate",
+        target_type="course",
+        target_id=course.id,
+        detail={"activated_at": datetime.now(UTC).isoformat()},
     )
     db.commit()
     db.refresh(course)

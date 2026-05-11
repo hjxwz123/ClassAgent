@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.enums import (
-    CourseStatus,
     LessonStatus,
     MaterialCategory,
     MaterialType,
@@ -24,7 +23,7 @@ from app.core.errors import bad_request, forbidden, not_found
 from app.db.models import AsyncTaskLog, Chapter, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, PageNote, PedagogyArtifact, QARecord, User
 from app.services.ai import ai_service
 from app.services.audit import log_operation
-from app.services.courses import _assert_course_owner, _get_course_or_404
+from app.services.courses import _assert_course_active_for_teacher, _assert_course_owner, _get_course_or_404
 from app.services.parser import parse_material
 from app.services.pedagogy import generate_material_pedagogy_artifacts
 from app.services.runtime_config import get_enabled_service_config
@@ -51,9 +50,9 @@ _material_processing_worker_lock = Lock()
 _material_processing_worker_started = False
 
 
-def _assert_material_owner(db: Session, material: CourseMaterial, user: User) -> None:
+def _assert_material_owner(db: Session, material: CourseMaterial, user: User, *, require_active: bool = False) -> None:
     course = _get_course_or_404(db, material.course_id)
-    _assert_course_owner(course, user)
+    _assert_course_owner(course, user, require_active=require_active)
 
 
 def _assert_material_access(db: Session, material: CourseMaterial, user: User) -> None:
@@ -78,9 +77,8 @@ def _assert_material_access(db: Session, material: CourseMaterial, user: User) -
 
 def _validate_material_payload(course_id: int, category: str, chapter_id: int | None, user: User, db: Session) -> None:
     course = _get_course_or_404(db, course_id)
-    if course.status != CourseStatus.ACTIVE.value:
-        raise bad_request("课程已停用，无法上传资料")
     _assert_course_owner(course, user)
+    _assert_course_active_for_teacher(course, user, "课程已下架，无法上传资料")
     if category not in {item.value for item in MaterialCategory}:
         raise bad_request("资料分类不合法")
     if chapter_id is not None:
@@ -270,7 +268,7 @@ def update_material(
     material = db.get(CourseMaterial, material_id)
     if material is None or material.deleted_at is not None:
         raise not_found("资料不存在")
-    _assert_material_owner(db, material, user)
+    _assert_material_owner(db, material, user, require_active=True)
     metadata_changed = title is not None or chapter_id_provided
     if title is not None:
         material.title = title
@@ -318,7 +316,7 @@ def delete_material(db: Session, *, material_id: int, user: User) -> None:
     material = db.get(CourseMaterial, material_id)
     if material is None or material.deleted_at is not None:
         raise not_found("资料不存在")
-    _assert_material_owner(db, material, user)
+    _assert_material_owner(db, material, user, require_active=True)
     from datetime import UTC, datetime
 
     vector_store.delete_material(db, course_id=material.course_id, material_id=material.id)
@@ -346,7 +344,7 @@ def update_page_script(db: Session, *, page_id: int, user: User, script_text: st
     material = db.get(CourseMaterial, lesson.material_id)
     if material is None:
         raise not_found("资料不存在")
-    _assert_material_owner(db, material, user)
+    _assert_material_owner(db, material, user, require_active=True)
     audio_url, duration, error_message = _synthesize_or_none(script_text, db)
     page.script_text = script_text
     page.subtitle_text = script_text
@@ -377,7 +375,7 @@ def regenerate_page_script(db: Session, *, page_id: int, user: User) -> LessonPa
     material = db.get(CourseMaterial, lesson.material_id)
     if material is None:
         raise not_found("资料不存在")
-    _assert_material_owner(db, material, user)
+    _assert_material_owner(db, material, user, require_active=True)
     script_text = ai_service.generate_page_script(title=page.page_title, content=page.page_text, db=db)
     audio_url, duration, error_message = _synthesize_or_none(script_text, db)
     page.script_text = script_text
@@ -802,7 +800,7 @@ def reprocess_material(db: Session, *, material_id: int, user: User) -> CourseMa
     material = db.get(CourseMaterial, material_id)
     if material is None or material.deleted_at is not None:
         raise not_found("资料不存在")
-    _assert_material_owner(db, material, user)
+    _assert_material_owner(db, material, user, require_active=True)
     material.parse_status = ProcessStatus.PENDING.value
     material.vector_status = ProcessStatus.PENDING.value
     db.add(material)

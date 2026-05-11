@@ -84,11 +84,11 @@
         <div class="nav-group">
           <span class="course-title" @click="currentCourseId && go('teacherCourseHome')">{{ currentCourse ? shortName(currentCourse.name) : '请先选择或创建课程' }}<ChevronRight v-if="currentCourse" :size="13" /></span>
           <button :disabled="!currentCourse" :class="{ active: active === 'teacherCourseHome' }" @click="go('teacherCourseHome')"><Home :size="16" />课程主页</button>
-          <button :disabled="!currentCourse" :class="{ active: active === 'teacherMaterials' || active === 'teacherPpt' }" @click="go('teacherMaterials')"><FolderOpen :size="16" />资料管理</button>
-          <button :disabled="!currentCourse" :class="{ active: active === 'teacherLessons' }" @click="go('teacherLessons')"><Presentation :size="16" />课时管理</button>
-          <button :disabled="!currentCourse" :class="{ active: active === 'teacherStudents' }" @click="go('teacherStudents')"><Users :size="16" />学生管理</button>
-          <button :disabled="!currentCourse" :class="{ active: active === 'teacherAnalytics' }" @click="go('teacherAnalytics')"><BarChart2 :size="16" />教学分析</button>
-          <button :disabled="!currentCourse" :class="{ active: active === 'teacherWeakQuizzes' }" @click="go('teacherWeakQuizzes')"><AlertTriangle :size="16" />薄弱题目</button>
+          <button :disabled="!currentCourseOperable" :class="{ active: active === 'teacherMaterials' || active === 'teacherPpt' }" @click="go('teacherMaterials')"><FolderOpen :size="16" />资料管理</button>
+          <button :disabled="!currentCourseOperable" :class="{ active: active === 'teacherLessons' }" @click="go('teacherLessons')"><Presentation :size="16" />课时管理</button>
+          <button :disabled="!currentCourseOperable" :class="{ active: active === 'teacherStudents' }" @click="go('teacherStudents')"><Users :size="16" />学生管理</button>
+          <button :disabled="!currentCourseOperable" :class="{ active: active === 'teacherAnalytics' }" @click="go('teacherAnalytics')"><BarChart2 :size="16" />教学分析</button>
+          <button :disabled="!currentCourseOperable" :class="{ active: active === 'teacherWeakQuizzes' }" @click="go('teacherWeakQuizzes')"><AlertTriangle :size="16" />薄弱题目</button>
         </div>
         <div class="nav-group">
           <span>个人</span>
@@ -104,13 +104,13 @@
           <button v-if="active === 'teacherDashboard'" class="btn btn-secondary" @click="enterRecentCourse"><Presentation :size="16" />最近课程</button>
           <button v-if="active === 'teacherCourses'" class="btn btn-primary" @click="newCourse"><Plus :size="16" />创建课程</button>
           <button v-if="active === 'teacherCourseForm'" class="btn btn-primary" :data-loading="isPending('save-course')" :disabled="isPending('save-course')" @click="saveCourse">{{ courseForm.id ? '保存修改' : '创建课程' }}</button>
-          <button v-if="active === 'teacherMaterials'" class="btn btn-primary" @click="openUploadModal"><Upload :size="16" />上传资料</button>
-          <button v-if="active === 'teacherLessons'" class="btn btn-primary" @click="go('teacherMaterials')"><Plus :size="16" />从资料创建</button>
-          <button v-if="active === 'teacherStudents'" class="btn btn-ghost" :data-loading="isPending('export-teacherStudents')" :disabled="isPending('export-teacherStudents')" @click="exportCurrent"><Download :size="16" />导出学生</button>
+          <button v-if="active === 'teacherMaterials'" class="btn btn-primary" :disabled="!currentCourseOperable" @click="openUploadModal"><Upload :size="16" />上传资料</button>
+          <button v-if="active === 'teacherLessons'" class="btn btn-primary" :disabled="!currentCourseOperable" @click="go('teacherMaterials')"><Plus :size="16" />从资料创建</button>
+          <button v-if="active === 'teacherStudents'" class="btn btn-ghost" :data-loading="isPending('export-teacherStudents')" :disabled="isPending('export-teacherStudents') || !currentCourseOperable" @click="exportCurrent"><Download :size="16" />导出学生</button>
           <div v-if="active === 'teacherAnalytics'" class="segmented-control">
-            <button v-for="item in analysisRangeOptions" :key="item" type="button" class="segment-btn" :class="{ active: analysisRange === item }" :data-loading="isPending('analysis-range') && analysisRange === item" :disabled="isPending('analysis-range')" @click="setAnalysisRange(item)">{{ item }}</button>
+            <button v-for="item in analysisRangeOptions" :key="item" type="button" class="segment-btn" :class="{ active: analysisRange === item }" :data-loading="isPending('analysis-range') && analysisRange === item" :disabled="isPending('analysis-range') || !currentCourseOperable" @click="setAnalysisRange(item)">{{ item }}</button>
           </div>
-          <button v-if="active === 'teacherAnalytics'" class="btn btn-ghost" :data-loading="isPending('export-teacherAnalytics')" :disabled="isPending('export-teacherAnalytics')" @click="exportCurrent"><Download :size="16" />导出报告</button>
+          <button v-if="active === 'teacherAnalytics'" class="btn btn-ghost" :data-loading="isPending('export-teacherAnalytics')" :disabled="isPending('export-teacherAnalytics') || !currentCourseOperable" @click="exportCurrent"><Download :size="16" />导出报告</button>
         </section>
       </div>
       <TransitionGroup name="page-switch" tag="div" class="teacher-page-stack">
@@ -180,10 +180,10 @@
             <article v-for="course in filteredCourses" :key="course.id" class="course-card" :class="{ inactive: course.status !== 'active' }">
               <div class="course-cover" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)"><span class="tag">{{ course.term }}</span><span class="tag" :class="statusClass(course.status)">{{ statusText(course.status) }}</span><strong v-if="!course.cover_url" class="course-cover-title">{{ courseCoverText(course) }}</strong></div>
               <section><h2>{{ course.name }}</h2><code>{{ course.course_code }}</code><div class="course-stats"><span><Users :size="15" />{{ course.student_count || 0 }}</span><span><Presentation :size="15" />{{ course.published_lesson_count || 0 }}/{{ course.lesson_count || 0 }}</span><span><File :size="15" />{{ course.material_count || 0 }}</span><span><Check :size="15" />{{ course.published_rate || 0 }}%</span></div></section>
-              <footer><button class="btn btn-primary btn-sm" :data-loading="isPending(`select-course-${course.id}`)" :disabled="isPending(`select-course-${course.id}`)" @click="selectCourse(course.id, 'teacherCourseHome')">进入课程</button><button class="icon-action" :data-loading="isPending(`edit-course-${course.id}`)" :disabled="isPending(`edit-course-${course.id}`)" @click="editCourse(course)"><Pencil :size="15" />编辑</button></footer>
+              <footer><button class="btn btn-primary btn-sm" :data-loading="isPending(`select-course-${course.id}`)" :disabled="isPending(`select-course-${course.id}`)" @click="selectCourse(course.id, 'teacherCourseHome')">{{ isCourseOperable(course) ? '进入课程' : '查看状态' }}</button><button v-if="isCourseOperable(course)" class="icon-action" :data-loading="isPending(`edit-course-${course.id}`)" :disabled="isPending(`edit-course-${course.id}`)" @click="editCourse(course)"><Pencil :size="15" />编辑</button><button class="icon-action course-status-action" :class="{ danger: isCourseOperable(course) }" :data-loading="isPending(`toggle-course-${course.id}`)" :disabled="isPending(`toggle-course-${course.id}`)" @click="toggleCourseStatus(course)"><Check v-if="!isCourseOperable(course)" :size="15" /><Ban v-else :size="15" />{{ isCourseOperable(course) ? '下架' : '上架' }}</button></footer>
             </article>
           </TransitionGroup>
-          <article v-else key="list" class="table-card"><table class="teacher-table"><thead><tr><th>课程名称</th><th>学期</th><th>学生数</th><th>课时数</th><th>资料数</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead><TransitionGroup name="row-list" tag="tbody"><tr v-for="course in filteredCourses" :key="course.id"><td><span class="mini-cover" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)">{{ course.cover_url ? '' : courseCoverText(course).slice(0, 2) }}</span><strong>{{ course.name }}</strong><code>{{ course.course_code }}</code></td><td>{{ course.term }}</td><td><Users :size="14" />{{ course.student_count || 0 }}</td><td><Presentation :size="14" />{{ course.published_lesson_count || 0 }}/{{ course.lesson_count || 0 }}</td><td><File :size="14" />{{ course.material_count || 0 }}</td><td><span class="tag" :class="statusClass(course.status)">{{ statusText(course.status) }}</span></td><td>{{ relativeTime(course.updated_at) }}</td><td><button class="btn btn-primary btn-sm" :data-loading="isPending(`select-course-${course.id}`)" :disabled="isPending(`select-course-${course.id}`)" @click="selectCourse(course.id, 'teacherCourseHome')">进入课程</button><button class="icon-action" :data-loading="isPending(`edit-course-${course.id}`)" :disabled="isPending(`edit-course-${course.id}`)" @click="editCourse(course)"><Pencil :size="15" />编辑</button></td></tr></TransitionGroup></table></article>
+          <article v-else key="list" class="table-card"><table class="teacher-table"><thead><tr><th>课程名称</th><th>学期</th><th>学生数</th><th>课时数</th><th>资料数</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead><TransitionGroup name="row-list" tag="tbody"><tr v-for="course in filteredCourses" :key="course.id"><td><span class="mini-cover" :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)">{{ course.cover_url ? '' : courseCoverText(course).slice(0, 2) }}</span><strong>{{ course.name }}</strong><code>{{ course.course_code }}</code></td><td>{{ course.term }}</td><td><Users :size="14" />{{ course.student_count || 0 }}</td><td><Presentation :size="14" />{{ course.published_lesson_count || 0 }}/{{ course.lesson_count || 0 }}</td><td><File :size="14" />{{ course.material_count || 0 }}</td><td><span class="tag" :class="statusClass(course.status)">{{ statusText(course.status) }}</span></td><td>{{ relativeTime(course.updated_at) }}</td><td><button class="btn btn-primary btn-sm" :data-loading="isPending(`select-course-${course.id}`)" :disabled="isPending(`select-course-${course.id}`)" @click="selectCourse(course.id, 'teacherCourseHome')">{{ isCourseOperable(course) ? '进入课程' : '查看状态' }}</button><button v-if="isCourseOperable(course)" class="icon-action" :data-loading="isPending(`edit-course-${course.id}`)" :disabled="isPending(`edit-course-${course.id}`)" @click="editCourse(course)"><Pencil :size="15" />编辑</button><button class="icon-action course-status-action" :class="{ danger: isCourseOperable(course) }" :data-loading="isPending(`toggle-course-${course.id}`)" :disabled="isPending(`toggle-course-${course.id}`)" @click="toggleCourseStatus(course)"><Check v-if="!isCourseOperable(course)" :size="15" /><Ban v-else :size="15" />{{ isCourseOperable(course) ? '下架' : '上架' }}</button></td></tr></TransitionGroup></table></article>
         </Transition>
         <EmptyState v-if="!filteredCourses.length" text="还没有课程"><button class="btn btn-primary" @click="newCourse"><Plus :size="16" />创建课程</button></EmptyState>
       </section>
@@ -221,39 +221,40 @@
       <section v-if="active === 'teacherCourseHome'" key="teacherCourseHome" class="teacher-content">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
-          <article class="course-hero" :class="{ 'has-image': currentCourse.cover_url }" :style="courseHeroStyle(currentCourse)"><span><BookOpen v-if="currentCourse.cover_url" :size="36" /><strong v-else class="course-hero-cover-title">{{ courseCoverText(currentCourse) }}</strong></span><div><h1>{{ courseHome.course?.name || currentCourse.name }}</h1><p>{{ currentCourse.term }} · {{ currentCourse.course_code }}</p><small><Users :size="15" />{{ courseHome.quick_counts?.student_count || 0 }} 学生 <Presentation :size="15" />{{ courseHome.quick_counts?.lesson_count || 0 }} 课时 <File :size="15" />{{ courseHome.quick_counts?.material_count || 0 }} 资料</small></div><section><button class="btn ghost-white" @click="editCourse(currentCourse)"><Pencil :size="16" />编辑课程</button><button class="btn ghost-white" @click="copyText(currentCourse.course_code)"><Share2 :size="16" />分享课程码</button></section></article>
-          <div class="quick-grid"><QuickAction :icon="Upload" label="上传资料" sub="PPT/PDF/Word/TXT" @click="go('teacherMaterials')" /><QuickAction :icon="Presentation" label="管理课时" sub="课时发布" @click="go('teacherLessons')" /><QuickAction :icon="UserPlus" label="邀请学生" sub="课程码" @click="copyText(currentCourse.course_code)" /><QuickAction :icon="BarChart2" label="教学分析" sub="课程数据" @click="go('teacherAnalytics')" /></div>
+          <article class="course-hero" :class="{ 'has-image': currentCourse.cover_url }" :style="courseHeroStyle(currentCourse)"><span><BookOpen v-if="currentCourse.cover_url" :size="36" /><strong v-else class="course-hero-cover-title">{{ courseCoverText(currentCourse) }}</strong></span><div><h1>{{ courseHome.course?.name || currentCourse.name }}</h1><p>{{ currentCourse.term }} · {{ currentCourse.course_code }} <span class="tag" :class="statusClass(currentCourse.status)">{{ statusText(currentCourse.status) }}</span></p><small><Users :size="15" />{{ courseHome.quick_counts?.student_count || 0 }} 学生 <Presentation :size="15" />{{ courseHome.quick_counts?.lesson_count || 0 }} 课时 <File :size="15" />{{ courseHome.quick_counts?.material_count || 0 }} 资料</small></div><section><button v-if="currentCourseOperable" class="btn ghost-white" @click="editCourse(currentCourse)"><Pencil :size="16" />编辑课程</button><button v-if="currentCourseOperable" class="btn ghost-white" @click="copyText(currentCourse.course_code)"><Share2 :size="16" />分享课程码</button><button class="btn ghost-white" :class="{ danger: currentCourseOperable }" :data-loading="isPending(`toggle-course-${currentCourse.id}`)" :disabled="isPending(`toggle-course-${currentCourse.id}`)" @click="toggleCourseStatus(currentCourse)"><Check v-if="!currentCourseOperable" :size="16" /><Ban v-else :size="16" />{{ currentCourseOperable ? '下架课程' : '上架课程' }}</button></section></article>
+          <article v-if="!currentCourseOperable" class="course-inactive-banner"><AlertTriangle :size="20" /><div><strong>课程已下架</strong><span>已加入学生可继续学习，新学生不能加入；教师需上架后才能继续管理课程。</span></div></article>
+          <div v-if="currentCourseOperable" class="quick-grid"><QuickAction :icon="Upload" label="上传资料" sub="PPT/PDF/Word/TXT" @click="go('teacherMaterials')" /><QuickAction :icon="Presentation" label="管理课时" sub="课时发布" @click="go('teacherLessons')" /><QuickAction :icon="UserPlus" label="邀请学生" sub="课程码" @click="copyText(currentCourse.course_code)" /><QuickAction :icon="BarChart2" label="教学分析" sub="课程数据" @click="go('teacherAnalytics')" /></div>
           <div class="course-home-grid">
             <article class="panel-card home-lesson-card">
               <div class="panel-head rich-head">
                 <div><h2><Presentation :size="18" />课时列表</h2><small>{{ courseHome.quick_counts?.lesson_count || 0 }} 个课时 · 点击可进入脚本工作台</small></div>
-                <button class="btn btn-ghost btn-sm" @click="go('teacherLessons')"><Presentation :size="14" />管理课时</button>
+                <button class="btn btn-ghost btn-sm" :disabled="!currentCourseOperable" @click="go('teacherLessons')"><Presentation :size="14" />管理课时</button>
               </div>
-              <LessonRows :items="courseHome.lessons || []" :student-total="courseHome.quick_counts?.student_count || 0" @open="openLessonScript" />
-              <button class="btn btn-primary btn-sm full home-card-action" @click="go('teacherMaterials')"><Plus :size="14" />从资料生成课时</button>
+              <LessonRows :items="courseHome.lessons || []" :student-total="courseHome.quick_counts?.student_count || 0" :disabled="!currentCourseOperable" @open="openLessonScript" />
+              <button class="btn btn-primary btn-sm full home-card-action" :disabled="!currentCourseOperable" @click="go('teacherMaterials')"><Plus :size="14" />从资料生成课时</button>
             </article>
             <article class="panel-card material-overview-card">
               <div class="panel-head rich-head">
                 <div><h2><FolderOpen :size="18" />资料状态</h2><small>{{ materialReadyCount }}/{{ materialTotal }} 份资料已完成解析</small></div>
-                <button class="btn btn-ghost btn-sm" @click="go('teacherMaterials')"><Upload :size="14" />资料管理</button>
+                <button class="btn btn-ghost btn-sm" :disabled="!currentCourseOperable" @click="go('teacherMaterials')"><Upload :size="14" />资料管理</button>
               </div>
               <section class="material-health">
                 <div><strong>{{ materialReadyPercent }}%</strong><span>解析完成率</span></div>
                 <AppProgress :value="materialReadyPercent" :tone="materialProgressTone" />
               </section>
               <div class="material-status-grid">
-                <button v-for="item in materialStatusCards" :key="item.key" :class="['material-status-tile', item.tone]" @click="go('teacherMaterials')">
+                <button v-for="item in materialStatusCards" :key="item.key" :class="['material-status-tile', item.tone]" :disabled="!currentCourseOperable" @click="go('teacherMaterials')">
                   <component :is="item.icon" :size="17" />
                   <span>{{ item.label }}</span>
                   <strong>{{ item.value }}</strong>
                 </button>
               </div>
               <MaterialTypeList :stats="courseHome.material_stats?.by_type || {}" />
-              <button class="btn btn-secondary btn-sm full home-card-action" @click="go('teacherMaterials')"><Upload :size="14" />上传课程资料</button>
+              <button class="btn btn-secondary btn-sm full home-card-action" :disabled="!currentCourseOperable" @click="go('teacherMaterials')"><Upload :size="14" />上传课程资料</button>
             </article>
             <article class="panel-card"><div class="panel-head"><h2><Clock :size="18" />近期活动</h2></div><ActivityList :items="courseHome.activities || []" /></article>
           </div>
-          <div class="course-bottom-grid"><article class="panel-card"><div class="panel-head"><h2><Users :size="18" />学生学习进度</h2><button class="link-btn" @click="go('teacherStudents')">查看详情</button></div><ProgressList :items="courseHome.student_progress || []" /></article><article class="panel-card"><div class="panel-head"><h2><Sparkles :size="18" />AI 任务队列</h2><span class="tag">{{ (courseHome.ai_tasks || []).length }}</span></div><TaskList :items="courseHome.ai_tasks || []" @retry="retryTask" /></article></div>
+          <div class="course-bottom-grid"><article class="panel-card"><div class="panel-head"><h2><Users :size="18" />学生学习进度</h2><button class="link-btn" :disabled="!currentCourseOperable" @click="go('teacherStudents')">查看详情</button></div><ProgressList :items="courseHome.student_progress || []" /></article><article class="panel-card"><div class="panel-head"><h2><Sparkles :size="18" />AI 任务队列</h2><span class="tag">{{ (courseHome.ai_tasks || []).length }}</span></div><TaskList :items="courseHome.ai_tasks || []" @retry="retryTask" /></article></div>
         </template>
       </section>
 
@@ -599,7 +600,7 @@
 import { TransitionGroup, computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type PropType } from "vue";
 import { useRouter } from "vue-router";
 import {
-  Activity, AlertCircle, AlertTriangle, ArrowLeft, BarChart2, Bell, BookOpen, Camera, Check, CheckCircle,
+  Activity, AlertCircle, AlertTriangle, ArrowLeft, Ban, BarChart2, Bell, BookOpen, Camera, Check, CheckCircle,
   ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Database, Download, Edit2, Eye, File,
   FileEdit, FileText, FolderOpen, GripVertical, Grid2X2, HelpCircle, Home, IdCard, Inbox, Layers, LayoutDashboard,
   Lock, LogOut, Mail, Maximize, MessageCircle, Pencil, Plus, PlusCircle, Presentation, RefreshCw,
@@ -736,7 +737,7 @@ const noticeSettings = reactive([{ key: "join", label: "学生加入课程", ena
 const palette = ["#121614", "#D94925", "#00B8D4", "#2E7D32", "#D9A05B", "#C62828"];
 const weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const pageTitleMap: Record<string, string> = { teacherDashboard: "工作台首页", teacherCourses: "我的课程", teacherCourseForm: "创建课程", teacherCourseHome: "课程主页", teacherMaterials: "资料管理", teacherPpt: "PPT 工作台", teacherLessons: "课时管理", teacherStudents: "学生管理", teacherAnalytics: "教学分析", teacherWeakQuizzes: "薄弱题目", teacherProfile: "个人中心" };
-const courseStatusOptions = [{ label: "全部", value: "" }, { label: "进行中", value: "active" }, { label: "已停用", value: "inactive" }];
+const courseStatusOptions = [{ label: "全部", value: "" }, { label: "进行中", value: "active" }, { label: "已下架", value: "inactive" }];
 const materialTypeOptions = [{ label: "全部", value: "" }, { label: "PPT", value: "pptx" }, { label: "PDF", value: "pdf" }, { label: "Word", value: "docx" }, { label: "TXT/Markdown", value: "txt" }];
 const materialStatusOptions = [{ label: "全部", value: "" }, { label: "已解析", value: "ready" }, { label: "解析中", value: "processing" }, { label: "解析失败", value: "failed" }];
 const materialSortOptions = [{ label: "上传时间", value: "time" }, { label: "文件名", value: "name" }, { label: "文件大小", value: "size" }];
@@ -752,8 +753,10 @@ const weakQuestionTypes = [
   { label: "填空题", value: "blank" },
   { label: "简答题", value: "short_answer" },
 ];
+const courseOperationPages = new Set(["teacherMaterials", "teacherPpt", "teacherLessons", "teacherStudents", "teacherAnalytics", "teacherWeakQuizzes"]);
 
 const currentCourse = computed(() => courses.value.find((course) => course.id === currentCourseId.value) || courses.value[0] || null);
+const currentCourseOperable = computed(() => isCourseOperable(currentCourse.value));
 const pageTitle = computed(() => pageTitleMap[active.value] || "教师端");
 const greeting = computed(() => { const hour = new Date().getHours(); if (hour < 12) return "早上好"; if (hour < 18) return "下午好"; return "晚上好"; });
 const todayText = computed(() => new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric", weekday: "long" }));
@@ -901,6 +904,10 @@ async function go(key: string) {
   courseMenuOpen.value = false;
   userMenuOpen.value = false;
   teacherNoticeOpen.value = false;
+  if (courseOperationPages.has(key) && currentCourse.value && !isCourseOperable(currentCourse.value)) {
+    emit("notice", "warning", "课程已下架，请先上架后再操作");
+    key = "teacherCourseHome";
+  }
   if (key !== "teacherPpt") {
     presentationMode.value = false;
     slideOverviewOpen.value = false;
@@ -997,6 +1004,12 @@ async function loadTeacherProfile() { const data = await run<any>(() => api.get(
 async function loadActive() {
   pageLoading.value = !initialPageLoading.value;
   try {
+    if (courseOperationPages.has(active.value) && currentCourse.value && !currentCourseOperable.value) {
+      emit("notice", "warning", "课程已下架，请先上架后再操作");
+      active.value = "teacherCourseHome";
+      await go("teacherCourseHome");
+      return;
+    }
     if (active.value === "teacherDashboard") await loadDashboard();
     if (active.value === "teacherCourses") await loadCourses();
     if (active.value === "teacherCourseHome") await loadCourseHome();
@@ -1028,6 +1041,7 @@ function resetCourseCoverSelection() {
 }
 function newCourse() { removedChapterIds.value = []; resetCourseCoverSelection(); Object.assign(courseForm, { id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, allow_general_ai_answer: false, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] }); go("teacherCourseForm"); }
 async function editCourse(course: any) {
+  if (!isCourseOperable(course)) return emit("notice", "warning", "课程已下架，请先上架后再编辑");
   const detail = await withAction<CourseDetail>(`edit-course-${course.id}`, () => api.get(`/courses/${course.id}`));
   removedChapterIds.value = [];
   resetCourseCoverSelection();
@@ -1075,6 +1089,8 @@ async function uploadCourseCover(courseId: number) {
 }
 async function saveCourse() {
   if (!courseForm.name.trim() || !courseForm.term.trim()) return emit("notice", "warning", "课程必填");
+  const originalCourse = courses.value.find((course) => Number(course.id) === Number(courseForm.id));
+  if (courseForm.id && originalCourse && !isCourseOperable(originalCourse)) return emit("notice", "warning", "课程已下架，请先上架后再编辑");
   await withAction("save-course", async () => {
     const payload = { name: courseForm.name, description: courseForm.description, term: courseForm.term, cover_url: courseForm.cover_url, cover_color: courseForm.cover_color, allow_general_ai_answer: courseForm.allow_general_ai_answer };
     const course = courseForm.id ? await run<Course>(() => api.patch(`/courses/${courseForm.id}`, payload), "已保存") : await run<Course>(() => api.post("/courses", payload), "已创建");
@@ -1094,8 +1110,27 @@ async function saveCourse() {
     await selectCourse(course.id, "teacherCourseHome");
   });
 }
+async function toggleCourseStatus(course: any) {
+  if (!course?.id) return;
+  const activating = !isCourseOperable(course);
+  if (!activating && !window.confirm(`确定下架“${course.name}”？下架后教师需重新上架才能继续管理，新学生也不能加入。`)) return;
+  await withAction(`toggle-course-${course.id}`, async () => {
+    const updated = await run<Course>(() => api.post(`/courses/${course.id}/${activating ? "activate" : "deactivate"}`), activating ? "课程已上架" : "课程已下架");
+    if (!updated) return;
+    courses.value = courses.value.map((item) => Number(item.id) === Number(updated.id) ? { ...item, ...updated } : item);
+    if (currentCourseId.value === updated.id) {
+      if (courseHome.value.course) courseHome.value = { ...courseHome.value, course: { ...courseHome.value.course, ...updated } };
+      await loadCourseHome();
+      if (!activating && courseOperationPages.has(active.value)) await go("teacherCourseHome");
+    }
+    await loadCourses();
+    await loadDashboard();
+  });
+}
 async function deleteCourse() {
   if (!courseForm.id) return;
+  const originalCourse = courses.value.find((course) => Number(course.id) === Number(courseForm.id));
+  if (originalCourse && !isCourseOperable(originalCourse)) return emit("notice", "warning", "课程已下架，请先上架后再删除");
   confirmDeleteCourseOpen.value = true;
 }
 async function confirmDeleteCourse() {
@@ -1122,7 +1157,7 @@ function nextChapterOrderIndex() {
   return Math.max(0, ...materialChapterRows().map((chapter: any) => Number(chapter.order_index || 0))) + 1;
 }
 function openAddChapterModal() {
-  if (!currentCourse.value) return;
+  if (!ensureCurrentCourseOperable()) return;
   chapterNameDraft.value = `第${nextChapterOrderIndex()}章`;
   chapterNameOpen.value = true;
   nextTick(() => {
@@ -1131,7 +1166,7 @@ function openAddChapterModal() {
   });
 }
 async function addChapterFromTree() {
-  if (!currentCourse.value) return;
+  if (!ensureCurrentCourseOperable()) return;
   const title = chapterNameDraft.value.trim();
   if (!title) return emit("notice", "warning", "请输入章节名称");
   const existing = [...(materialSummary.value.chapters || []), ...(courseHome.value.chapters || [])];
@@ -1146,7 +1181,7 @@ async function addChapterFromTree() {
   });
 }
 async function deleteChapterFromTree(chapter: any) {
-  if (!currentCourse.value || !chapter?.id) return;
+  if (!ensureCurrentCourseOperable() || !chapter?.id) return;
   const linkedCount = Number(chapter.count || 0);
   const message = linkedCount > 0
     ? `确定删除“${chapter.title}”？该章节下 ${linkedCount} 份资料会保留并改为未分章。`
@@ -1251,6 +1286,7 @@ function serializeEditorQuestion(question: any) {
   };
 }
 async function saveQuizEditor() {
+  if (!ensureCurrentCourseOperable()) return null;
   if (!quizEditor.id || quizEditorSaving.value) return null;
   quizEditorSaving.value = true;
   try {
@@ -1266,6 +1302,7 @@ async function saveQuizEditor() {
   }
 }
 async function publishQuizEditor() {
+  if (!ensureCurrentCourseOperable()) return;
   if (!quizEditor.id || quizEditorPublishing.value) return;
   quizEditorPublishing.value = true;
   try {
@@ -1357,7 +1394,7 @@ async function openGeneratedWeakQuiz(quizOrId: any) {
   if (detail) openQuizEditor(detail);
 }
 async function generateTeacherWeakQuiz(point?: any) {
-  if (!currentCourse.value) return emit("notice", "warning", "请先选择课程");
+  if (!ensureCurrentCourseOperable()) return;
   if (!weakQuizFormValid.value) return emit("notice", "warning", "题型数量合计必须等于总题量");
   if (weakQuizGenerating.value) return emit("notice", "info", "正在生成测验，请稍候");
   const mode: "all" | "single" = point ? "single" : "all";
@@ -1411,6 +1448,7 @@ function questionTypeText(type?: string) {
 }
 async function refreshMaterials() { await withAction("filter-materials", loadMaterials); }
 async function openUploadModal() {
+  if (!ensureCurrentCourseOperable()) return;
   uploadOpen.value = true;
   if (!currentCourse.value) return;
   await withAction("load-upload-chapters", async () => {
@@ -1468,7 +1506,7 @@ function scheduleMaterialRefreshes() {
 function pickUploadFiles(event: Event) { const files = Array.from((event.target as HTMLInputElement).files || []); uploadQueue.value = files.map((file, index) => ({ id: Date.now() + index, file, chapter_id: selectedChapterId.value, category: "courseware" })); }
 function removeUpload(id: number) { uploadQueue.value = uploadQueue.value.filter((item) => item.id !== id); }
 async function uploadMaterials() {
-  if (!currentCourse.value) return;
+  if (!ensureCurrentCourseOperable()) return;
   await withAction("upload-materials", async () => {
     let successCount = 0;
     for (const item of uploadQueue.value) {
@@ -1490,8 +1528,9 @@ async function uploadMaterials() {
     scheduleMaterialRefreshes();
   });
 }
-async function deleteMaterial(id: number) { await withAction(`delete-material-${id}`, async () => { await run(() => api.delete(`/materials/${id}`), "已删除"); await loadMaterials(); }); }
+async function deleteMaterial(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`delete-material-${id}`, async () => { await run(() => api.delete(`/materials/${id}`), "已删除"); await loadMaterials(); }); }
 async function reprocessMaterial(id: number) {
+  if (!ensureCurrentCourseOperable()) return;
   await withAction(`reprocess-material-${id}`, async () => {
     const material = await run<any>(() => api.post(`/materials/${id}/reprocess`), "已重新提交解析，正在解析中");
     if (!material) return;
@@ -1518,6 +1557,7 @@ async function previewMaterial(item: any) {
   if (!hasPreviewMarkdown.value && item.preview_url) previewMode.value = "file";
 }
 async function openPptWorkbench(materialId: number) {
+  if (!ensureCurrentCourseOperable()) return;
   const row = materials.value.find((item) => Number(item.id) === Number(materialId));
   if (row && isMaterialProcessing(row)) {
     emit("notice", "info", "资料正在解析中，完成后可编辑课时");
@@ -1532,6 +1572,7 @@ async function openPptWorkbench(materialId: number) {
   await go("teacherPpt");
 }
 async function openLessonWorkbench(lessonId: number) {
+  if (!ensureCurrentCourseOperable()) return;
   const detail = await withAction<any>(`open-lesson-${lessonId}`, () => api.get(`/lessons/${lessonId}`));
   if (!detail) return;
   if (!(detail.pages || []).length) return emit("notice", "warning", "该课时暂无页面内容");
@@ -1628,6 +1669,7 @@ function redoScriptEdit() {
   pulseEditor("redo");
 }
 async function saveCurrentScript(ok: string) {
+  if (!ensureCurrentCourseOperable()) return;
   if (!activePage.value) return;
   const pageId = activePage.value.id;
   const page = await withAction<any>(`save-script-${pageId}`, () => api.patch(`/materials/pages/${pageId}/script`, { script_text: scriptDraft.value }), ok);
@@ -1636,12 +1678,14 @@ async function saveCurrentScript(ok: string) {
 async function saveScript() { await saveCurrentScript("已审核"); }
 async function synthesizeCurrent() { await saveCurrentScript("已合成"); }
 async function regenCurrent() {
+  if (!ensureCurrentCourseOperable()) return;
   if (!activePage.value) return;
   const pageId = activePage.value.id;
   const page = await withAction<any>(`regen-page-${pageId}`, () => api.post(`/materials/pages/${pageId}/script/regenerate`), "已生成");
   if (page && materialDetail.value) { const index = materialDetail.value.pages.findIndex((item: any) => item.id === page.id); if (index >= 0) materialDetail.value.pages[index] = page; scriptDraft.value = page.script_text || ""; }
 }
 async function markAllReviewed() {
+  if (!ensureCurrentCourseOperable()) return;
   await withAction("mark-all-reviewed", async () => {
     for (const page of pages.value) await run(() => api.patch(`/materials/pages/${page.id}/script`, { script_text: page.script_text || page.page_text }));
     emit("notice", "success", "已审核");
@@ -1649,10 +1693,10 @@ async function markAllReviewed() {
     else if (materialDetail.value?.lesson_id) await openLessonWorkbench(materialDetail.value.lesson_id);
   });
 }
-async function publishLessonFromMaterial() { if (!materialDetail.value?.lesson_id) return emit("notice", "warning", "暂无可发布的课时"); await withAction("publish-lesson", () => api.post(`/lessons/${materialDetail.value!.lesson_id}/publish`), "已发布"); }
-async function toggleLessonPublish(lesson: any) { await withAction(`toggle-lesson-${lesson.id}`, async () => { await run(() => api.post(`/lessons/${lesson.id}/${lesson.status === 'published' ? 'unpublish' : 'publish'}`), "已更新"); await loadLessons(); }); }
-async function duplicateLesson(id: number) { await withAction(`duplicate-lesson-${id}`, async () => { await run(() => api.post(`/teacher/lessons/${id}/duplicate`), "已复制"); await loadLessons(); }); }
-async function deleteLesson(id: number) { await withAction(`delete-lesson-${id}`, async () => { await run(() => api.delete(`/teacher/lessons/${id}`), "已删除"); await loadLessons(); }); }
+async function publishLessonFromMaterial() { if (!ensureCurrentCourseOperable()) return; if (!materialDetail.value?.lesson_id) return emit("notice", "warning", "暂无可发布的课时"); await withAction("publish-lesson", () => api.post(`/lessons/${materialDetail.value!.lesson_id}/publish`), "已发布"); }
+async function toggleLessonPublish(lesson: any) { if (!ensureCurrentCourseOperable()) return; await withAction(`toggle-lesson-${lesson.id}`, async () => { await run(() => api.post(`/lessons/${lesson.id}/${lesson.status === 'published' ? 'unpublish' : 'publish'}`), "已更新"); await loadLessons(); }); }
+async function duplicateLesson(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`duplicate-lesson-${id}`, async () => { await run(() => api.post(`/teacher/lessons/${id}/duplicate`), "已复制"); await loadLessons(); }); }
+async function deleteLesson(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`delete-lesson-${id}`, async () => { await run(() => api.delete(`/teacher/lessons/${id}`), "已删除"); await loadLessons(); }); }
 async function openLessonPreview(id: number) {
   const detail = await withAction<any>(`preview-lesson-${id}`, () => api.get(`/lessons/${id}`));
   if (!detail) return;
@@ -1669,7 +1713,7 @@ async function openStudent(id: number) {
 function defaultReminderTitle() { return currentCourse.value ? `${currentCourse.value.name}学习提醒` : "学习提醒"; }
 function defaultReminderMessage() { return `请及时查看《${currentCourse.value?.name || "课程"}》的学习进度，完成未学课时、练习或待办任务。`; }
 function openReminderModal(ids: number[]) {
-  if (!currentCourse.value) return emit("notice", "warning", "请先选择课程");
+  if (!ensureCurrentCourseOperable()) return;
   const uniqueIds = Array.from(new Set(ids.map(Number).filter(Boolean)));
   if (!uniqueIds.length) return emit("notice", "warning", "请先选择学生");
   reminderTargetIds.value = uniqueIds;
@@ -1678,10 +1722,10 @@ function openReminderModal(ids: number[]) {
   reminderOpen.value = true;
 }
 function remindStudent(id: number) { openReminderModal([id]); }
-async function removeStudent(id: number) { if (!currentCourse.value) return; await withAction(`remove-student-${id}`, async () => { await run(() => api.delete(`/teacher/courses/${currentCourse.value!.id}/students/${id}`), "已移出"); studentDrawer.value = null; await loadStudents(); }); }
+async function removeStudent(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`remove-student-${id}`, async () => { await run(() => api.delete(`/teacher/courses/${currentCourse.value!.id}/students/${id}`), "已移出"); studentDrawer.value = null; await loadStudents(); }); }
 function batchRemind() { openReminderModal(filteredStudents.value.map((item: any) => item.student.id)); }
 async function sendReminder() {
-  if (!currentCourse.value || !reminderTargetIds.value.length) return;
+  if (!ensureCurrentCourseOperable() || !reminderTargetIds.value.length) return;
   const title = reminderForm.title.trim();
   const message = reminderForm.message.trim();
   if (!title || !message) return emit("notice", "warning", "提醒标题和内容不能为空");
@@ -1743,8 +1787,20 @@ function cloudSize(count: string | number) { return `${14 + Math.min(Number(coun
 function formatTime(value?: string | null) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
 function shortDate(value?: string | null) { return value ? new Date(value).toLocaleDateString("zh-CN") : "-"; }
 function relativeTime(value?: string | null) { if (!value) return "从未"; const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
+function isCourseOperable(course?: any | null) { return !!course && String(course.status || "active") === "active"; }
+function ensureCurrentCourseOperable() {
+  if (!currentCourse.value) {
+    emit("notice", "warning", "请先选择课程");
+    return false;
+  }
+  if (!currentCourseOperable.value) {
+    emit("notice", "warning", "课程已下架，请先上架后再操作");
+    return false;
+  }
+  return true;
+}
 function statusClass(status?: string) { if (["ready", "published", "active", "success"].includes(String(status))) return "tag-success"; if (["pending", "processing", "review"].includes(String(status))) return "tag-warning"; if (["failed", "inactive", "disabled"].includes(String(status))) return "tag-danger"; return ""; }
-function statusText(status?: string) { return { ready: "已解析", published: "已发布", active: "进行中", inactive: "已停用", pending: "待处理", processing: "处理中", failed: "失败", draft: "草稿", review: "待发布", closed: "已关闭" }[String(status)] || String(status || "-"); }
+function statusText(status?: string) { return { ready: "已解析", published: "已发布", active: "进行中", inactive: "已下架", pending: "待处理", processing: "处理中", failed: "失败", draft: "草稿", review: "待发布", closed: "已关闭" }[String(status)] || String(status || "-"); }
 function courseColor(id: number) { return `linear-gradient(135deg, ${palette[id % palette.length]}, #0F172A)`; }
 function courseCoverText(course?: any) {
   const text = String(course?.name || "课程名称").replace(/\s+/g, "");
@@ -1815,10 +1871,10 @@ const EmptyState = defineComponent({ props: { text: { type: String, required: tr
 const CourseRequired = defineComponent(() => () => h("div", { class: "empty page-empty" }, [h(BookOpen, { size: 48 }), h("span", "请选择课程")]));
 const QuickAction = defineComponent({ props: { icon: { type: Object, required: true }, label: { type: String, required: true }, sub: { type: String, required: true } }, emits: ["click"], setup(p, { emit: update }) { return () => h("button", { class: "quick-action", onClick: () => update("click") }, [h(p.icon as any, { size: 22 }), h("strong", p.label), h("small", p.sub)]); } });
 const TaskList = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true } }, emits: ["retry"], setup(p, { emit: update }) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "task-list" }, { default: () => p.items.length ? p.items.map((item) => h("div", { key: item.id || item.title, class: "task-item" }, [h(item.status === "ready" ? CheckCircle : item.status === "failed" ? XCircle : item.status === "processing" ? RefreshCw : Clock, { size: 16, class: item.status }), h("span", item.title), h("small", statusText(item.status)), item.status === "failed" ? h("button", { class: "link-btn", onClick: () => update("retry", item) }, "重试") : null])) : [h(EmptyState, { key: "empty", text: "暂无任务" })] }); } });
-const LessonRows = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true }, studentTotal: { type: Number, required: true } }, emits: ["open"], setup(p, { emit: update }) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "lesson-rows" }, { default: () => p.items.length ? p.items.slice(0, 6).map((item, index) => {
+const LessonRows = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true }, studentTotal: { type: Number, required: true }, disabled: { type: Boolean, default: false } }, emits: ["open"], setup(p, { emit: update }) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "lesson-rows" }, { default: () => p.items.length ? p.items.slice(0, 6).map((item, index) => {
   const progress = Math.round(Number(item.average_progress || 0));
   const progressTone: "success" | "warning" | "danger" = progress >= 70 ? "success" : progress >= 30 ? "warning" : "danger";
-  return h("button", { key: item.id, class: "lesson-row", onClick: () => update("open", item) }, [
+  return h("button", { key: item.id, class: "lesson-row", disabled: p.disabled, onClick: () => update("open", item) }, [
     h("span", { class: "lesson-index" }, [h("b", String(index + 1).padStart(2, "0")), h("i")]),
     h("span", { class: "lesson-body" }, [
       h("span", { class: "lesson-title-line" }, [h("strong", item.title), h("span", { class: ["tag", statusClass(item.status)] }, statusText(item.status))]),

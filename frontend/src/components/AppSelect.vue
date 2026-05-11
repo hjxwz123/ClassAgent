@@ -107,17 +107,23 @@ function updatePopoverPosition() {
   const gap = 6;
   const edge = 8;
   const width = Math.max(rect.width, 128);
-  const below = window.innerHeight - rect.bottom - gap - edge;
-  const above = rect.top - gap - edge;
+  const below = Math.max(0, window.innerHeight - rect.bottom - gap - edge);
+  const above = Math.max(0, rect.top - gap - edge);
   const openUp = below < 160 && above > below;
-  const maxHeight = Math.max(120, Math.min(260, openUp ? above : below));
-  const top = openUp ? Math.max(edge, rect.top - gap - maxHeight) : Math.min(window.innerHeight - edge - maxHeight, rect.bottom + gap);
+  const available = openUp ? above : below;
+  const maxHeight = Math.max(80, Math.min(260, available));
+  const naturalHeight = popRef.value ? Math.ceil(popRef.value.scrollHeight + 2) : maxHeight;
+  const expectedHeight = Math.min(naturalHeight, maxHeight);
+  const top = openUp
+    ? Math.max(edge, rect.top - gap - expectedHeight)
+    : Math.min(window.innerHeight - edge - expectedHeight, rect.bottom + gap);
   const left = Math.max(edge, Math.min(rect.left, window.innerWidth - edge - width));
   popStyle.value = {
     left: `${left}px`,
     top: `${top}px`,
     width: `${width}px`,
     maxHeight: `${maxHeight}px`,
+    transformOrigin: openUp ? "bottom center" : "top center",
   };
 }
 function onDocumentPointerDown(event: PointerEvent) {
