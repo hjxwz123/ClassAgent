@@ -4,7 +4,7 @@ import re
 from time import sleep
 
 from fastapi import UploadFile
-from sqlalchemy import or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -922,7 +922,7 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
     }
 
 
-def list_history(db: Session, *, user: User, course_id: int | None = None, lesson_id: int | None = None, keyword: str | None = None) -> list[QARecord]:
+def list_history(db: Session, *, user: User, course_id: int | None = None, lesson_id: int | None = None, keyword: str | None = None) -> list[dict]:
     if user.role == UserRole.STUDENT.value:
         if course_id is None:
             course_ids = list(
@@ -932,9 +932,10 @@ def list_history(db: Session, *, user: User, course_id: int | None = None, lesso
                 return []
             course_id = course_ids[0]
         _assert_student_course_access(db, course_id=course_id, user=user)
-    statement = select(QARecord).where(QARecord.user_id == user.id)
+    conversation_statement = select(QAConversation.id).where(QAConversation.user_id == user.id)
     if course_id is not None:
-        statement = statement.where(QARecord.course_id == course_id)
+        conversation_statement = conversation_statement.where(QAConversation.course_id == course_id)
+    lesson_page_ids = None
     if lesson_id is not None:
         lesson_page_ids = (
             select(LessonPage.id)
@@ -943,7 +944,13 @@ def list_history(db: Session, *, user: User, course_id: int | None = None, lesso
         )
         if course_id is not None:
             lesson_page_ids = lesson_page_ids.where(Lesson.course_id == course_id)
-        statement = statement.where(QARecord.lesson_page_id.in_(lesson_page_ids))
+        lesson_conversation_ids = select(QARecord.conversation_id).where(
+            QARecord.user_id == user.id,
+            QARecord.lesson_page_id.in_(lesson_page_ids),
+        )
+        if course_id is not None:
+            lesson_conversation_ids = lesson_conversation_ids.where(QARecord.course_id == course_id)
+        conversation_statement = conversation_statement.where(QAConversation.id.in_(lesson_conversation_ids))
     else:
         lesson_conversation_ids = select(QARecord.conversation_id).where(
             QARecord.user_id == user.id,
@@ -951,14 +958,94 @@ def list_history(db: Session, *, user: User, course_id: int | None = None, lesso
         )
         if course_id is not None:
             lesson_conversation_ids = lesson_conversation_ids.where(QARecord.course_id == course_id)
-        statement = statement.where(
-            QARecord.lesson_page_id.is_(None),
-            QARecord.conversation_id.not_in(lesson_conversation_ids),
-        )
+        conversation_statement = conversation_statement.where(QAConversation.id.not_in(lesson_conversation_ids))
     if keyword:
         like = f"%{keyword}%"
-        statement = statement.where(or_(QARecord.question.like(like), QARecord.answer.like(like)))
-    return list(db.scalars(statement.order_by(QARecord.created_at.desc())))
+        keyword_conversation_ids = select(QARecord.conversation_id).where(
+            QARecord.user_id == user.id,
+            or_(QARecord.question.like(like), QARecord.answer.like(like)),
+        )
+        if course_id is not None:
+            keyword_conversation_ids = keyword_conversation_ids.where(QARecord.course_id == course_id)
+        conversation_statement = conversation_statement.where(QAConversation.id.in_(keyword_conversation_ids))
+
+    conversation_ids = conversation_statement.subquery()
+    conversation_id_select = select(conversation_ids.c.id)
+    summary_record_statement = select(
+        QARecord.id.label("record_id"),
+        QARecord.conversation_id.label("conversation_id"),
+        QARecord.course_id.label("course_id"),
+        QARecord.user_id.label("user_id"),
+        QARecord.lesson_page_id.label("lesson_page_id"),
+        QARecord.question.label("question"),
+        QARecord.answer.label("answer"),
+        QARecord.attachments.label("attachments"),
+        QARecord.created_at.label("created_at"),
+        QARecord.updated_at.label("updated_at"),
+        func.row_number()
+        .over(
+            partition_by=QARecord.conversation_id,
+            order_by=[QARecord.created_at.desc(), QARecord.id.desc()],
+        )
+        .label("row_number"),
+    ).where(QARecord.user_id == user.id, QARecord.conversation_id.in_(conversation_id_select))
+    if lesson_page_ids is not None:
+        summary_record_statement = summary_record_statement.where(QARecord.lesson_page_id.in_(lesson_page_ids))
+    summary_records = summary_record_statement.subquery()
+    counts = (
+        select(
+            QARecord.conversation_id.label("conversation_id"),
+            func.count(QARecord.id).label("record_count"),
+            func.max(case((QARecord.is_favorite.is_(True), 1), else_=0)).label("favorite_count"),
+        )
+        .where(QARecord.user_id == user.id, QARecord.conversation_id.in_(conversation_id_select))
+        .group_by(QARecord.conversation_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(
+            QAConversation.id.label("conversation_id"),
+            QAConversation.course_id.label("conversation_course_id"),
+            QAConversation.user_id.label("conversation_user_id"),
+            QAConversation.title.label("title"),
+            summary_records.c.record_id,
+            summary_records.c.course_id,
+            summary_records.c.user_id,
+            summary_records.c.lesson_page_id,
+            summary_records.c.question,
+            summary_records.c.answer,
+            summary_records.c.attachments,
+            summary_records.c.created_at,
+            summary_records.c.updated_at,
+            counts.c.record_count,
+            counts.c.favorite_count,
+        )
+        .join(summary_records, summary_records.c.conversation_id == QAConversation.id)
+        .join(counts, counts.c.conversation_id == QAConversation.id)
+        .where(QAConversation.id.in_(conversation_id_select), summary_records.c.row_number == 1)
+        .order_by(summary_records.c.created_at.desc(), summary_records.c.record_id.desc())
+    )
+    items: list[dict] = []
+    for row in rows:
+        answer = str(row.answer or "").strip()
+        items.append(
+            {
+                "id": int(row.record_id),
+                "conversation_id": int(row.conversation_id),
+                "course_id": int(row.course_id or row.conversation_course_id),
+                "user_id": int(row.user_id or row.conversation_user_id),
+                "title": row.title or row.question[:30],
+                "question": row.question,
+                "answer_preview": answer[:160],
+                "lesson_page_id": row.lesson_page_id,
+                "attachments": row.attachments or [],
+                "is_favorite": bool(row.favorite_count),
+                "record_count": int(row.record_count or 0),
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+            }
+        )
+    return items
 
 
 def list_conversation_records(db: Session, *, user: User, conversation_id: int) -> list[QARecord]:

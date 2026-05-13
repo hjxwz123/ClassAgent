@@ -171,6 +171,16 @@ def _material_status_counts(db: Session, course_id: int) -> dict:
     }
 
 
+def _material_task_status(material: CourseMaterial, fallback: str) -> str:
+    parse_status = str(material.parse_status or "")
+    vector_status = str(material.vector_status or "")
+    if parse_status == ProcessStatus.PROCESSING.value or vector_status == ProcessStatus.PROCESSING.value:
+        return ProcessStatus.PROCESSING.value
+    if parse_status == ProcessStatus.PENDING.value or vector_status == ProcessStatus.PENDING.value:
+        return ProcessStatus.PENDING.value
+    return parse_status or fallback
+
+
 def _recent_activities(db: Session, course_id: int, limit: int = 8) -> list[dict]:
     items = [
         {
@@ -207,14 +217,15 @@ def _recent_activities(db: Session, course_id: int, limit: int = 8) -> list[dict
 
 
 def _ai_tasks(db: Session, course_ids: list[int], limit: int = 5) -> list[dict]:
+    from app.services.materials import repair_materials_with_existing_pages
+
     if not course_ids:
         return []
-    material_ids = [
-        row[0]
-        for row in db.execute(
-            select(CourseMaterial.id).where(CourseMaterial.course_id.in_(course_ids), CourseMaterial.deleted_at.is_(None))
-        )
-    ]
+    course_materials = list(
+        db.scalars(select(CourseMaterial).where(CourseMaterial.course_id.in_(course_ids), CourseMaterial.deleted_at.is_(None)))
+    )
+    repair_materials_with_existing_pages(db, course_materials)
+    material_ids = [item.id for item in course_materials]
     task_filters = [AsyncTaskLog.target_type == "quiz"]
     if material_ids:
         task_filters.append((AsyncTaskLog.target_type == "material") & (AsyncTaskLog.target_id.in_(material_ids)))
@@ -232,10 +243,7 @@ def _ai_tasks(db: Session, course_ids: list[int], limit: int = 5) -> list[dict]:
         for task in task_rows
         if task.target_type != "quiz" or int((task.detail or {}).get("course_id") or 0) in course_id_set
     ][:limit]
-    material_by_id = {
-        item.id: item
-        for item in db.scalars(select(CourseMaterial).where(CourseMaterial.id.in_([task.target_id for task in tasks if task.target_id])))
-    }
+    material_by_id = {item.id: item for item in course_materials}
     quiz_by_id = {
         item.id: item
         for item in db.scalars(
@@ -246,7 +254,12 @@ def _ai_tasks(db: Session, course_ids: list[int], limit: int = 5) -> list[dict]:
         {
             "id": task.id,
             "task_name": task.task_name,
-            "status": task.status,
+            "status": (
+                _material_task_status(material_by_id[task.target_id], task.status)
+                if task.target_type == "material" and task.target_id in material_by_id
+                else task.status
+            ),
+            "task_status": task.status,
             "target_id": task.target_id,
             "title": (
                 material_by_id.get(task.target_id).title

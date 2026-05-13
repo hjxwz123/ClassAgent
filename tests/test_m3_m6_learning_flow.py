@@ -403,8 +403,17 @@ def test_learning_core_flow(client, monkeypatch):
         headers=student_headers,
     )
     assert history_resp.status_code == 200, history_resp.text
-    assert len(history_resp.json()["data"]) >= 1
-    assert "thinking_process" in history_resp.json()["data"][0]
+    history = history_resp.json()["data"]
+    assert len(history) >= 1
+    assert history[0]["conversation_id"] == qa_data["conversation_id"]
+    assert history[0]["record_count"] == 1
+    assert "thinking_process" not in history[0]
+
+    conversation_resp = client.get(f"/api/v1/qa/conversations/{qa_data['conversation_id']}", headers=student_headers)
+    assert conversation_resp.status_code == 200, conversation_resp.text
+    conversation_records = conversation_resp.json()["data"]
+    assert len(conversation_records) == 1
+    assert "thinking_process" in conversation_records[0]
 
     problem_resp = client.post(
         "/api/v1/tutoring/problems/text",
@@ -998,7 +1007,14 @@ def test_course_qa_history_excludes_lesson_page_conversations_by_default(client,
     )
     assert lesson_history_resp.status_code == 200, lesson_history_resp.text
     lesson_history = lesson_history_resp.json()["data"]
-    assert any(item["question"] == "课件里的矩阵是什么？" and item["lesson_page_id"] == first_page_id for item in lesson_history)
+    assert [item["conversation_id"] for item in lesson_history] == [lesson_conversation_id]
+    assert lesson_history[0]["question"] == "课件里的矩阵是什么？"
+    assert lesson_history[0]["lesson_page_id"] == first_page_id
+    assert lesson_history[0]["record_count"] == 2
+
+    lesson_conversation_resp = client.get(f"/api/v1/qa/conversations/{lesson_conversation_id}", headers=student_headers)
+    assert lesson_conversation_resp.status_code == 200, lesson_conversation_resp.text
+    assert [item["question"] for item in lesson_conversation_resp.json()["data"]] == ["课件里的矩阵是什么？", "同一课件对话后续追问"]
 
 
 def test_qa_stream_sends_previous_turn_as_history_messages(client, monkeypatch):
@@ -1048,6 +1064,16 @@ def test_qa_stream_sends_previous_turn_as_history_messages(client, monkeypatch):
     ]
     assert calls[1]["question"] == "这个能再举个例子吗？"
     assert "线性变换" in second_body
+
+    history_resp = client.get("/api/v1/qa/history", params={"course_id": course["id"]}, headers=student_headers)
+    assert history_resp.status_code == 200, history_resp.text
+    history = history_resp.json()["data"]
+    assert [item["conversation_id"] for item in history] == [conversation_id]
+    assert history[0]["record_count"] == 2
+
+    records_resp = client.get(f"/api/v1/qa/conversations/{conversation_id}", headers=student_headers)
+    assert records_resp.status_code == 200, records_resp.text
+    assert [item["question"] for item in records_resp.json()["data"]] == ["矩阵可以表示什么？", "这个能再举个例子吗？"]
 
 
 def test_qa_from_lesson_page_can_answer_other_page_in_same_ppt(client, monkeypatch):

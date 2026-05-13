@@ -214,7 +214,8 @@ def test_teacher_can_toggle_course_and_inactive_course_rules(client):
     assert joined_after_activate.status_code == 200, joined_after_activate.text
 
 
-def test_login_error_messages_are_specific(client):
+def test_login_error_messages_are_generic(client):
+    expected_message = "登录失败，请检查用户名或者密码"
     register_user(
         client,
         email="login-student@example.com",
@@ -226,11 +227,11 @@ def test_login_error_messages_are_specific(client):
 
     missing = client.post("/api/v1/auth/login", json={"email": "missing@example.com", "password": "Student123"})
     assert missing.status_code == 401
-    assert missing.json()["message"] == "账号不存在"
+    assert missing.json()["message"] == expected_message
 
     wrong_password = client.post("/api/v1/auth/login", json={"email": "login-student@example.com", "password": "Student456"})
     assert wrong_password.status_code == 401
-    assert wrong_password.json()["message"] == "密码错误"
+    assert wrong_password.json()["message"] == expected_message
 
     admin_login = login_user(client, email="admin@classagent.com", password="Admin123456")
     disabled_user = register_user(
@@ -249,4 +250,4 @@ def test_login_error_messages_are_specific(client):
     assert disable_response.status_code == 200, disable_response.text
     disabled = client.post("/api/v1/auth/login", json={"email": "disabled-student@example.com", "password": "Student123"})
     assert disabled.status_code == 401
-    assert disabled.json()["message"] == "账号已被禁用"
+    assert disabled.json()["message"] == expected_message
