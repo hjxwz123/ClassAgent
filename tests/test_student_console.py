@@ -3,6 +3,7 @@ from sqlalchemy import select
 from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus, QuizStatus, QuizType, QuestionType
 from app.db import session as db_session
 from app.db.models import CourseMaterial, Lesson, LessonPage, ProblemRecord, QAConversation, QARecord, Quiz, QuizQuestion, StudyPlan, User
+from app.services import student as student_service
 from app.services.learning import extract_reference_answer_value
 
 
@@ -194,6 +195,53 @@ def prepare_student_workspace(client):
         db.refresh(quiz)
         db.refresh(first_question)
         return student_headers, first_course, second_course, page.id, quiz.id, first_question.id
+
+
+def test_student_dashboard_recommendation_uses_daily_redis_cache(client, monkeypatch):
+    student_headers, *_ = prepare_student_workspace(client)
+    calls = []
+
+    class FakeRedis:
+        def __init__(self):
+            self.values = {}
+
+        def get(self, key):
+            return self.values.get(key)
+
+        def setex(self, key, ttl, value):
+            self.values[key] = value
+
+    cache = FakeRedis()
+
+    def fake_recommendation(**kwargs):
+        calls.append(kwargs)
+        return f"今日建议 {len(calls)}"
+
+    monkeypatch.setattr(student_service, "_student_recommendation_cache_client", lambda: cache)
+    monkeypatch.setattr(student_service.ai_service, "generate_student_recommendation", fake_recommendation)
+
+    first_response = client.get("/api/v1/student/dashboard", headers=student_headers)
+    assert first_response.status_code == 200, first_response.text
+    assert first_response.json()["data"]["recommendation"]["text"] == "今日建议 1"
+
+    second_response = client.get("/api/v1/student/dashboard", headers=student_headers)
+    assert second_response.status_code == 200, second_response.text
+    assert second_response.json()["data"]["recommendation"]["text"] == "今日建议 1"
+    assert len(calls) == 1
+
+    refresh_response = client.get(
+        "/api/v1/student/dashboard",
+        params={"refresh_recommendation": True},
+        headers=student_headers,
+    )
+    assert refresh_response.status_code == 200, refresh_response.text
+    assert refresh_response.json()["data"]["recommendation"]["text"] == "今日建议 2"
+    assert len(calls) == 2
+
+    cached_response = client.get("/api/v1/student/dashboard", headers=student_headers)
+    assert cached_response.status_code == 200, cached_response.text
+    assert cached_response.json()["data"]["recommendation"]["text"] == "今日建议 2"
+    assert len(calls) == 2
 
 
 def test_student_console_endpoints_and_multiple_courses(client):
@@ -388,4 +436,12 @@ def test_student_console_endpoints_and_multiple_courses(client):
         headers=student_headers,
     )
     assert notice_response.status_code == 200, notice_response.text
-    assert any(item["key"] == "plan" and item["time"] == "19:30" for item in notice_response.json()["data"])
+    notice_settings = notice_response.json()["data"]
+    assert [item["key"] for item in notice_settings] == ["lesson", "quiz", "qa", "teacher", "system"]
+    assert all("time" not in item for item in notice_settings)
+    assert next(item for item in notice_settings if item["key"] == "lesson")["enabled"] is True
+
+    profile_after_notice_response = client.get("/api/v1/student/profile", headers=student_headers)
+    assert profile_after_notice_response.status_code == 200, profile_after_notice_response.text
+    profile_notice_settings = profile_after_notice_response.json()["data"]["notification_settings"]
+    assert [item["key"] for item in profile_notice_settings] == ["lesson", "quiz", "qa", "teacher", "system"]

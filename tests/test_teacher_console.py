@@ -1,6 +1,6 @@
 from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus
 from app.db import session as db_session
-from app.db.models import CourseMaterial, Lesson, LessonPage, User
+from app.db.models import AsyncTaskLog, CourseMaterial, Lesson, LessonPage, User
 from app.services.notifications import push_user_notification
 from sqlalchemy import select
 
@@ -250,6 +250,38 @@ def test_teacher_console_aggregation_and_actions(client):
     ).json()["data"]
     delete_course_response = client.delete(f"/api/v1/teacher/courses/{temp_course['id']}", headers=teacher_headers)
     assert delete_course_response.status_code == 200, delete_course_response.text
+
+
+def test_teacher_ai_tasks_follow_current_material_status(client):
+    teacher_headers, _, course, _, _, material, _ = prepare_teacher_course(client)
+
+    with db_session.SessionLocal() as db:
+        stored_material = db.get(CourseMaterial, material["id"])
+        assert stored_material is not None
+        stored_material.parse_status = ProcessStatus.FAILED.value
+        stored_material.vector_status = ProcessStatus.FAILED.value
+        task = AsyncTaskLog(
+            task_name="material.process",
+            target_type="material",
+            target_id=material["id"],
+            status=ProcessStatus.FAILED.value,
+            detail={"error": "旧处理任务失败"},
+        )
+        db.add_all([stored_material, task])
+        db.commit()
+        task_id = task.id
+
+    home_response = client.get(f"/api/v1/teacher/courses/{course['id']}/home", headers=teacher_headers)
+    assert home_response.status_code == 200, home_response.text
+    home_task = next(item for item in home_response.json()["data"]["ai_tasks"] if item["id"] == task_id)
+    assert home_task["title"] == "网络课件"
+    assert home_task["task_status"] == ProcessStatus.FAILED.value
+    assert home_task["status"] == ProcessStatus.READY.value
+
+    dashboard_response = client.get("/api/v1/teacher/dashboard", headers=teacher_headers)
+    assert dashboard_response.status_code == 200, dashboard_response.text
+    dashboard_task = next(item for item in dashboard_response.json()["data"]["ai_tasks"] if item["id"] == task_id)
+    assert dashboard_task["status"] == ProcessStatus.READY.value
 
 
 def test_teacher_can_delete_non_empty_chapter_without_deleting_content(client):

@@ -445,7 +445,7 @@
                   <div class="home-data-tag">
                     <Sparkles :size="14" />{{ hasJoinedCourses ? '基于你的学习数据生成' : '等待课程数据' }}
                   </div>
-                  <button class="home-refresh-btn" @click="hasJoinedCourses ? loadDashboard() : (joinOpen = true)">
+                  <button class="home-refresh-btn" @click="hasJoinedCourses ? loadDashboard({ refreshRecommendation: true }) : (joinOpen = true)">
                     <RefreshCw v-if="hasJoinedCourses" :size="14" />
                     <Plus v-else :size="14" />
                     {{ hasJoinedCourses ? '刷新建议' : '加入课程' }}
@@ -1082,7 +1082,7 @@
                       <footer><button class="btn btn-primary" @click="changePassword">确认修改</button></footer>
                       <h2>通知设置</h2>
                       <div class="notice-settings-grid">
-                        <div v-for="item in noticeSettings" :key="item.key" class="toggle-line"><AppCheckbox v-model="item.enabled" variant="switch" :label="item.label" /><input v-if="item.key === 'plan'" v-model="item.time" class="time-input" type="text" placeholder="09:00" /></div>
+                        <div v-for="item in noticeSettings" :key="item.key" class="toggle-line"><AppCheckbox v-model="item.enabled" variant="switch" :label="item.label" /></div>
                       </div>
                       <footer><button class="btn btn-secondary" @click="saveNotices">保存设置</button></footer>
                     </article>
@@ -1970,7 +1970,13 @@ async function loadCourses() {
   pruneSearchCache();
   if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id;
 }
-async function loadDashboard() { dashboard.value = (await run(() => api.get("/student/dashboard"))) || {}; notifications.value = dashboard.value.notifications || []; courses.value = dashboard.value.courses || courses.value; pruneSearchCache(); if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id; }
+async function loadDashboard(options: { refreshRecommendation?: boolean } = {}) {
+  dashboard.value = (await run(() => api.get("/student/dashboard", options.refreshRecommendation ? { refresh_recommendation: true } : undefined))) || {};
+  notifications.value = dashboard.value.notifications || [];
+  courses.value = dashboard.value.courses || courses.value;
+  pruneSearchCache();
+  if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id;
+}
 async function loadNotifications(silent = false) {
   if (notificationLoading.value) return;
   if (!silent) notificationLoading.value = true;
@@ -2064,7 +2070,16 @@ function applyStudentProfile(data: any) {
     updated_at: data.user.updated_at || props.user.updated_at,
   });
 }
-async function loadProfile() { const data: any = (await run<any>(() => api.get("/student/profile"))) || {}; applyStudentProfile(data); noticeSettings.splice(0, noticeSettings.length, ...(data.notification_settings || [])); }
+function normalizeNoticeSettings(settings: any) {
+  return (Array.isArray(settings) ? settings : [])
+    .filter((item: any) => item?.key && item.key !== "plan")
+    .map((item: any) => ({ key: item.key, label: item.label, enabled: Boolean(item.enabled) }));
+}
+async function loadProfile() {
+  const data: any = (await run<any>(() => api.get("/student/profile"))) || {};
+  applyStudentProfile(data);
+  noticeSettings.splice(0, noticeSettings.length, ...normalizeNoticeSettings(data.notification_settings));
+}
 async function loadActive() {
   studentPageLoading.value = true;
   try {
@@ -3412,7 +3427,11 @@ async function uploadProfileAvatar(event: Event) {
 }
 async function saveProfile() { const data = await run<any>(() => api.patch("/student/profile", { nickname: profileForm.nickname, avatar_url: profileForm.avatar_url, bio: profileForm.bio, school: profileForm.school }), "已保存"); if (data) applyStudentProfile(data); }
 async function changePassword() { if (passwordForm.new_password !== passwordConfirm.value) return emit("notice", "warning", "密码不一致"); await run(() => api.post("/auth/me/password", passwordForm), "已保存"); Object.assign(passwordForm, { old_password: "", new_password: "" }); passwordConfirm.value = ""; }
-async function saveNotices() { await run(() => api.put("/student/notifications", { settings: noticeSettings }), "已保存"); }
+async function saveNotices() {
+  const settings = noticeSettings.map((item) => ({ key: item.key, enabled: Boolean(item.enabled) }));
+  const data = await run<any[]>(() => api.put("/student/notifications", { settings }), "已保存");
+  if (data) noticeSettings.splice(0, noticeSettings.length, ...normalizeNoticeSettings(data));
+}
 
 type SelectOption = { label: string; value: string | number; danger?: boolean };
 function optionText(value: unknown, question?: any) {

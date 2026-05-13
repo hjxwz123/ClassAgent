@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
+import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 
 from fastapi import UploadFile
+import redis
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.enums import CourseStatus, LessonStatus, ProcessStatus, QuizStatus, UserRole
 from app.core.errors import bad_request, forbidden, not_found
 from app.db.models import (
@@ -42,6 +46,9 @@ from app.services.storage import storage_service
 STUDENT_PROFILE_KEY = "student.profile"
 STUDENT_NOTICE_KEY = "student.notifications"
 STUDENT_REMINDER_KEY = "student.teacher_reminders"
+STUDENT_RECOMMENDATION_CACHE_PREFIX = "classagent:student:daily_recommendation"
+STUDENT_RECOMMENDATION_CACHE_TTL_SECONDS = 60 * 60 * 48
+LOGGER = logging.getLogger(__name__)
 
 DEFAULT_STUDENT_NOTICES = [
     {"key": "lesson", "label": "新课时发布", "enabled": True},
@@ -49,7 +56,6 @@ DEFAULT_STUDENT_NOTICES = [
     {"key": "qa", "label": "AI 问答完成", "enabled": True},
     {"key": "teacher", "label": "教师提醒", "enabled": True},
     {"key": "system", "label": "系统公告", "enabled": True},
-    {"key": "plan", "label": "学习计划提醒", "enabled": True, "time": "20:00"},
 ]
 
 
@@ -70,6 +76,71 @@ def _as_dict(item) -> dict:
     if "avatar_url" in data:
         data["avatar_url"] = storage_service.normalize_public_url(data["avatar_url"])
     return data
+
+
+def _student_recommendation_cache_key(*, user_id: int) -> str:
+    today = datetime.now().date().isoformat()
+    return f"{STUDENT_RECOMMENDATION_CACHE_PREFIX}:{user_id}:{today}"
+
+
+def _student_recommendation_cache_client() -> redis.Redis:
+    return redis.Redis.from_url(
+        get_settings().redis_url,
+        decode_responses=True,
+        socket_connect_timeout=0.2,
+        socket_timeout=0.2,
+    )
+
+
+def _cached_student_recommendation_text(*, user_id: int) -> str | None:
+    try:
+        raw = _student_recommendation_cache_client().get(_student_recommendation_cache_key(user_id=user_id))
+    except Exception as exc:  # Redis cache must not block the student home page.
+        LOGGER.warning("Failed to read student recommendation cache: %s", exc)
+        return None
+    if not raw:
+        return None
+    try:
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    text = payload.get("text") if isinstance(payload, dict) else None
+    return text.strip() if isinstance(text, str) and text.strip() else None
+
+
+def _cache_student_recommendation_text(*, user_id: int, text: str) -> None:
+    if not text.strip():
+        return
+    payload = json.dumps(
+        {"text": text.strip(), "generated_at": datetime.now(UTC).isoformat()},
+        ensure_ascii=False,
+    )
+    try:
+        _student_recommendation_cache_client().setex(
+            _student_recommendation_cache_key(user_id=user_id),
+            STUDENT_RECOMMENDATION_CACHE_TTL_SECONDS,
+            payload,
+        )
+    except Exception as exc:  # Best-effort cache write; homepage should still render.
+        LOGGER.warning("Failed to write student recommendation cache: %s", exc)
+
+
+def _student_notice_settings(db: Session, *, user_id: int) -> list[dict]:
+    saved = _preference(db, user_id=user_id, key=STUDENT_NOTICE_KEY)
+    default_enabled = {item["key"]: bool(item.get("enabled", True)) for item in DEFAULT_STUDENT_NOTICES}
+    labels = {item["key"]: item["label"] for item in DEFAULT_STUDENT_NOTICES}
+    enabled_by_key: dict[str, bool] = {}
+    if isinstance(saved, list):
+        for item in saved:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "").strip()
+            if key in labels:
+                enabled_by_key[key] = bool(item.get("enabled", default_enabled[key]))
+    return [
+        {"key": key, "label": labels[key], "enabled": enabled_by_key.get(key, default_enabled[key])}
+        for key in labels
+    ]
 
 
 def _assert_student(user: User) -> None:
@@ -383,7 +454,7 @@ def _activities(db: Session, *, user: User, course_ids: list[int], limit: int = 
     return sorted(activities, key=lambda item: item["time"], reverse=True)[:limit]
 
 
-def get_student_dashboard(db: Session, user: User) -> dict:
+def get_student_dashboard(db: Session, user: User, *, refresh_recommendation: bool = False) -> dict:
     courses = list_student_course_summaries(db, user)
     course_ids = [course["id"] for course in courses]
     tasks = _today_tasks(db, user)
@@ -442,16 +513,21 @@ def get_student_dashboard(db: Session, user: User) -> dict:
         },
     }
     if course_ids:
-        recommendation["text"] = ai_service.generate_student_recommendation(
-            course_count=len(course_ids),
-            pending_tasks=len([task for task in tasks if task.get("status") != "done"]),
-            recent_lesson_title=recent_lesson["lesson"]["title"] if recent_lesson else None,
-            weak_points=[item["name"] for item in weak],
-            study_hours=stats["study_hours"],
-            completion_rate=stats["completion_rate"],
-            accuracy=stats["accuracy"],
-            db=db,
-        )
+        cached_text = None if refresh_recommendation else _cached_student_recommendation_text(user_id=user.id)
+        if cached_text:
+            recommendation["text"] = cached_text
+        else:
+            recommendation["text"] = ai_service.generate_student_recommendation(
+                course_count=len(course_ids),
+                pending_tasks=len([task for task in tasks if task.get("status") != "done"]),
+                recent_lesson_title=recent_lesson["lesson"]["title"] if recent_lesson else None,
+                weak_points=[item["name"] for item in weak],
+                study_hours=stats["study_hours"],
+                completion_rate=stats["completion_rate"],
+                accuracy=stats["accuracy"],
+                db=db,
+            )
+            _cache_student_recommendation_text(user_id=user.id, text=recommendation["text"])
     return {
         "courses": courses,
         "today_tasks": tasks,
@@ -596,7 +672,7 @@ def get_student_profile(db: Session, user: User) -> dict:
     return {
         "user": _as_dict(user),
         "student_profile": _preference(db, user_id=user.id, key=STUDENT_PROFILE_KEY) or {"school": "", "bio": user.bio or ""},
-        "notification_settings": _preference(db, user_id=user.id, key=STUDENT_NOTICE_KEY) or DEFAULT_STUDENT_NOTICES,
+        "notification_settings": _student_notice_settings(db, user_id=user.id),
         "stats": stats,
         "achievements": achievements,
         "activities": _activities(db, user=user, course_ids=course_ids, limit=20),
@@ -644,29 +720,31 @@ def upload_student_avatar(db: Session, *, user: User, upload: UploadFile) -> dic
 def update_student_notifications(db: Session, *, user: User, settings: list[dict]) -> list[dict]:
     _assert_student(user)
     label_map = {item["key"]: item["label"] for item in DEFAULT_STUDENT_NOTICES}
-    normalized = []
+    enabled_by_key: dict[str, bool] = {}
     for item in settings:
         key = str(item.get("key", "")).strip()
         if key not in label_map:
             continue
-        normalized.append({"key": key, "label": label_map[key], "enabled": bool(item.get("enabled", False)), "time": item.get("time") or "20:00"})
-    if not normalized:
+        enabled_by_key[key] = bool(item.get("enabled", False))
+    if not enabled_by_key:
         raise bad_request("通知设置不能为空")
-    existing = {item["key"] for item in normalized}
+    normalized = []
     for item in DEFAULT_STUDENT_NOTICES:
-        if item["key"] not in existing:
-            normalized.append(item)
+        normalized.append(
+            {
+                "key": item["key"],
+                "label": label_map[item["key"]],
+                "enabled": enabled_by_key.get(item["key"], bool(item.get("enabled", True))),
+            }
+        )
     _set_preference(db, user_id=user.id, key=STUDENT_NOTICE_KEY, value=normalized)
     db.commit()
     return normalized
 
 
 def _notice_enabled(db: Session, *, user_id: int, key: str) -> bool:
-    settings = _preference(db, user_id=user_id, key=STUDENT_NOTICE_KEY) or DEFAULT_STUDENT_NOTICES
-    if not isinstance(settings, list):
-        return True
-    for item in settings:
-        if isinstance(item, dict) and item.get("key") == key:
+    for item in _student_notice_settings(db, user_id=user_id):
+        if item.get("key") == key:
             return bool(item.get("enabled", True))
     return True
 
@@ -724,22 +802,23 @@ def get_student_notifications(db: Session, user: User) -> list[dict]:
                             "unread": bool(item.get("unread", True)),
                         }
                     )
-        for lesson in db.scalars(
-            select(Lesson)
-            .where(Lesson.course_id.in_(course_ids), Lesson.status == LessonStatus.PUBLISHED.value)
-            .order_by(*_published_lesson_order())
-            .limit(4)
-        ):
-            lesson_time = lesson.published_at or lesson.created_at
-            notifications.append(
-                {
-                    "id": f"lesson-{lesson.id}-{int(_notification_sort_time({'time': lesson_time}))}",
-                    "type": "lesson",
-                    "title": f"新课时：{lesson.title}",
-                    "time": lesson_time,
-                    "unread": True,
-                }
-            )
+        if _notice_enabled(db, user_id=user.id, key="lesson"):
+            for lesson in db.scalars(
+                select(Lesson)
+                .where(Lesson.course_id.in_(course_ids), Lesson.status == LessonStatus.PUBLISHED.value)
+                .order_by(*_published_lesson_order())
+                .limit(4)
+            ):
+                lesson_time = lesson.published_at or lesson.created_at
+                notifications.append(
+                    {
+                        "id": f"lesson-{lesson.id}-{int(_notification_sort_time({'time': lesson_time}))}",
+                        "type": "lesson",
+                        "title": f"新课时：{lesson.title}",
+                        "time": lesson_time,
+                        "unread": True,
+                    }
+                )
         failed_material = db.scalar(
             select(CourseMaterial)
             .where(CourseMaterial.course_id.in_(course_ids), CourseMaterial.parse_status == ProcessStatus.FAILED.value)

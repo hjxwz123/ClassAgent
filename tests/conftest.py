@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,20 @@ def _parse_test_pages(path, material_type, db=None, filename=None, resume_task_i
     ]
 
 
+def _generate_test_study_plan(*, goal, available_days, daily_minutes, course_name, db=None):
+    today = date.today()
+    return [
+        {
+            "title": f"{course_name} 第{index + 1}天学习任务",
+            "task_date": (today + timedelta(days=index)).isoformat(),
+            "task_type": "study_plan",
+            "estimated_minutes": daily_minutes,
+            "summary": f"围绕目标“{goal}”完成学习。",
+        }
+        for index in range(available_days)
+    ]
+
+
 @pytest.fixture()
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     db_path = tmp_path / "test.db"
@@ -43,6 +58,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(ai_service, "generate_common_mistakes", lambda knowledge_points, db=None: [])
         monkeypatch.setattr(ai_service, "generate_similar_questions", lambda knowledge_points, db=None: [])
         monkeypatch.setattr(ai_service, "generate_problem_guidance", lambda problem_text, level, contexts=None, db=None: "测试解析。")
+        monkeypatch.setattr(ai_service, "generate_student_recommendation", lambda **kwargs: "测试学习建议。")
+        monkeypatch.setattr(ai_service, "score_subjective_answer", lambda reference_keywords, user_answer, full_score, db=None: (full_score, "测试评分。"))
+        monkeypatch.setattr(ai_service, "generate_study_plan", _generate_test_study_plan)
         monkeypatch.setattr(ai_service, "answer_question", lambda question, contexts, history=None, db=None: ("测试回答。", False, None))
         monkeypatch.setattr(ai_service, "answer_general_question", lambda question, history=None, db=None: ("测试通用回答。", None))
         monkeypatch.setattr(ai_service, "rewrite_retrieval_query", lambda question, history=None, db=None: question)

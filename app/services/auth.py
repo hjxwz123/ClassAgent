@@ -23,6 +23,7 @@ from app.services.email import email_service
 
 
 REGISTERABLE_ROLES = {UserRole.STUDENT.value}
+LOGIN_FAILED_MESSAGE = "登录失败，请检查用户名或者密码"
 
 
 def _ensure_unique_identity(db: Session, payload: RegisterRequest) -> None:
@@ -69,15 +70,15 @@ def register_user(db: Session, payload: RegisterRequest) -> User:
 def authenticate_user(db: Session, payload: LoginRequest, *, login_ip: str | None, user_agent: str | None) -> LoginResponse:
     user = db.scalar(select(User).where(User.email == payload.email, User.deleted_at.is_(None)))
     if user is None:
-        raise unauthorized("账号不存在")
+        raise unauthorized(LOGIN_FAILED_MESSAGE)
     if not verify_password(payload.password, user.password_hash):
         log_login(db, user_id=user.id, login_ip=login_ip, user_agent=user_agent, success=False)
         db.commit()
-        raise unauthorized("密码错误")
+        raise unauthorized(LOGIN_FAILED_MESSAGE)
     if user.status != UserStatus.ACTIVE.value:
         log_login(db, user_id=user.id, login_ip=login_ip, user_agent=user_agent, success=False)
         db.commit()
-        raise unauthorized("账号已被禁用")
+        raise unauthorized(LOGIN_FAILED_MESSAGE)
     user.last_login_at = datetime.now(UTC)
     user.last_seen_at = user.last_login_at
     db.add(user)

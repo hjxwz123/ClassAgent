@@ -102,6 +102,7 @@ const studentNo = ref("");
 const resetForm = reactive({ email: "", code: "", new_password: "" });
 const session = useSessionStore();
 const router = useRouter();
+const loginFailedMessage = "登录失败，请检查用户名或者密码";
 const modeTitle = computed(() => (mode.value === "login" ? "欢迎回来" : mode.value === "register" ? "加入学习空间" : "找回密码"));
 const authThemeClass = computed(() => `auth-${authTheme.value}`);
 let unsubscribeTheme: (() => void) | null = null;
@@ -140,8 +141,8 @@ async function login() {
     await router.replace(defaultRouteForRole(data.user.role));
   } catch (error) {
     loginRedirecting.value = false;
-    formError.value = (error as Error).message;
-    emit("notice", "error", (error as Error).message);
+    formError.value = loginFailedMessage;
+    emit("notice", "error", loginFailedMessage);
   } finally {
     loading.value = false;
   }

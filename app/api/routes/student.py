@@ -57,8 +57,12 @@ def dashboard_endpoint(
     request: Request,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    refresh_recommendation: bool = Query(default=False),
 ):
-    return success_response(data=get_student_dashboard(db, user), request_id=request.state.request_id)
+    return success_response(
+        data=get_student_dashboard(db, user, refresh_recommendation=refresh_recommendation),
+        request_id=request.state.request_id,
+    )
 
 
 @router.get("/courses")

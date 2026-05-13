@@ -53,6 +53,22 @@ class QAHistoryItem(ORMModel):
     updated_at: datetime
 
 
+class QAHistoryConversation(BaseModel):
+    id: int
+    conversation_id: int
+    course_id: int
+    user_id: int
+    title: str
+    question: str
+    answer_preview: str = ""
+    lesson_page_id: int | None = None
+    attachments: list | None = None
+    is_favorite: bool = False
+    record_count: int
+    created_at: datetime
+    updated_at: datetime
+
+
 class QAFavoriteRequest(BaseModel):
     is_favorite: bool
 
