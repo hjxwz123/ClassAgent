@@ -10,7 +10,7 @@
     </div>
   </section>
 
-  <section v-else-if="classroomOpen" class="study-room" :class="{ panelClosed: !aiPanelOpen }" @mousemove="revealChrome">
+  <section v-else-if="classroomOpen" ref="studyRoomRef" class="study-room" :class="{ panelClosed: !aiPanelOpen, compactLesson: compactLessonLayout, fullscreen: lessonFullscreen }" @mousemove="revealChrome">
     <transition name="study-top">
       <header v-show="chromeVisible || !audioPlaying" class="study-head">
         <div>
@@ -23,7 +23,7 @@
         <div>
           <Clock :size="16" />
           <code>{{ studyClock }}</code>
-          <button class="icon-glass" @click="aiPanelOpen = !aiPanelOpen"><PanelRight :size="18" /></button>
+          <button v-if="!compactLessonLayout" class="icon-glass" @click="aiPanelOpen = !aiPanelOpen"><PanelRight :size="18" /></button>
           <button class="icon-glass" @click="settingsOpen = !settingsOpen"><Settings :size="18" /></button>
         </div>
       </header>
@@ -47,9 +47,17 @@
         </aside>
       </transition>
 
-      <section class="slide-stage">
-        <transition :name="pageDirection === 'next' ? 'slide-next' : 'slide-prev'" mode="out-in">
-          <article :key="activePage?.id || currentPage" class="slide-card">
+      <section ref="slideStageRef" class="slide-stage" :class="{ 'has-original-preview': !!classroomOriginalMaterial }" @mouseup="scheduleLessonSelectionCheck" @scroll.passive="hideLessonSelectionMenu">
+        <transition :name="classroomOriginalMaterial ? 'fade-slide' : (pageDirection === 'next' ? 'slide-next' : 'slide-prev')" mode="out-in">
+          <DocumentPreviewSurface
+            v-if="classroomOriginalMaterial"
+            :key="`material-${classroomOriginalMaterial.id}`"
+            class="lesson-original-preview"
+            :material="classroomOriginalMaterial"
+            :page-number="currentPage"
+            bare
+          />
+          <article v-else :key="activePage?.id || currentPage" class="slide-card">
             <span class="page-badge">P{{ currentPage }}</span>
             <span class="knowledge-dot" aria-label="AI知识点"><Sparkles :size="14" /></span>
             <h1>{{ activePage?.page_title || `第${currentPage}页` }}</h1>
@@ -75,14 +83,14 @@
               <PopoverButton :items="speedItems" :label="`${playbackRate}x`" placement="top" @select="setRate" />
             </template>
             <button class="round-btn ghost" @click="thumbOpen = !thumbOpen"><Grid2X2 :size="18" /></button>
-            <button class="round-btn ghost"><Maximize :size="18" /></button>
+            <button class="round-btn ghost" :title="lessonFullscreen ? '退出全屏' : '进入全屏'" @click="toggleLessonFullscreen"><Maximize :size="18" /></button>
             <audio v-if="activePage?.audio_url" ref="audioRef" :src="activePage.audio_url" @timeupdate="updateAudio" @loadedmetadata="updateAudio" @ended="handleAudioEnded" @play="audioPlaying = true" @pause="audioPlaying = false"></audio>
           </div>
         </transition>
       </section>
 
       <button
-        v-show="aiPanelOpen"
+        v-show="aiPanelOpen && !compactLessonLayout"
         class="study-resizer"
         type="button"
         aria-label="拖动调整课件和互动区域宽度"
@@ -160,12 +168,18 @@
                   <button type="button" @click="removeQaAttachment('class', index)"><X :size="13" /></button>
                 </div>
               </div>
+              <div v-if="lessonAskContext" class="lesson-qa-selection-context" :title="lessonAskContext">
+                <Quote :size="14" />
+                <span>{{ lessonAskContextPreview }}</span>
+                <button type="button" aria-label="移除选中文本" @click="clearLessonAskContext"><X :size="13" /></button>
+              </div>
               <form class="chat-input compact" @submit.prevent="askInClass">
                 <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
                 <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
                 <textarea
+                  ref="classQuestionInput"
                   v-model="classQuestion"
-                  placeholder="问问 AI 这一页..."
+                  :placeholder="classQuestionPlaceholder"
                   rows="1"
                   @compositionstart="handleQuestionCompositionStart('class')"
                   @compositionend="handleQuestionCompositionEnd('class')"
@@ -191,6 +205,19 @@
         </transition>
       </aside>
     </main>
+
+    <transition name="selection-pop">
+      <div
+        v-if="lessonSelectionMenu.open"
+        class="lesson-selection-popover"
+        :style="lessonSelectionMenuStyle"
+        @pointerdown.stop
+        @mousedown.prevent.stop
+      >
+        <button type="button" @click="explainLessonSelection">解释</button>
+        <button type="button" @click="prepareLessonSelectionQuestion">提问</button>
+      </div>
+    </transition>
 
     <Teleport to="body">
       <transition name="modal-pop">
@@ -545,7 +572,12 @@
               </article>
               <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="openQuizSelection('practice')" /></div>
               <div class="course-layout course-overview-layout">
-                <article id="lesson-list" class="panel-card course-lessons-card"><div class="section-head"><h2><Presentation :size="18" />课时列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div><LessonItem v-for="(lesson, index) in courseHome.lessons || []" :key="lesson.id" :lesson="lesson" :index="Number(index)" :loading="isOpeningLesson(Number(lesson.id))" :disabled="isLessonOpening && !isOpeningLesson(Number(lesson.id))" @open="openLesson(Number(lesson.id))" /></article>
+                <article id="lesson-list" class="panel-card course-lessons-card">
+                  <div class="section-head"><h2><Presentation :size="18" />课时列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div>
+                  <div class="course-lessons-scroll">
+                    <LessonItem v-for="(lesson, index) in courseHome.lessons || []" :key="lesson.id" :lesson="lesson" :index="Number(index)" :loading="isOpeningLesson(Number(lesson.id))" :disabled="isLessonOpening && !isOpeningLesson(Number(lesson.id))" @open="openLesson(Number(lesson.id))" />
+                  </div>
+                </article>
                 <article class="panel-card course-data-card"><div class="section-head"><h2><BarChart2 :size="18" />我的数据</h2></div><div class="data-grid"><MiniMetric :icon="Clock" label="学习时长" :value="`${courseHome.stats?.study_hours || 0}h`" /><MiniMetric :icon="CheckCircle" label="完成进度" :value="`${courseHome.stats?.completion_rate || 0}%`" tone="success" /><MiniMetric :icon="MessageCircle" label="问答次数" :value="courseHome.stats?.qa_count || 0" tone="ai" /><MiniMetric :icon="XCircle" label="错题数" :value="courseHome.stats?.wrong_count || 0" tone="danger" /><MiniMetric :icon="Star" label="正确率" :value="`${courseHome.stats?.accuracy || 0}%`" tone="warning" /><MiniMetric :icon="Zap" label="连续打卡" :value="`${courseHome.stats?.streak_days || 0}天`" tone="warning" /></div></article>
                 <article class="panel-card course-materials-card">
                   <div class="section-head"><h2><FolderOpen :size="18" />课程资料</h2><button @click="materialsExpanded = !materialsExpanded">{{ materialsExpanded ? '收起' : '展开' }}</button></div>
@@ -1122,6 +1154,8 @@
         </transition>
       </div>
 
+      <MaterialPreviewModal :open="!!materialPreviewItem" :item="materialPreviewItem" :detail="materialPreviewDetail" :loading="materialPreviewLoading" @close="closeMaterialPreview" />
+
       <transition name="modal-pop">
         <div v-if="joinOpen" class="modal-mask student-modal-scope">
           <article class="join-modal">
@@ -1162,15 +1196,17 @@ import {
 } from "../icons";
 import { api } from "../api/client";
 import { routeByPage } from "../router";
-import type { Lesson, LessonPage, PageActivity, Quiz, User as UserType } from "../types";
+import type { Lesson, LessonDetail, LessonPage, Material, MaterialDetail, PageActivity, Quiz, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
 import { extractStructuredText, renderRichText } from "../utils/richText";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
 import AppSlider from "../components/AppSlider.vue";
 import BrandLogo from "../components/BrandLogo.vue";
+import DocumentPreviewSurface from "../components/DocumentPreviewSurface.vue";
 import DropdownMenu from "../components/DropdownMenu";
 import LoadingMark from "../components/LoadingMark.vue";
+import MaterialPreviewModal from "../components/MaterialPreviewModal.vue";
 import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
 import SelectMenu from "../components/SelectMenu";
@@ -1211,11 +1247,14 @@ const route = useRoute();
 const router = useRouter();
 
 const LESSON_LAYOUT_STORAGE_KEY = "student_lesson_panel_ratio";
-const LESSON_LAYOUT_DEFAULT_RATIO = 0.3;
+const LESSON_LAYOUT_DEFAULT_RATIO = 0.28;
+const LESSON_LAYOUT_MIN_RATIO = 0.18;
+const LESSON_LAYOUT_MAX_RATIO = 0.62;
+const LESSON_RESIZER_WIDTH = 18;
 
 function savedLessonPanelRatio() {
   const value = Number(localStorage.getItem(LESSON_LAYOUT_STORAGE_KEY));
-  return Number.isFinite(value) && value > 0 ? Math.min(0.62, Math.max(0.24, value)) : LESSON_LAYOUT_DEFAULT_RATIO;
+  return Number.isFinite(value) && value > 0 ? Math.min(LESSON_LAYOUT_MAX_RATIO, Math.max(LESSON_LAYOUT_MIN_RATIO, value)) : LESSON_LAYOUT_DEFAULT_RATIO;
 }
 
 function currentRoutePageKey() {
@@ -1236,6 +1275,9 @@ const notifications = ref<any[]>([]);
 const lessons = ref<any[]>([]);
 const materialsExpanded = ref(false);
 const courseSection = ref("lessons");
+const materialPreviewItem = ref<any | null>(null);
+const materialPreviewDetail = ref<MaterialDetail | null>(null);
+const materialPreviewLoading = ref(false);
 
 const searchOpen = ref(false);
 const globalSearch = ref("");
@@ -1286,7 +1328,7 @@ const pageStageStyle = computed(() => (
 ));
 
 const classroomOpen = ref(false);
-const classroomLesson = ref<{ lesson: Lesson; pages: LessonPage[] } | null>(null);
+const classroomLesson = ref<LessonDetail | null>(null);
 const lessonStudyLoading = ref(active.value === "studentLessonStudy");
 const lessonStudyError = ref("");
 const studentFullscreenLoading = computed(() => initialStudentLoading.value || (
@@ -1295,9 +1337,15 @@ const studentFullscreenLoading = computed(() => initialStudentLoading.value || (
   active.value === "studentLessonStudy" && !lessonStudyError.value && (!classroomOpen.value || lessonStudyLoading.value)
 ));
 const openingLessonId = ref<number | null>(null);
+const studyRoomRef = ref<HTMLElement | null>(null);
 const studyMainRef = ref<HTMLElement | null>(null);
+const slideStageRef = ref<HTMLElement | null>(null);
 const lessonPanelRatio = ref(savedLessonPanelRatio());
+const lessonPanelRatioCustomized = ref(false);
 const lessonResizeActive = ref(false);
+const compactLessonLayout = ref(false);
+const lessonFullscreen = ref(false);
+const lessonLayoutWidth = ref(typeof window === "undefined" ? 0 : window.innerWidth || 0);
 const currentPage = ref(1);
 const pageDirection = ref<"next" | "prev">("next");
 const classroomTab = ref<"script" | "activity" | "qa" | "note">("script");
@@ -1306,8 +1354,11 @@ const classQuestion = ref("");
 const classThinking = ref(false);
 const classConversationId = ref<number | null>(null);
 const classQaImageInput = ref<HTMLInputElement | null>(null);
+const classQuestionInput = ref<HTMLTextAreaElement | null>(null);
 const classQaAttachments = ref<QaAttachment[]>([]);
 const classQaImageUploading = ref(false);
+const lessonSelectionMenu = reactive({ open: false, text: "", x: 0, y: 0 });
+const lessonAskContext = ref("");
 const questionCompositionState = reactive<Record<QaInputScope, { active: boolean; endedAt: number }>>({
   class: { active: false, endedAt: 0 },
   global: { active: false, endedAt: 0 }
@@ -1334,6 +1385,7 @@ let lessonLoadSeq = 0;
 let courseHomeLoadSeq = 0;
 let suppressCourseScopedReset = false;
 let qaScrollFrame = 0;
+let lessonSelectionTimer: number | undefined;
 
 const globalMessages = ref<ChatMessage[]>([]);
 const globalQuestion = ref("");
@@ -1569,13 +1621,28 @@ const searchResultGroups = computed(() => (["course", "lesson", "material", "kno
   .filter((group) => group.items.length));
 const flatSearchResults = computed(() => searchResultGroups.value.flatMap((group) => group.items));
 const activePage = computed(() => classroomLesson.value?.pages.find((page) => page.page_number === currentPage.value) || classroomLesson.value?.pages[0] || null);
+const classroomOriginalMaterial = computed<Material | null>(() => {
+  const material = classroomLesson.value?.material || null;
+  if (!material?.id) return null;
+  const type = String(material.material_type || "").toLowerCase();
+  return ["pdf", "ppt", "pptx", "doc", "docx", "txt", "md", "markdown"].includes(type) ? material : null;
+});
 const hasActiveAudio = computed(() => Boolean(activePage.value?.audio_url));
+const lessonSelectionMenuStyle = computed(() => ({
+  left: `${lessonSelectionMenu.x}px`,
+  top: `${lessonSelectionMenu.y}px`,
+}));
+const lessonAskContextPreview = computed(() => selectionPreviewText(lessonAskContext.value));
+const classQuestionPlaceholder = computed(() => lessonAskContext.value ? "需要问点什么？" : "问问 AI 这一页...");
 const studyLayoutStyle = computed(() => {
-  const right = Math.round(lessonPanelRatio.value * 1000);
+  if (compactLessonLayout.value || !aiPanelOpen.value) return undefined;
+  const ratio = clampLessonPanelRatio(lessonPanelRatio.value, lessonLayoutWidth.value || studyMainRef.value?.clientWidth || 0);
+  const right = Math.round(ratio * 1000);
   const left = Math.max(1, 1000 - right);
+  const leftMin = classroomOriginalMaterial.value ? 680 : 520;
+  const rightMin = 320;
   return {
-    "--lesson-left-fr": `${left}fr`,
-    "--lesson-right-fr": `${Math.max(1, right)}fr`,
+    gridTemplateColumns: `minmax(min(${leftMin}px,72vw),${left}fr) ${LESSON_RESIZER_WIDTH}px minmax(${rightMin}px,${Math.max(1, right)}fr)`,
   };
 });
 const activePageActivities = computed<PageActivity[]>(() => activePage.value?.pedagogy || []);
@@ -2497,6 +2564,22 @@ function formatJoinCode() { joinCode.value = joinCode.value.toUpperCase().replac
 async function validateJoinCode() { joinChecking.value = true; joinError.value = ""; const data = await run<any>(() => api.get("/student/courses/preview", { course_code: joinCode.value })); joinChecking.value = false; if (!data) { joinError.value = "课程码不存在或已停用"; return; } joinPreview.value = data; if (data.already_joined) joinError.value = "你已加入该课程"; }
 async function confirmJoin() { if (!joinPreview.value) return; await run(() => api.post("/courses/join", { course_code: joinCode.value }), "已加入"); joinOpen.value = false; joinCode.value = ""; joinPreview.value = null; await loadDashboard(); }
 async function handleCourseMenu(action: string, course: any) { if (action === "detail") await openCourse(course.id); if (action === "qa") { selectedCourseId.value = course.id; await go("studentQa"); } if (action === "share") await copyText(course.course_code); if (action === "leave") await run(() => api.post(`/courses/${course.id}/leave`), "已退出"); await loadCourses(); }
+function closeMaterialPreview() {
+  materialPreviewItem.value = null;
+  materialPreviewDetail.value = null;
+  materialPreviewLoading.value = false;
+}
+async function previewMaterial(item: any) {
+  materialPreviewItem.value = item;
+  materialPreviewDetail.value = null;
+  materialPreviewLoading.value = true;
+  try {
+    const detail = await run<MaterialDetail>(() => api.get(`/materials/${item.id}`));
+    if (detail) materialPreviewDetail.value = detail;
+  } finally {
+    materialPreviewLoading.value = false;
+  }
+}
 
 function hasCourseRouteParam() {
   return route.params.courseId !== undefined;
@@ -2528,6 +2611,8 @@ function resetClassroomState() {
   classThinking.value = false;
   classQaAttachments.value = [];
   classQaImageUploading.value = false;
+  clearLessonAskContext();
+  hideLessonSelectionMenu();
   completeOpen.value = false;
   settingsOpen.value = false;
   thumbOpen.value = false;
@@ -2561,7 +2646,7 @@ async function loadLessonStudyRoute() {
   lessonStudyError.value = "";
   resetClassroomState();
   try {
-    const detail = await api.get<{ lesson: Lesson; pages: LessonPage[] }>(`/lessons/${lessonId}`);
+    const detail = await api.get<LessonDetail>(`/lessons/${lessonId}`);
     if (loadSeq !== lessonLoadSeq || routeLessonId() !== lessonId) return;
     if (!detail?.lesson) throw new Error("课时不存在或暂无访问权限");
     if (detail.lesson.course_id) selectedCourseId.value = Number(detail.lesson.course_id);
@@ -2614,18 +2699,130 @@ async function closeClassroom() {
   }
   else await loadDashboard();
 }
+
+function normalizeLessonSelectionText(text: string) {
+  return text
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, "\n")
+    .trim()
+    .slice(0, 1200);
+}
+
+function selectionPreviewText(text: string) {
+  const raw = text.trim();
+  const oneLine = raw.replace(/\s+/g, " ");
+  if (!oneLine) return "";
+  const hasLineBreak = raw.includes("\n");
+  const maxLength = 54;
+  if (oneLine.length > maxLength) return `${oneLine.slice(0, maxLength)}...`;
+  return hasLineBreak ? `${oneLine}...` : oneLine;
+}
+
+function hideLessonSelectionMenu() {
+  lessonSelectionMenu.open = false;
+}
+
+function clearLessonAskContext() {
+  lessonAskContext.value = "";
+}
+
+function clearBrowserSelection() {
+  window.getSelection()?.removeAllRanges();
+}
+
+function lessonSelectionNodeInStage(node: Node | null) {
+  const stage = slideStageRef.value;
+  if (!stage || !node) return false;
+  return stage.contains(node);
+}
+
+function clampSelectionPopoverX(x: number) {
+  return Math.min(Math.max(x, 76), Math.max(76, window.innerWidth - 76));
+}
+
+function updateLessonSelectionMenu() {
+  if (!classroomOpen.value || lessonResizeActive.value) {
+    hideLessonSelectionMenu();
+    return;
+  }
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed || !selection.rangeCount) {
+    hideLessonSelectionMenu();
+    return;
+  }
+  const selectedText = normalizeLessonSelectionText(selection.toString());
+  if (selectedText.length < 2) {
+    hideLessonSelectionMenu();
+    return;
+  }
+  const range = selection.getRangeAt(0);
+  if (!lessonSelectionNodeInStage(range.commonAncestorContainer) && !lessonSelectionNodeInStage(selection.anchorNode) && !lessonSelectionNodeInStage(selection.focusNode)) {
+    hideLessonSelectionMenu();
+    return;
+  }
+  const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0 && rect.height > 0);
+  const rect = rects[0] || range.getBoundingClientRect();
+  if (!rect || (!rect.width && !rect.height)) {
+    hideLessonSelectionMenu();
+    return;
+  }
+  lessonSelectionMenu.text = selectedText;
+  lessonSelectionMenu.x = clampSelectionPopoverX(rect.left + rect.width / 2);
+  lessonSelectionMenu.y = Math.max(56, rect.top - 12);
+  lessonSelectionMenu.open = true;
+}
+
+function scheduleLessonSelectionCheck() {
+  if (lessonSelectionTimer) window.clearTimeout(lessonSelectionTimer);
+  lessonSelectionTimer = window.setTimeout(updateLessonSelectionMenu, 80);
+}
+
+async function openClassQaFromSelection() {
+  if (!compactLessonLayout.value) aiPanelOpen.value = true;
+  classroomTab.value = "qa";
+  await nextTick();
+}
+
+async function explainLessonSelection() {
+  const text = lessonSelectionMenu.text;
+  if (!text || classThinking.value) return;
+  hideLessonSelectionMenu();
+  clearLessonAskContext();
+  clearBrowserSelection();
+  await openClassQaFromSelection();
+  classQuestion.value = `请为我解释“${text}”`;
+  await askInClass();
+}
+
+async function prepareLessonSelectionQuestion() {
+  const text = lessonSelectionMenu.text;
+  if (!text) return;
+  hideLessonSelectionMenu();
+  clearBrowserSelection();
+  lessonAskContext.value = text;
+  classQuestion.value = "";
+  await openClassQaFromSelection();
+  classQuestionInput.value?.focus();
+}
+
 function clampLessonPanelRatio(value: number, totalWidth = studyMainRef.value?.clientWidth || 0) {
   if (totalWidth > 900) {
-    const splitterWidth = 10;
-    const minLeft = 460;
+    const splitterWidth = LESSON_RESIZER_WIDTH;
+    const minLeft = classroomOriginalMaterial.value ? 680 : 520;
     const minRight = 320;
-    const minRatio = minRight / Math.max(totalWidth - splitterWidth, 1);
-    const maxRatio = (totalWidth - splitterWidth - minLeft) / Math.max(totalWidth - splitterWidth, 1);
+    const width = Math.max(totalWidth - splitterWidth, 1);
+    const maxRight = classroomOriginalMaterial.value
+      ? Math.min(880, Math.max(480, width * 0.52))
+      : Math.min(860, Math.max(420, width * 0.56));
+    const minRatio = minRight / width;
+    const maxRatio = Math.min(maxRight / width, (width - minLeft) / width, LESSON_LAYOUT_MAX_RATIO);
     if (maxRatio > minRatio) return Math.min(maxRatio, Math.max(minRatio, value));
   }
-  return Math.min(0.66, Math.max(0.24, value));
+  return Math.min(LESSON_LAYOUT_MAX_RATIO, Math.max(LESSON_LAYOUT_MIN_RATIO, value));
 }
 function updateLessonPanelRatio(clientX: number) {
+  if (compactLessonLayout.value) return;
   const element = studyMainRef.value;
   if (!element) return;
   const rect = element.getBoundingClientRect();
@@ -2639,6 +2836,7 @@ function onLessonResizePointerMove(event: PointerEvent) {
 function stopLessonResize() {
   if (!lessonResizeActive.value) return;
   lessonResizeActive.value = false;
+  lessonPanelRatioCustomized.value = true;
   document.body.classList.remove("lesson-resizing");
   window.removeEventListener("pointermove", onLessonResizePointerMove);
   window.removeEventListener("pointerup", stopLessonResize);
@@ -2646,7 +2844,7 @@ function stopLessonResize() {
   localStorage.setItem(LESSON_LAYOUT_STORAGE_KEY, String(lessonPanelRatio.value));
 }
 function startLessonResize(event: PointerEvent) {
-  if (!aiPanelOpen.value) return;
+  if (!aiPanelOpen.value || compactLessonLayout.value) return;
   event.preventDefault();
   lessonResizeActive.value = true;
   (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(event.pointerId);
@@ -2659,6 +2857,48 @@ function startLessonResize(event: PointerEvent) {
 function revealChrome() { chromeVisible.value = true; if (chromeTimer) window.clearTimeout(chromeTimer); chromeTimer = window.setTimeout(() => { if (audioPlaying.value) chromeVisible.value = false; }, 3000); }
 function startStudyClock() { stopStudyClock(); studyTimer = window.setInterval(() => { studySeconds.value += 1; }, 1000); }
 function stopStudyClock() { if (studyTimer) window.clearInterval(studyTimer); studyTimer = undefined; }
+function updateCompactLessonLayout() {
+  const width = window.innerWidth || document.documentElement.clientWidth || 0;
+  lessonLayoutWidth.value = width;
+  const nextCompact = width > 0 && width < 1180;
+  const wasCompact = compactLessonLayout.value;
+  compactLessonLayout.value = nextCompact;
+  if (nextCompact) {
+    aiPanelOpen.value = false;
+    thumbOpen.value = false;
+    settingsOpen.value = false;
+  } else if (wasCompact) {
+    aiPanelOpen.value = true;
+  }
+}
+async function toggleLessonFullscreen() {
+  const element = studyRoomRef.value;
+  if (!element) return;
+  try {
+    if (document.fullscreenElement === element) {
+      await document.exitFullscreen();
+      return;
+    }
+    if (!document.fullscreenElement) {
+      await element.requestFullscreen();
+      return;
+    }
+    await document.exitFullscreen();
+    await element.requestFullscreen();
+  } catch (error) {
+    emit("notice", "warning", (error as Error)?.message || "当前环境不支持全屏");
+  }
+}
+function onLessonFullscreenChange() {
+  lessonFullscreen.value = document.fullscreenElement === studyRoomRef.value;
+}
+
+watch(
+  () => classroomLesson.value?.lesson.id,
+  () => {
+    lessonPanelRatioCustomized.value = false;
+  }
+);
 async function jumpPage(page: number) { pageDirection.value = page >= currentPage.value ? "next" : "prev"; currentPage.value = page; thumbOpen.value = false; await saveProgress(false, true); }
 async function prevPage() { await jumpPage(Math.max(1, currentPage.value - 1)); }
 async function nextPage() { await jumpPage(Math.min(classroomLesson.value?.pages.length || 1, currentPage.value + 1)); }
@@ -2764,9 +3004,15 @@ async function askInClass() {
     emit("notice", "warning", "当前课件页还未加载完成，请稍后再提问。");
     return;
   }
-  const question = classQuestion.value.trim() || "请分析这张图片";
+  const rawQuestion = classQuestion.value.trim();
+  const selectedContext = lessonAskContext.value.trim();
+  const question = rawQuestion || "请分析这张图片";
+  const requestQuestion = selectedContext
+    ? `请基于以下选中的课件内容回答：\n“${selectedContext}”\n\n我的问题：${question}`
+    : question;
   const attachments = classQaAttachments.value.map((item) => ({ ...item }));
   classQuestion.value = "";
+  clearLessonAskContext();
   classQaAttachments.value = [];
   classMessages.value.push({ id: Date.now(), role: "user", text: question, attachments });
   const aiMessageId = Date.now() + 1;
@@ -2778,7 +3024,7 @@ async function askInClass() {
       course_id: classroomLesson.value.lesson.course_id,
       conversation_id: classConversationId.value,
       lesson_page_id: lessonPageId,
-      question,
+      question: requestQuestion,
       attachments
     }, (event, data) => {
       applyQaStreamEvent(classMessages, aiMessageId, event, data);
@@ -3360,7 +3606,12 @@ const MaterialRow = defineComponent({
     return () => h("div", { class: "material-row" }, [
       h("span", { class: "file-badge" }, [h(FileText, { size: 16 })]),
       h("div", [h("strong", p.item.title || p.item.original_filename || "课程资料"), h("small", `${p.item.material_type || "file"} · ${p.item.size_label || optionText(p.item.size_bytes || 0)}`)]),
-      p.item.preview_url ? h("a", { href: p.item.preview_url, target: "_blank", class: "link-btn" }, [h(Download, { size: 14 }), "查看"]) : h("span", { class: "tag" }, p.item.parse_status || "待处理")
+      h("div", { class: "material-row-actions" }, [
+        h("button", { type: "button", class: "material-row-action primary", onClick: () => previewMaterial(p.item) }, [h(Eye, { size: 14 }), "预览"]),
+        p.item.preview_url
+          ? h("a", { href: p.item.preview_url, target: "_blank", rel: "noreferrer", class: "material-row-action" }, [h(Download, { size: 14 }), "下载"])
+          : h("span", { class: "tag" }, p.item.parse_status || "待处理")
+      ])
     ]);
   }
 });
@@ -3783,6 +4034,8 @@ const PopoverButton = defineComponent({
 });
 
 function onStudentDocumentPointerDown(event: PointerEvent) {
+  const elementTarget = event.target as Element | null;
+  if (!elementTarget?.closest?.(".lesson-selection-popover")) hideLessonSelectionMenu();
   const target = event.target as Node;
   if (topActionsRef.value?.contains(target) || noticePopRef.value?.contains(target) || userPopRef.value?.contains(target)) return;
   noticeOpen.value = false;
@@ -3791,6 +4044,8 @@ function onStudentDocumentPointerDown(event: PointerEvent) {
 function onStudentDocumentKeydown(event: KeyboardEvent) {
   if (event.key !== "Escape") return;
   if (searchOpen.value) closeSearch();
+  hideLessonSelectionMenu();
+  closeMaterialPreview();
   noticeOpen.value = false;
   userMenuOpen.value = false;
   settingsOpen.value = false;
@@ -3809,11 +4064,15 @@ function onStudentWindowFocus() {
 onMounted(async () => {
   document.addEventListener("pointerdown", onStudentDocumentPointerDown);
   document.addEventListener("keydown", onStudentDocumentKeydown);
+  document.addEventListener("selectionchange", scheduleLessonSelectionCheck);
   document.addEventListener("visibilitychange", onStudentVisibilityChange);
+  document.addEventListener("fullscreenchange", onLessonFullscreenChange);
   window.addEventListener("focus", onStudentWindowFocus);
   window.addEventListener("resize", updateTopNavIndicator);
   window.addEventListener("resize", scheduleQaLatestButtonCheck);
+  window.addEventListener("resize", updateCompactLessonLayout);
   window.addEventListener("scroll", scheduleQaLatestButtonCheck, { passive: true });
+  updateCompactLessonLayout();
   if (active.value === "studentLessonStudy") {
     await loadActive();
     await loadCourses();
@@ -3830,13 +4089,17 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onStudentDocumentPointerDown);
   document.removeEventListener("keydown", onStudentDocumentKeydown);
+  document.removeEventListener("selectionchange", scheduleLessonSelectionCheck);
   document.removeEventListener("visibilitychange", onStudentVisibilityChange);
+  document.removeEventListener("fullscreenchange", onLessonFullscreenChange);
   window.removeEventListener("focus", onStudentWindowFocus);
   window.removeEventListener("resize", updateTopNavIndicator);
   window.removeEventListener("resize", scheduleQaLatestButtonCheck);
+  window.removeEventListener("resize", updateCompactLessonLayout);
   window.removeEventListener("scroll", scheduleQaLatestButtonCheck);
   if (topNavIndicatorFrame) window.cancelAnimationFrame(topNavIndicatorFrame);
   if (qaScrollFrame) window.cancelAnimationFrame(qaScrollFrame);
+  if (lessonSelectionTimer) window.clearTimeout(lessonSelectionTimer);
   stopLessonResize();
   stopStudyClock();
   if (chromeTimer) clearTimeout(chromeTimer);

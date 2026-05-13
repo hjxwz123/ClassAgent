@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any
+from typing import Any, Callable
 
 from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
@@ -567,18 +567,28 @@ def generate_material_pedagogy_artifacts(
     material: CourseMaterial,
     lesson: Lesson,
     pages: Sequence[LessonPage],
+    on_progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> list[PedagogyArtifact]:
     db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.material_id == material.id))
     artifacts: list[PedagogyArtifact] = []
-    for index, page in enumerate(pages):
+    total_pages = len(pages)
+    for index, page in enumerate(pages, start=1):
         page_artifacts = _page_artifacts(
             db=db,
             material=material,
             lesson=lesson,
             page=page,
-            order_base=index * 100 + 1,
+            order_base=(index - 1) * 100 + 1,
         )
         artifacts.extend(page_artifacts)
+        if on_progress is not None:
+            on_progress(
+                {
+                    "completed_pages": index,
+                    "total_pages": total_pages,
+                    "page_number": page.page_number,
+                }
+            )
     if pages:
         artifacts.insert(0, _chapter_outline_artifact(material=material, lesson=lesson, pages=pages, page_artifacts=artifacts))
     for artifact in artifacts:

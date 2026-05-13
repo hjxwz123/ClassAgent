@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.schemas.common import ORMModel
+from app.schemas.material import MaterialResponse
 from app.schemas.material import LessonPageResponse
 
 
@@ -21,6 +22,7 @@ class LessonResponse(ORMModel):
 
 class LessonDetailResponse(BaseModel):
     lesson: LessonResponse
+    material: MaterialResponse | None = None
     pages: list[LessonPageResponse]
 
 

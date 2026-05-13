@@ -10,6 +10,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.schemas.classroom import LearningProgressResponse, LessonDetailResponse, LessonResponse, ProgressUpdateRequest
 from app.schemas.material import LessonPageResponse
+from app.schemas.material import MaterialResponse
 from app.services.classroom import get_learning_progress, get_lesson_detail, list_lessons, publish_lesson, update_learning_progress
 from app.services.pedagogy import ensure_lesson_pedagogy_artifacts, page_activity_payload
 
@@ -35,7 +36,7 @@ def get_lesson_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    lesson, pages = get_lesson_detail(db, lesson_id=lesson_id, user=user)
+    lesson, pages, material = get_lesson_detail(db, lesson_id=lesson_id, user=user)
     activities_by_page = page_activity_payload(db, lesson_page_ids=[page.id for page in pages])
     if pages and not any(activities_by_page.values()):
         if ensure_lesson_pedagogy_artifacts(db, lesson=lesson, pages=pages):
@@ -48,6 +49,7 @@ def get_lesson_endpoint(
         page_payloads.append(payload)
     payload = LessonDetailResponse(
         lesson=LessonResponse.model_validate(lesson),
+        material=MaterialResponse.model_validate(material) if material else None,
         pages=page_payloads,
     )
     return success_response(data=payload.model_dump(mode="json"), request_id=request.state.request_id)

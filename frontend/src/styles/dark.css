@@ -644,6 +644,7 @@ html.theme-dark .activity-view,
 html.theme-dark .note-view,
 html.theme-dark .note-tools,
 html.theme-dark .note-editor,
+html.theme-dark .study-room .sticky-tools,
 html.theme-dark .settings-pop,
 html.theme-dark .complete-modal,
 html.theme-dark .join-modal,
@@ -655,6 +656,7 @@ html.theme-dark .player-bar {
 }
 
 html.theme-dark .study-room .study-tabs,
+html.theme-dark .study-room .reading,
 html.theme-dark .study-room .activity-band section,
 html.theme-dark .study-room .activity-item,
 html.theme-dark .study-room .note-tools button,
@@ -662,6 +664,14 @@ html.theme-dark .study-room .player-bar .popover-button.select-menu > button {
   background: var(--dark-surface-2) !important;
   color: var(--dark-body) !important;
   border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .study-room .sticky-tools button {
+  color: var(--dark-cyan-text) !important;
+}
+
+html.theme-dark .study-room .reading {
+  border-left-color: var(--color-primary-500) !important;
 }
 
 /* Teacher workspace */

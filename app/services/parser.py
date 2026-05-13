@@ -725,8 +725,12 @@ class DocParserService:
     def _pages_from_successful_task(self, task_id: str, config: dict, status: dict, db: Session | None) -> list[dict]:
         pages = self._pages_from_layouts(self._collect_layouts(task_id, config))
         markdown = self._download_markdown_result(status)
-        if markdown and (not pages or len(markdown) > sum(len(page.get("page_text") or "") for page in pages)):
-            pages = _pages_from_markdown(markdown)
+        if markdown:
+            markdown_pages = _pages_from_markdown(markdown)
+            layout_text_len = sum(len(page.get("page_text") or "") for page in pages)
+            markdown_text_len = sum(len(page.get("page_text") or "") for page in markdown_pages)
+            if markdown_pages and (not pages or (len(markdown_pages) >= len(pages) and markdown_text_len > layout_text_len)):
+                pages = markdown_pages
         image_cache: dict[str, str | None] = {}
         for page in pages:
             page["page_text"] = _localize_markdown_images(page.get("page_text") or "", db, image_cache)

@@ -572,11 +572,7 @@
       </div>
     </Transition>
 
-    <Transition name="modal-pop">
-      <div v-if="previewItem" class="modal-mask">
-        <article class="modal preview-modal"><div class="modal-head"><FileText :size="20" /><h2>{{ previewItem.title }}</h2><button class="icon-action" @click="previewItem = null"><X :size="16" />关闭</button></div><iframe v-if="previewItem.preview_url" :src="previewItem.preview_url"></iframe><EmptyState v-else text="暂无预览" /></article>
-      </div>
-    </Transition>
+    <MaterialPreviewModal :open="!!previewItem" :item="previewItem" :detail="previewDetail" :loading="previewLoading" @close="closeMaterialPreview" />
 
     <Transition name="modal-pop">
       <div v-if="logDetail" class="modal-mask">
@@ -598,11 +594,12 @@ import {
 } from "../icons";
 import { api } from "../api/client";
 import { routeByPage } from "../router";
-import type { Role, User as UserType } from "../types";
+import type { MaterialDetail, Role, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppSelect from "../components/AppSelect.vue";
 import AppSlider from "../components/AppSlider.vue";
+import MaterialPreviewModal from "../components/MaterialPreviewModal.vue";
 import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
@@ -647,6 +644,8 @@ const userDrawer = ref<any | null>(null);
 const courseDrawer = ref<any | null>(null);
 const userCoursesModal = ref<any | null>(null);
 const previewItem = ref<any | null>(null);
+const previewDetail = ref<MaterialDetail | null>(null);
+const previewLoading = ref(false);
 const logDetail = ref<any | null>(null);
 const adminModalOpen = ref(false);
 const adminFormError = ref("");
@@ -1182,7 +1181,22 @@ async function batchDeactivateCourses() { for (const id of selectedCourses.value
 async function batchActivateCourses() { for (const id of selectedCourses.value) await activateCourse(id); selectedCourses.value = []; }
 function toggleAllCourses(value: boolean | Event) { selectedCourses.value = checkedValue(value) ? filteredCourses.value.map((item) => item.id) : []; }
 function clearCourseFilter() { Object.assign(courseFilter, { keyword: "", status: "" }); courseTerm.value = ""; loadCourses(); }
-function previewMaterial(item: any) { previewItem.value = item; }
+function closeMaterialPreview() {
+  previewItem.value = null;
+  previewDetail.value = null;
+  previewLoading.value = false;
+}
+async function previewMaterial(item: any) {
+  previewItem.value = item;
+  previewDetail.value = null;
+  previewLoading.value = true;
+  try {
+    const detail = await run<MaterialDetail>(() => api.get(`/materials/${item.id}`));
+    if (detail) previewDetail.value = detail;
+  } finally {
+    previewLoading.value = false;
+  }
+}
 async function deleteMaterial(id: number) { await run(() => api.delete(`/admin/materials/${id}`), "已删除"); await loadMaterials(); }
 async function batchDeleteMaterials() { for (const id of selectedMaterials.value) await run(() => api.delete(`/admin/materials/${id}`)); selectedMaterials.value = []; await loadMaterials(); }
 function toggleAllMaterials(value: boolean | Event) { selectedMaterials.value = checkedValue(value) ? materials.value.map((item) => item.id) : []; }
@@ -1273,7 +1287,7 @@ function onAdminDocumentKeydown(event: KeyboardEvent) {
   adminModalOpen.value = false;
   resetPasswordModalOpen.value = false;
   resetPasswordResult.value = "";
-  previewItem.value = null;
+  closeMaterialPreview();
   logDetail.value = null;
 }
 onMounted(async () => {
