@@ -252,6 +252,19 @@ def test_quiz_generation_calls_ai_with_course_context_without_material(client, m
     assert "课程简介：图论与集合基础" in captured["source_text"]
 
 
+def test_lesson_detail_includes_material_for_original_preview(client):
+    _course, _chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    lesson_detail_resp = client.get(f"/api/v1/lessons/{lesson_id}", headers=student_headers)
+    assert lesson_detail_resp.status_code == 200, lesson_detail_resp.text
+    detail = lesson_detail_resp.json()["data"]
+    assert detail["lesson"]["id"] == lesson_id
+    assert detail["material"]["id"] == detail["lesson"]["material_id"]
+    assert detail["material"]["material_type"] == "pptx"
+    assert detail["material"]["preview_url"].startswith("/static/")
+    assert len(detail["pages"]) >= 1
+
+
 def test_quiz_source_context_covers_many_pages_without_oversized_prompt(client):
     teacher_email = "teacher-long-ppt@example.com"
     page_count = 420

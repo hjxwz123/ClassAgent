@@ -118,6 +118,12 @@ export type Lesson = {
   updated_at: string;
 };
 
+export type LessonDetail = {
+  lesson: Lesson;
+  material?: Material | null;
+  pages: LessonPage[];
+};
+
 export type Quiz = {
   id: number;
   course_id: number;

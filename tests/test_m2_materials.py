@@ -9,6 +9,7 @@ from docx import Document
 from pptx import Presentation
 from sqlalchemy import select
 
+from app.core.enums import ProcessStatus
 from app.db import session as db_session
 from app.db.models import AsyncTaskLog, CourseMaterial, KnowledgeChunk, Lesson, LessonPage
 from app.services.materials import _split_knowledge_text, recover_stale_material_processing_tasks
@@ -550,6 +551,105 @@ def test_material_management_flow(client):
 
     delete_resp = client.delete(f"/api/v1/materials/{material['id']}", headers=teacher_headers)
     assert delete_resp.status_code == 200, delete_resp.text
+
+
+def test_reprocess_material_rejects_pending_or_processing_tasks(client):
+    register_user(
+        client,
+        email="teacher-reprocess-guard@example.com",
+        password="Teacher123",
+        nickname="防重解析老师",
+        role="teacher",
+        employee_no="REPROCESS-GUARD",
+    )
+    teacher_login = login_user(client, email="teacher-reprocess-guard@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "解析防重课程", "description": "测试", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+
+    upload_resp = client.post(
+        "/api/v1/materials",
+        data={"course_id": str(course["id"]), "title": "防重资料", "category": "courseware"},
+        files={"file": ("guard.txt", build_txt_bytes(), "text/plain")},
+        headers=teacher_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    material = upload_resp.json()["data"]
+
+    with db_session.SessionLocal() as db:
+        row = db.get(CourseMaterial, material["id"])
+        assert row is not None
+        row.parse_status = ProcessStatus.PENDING.value
+        row.vector_status = ProcessStatus.PENDING.value
+        db.add(row)
+        db.commit()
+
+    pending_resp = client.post(f"/api/v1/materials/{material['id']}/reprocess", headers=teacher_headers)
+    assert pending_resp.status_code == 400, pending_resp.text
+    assert pending_resp.json()["message"] == "资料已在处理中，请等待当前任务完成"
+
+    with db_session.SessionLocal() as db:
+        row = db.get(CourseMaterial, material["id"])
+        assert row is not None
+        row.parse_status = ProcessStatus.READY.value
+        row.vector_status = ProcessStatus.READY.value
+        db.add(row)
+        db.add(
+            AsyncTaskLog(
+                task_name="material.process",
+                target_type="material",
+                target_id=material["id"],
+                status=ProcessStatus.PROCESSING.value,
+                detail={"source": "test"},
+            )
+        )
+        db.commit()
+
+    processing_resp = client.post(f"/api/v1/materials/{material['id']}/reprocess", headers=teacher_headers)
+    assert processing_resp.status_code == 400, processing_resp.text
+    assert processing_resp.json()["message"] == "资料已在处理中，请等待当前任务完成"
+
+
+def test_material_content_endpoint_returns_inline_file(client):
+    register_user(
+        client,
+        email="teacher-preview-stream@example.com",
+        password="Teacher123",
+        nickname="预览流老师",
+        role="teacher",
+        employee_no="PREVIEW-STREAM",
+    )
+    teacher_login = login_user(client, email="teacher-preview-stream@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "预览流课程", "description": "测试站内预览流", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+
+    upload_resp = client.post(
+        "/api/v1/materials",
+        data={"course_id": str(course["id"]), "title": "PDF预览资料", "category": "courseware"},
+        files={"file": ("preview.pdf", build_pdf_bytes(), "application/pdf")},
+        headers=teacher_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    material = upload_resp.json()["data"]
+
+    content_resp = client.get(f"/api/v1/materials/{material['id']}/content", headers=teacher_headers)
+    assert content_resp.status_code == 200, content_resp.text
+    assert content_resp.headers["content-type"].startswith("application/pdf")
+    assert "inline;" in content_resp.headers["content-disposition"]
+    assert "preview.pdf" in content_resp.headers["content-disposition"]
+    assert content_resp.content.startswith(b"%PDF")
 
 
 def test_material_pipeline_keeps_parse_ready_when_tts_fails(client, monkeypatch):

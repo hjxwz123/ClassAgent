@@ -863,6 +863,49 @@ class AIService:
             dimension = int(self.settings.embedding_dimension)
         return dimension if dimension > 0 else 1536
 
+    def _embedding_batch_size(self, config: Any | None, text_count: int) -> int:
+        if text_count <= 0:
+            return 0
+        raw_value = (config.extra_config or {}).get("batch_size") if config is not None else None
+        try:
+            batch_size = int(raw_value) if raw_value else 0
+        except (TypeError, ValueError):
+            batch_size = 0
+        if batch_size > 0:
+            return batch_size
+        if getattr(config, "provider", "") == "qwen":
+            return 10
+        return text_count
+
+    def _request_embedding_vectors(
+        self,
+        config: Any,
+        *,
+        headers: dict[str, str],
+        texts: Sequence[str],
+        dimension: int,
+    ) -> list[list[float]]:
+        payload: dict[str, Any] = {
+            "model": config.model_name,
+            "input": list(texts),
+        }
+        if config.extra_config.get("dimensions"):
+            payload["dimensions"] = config.extra_config["dimensions"]
+        with httpx.Client(timeout=self.settings.external_service_timeout_seconds) as client:
+            response = client.post(self._embedding_endpoint(config.endpoint), headers=headers, json=payload)
+        if response.status_code >= 400:
+            raise bad_request(f"Embedding 调用失败: HTTP {response.status_code} {response.text[:300]}")
+        body = response.json()
+        rows = body.get("data") or []
+        embeddings = [row.get("embedding") for row in rows if isinstance(row, dict)]
+        if len(embeddings) != len(texts) or not all(isinstance(item, list) for item in embeddings):
+            raise bad_request("Embedding 响应格式不符合 OpenAI 兼容规范")
+        vectors = [[float(value) for value in embedding] for embedding in embeddings]
+        if config.extra_config.get("dimensions") and any(len(vector) != dimension for vector in vectors):
+            actual = len(vectors[0]) if vectors else 0
+            raise bad_request(f"Embedding 维度不一致：期望 {dimension}，实际 {actual}")
+        return vectors
+
     def embed_texts(self, db: Session | None, texts: Sequence[str]) -> list[list[float]]:
         if not texts:
             return []
@@ -881,26 +924,14 @@ class AIService:
         if config.api_key:
             headers["Authorization"] = f"Bearer {config.api_key}"
         headers.update(config.extra_config.get("headers") or {})
-        payload: dict[str, Any] = {
-            "model": config.model_name,
-            "input": list(texts),
-        }
-        if config.extra_config.get("dimensions"):
-            payload["dimensions"] = config.extra_config["dimensions"]
         try:
-            with httpx.Client(timeout=self.settings.external_service_timeout_seconds) as client:
-                response = client.post(self._embedding_endpoint(config.endpoint), headers=headers, json=payload)
-            if response.status_code >= 400:
-                raise bad_request(f"Embedding 调用失败: HTTP {response.status_code} {response.text[:300]}")
-            body = response.json()
-            rows = body.get("data") or []
-            embeddings = [row.get("embedding") for row in rows if isinstance(row, dict)]
-            if len(embeddings) != len(texts) or not all(isinstance(item, list) for item in embeddings):
-                raise bad_request("Embedding 响应格式不符合 OpenAI 兼容规范")
-            vectors = [[float(value) for value in embedding] for embedding in embeddings]
-            if config.extra_config.get("dimensions") and any(len(vector) != dimension for vector in vectors):
-                actual = len(vectors[0]) if vectors else 0
-                raise bad_request(f"Embedding 维度不一致：期望 {dimension}，实际 {actual}")
+            batch_size = max(1, self._embedding_batch_size(config, len(texts)))
+            if batch_size >= len(texts):
+                return self._request_embedding_vectors(config, headers=headers, texts=texts, dimension=dimension)
+            vectors: list[list[float]] = []
+            for index in range(0, len(texts), batch_size):
+                batch = texts[index : index + batch_size]
+                vectors.extend(self._request_embedding_vectors(config, headers=headers, texts=batch, dimension=dimension))
             return vectors
         except Exception:
             if self._fallback_allowed():

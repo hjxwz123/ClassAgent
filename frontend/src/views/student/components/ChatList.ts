@@ -30,8 +30,8 @@ export default defineComponent({
   emits: ["toggle-thought", "copy", "favorite", "feedback"],
   setup(p, { emit }) {
     const expandedSourceMessageIds = ref<number[]>([]);
-    const burstingMessageIds = ref<number[]>([]);
-    const burstTimers = new Map<number, number>();
+    const burstingAvatarKeys = ref<string[]>([]);
+    const burstTimers = new Map<string, number>();
     const imageFallback = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='84' height='84' viewBox='0 0 84 84'%3E%3Crect width='84' height='84' rx='16' fill='%23F9F8F6'/%3E%3Cpath d='M23 56l12-14 9 10 6-7 11 11H23z' fill='%2300B8D4' opacity='.72'/%3E%3Ccircle cx='56' cy='29' r='7' fill='%23121614' opacity='.82'/%3E%3C/svg%3E";
     function sourceLabel(source: any, index: number) {
       return source?.title || source?.material_title || source?.chapter_title || source?.course_name || `来源${index + 1}`;
@@ -112,15 +112,18 @@ export default defineComponent({
         h("span", item.filename || `图片${index + 1}`)
       ])));
     }
-    function triggerLogoBurst(message: ChatMessage) {
-      if (message.role !== "ai") return;
-      window.clearTimeout(burstTimers.get(message.id));
-      burstingMessageIds.value = burstingMessageIds.value.filter((id) => id !== message.id);
+    function avatarBurstKey(message: ChatMessage) {
+      return `${message.role}-${message.id}`;
+    }
+    function triggerAvatarBurst(message: ChatMessage) {
+      const key = avatarBurstKey(message);
+      window.clearTimeout(burstTimers.get(key));
+      burstingAvatarKeys.value = burstingAvatarKeys.value.filter((item) => item !== key);
       requestAnimationFrame(() => {
-        burstingMessageIds.value = [...burstingMessageIds.value, message.id];
-        burstTimers.set(message.id, window.setTimeout(() => {
-          burstingMessageIds.value = burstingMessageIds.value.filter((id) => id !== message.id);
-          burstTimers.delete(message.id);
+        burstingAvatarKeys.value = [...burstingAvatarKeys.value, key];
+        burstTimers.set(key, window.setTimeout(() => {
+          burstingAvatarKeys.value = burstingAvatarKeys.value.filter((item) => item !== key);
+          burstTimers.delete(key);
         }, 720));
       });
     }
@@ -173,20 +176,29 @@ export default defineComponent({
     }
     function avatar(message: ChatMessage) {
       if (message.role === "user") {
-        return h("span", { class: ["chat-avatar", "avatar-user"] }, [
-          p.userAvatarUrl
-            ? h("img", { class: "chat-avatar-image", src: p.userAvatarUrl, alt: p.userName || "用户头像" })
-            : defaultUserAvatar()
+        if (p.userAvatarUrl) {
+          return h("span", { class: ["chat-avatar", "avatar-user"] }, [
+            h("img", { class: "chat-avatar-image", src: p.userAvatarUrl, alt: p.userName || "用户头像" })
+          ]);
+        }
+        return h("button", {
+          type: "button",
+          class: ["chat-avatar", "avatar-user", "default-avatar-trigger", { "is-bursting": burstingAvatarKeys.value.includes(avatarBurstKey(message)) }],
+          title: p.userName || "用户",
+          "aria-label": "触发默认头像动画",
+          onClick: () => triggerAvatarBurst(message)
+        }, [
+          defaultUserAvatar()
         ]);
       }
       return h(
         "button",
         {
           type: "button",
-          class: ["chat-avatar", "avatar-ai", { "is-bursting": burstingMessageIds.value.includes(message.id) }],
+          class: ["chat-avatar", "avatar-ai", { "is-bursting": burstingAvatarKeys.value.includes(avatarBurstKey(message)) }],
           title: "智学黑板",
           "aria-label": "触发助手图标动画",
-          onClick: () => triggerLogoBurst(message)
+          onClick: () => triggerAvatarBurst(message)
         },
         [h(BrandLogo, { class: "chat-avatar-logo" })]
       );

@@ -1,9 +1,14 @@
+from mimetypes import guess_type
+from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.errors import not_found
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -13,6 +18,7 @@ from app.services.materials import (
     delete_material,
     dispatch_material_processing,
     get_material_detail,
+    get_material_for_preview,
     list_materials,
     regenerate_page_script,
     reprocess_material,
@@ -102,6 +108,27 @@ def get_material_endpoint(
         "pages": [serialize_page(page) for page in pages],
     }
     return success_response(data=payload, request_id=request.state.request_id)
+
+
+@router.get("/{material_id}/content")
+def get_material_content_endpoint(
+    material_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    material = get_material_for_preview(db, material_id=material_id, user=user)
+    try:
+        content = storage_service.read_bytes(material.storage_path, db=db)
+    except FileNotFoundError as exc:
+        raise not_found("资料文件不存在") from exc
+    media_type = guess_type(material.original_filename or material.storage_path)[0] or "application/octet-stream"
+    filename = Path(material.original_filename or material.storage_path).name or f"material-{material.id}"
+    fallback_name = f"material-{material.id}{Path(filename).suffix.lower()}"
+    headers = {
+        "Content-Disposition": f'''inline; filename="{fallback_name}"; filename*=UTF-8''{quote(filename)}''',
+        "Cache-Control": "private, max-age=600",
+    }
+    return Response(content=content, media_type=media_type, headers=headers)
 
 
 @router.patch("/{material_id}")

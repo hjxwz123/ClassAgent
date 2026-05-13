@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     external_ai_mode: Literal["auto", "strict"] = "auto"
     external_storage_mode: Literal["auto", "local", "oss"] = "auto"
     external_service_timeout_seconds: float = 30.0
+    material_processing_worker_count: int = 4
+    doc_parser_max_concurrency: int = 2
+    material_ai_max_concurrency: int = 6
+    tts_max_concurrency: int = 1
+    material_processing_stale_minutes: int = 10
+    material_processing_watchdog_interval_seconds: int = 30
     public_base_url: str = "http://127.0.0.1:8000"
     vector_store_provider: Literal["chroma"] = "chroma"
     chroma_persist_dir: str = str(VECTOR_DIR / "chroma")

@@ -795,6 +795,57 @@
   color: var(--ca-color-paper-ink);
 }
 
+.modal-head .modal-close-action,
+.drawer-head .modal-close-action {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  flex: 0 0 38px;
+  gap: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .78);
+  color: var(--ca-color-paper-muted);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .10);
+  padding: 0;
+  font-size: 0;
+  line-height: 0;
+  backdrop-filter: blur(10px);
+}
+
+.modal-head .modal-close-action svg,
+.drawer-head .modal-close-action svg {
+  width: 18px;
+  height: 18px;
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.modal-head .modal-close-action:hover,
+.drawer-head .modal-close-action:hover {
+  border-color: rgba(239, 68, 68, .28);
+  background: #fff;
+  color: #DC2626;
+  box-shadow: 0 14px 30px rgba(220, 38, 38, .16);
+  transform: translateY(-1px);
+}
+
+.modal-head .modal-close-action:hover svg,
+.drawer-head .modal-close-action:hover svg {
+  transform: rotate(90deg) scale(1.04);
+}
+
+.modal-head .modal-close-action:active,
+.drawer-head .modal-close-action:active {
+  transform: translateY(0) scale(.94);
+}
+
+.modal-head .modal-close-action:disabled,
+.drawer-head .modal-close-action:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+  transform: none;
+}
+
 .search-box,
 .input,
 .textarea,
@@ -864,7 +915,7 @@
 .chapter-tree-title,
 .material-row strong,
 .material-row small,
-.upload-row > span,
+.upload-meta-head span,
 .lesson-card h2,
 .question-row span {
   min-width: 0;
@@ -874,12 +925,106 @@
 }
 
 .upload-list {
-  overflow: visible;
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+  padding-right: 4px;
+}
+
+.upload-progress-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-md);
+  background: var(--ca-color-paper-bg);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.upload-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.upload-progress-head strong {
+  color: var(--ca-color-paper-ink);
+}
+
+.upload-progress-head small,
+.upload-meta-head small,
+.upload-meta-progress em {
+  color: var(--ca-color-paper-sub);
+  font-size: var(--text-caption);
+  font-style: normal;
 }
 
 .upload-row {
-  grid-template-columns: 24px minmax(0, 1fr) 76px minmax(132px, 148px) minmax(118px, 132px) auto;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px 12px;
   overflow: visible;
+}
+
+.upload-row > svg {
+  margin-top: 4px;
+  color: var(--ca-color-paper-sub);
+}
+
+.upload-body {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.upload-meta {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.upload-meta-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.upload-meta-head small {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.upload-meta-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.upload-row.is-uploading .upload-meta-progress em {
+  color: var(--ca-role-teacher-primary);
+}
+
+.upload-row.is-uploaded .upload-meta-progress em {
+  color: var(--color-success-700);
+}
+
+.upload-row.is-failed .upload-meta-progress em,
+.upload-error {
+  color: var(--color-danger-700);
+}
+
+.upload-error {
+  margin: 0;
+  font-size: var(--text-caption);
+  line-height: 1.45;
+}
+
+.upload-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(140px, 160px) auto;
+  gap: 10px;
+  align-items: center;
 }
 
 .upload-row .app-select {
@@ -887,13 +1032,22 @@
   width: 100%;
 }
 
+.upload-controls .icon-action {
+  align-self: stretch;
+}
+
+.upload-drop.disabled {
+  opacity: .72;
+  cursor: wait;
+}
+
 .modal:has(.upload-list) {
-  overflow: visible;
+  overflow: hidden;
 }
 
 .modal-mask:has(.upload-list) {
   align-items: center;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .ai-suggestion {
@@ -1125,12 +1279,16 @@
   }
 
   .upload-row {
-    grid-template-columns: 24px minmax(0, 1fr) 76px;
+    grid-template-columns: 24px minmax(0, 1fr);
   }
 
-  .upload-row .app-select,
-  .upload-row .icon-action {
-    grid-column: span 1;
+  .upload-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .upload-controls .icon-action {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
 
@@ -1236,10 +1394,12 @@
     grid-template-columns: 24px minmax(0, 1fr);
   }
 
-  .upload-row small,
-  .upload-row .app-select,
-  .upload-row .icon-action {
-    grid-column: 1 / -1;
+  .upload-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-controls .icon-action {
+    justify-self: start;
   }
 
   .quiz-editor-layout,
@@ -1400,6 +1560,22 @@ html.theme-dark .teacher-shell .segment-btn.active {
   background: rgba(249, 115, 22, .14) !important;
   color: #FDBA74 !important;
   border-color: rgba(251, 146, 60, .34) !important;
+}
+
+html.theme-dark .teacher-shell .modal-head .modal-close-action,
+html.theme-dark .teacher-shell .drawer-head .modal-close-action {
+  border-color: rgba(148, 163, 184, .24) !important;
+  background: rgba(15, 23, 42, .78) !important;
+  color: #CBD5E1 !important;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .28) !important;
+}
+
+html.theme-dark .teacher-shell .modal-head .modal-close-action:hover,
+html.theme-dark .teacher-shell .drawer-head .modal-close-action:hover {
+  border-color: rgba(248, 113, 113, .38) !important;
+  background: rgba(127, 29, 29, .38) !important;
+  color: #FCA5A5 !important;
+  box-shadow: 0 14px 30px rgba(248, 113, 113, .18) !important;
 }
 
 .teacher-shell .header-theme-toggle {

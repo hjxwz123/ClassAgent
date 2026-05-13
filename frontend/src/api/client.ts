@@ -32,6 +32,12 @@ type ValidationIssue = {
   ctx?: Record<string, unknown>;
 };
 
+type UploadProgress = {
+  loaded: number;
+  total: number;
+  percent: number;
+};
+
 function fieldName(loc?: Array<string | number>) {
   const parts = (loc || []).filter((item) => !["body", "query", "path"].includes(String(item)));
   return parts.length ? parts.join(".") : "参数";
@@ -66,6 +72,14 @@ function errorMessage(payload: ApiResponse<unknown> | null) {
   return payload.message || "请求失败";
 }
 
+function parsePayload<T>(raw: string) {
+  try {
+    return raw ? (JSON.parse(raw) as ApiResponse<T>) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}, query?: Record<string, unknown>) {
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
@@ -76,6 +90,41 @@ async function request<T>(path: string, init: RequestInit = {}, query?: Record<s
     throw new Error(errorMessage(payload as ApiResponse<unknown> | null));
   }
   return payload.data;
+}
+
+function upload<T>(
+  path: string,
+  body: FormData,
+  options: {
+    query?: Record<string, unknown>;
+    onProgress?: (progress: UploadProgress) => void;
+  } = {}
+) {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", buildUrl(path, options.query), true);
+    xhr.setRequestHeader("Accept", "application/json");
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    xhr.upload.onprogress = (event) => {
+      const total = event.lengthComputable ? event.total : 0;
+      const percent = total > 0 ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0;
+      options.onProgress?.({ loaded: event.loaded, total, percent });
+    };
+
+    xhr.onerror = () => reject(new Error("网络异常，上传失败"));
+    xhr.onabort = () => reject(new Error("上传已取消"));
+    xhr.onload = () => {
+      const payload = parsePayload<T>(xhr.responseText || "");
+      if (xhr.status >= 200 && xhr.status < 300 && payload && payload.code === 0) {
+        resolve(payload.data);
+        return;
+      }
+      reject(new Error(errorMessage(payload as ApiResponse<unknown> | null)));
+    };
+
+    xhr.send(body);
+  });
 }
 
 async function download(path: string, filename?: string, query?: Record<string, unknown>) {
@@ -152,6 +201,14 @@ export const api = {
   get: <T>(path: string, query?: Record<string, unknown>) => request<T>(path, {}, query),
   post: <T>(path: string, body?: unknown, query?: Record<string, unknown>) =>
     request<T>(path, { method: "POST", body: body instanceof FormData ? body : JSON.stringify(body ?? {}) }, query),
+  upload: <T>(
+    path: string,
+    body: FormData,
+    options?: {
+      query?: Record<string, unknown>;
+      onProgress?: (progress: UploadProgress) => void;
+    }
+  ) => upload<T>(path, body, options),
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(body ?? {}) }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(body ?? {}) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),

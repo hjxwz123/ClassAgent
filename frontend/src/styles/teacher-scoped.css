@@ -638,6 +638,7 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .notice-list label { display: flex; align-items: center; gap: 10px; min-height: 36px; }
 .modal-mask { position: fixed; inset: 0; z-index: var(--z-tooltip); display: grid; place-items: center; background: rgba(15,23,42,0.38); backdrop-filter: blur(6px); }
 .modal { width: 640px; max-height: 90vh; overflow: auto; border-radius: var(--radius-xl); background: white; box-shadow: var(--shadow-xl); padding: 20px; }
+.modal.upload-modal { width: min(760px, 94vw); max-height: min(90vh, 820px); display: flex; flex-direction: column; overflow: hidden; }
 .chapter-name-modal { width: min(440px, calc(100vw - 32px)); display: grid; gap: 14px; overflow: visible; }
 .chapter-name-modal label { display: grid; gap: 8px; color: var(--color-text-secondary); font-weight: 600; }
 .reminder-modal { display: grid; gap: 14px; }
@@ -700,7 +701,10 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .modal-head h2 { flex: 1; margin: 0; font-size: var(--text-h3); color: var(--color-text-primary); }
 .upload-drop { position: relative; height: 160px; flex-direction: column; color: var(--color-text-muted); margin-bottom: 14px; }
 .upload-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.upload-row { display: grid; grid-template-columns: auto 1fr 80px 140px 120px auto; align-items: center; gap: 8px; border-bottom: 1px solid var(--color-border-subtle); padding: 8px 0; }
+.upload-list { min-height: 0; overflow: auto; align-content: start; padding-right: 4px; }
+.upload-row { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: start; gap: 10px 12px; border-bottom: 1px solid var(--color-border-subtle); padding: 8px 0; }
+.upload-body { min-width: 0; display: grid; gap: 10px; }
+.upload-controls { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(140px, 160px) auto; gap: 10px; align-items: center; }
 .quiz-editor-modal { width: min(1180px, 94vw); height: min(820px, 92vh); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
 .quiz-editor-layout { min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; }
 .quiz-editor-side { display: grid; align-content: start; gap: 14px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-muted); padding: 14px; }

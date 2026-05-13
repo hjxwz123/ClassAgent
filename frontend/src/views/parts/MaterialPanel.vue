@@ -4,7 +4,7 @@
       <span class="tag">{{ detail.material.material_type }}</span>
       <span class="tag" :class="detail.material.parse_status === 'ready' ? 'tag-success' : 'tag-warning'">{{ detail.material.parse_status }}</span>
       <span class="tag" :class="detail.material.vector_status === 'ready' ? 'tag-success' : 'tag-warning'">{{ detail.material.vector_status }}</span>
-      <a v-if="detail.material.preview_url" class="btn btn-secondary btn-sm" :href="detail.material.preview_url" target="_blank">预览</a>
+      <a v-if="detail.material.preview_url" class="btn btn-secondary btn-sm" :href="detail.material.preview_url" target="_blank" rel="noreferrer">下载</a>
     </div>
     <div v-if="editable" class="form-row edit-row">
       <input v-model="edit.title" class="input" placeholder="标题" />

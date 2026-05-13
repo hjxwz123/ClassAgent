@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import LessonStatus, UserRole
 from app.core.errors import forbidden, not_found
-from app.db.models import CourseMembership, LearningProgress, Lesson, LessonPage, User
+from app.db.models import CourseMaterial, CourseMembership, LearningProgress, Lesson, LessonPage, User
 from app.services.courses import _assert_course_owner, _get_course_or_404
+from app.services.storage import storage_service
 
 
 def _assert_student_in_course(db: Session, *, course_id: int, user: User) -> None:
@@ -28,7 +29,7 @@ def list_lessons(db: Session, *, course_id: int, user: User) -> list[Lesson]:
     return list(db.scalars(statement.order_by(Lesson.created_at.desc())))
 
 
-def get_lesson_detail(db: Session, *, lesson_id: int, user: User) -> tuple[Lesson, list[LessonPage]]:
+def get_lesson_detail(db: Session, *, lesson_id: int, user: User) -> tuple[Lesson, list[LessonPage], CourseMaterial | None]:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
         raise not_found("课时不存在")
@@ -40,7 +41,12 @@ def get_lesson_detail(db: Session, *, lesson_id: int, user: User) -> tuple[Lesso
         course = _get_course_or_404(db, lesson.course_id)
         _assert_course_owner(course, user)
     pages = list(db.scalars(select(LessonPage).where(LessonPage.lesson_id == lesson_id).order_by(LessonPage.page_number)))
-    return lesson, pages
+    material = db.get(CourseMaterial, lesson.material_id) if lesson.material_id else None
+    if material is not None and material.deleted_at is not None:
+        material = None
+    if material is not None:
+        material.preview_url = storage_service.normalize_public_url(material.preview_url)
+    return lesson, pages, material
 
 
 def publish_lesson(db: Session, *, lesson_id: int, user: User, status: str) -> Lesson:

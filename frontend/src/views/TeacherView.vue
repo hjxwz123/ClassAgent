@@ -262,7 +262,7 @@
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <div class="metric-grid three compact"><MetricCard :icon="File" label="资料总数" :value="materialSummary.total || 0" sub="份" /><MetricCard :icon="Database" label="存储用量" :value="sizeLabel(materialSummary.size_bytes)" sub="课程资料" tone="success" /><MetricCard :icon="Sparkles" label="已解析" :value="`${materialSummary.ready || 0}/${materialSummary.total || 0}`" sub="AI" tone="ai" /></div>
-          <div class="materials-layout"><aside class="chapter-tree"><div class="search-box small"><Search :size="15" /><input v-model="chapterKeyword" placeholder="搜索章节" /></div><button class="chapter-tree-main" :class="{ active: selectedChapterId === 0 }" @click="selectedChapterId = 0"><FileText :size="16" /><span class="chapter-tree-title">全部资料</span><span class="chapter-tree-count">{{ materialSummary.total || 0 }}</span></button><TransitionGroup name="motion-list" tag="div" class="chapter-buttons"><div v-for="chapter in filteredChapters" :key="chapter.id" class="chapter-tree-row" :class="{ active: selectedChapterId === chapter.id, 'is-empty': !chapter.count, 'just-added': freshMaterialChapterId === chapter.id }"><button class="chapter-tree-main" @click="selectedChapterId = chapter.id"><Layers :size="16" /><span class="chapter-tree-title">{{ chapter.title }}</span><span class="chapter-tree-count">{{ chapter.count || 0 }}</span></button><button class="chapter-tree-delete" :data-loading="isPending(`delete-chapter-${chapter.id}`)" :disabled="isPending(`delete-chapter-${chapter.id}`)" title="删除章节" @click="deleteChapterFromTree(chapter)"><Trash2 :size="14" /></button></div></TransitionGroup><button :data-loading="isPending('add-tree-chapter')" :disabled="isPending('add-tree-chapter')" @click="openAddChapterModal"><Plus :size="16" /><span class="chapter-tree-title">添加章节</span></button></aside><section class="materials-panel" :class="{ 'panel-loading': isPending('filter-materials') }"><div class="material-filter"><div class="search-box"><Search :size="16" /><input v-model="materialFilter.keyword" placeholder="搜索文件名" @keyup.enter="refreshMaterials" /></div><AppSelect v-model="materialFilter.type" :options="materialTypeOptions" /><AppSelect v-model="materialFilter.status" :options="materialStatusOptions" /><AppSelect v-model="materialSort" :options="materialSortOptions" /><div class="view-toggle"><button type="button" :class="{ active: materialView === 'grid' }" @click="materialView = 'grid'"><Grid2X2 :size="16" />网格</button><button type="button" :class="{ active: materialView === 'list' }" @click="materialView = 'list'"><FileText :size="16" />列表</button></div></div><TransitionGroup name="material-list-motion" tag="div" class="material-list" :class="materialView"><article v-for="item in filteredMaterials" :key="item.id" class="material-row" :class="{ processing: isMaterialProcessing(item) }"><span class="file-badge" :class="item.material_type"><component :is="fileIcon(item.material_type)" :size="18" /></span><div><strong>{{ item.title }}</strong><small>{{ chapterName(item.chapter_id) }} · {{ typeText(item.material_type) }} · {{ sizeLabel(item.size_bytes) }}</small><MaterialStatus :item="item" /></div><span class="tag" :class="statusClass(materialRowStatus(item))">{{ statusText(materialRowStatus(item)) }}</span><section><button class="icon-action" :disabled="isMaterialProcessing(item)" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" :data-loading="isPending(`reprocess-material-${item.id}`) || isMaterialProcessing(item)" :disabled="isPending(`reprocess-material-${item.id}`) || isMaterialProcessing(item)" @click="reprocessMaterial(item.id)"><RefreshCw :size="15" />{{ isMaterialProcessing(item) ? '解析中' : '重新解析' }}</button><button v-if="materialRowStatus(item) === 'ready'" class="icon-action" :data-loading="isPending(`open-ppt-${item.id}`)" :disabled="isPending(`open-ppt-${item.id}`) || isMaterialProcessing(item)" @click="openPptWorkbench(item.id)"><Wand2 :size="15" />编辑课时</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" :data-loading="isPending(`delete-material-${item.id}`)" :disabled="isPending(`delete-material-${item.id}`)" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></section></article><EmptyState v-if="!filteredMaterials.length" key="empty" text="暂无资料" /></TransitionGroup></section></div>
+          <div class="materials-layout"><aside class="chapter-tree"><div class="search-box small"><Search :size="15" /><input v-model="chapterKeyword" placeholder="搜索章节" /></div><button class="chapter-tree-main" :class="{ active: selectedChapterId === 0 }" @click="selectedChapterId = 0"><FileText :size="16" /><span class="chapter-tree-title">全部资料</span><span class="chapter-tree-count">{{ materialSummary.total || 0 }}</span></button><TransitionGroup name="motion-list" tag="div" class="chapter-buttons"><div v-for="chapter in filteredChapters" :key="chapter.id" class="chapter-tree-row" :class="{ active: selectedChapterId === chapter.id, 'is-empty': !chapter.count, 'just-added': freshMaterialChapterId === chapter.id }"><button class="chapter-tree-main" @click="selectedChapterId = chapter.id"><Layers :size="16" /><span class="chapter-tree-title">{{ chapter.title }}</span><span class="chapter-tree-count">{{ chapter.count || 0 }}</span></button><button class="chapter-tree-delete" :data-loading="isPending(`delete-chapter-${chapter.id}`)" :disabled="isPending(`delete-chapter-${chapter.id}`)" title="删除章节" @click="deleteChapterFromTree(chapter)"><Trash2 :size="14" /></button></div></TransitionGroup><button :data-loading="isPending('add-tree-chapter')" :disabled="isPending('add-tree-chapter')" @click="openAddChapterModal"><Plus :size="16" /><span class="chapter-tree-title">添加章节</span></button></aside><section class="materials-panel" :class="{ 'panel-loading': isPending('filter-materials') }"><div class="material-filter"><div class="search-box"><Search :size="16" /><input v-model="materialFilter.keyword" placeholder="搜索文件名" @keyup.enter="refreshMaterials" /></div><AppSelect v-model="materialFilter.type" :options="materialTypeOptions" /><AppSelect v-model="materialFilter.status" :options="materialStatusOptions" /><AppSelect v-model="materialSort" :options="materialSortOptions" /><div class="view-toggle"><button type="button" :class="{ active: materialView === 'grid' }" @click="materialView = 'grid'"><Grid2X2 :size="16" />网格</button><button type="button" :class="{ active: materialView === 'list' }" @click="materialView = 'list'"><FileText :size="16" />列表</button></div></div><TransitionGroup name="material-list-motion" tag="div" class="material-list" :class="materialView"><article v-for="item in filteredMaterials" :key="item.id" class="material-row" :class="{ processing: isMaterialProcessing(item) }"><span class="file-badge" :class="item.material_type"><component :is="fileIcon(item.material_type)" :size="18" /></span><div><strong>{{ item.title }}</strong><small>{{ chapterName(item.chapter_id) }} · {{ typeText(item.material_type) }} · {{ sizeLabel(item.size_bytes) }}</small><MaterialStatus :item="item" /></div><span class="tag" :class="statusClass(materialRowStatus(item))">{{ statusText(materialRowStatus(item)) }}</span><section><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" :data-loading="isPending(`reprocess-material-${item.id}`) || isMaterialRetryBlocked(item)" :disabled="isPending(`reprocess-material-${item.id}`) || isMaterialRetryBlocked(item)" @click="reprocessMaterial(item.id)"><RefreshCw :size="15" />{{ materialRetryActionText(item) }}</button><button v-if="materialRowStatus(item) === 'ready'" class="icon-action" :data-loading="isPending(`open-ppt-${item.id}`)" :disabled="isPending(`open-ppt-${item.id}`) || isMaterialProcessing(item)" @click="openPptWorkbench(item.id)"><Wand2 :size="15" />编辑课时</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" :data-loading="isPending(`delete-material-${item.id}`)" :disabled="isPending(`delete-material-${item.id}`)" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></section></article><EmptyState v-if="!filteredMaterials.length" key="empty" text="暂无资料" /></TransitionGroup></section></div>
         </template>
       </section>
 
@@ -424,13 +424,34 @@
 
     <Transition name="modal-pop">
       <div v-if="uploadOpen" class="modal-mask">
-        <article class="modal">
-          <div class="modal-head"><Upload :size="20" /><h2>上传课程资料</h2><button class="icon-action" @click="uploadOpen = false"><X :size="16" />关闭</button></div>
-          <label class="upload-drop"><Upload :size="40" /><span>拖拽上传</span><input type="file" multiple accept=".ppt,.pptx,.pdf,.doc,.docx,.txt,.md,.markdown" @change="pickUploadFiles" /></label>
+        <article class="modal upload-modal">
+          <div class="modal-head"><Upload :size="20" /><h2>上传课程资料</h2><button class="icon-action modal-close-action" aria-label="关闭" title="关闭" :disabled="isPending('upload-materials')" @click="closeUploadModal"><X :size="16" />关闭</button></div>
+          <label class="upload-drop" :class="{ disabled: isPending('upload-materials') }"><Upload :size="40" /><span>拖拽上传</span><input type="file" multiple accept=".ppt,.pptx,.pdf,.doc,.docx,.txt,.md,.markdown" :disabled="isPending('upload-materials')" @change="pickUploadFiles" /></label>
+          <section v-if="uploadQueue.length" class="upload-progress-panel">
+            <div class="upload-progress-head">
+              <strong>{{ isPending('upload-materials') ? `上传进度 ${uploadOverallPercent}%` : uploadFailedCount ? '可重试失败文件' : '待上传文件' }}</strong>
+              <small>{{ uploadProgressText }}</small>
+            </div>
+            <AppProgress :value="uploadOverallPercent" :tone="uploadProgressTone" />
+          </section>
           <TransitionGroup name="motion-list" tag="div" class="upload-list">
-            <div v-for="item in uploadQueue" :key="item.id" class="upload-row"><File :size="18" /><span>{{ item.file.name }}</span><small>{{ sizeLabel(item.file.size) }}</small><AppSelect v-model="item.chapter_id" :options="uploadChapterOptions" /><AppSelect v-model="item.category" :options="materialCategoryOptions" /><button class="icon-action danger" @click="removeUpload(item.id)"><Trash2 :size="15" />移除</button></div>
+            <div v-for="item in uploadQueue" :key="item.id" class="upload-row" :class="`is-${item.status}`">
+              <File :size="18" />
+              <div class="upload-body">
+                <div class="upload-meta">
+                  <div class="upload-meta-head"><span>{{ item.file.name }}</span><small>{{ sizeLabel(item.file.size) }}</small></div>
+                  <div class="upload-meta-progress"><AppProgress :value="item.progress" :tone="uploadItemTone(item)" compact /><em>{{ uploadItemText(item) }}</em></div>
+                  <p v-if="item.error" class="upload-error">{{ item.error }}</p>
+                </div>
+                <div class="upload-controls">
+                  <AppSelect v-model="item.chapter_id" :disabled="isPending('upload-materials')" :options="uploadChapterOptions" />
+                  <AppSelect v-model="item.category" :disabled="isPending('upload-materials')" :options="materialCategoryOptions" />
+                  <button class="icon-action danger" :disabled="isPending('upload-materials')" @click="removeUpload(item.id)"><Trash2 :size="15" />移除</button>
+                </div>
+              </div>
+            </div>
           </TransitionGroup>
-          <footer><button class="btn btn-ghost" @click="uploadOpen = false">取消</button><button class="btn btn-primary" :data-loading="isPending('upload-materials')" :disabled="!uploadQueue.length || isPending('upload-materials')" @click="uploadMaterials">确认上传</button></footer>
+          <footer><button class="btn btn-ghost" :disabled="isPending('upload-materials')" @click="closeUploadModal">取消</button><button class="btn btn-primary" :data-loading="isPending('upload-materials')" :disabled="!uploadQueue.length || isPending('upload-materials')" @click="uploadMaterials">确认上传</button></footer>
         </article>
       </div>
     </Transition>
@@ -441,7 +462,7 @@
           <div class="modal-head">
             <Layers :size="20" />
             <h2>添加章节</h2>
-            <button class="icon-action" @click="chapterNameOpen = false"><X :size="16" />关闭</button>
+            <button class="icon-action modal-close-action" aria-label="关闭" title="关闭" @click="chapterNameOpen = false"><X :size="16" />关闭</button>
           </div>
           <label>章节名称<input ref="chapterNameInput" v-model="chapterNameDraft" class="input" maxlength="80" placeholder="输入章节名称" @keydown.enter.prevent="addChapterFromTree" /></label>
           <footer>
@@ -454,7 +475,7 @@
 
     <Transition name="drawer">
       <aside v-if="studentDrawer" class="drawer">
-        <div class="drawer-head"><span class="avatar">{{ firstChar(studentDrawer.student.nickname) }}</span><div><h2>{{ studentDrawer.student.nickname }}</h2><small>{{ studentDrawer.student.student_no || '-' }} · {{ studentDrawer.student.email }}</small></div><button class="icon-action" @click="studentDrawer = null"><X :size="16" />关闭</button></div>
+        <div class="drawer-head"><span class="avatar">{{ firstChar(studentDrawer.student.nickname) }}</span><div><h2>{{ studentDrawer.student.nickname }}</h2><small>{{ studentDrawer.student.student_no || '-' }} · {{ studentDrawer.student.email }}</small></div><button class="icon-action modal-close-action" aria-label="关闭" title="关闭" @click="studentDrawer = null"><X :size="16" />关闭</button></div>
         <div class="profile-tabs small-tabs"><button :class="{ active: studentTab === 'base' }" @click="studentTab = 'base'">基本信息</button><button :class="{ active: studentTab === 'data' }" @click="studentTab = 'data'">学习数据</button><button :class="{ active: studentTab === 'qa' }" @click="studentTab = 'qa'">问答记录</button></div>
         <Transition name="fade-slide" mode="out-in">
           <section v-if="studentTab === 'base'" key="base" class="drawer-body"><InfoRow label="加入时间" :value="formatTime(studentDrawer.membership.joined_at)" /><InfoRow label="加入方式" value="课程码" /><InfoRow label="邮箱" :value="studentDrawer.student.email" /><InfoRow label="学号" :value="studentDrawer.student.student_no || '-'" /><div class="drawer-actions"><button class="btn btn-secondary" :data-loading="isPending(`remind-student-${studentDrawer.student.id}`)" :disabled="isPending(`remind-student-${studentDrawer.student.id}`)" @click="remindStudent(studentDrawer.student.id)"><Bell :size="16" />发送提醒</button><button class="btn btn-danger" :data-loading="isPending(`remove-student-${studentDrawer.student.id}`)" :disabled="isPending(`remove-student-${studentDrawer.student.id}`)" @click="removeStudent(studentDrawer.student.id)">移出课程</button></div></section>
@@ -470,7 +491,7 @@
           <div class="modal-head">
             <Bell :size="20" />
             <h2>发送学习提醒</h2>
-            <button class="icon-action" @click="reminderOpen = false"><X :size="16" />关闭</button>
+            <button class="icon-action modal-close-action" aria-label="关闭" title="关闭" @click="reminderOpen = false"><X :size="16" />关闭</button>
           </div>
           <div class="reminder-recipients">
             <Users :size="16" />
@@ -487,32 +508,11 @@
       </div>
     </Transition>
 
-    <Transition name="modal-pop">
-      <div v-if="previewItem" class="modal-mask">
-        <article class="modal preview-modal">
-          <div class="modal-head preview-head">
-            <FileText :size="20" />
-            <h2>{{ previewItem.title }}</h2>
-            <div class="preview-tabs">
-              <button type="button" :class="{ active: previewMode === 'markdown' }" :disabled="!hasPreviewMarkdown" @click="previewMode = 'markdown'">Markdown</button>
-              <button type="button" :class="{ active: previewMode === 'file' }" :disabled="!previewItem.preview_url" @click="previewMode = 'file'">原文件</button>
-            </div>
-            <a v-if="previewItem.preview_url" class="icon-action" :href="previewItem.preview_url" target="_blank" rel="noreferrer"><Download :size="16" />下载</a>
-            <button class="icon-action" @click="closePreview"><X :size="16" />关闭</button>
-          </div>
-          <div class="preview-content">
-            <div v-if="previewItem && isPending(`preview-material-${previewItem.id}`)" class="preview-loading"><LoadingMark :label="false" class="inline-loading-mark" />正在读取解析内容</div>
-            <div v-else-if="previewMode === 'markdown' && hasPreviewMarkdown" class="markdown-preview markdown-body" v-html="previewMarkdownHtml"></div>
-            <iframe v-else-if="previewMode === 'file' && previewItem.preview_url" :src="previewItem.preview_url"></iframe>
-            <EmptyState v-else text="暂无可预览内容" />
-          </div>
-        </article>
-      </div>
-    </Transition>
+    <MaterialPreviewModal :open="!!previewItem" :item="previewItem" :detail="previewDetail" :loading="previewItem ? isPending(`preview-material-${previewItem.id}`) : false" @close="closePreview" />
     <Transition name="modal-pop">
       <div v-if="lessonPreview" class="modal-mask">
         <article class="modal lesson-preview-modal">
-          <div class="modal-head"><Presentation :size="20" /><h2>{{ lessonPreview.lesson.title }}</h2><button class="icon-action" @click="lessonPreview = null"><X :size="16" />关闭</button></div>
+          <div class="modal-head"><Presentation :size="20" /><h2>{{ lessonPreview.lesson.title }}</h2><button class="icon-action modal-close-action" aria-label="关闭" title="关闭" @click="lessonPreview = null"><X :size="16" />关闭</button></div>
           <div class="lesson-preview-layout">
             <aside>
               <button v-for="page in lessonPreview.pages" :key="page.id" :class="{ active: lessonPreviewPageId === page.id }" @click="lessonPreviewPageId = page.id">
@@ -536,7 +536,7 @@
             <Sparkles :size="20" />
             <h2>编辑课堂测验</h2>
             <span class="tag" :class="statusClass(quizEditor.status)">{{ statusText(quizEditor.status) }}</span>
-            <button class="icon-action" @click="quizEditorOpen = false"><X :size="16" />关闭</button>
+            <button class="icon-action modal-close-action" aria-label="关闭" title="关闭" @click="quizEditorOpen = false"><X :size="16" />关闭</button>
           </div>
           <div class="quiz-editor-layout">
             <aside class="quiz-editor-side">
@@ -617,6 +617,7 @@ import AppProgress from "../components/AppProgress.vue";
 import AppSelect from "../components/AppSelect.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import LoadingMark from "../components/LoadingMark.vue";
+import MaterialPreviewModal from "../components/MaterialPreviewModal.vue";
 import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
@@ -625,6 +626,16 @@ import AdminChart from "./admin/AdminChart.vue";
 const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string]; authed: [user: UserType] }>();
 const router = useRouter();
+
+type UploadQueueItem = {
+  id: number;
+  file: File;
+  chapter_id: number;
+  category: string;
+  progress: number;
+  status: "pending" | "uploading" | "uploaded" | "failed";
+  error: string;
+};
 
 const active = ref(props.pageKey || "teacherDashboard");
 const sidebarCollapsed = ref(localStorage.getItem("teacher_sidebar_collapsed") !== "0");
@@ -660,14 +671,13 @@ const chapterKeyword = ref("");
 const materialSort = ref("time");
 const lessonSort = ref("created");
 const uploadOpen = ref(false);
-const uploadQueue = ref<Array<{ id: number; file: File; chapter_id: number; category: string }>>([]);
+const uploadQueue = ref<UploadQueueItem[]>([]);
 const chapterNameOpen = ref(false);
 const chapterNameDraft = ref("");
 const chapterNameInput = ref<HTMLInputElement | null>(null);
 const removedChapterIds = ref<number[]>([]);
 const previewItem = ref<any | null>(null);
 const previewDetail = ref<MaterialDetail | any | null>(null);
-const previewMode = ref<"markdown" | "file">("markdown");
 const currentPageId = ref<number | null>(null);
 const scriptDraft = ref("");
 const analysisRange = ref("本月");
@@ -780,6 +790,29 @@ const uploadChapterRows = computed(() => {
   });
 });
 const uploadChapterOptions = computed(() => [{ label: "未分章节", value: 0 }, ...uploadChapterRows.value.map((chapter: any) => ({ label: chapter.title || "未命名章节", value: chapter.id }))]);
+const uploadCompletedCount = computed(() => uploadQueue.value.filter((item) => item.status === "uploaded").length);
+const uploadActiveCount = computed(() => uploadQueue.value.filter((item) => item.status === "uploading").length);
+const uploadFailedCount = computed(() => uploadQueue.value.filter((item) => item.status === "failed").length);
+const uploadOverallPercent = computed(() => {
+  if (!uploadQueue.value.length) return 0;
+  const total = uploadQueue.value.reduce((sum, item) => sum + Math.max(0, Math.min(100, Number(item.progress) || 0)), 0);
+  return Math.round(total / uploadQueue.value.length);
+});
+const uploadProgressTone = computed<"primary" | "success" | "warning" | "danger">(() => {
+  if (!uploadQueue.value.length) return "primary";
+  if (uploadFailedCount.value && !uploadCompletedCount.value && !uploadActiveCount.value) return "danger";
+  if (uploadFailedCount.value) return "warning";
+  if (uploadCompletedCount.value === uploadQueue.value.length) return "success";
+  return "primary";
+});
+const uploadProgressText = computed(() => {
+  if (!uploadQueue.value.length) return "";
+  const total = uploadQueue.value.length;
+  const parts = [`已提交 ${uploadCompletedCount.value}/${total}`];
+  if (uploadActiveCount.value) parts.push(`上传中 ${uploadActiveCount.value}`);
+  if (uploadFailedCount.value) parts.push(`失败 ${uploadFailedCount.value}`);
+  return parts.join(" · ");
+});
 const filteredCourses = computed(() => courses.value.filter((course) => (!courseFilter.keyword || course.name.includes(courseFilter.keyword)) && (!courseFilter.term || course.term === courseFilter.term) && (!courseFilter.status || course.status === courseFilter.status)));
 const filteredChapters = computed(() => (materialSummary.value.chapters || []).filter((chapter: any) => !chapterKeyword.value || chapter.title.includes(chapterKeyword.value)));
 const filteredMaterials = computed(() => {
@@ -836,23 +869,6 @@ const materialStatusCards = computed(() => [
   { key: "pending", label: "待处理", value: Number(materialStatusCounts.value.pending || materialStatusCounts.value.review || 0), tone: "primary", icon: FileText },
   { key: "failed", label: "失败", value: Number(materialStatusCounts.value.failed || 0), tone: "danger", icon: XCircle }
 ]);
-const previewMarkdownText = computed(() => {
-  const pagesPayload = previewDetail.value?.pages || [];
-  if (pagesPayload.length) {
-    return pagesPayload
-      .map((page: any) => {
-        const title = page.page_title || `第${page.page_number || ""}页`;
-        const body = extractStructuredText(page.page_text);
-        if (!body) return "";
-        return `## ${title}\n\n${body}`;
-      })
-      .filter(Boolean)
-      .join("\n\n---\n\n");
-  }
-  return extractStructuredText(previewDetail.value?.material?.extracted_text || previewItem.value?.extracted_text || "");
-});
-const hasPreviewMarkdown = computed(() => Boolean(previewMarkdownText.value.trim()));
-const previewMarkdownHtml = computed(() => renderRichText(previewMarkdownText.value));
 const lessonAnalysisLabels = computed(() => (analysis.value.lesson_completion || []).map((item: any) => item.title));
 const lessonAnalysisSeries = computed(() => [{ name: "完成率", data: (analysis.value.lesson_completion || []).map((item: any) => item.completion_rate || item.average_progress || 0), color: "#10B981" }]);
 const analysisTimeLabels = computed(() => (analysis.value.study_time_series || []).map((item: any) => item.label));
@@ -1456,10 +1472,23 @@ async function openUploadModal() {
   });
 }
 function materialRowStatus(item: any) {
-  return isMaterialProcessing(item) ? "processing" : String(item?.parse_status || "");
+  if (isMaterialProcessing(item)) return "processing";
+  if (isMaterialPending(item)) return "pending";
+  return String(item?.parse_status || "");
+}
+function isMaterialPending(item: any) {
+  return String(item?.parse_status || "") === "pending" || String(item?.vector_status || "") === "pending";
 }
 function isMaterialProcessing(item: any) {
   return String(item?.parse_status || "") === "processing" || String(item?.vector_status || "") === "processing";
+}
+function isMaterialRetryBlocked(item: any) {
+  return isMaterialPending(item) || isMaterialProcessing(item);
+}
+function materialRetryActionText(item: any) {
+  if (isMaterialProcessing(item)) return "解析中";
+  if (isMaterialPending(item)) return "待处理";
+  return "重新解析";
 }
 function markMaterialReprocessing(id: number) {
   materialProcessingOverrides[id] = { startedAt: Date.now(), seenProcessing: false };
@@ -1503,29 +1532,85 @@ function scheduleMaterialRefreshes() {
     materialRefreshTimers.push(timer);
   });
 }
-function pickUploadFiles(event: Event) { const files = Array.from((event.target as HTMLInputElement).files || []); uploadQueue.value = files.map((file, index) => ({ id: Date.now() + index, file, chapter_id: selectedChapterId.value, category: "courseware" })); }
+function closeUploadModal() {
+  if (isPending("upload-materials")) return;
+  uploadOpen.value = false;
+}
+function uploadItemTone(item: UploadQueueItem) {
+  if (item.status === "failed") return "danger";
+  if (item.status === "uploaded") return "success";
+  return "primary";
+}
+function uploadItemText(item: UploadQueueItem) {
+  if (item.status === "uploaded") return "已提交解析";
+  if (item.status === "uploading") return item.progress > 0 ? `上传中 ${item.progress}%` : "上传中";
+  if (item.status === "failed") return item.error || "上传失败";
+  return "待上传";
+}
+function pickUploadFiles(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  const start = Date.now() + uploadQueue.value.length;
+  uploadQueue.value = [
+    ...uploadQueue.value,
+    ...files.map((file, index) => ({
+      id: start + index,
+      file,
+      chapter_id: selectedChapterId.value,
+      category: "courseware",
+      progress: 0,
+      status: "pending" as const,
+      error: "",
+    })),
+  ];
+  input.value = "";
+}
 function removeUpload(id: number) { uploadQueue.value = uploadQueue.value.filter((item) => item.id !== id); }
 async function uploadMaterials() {
   if (!ensureCurrentCourseOperable()) return;
   await withAction("upload-materials", async () => {
+    if (!currentCourse.value) return;
     let successCount = 0;
+    let failureCount = 0;
     for (const item of uploadQueue.value) {
+      item.progress = 0;
+      item.status = "uploading";
+      item.error = "";
       const form = new FormData();
-      form.set("course_id", String(currentCourse.value!.id));
+      form.set("course_id", String(currentCourse.value.id));
       form.set("title", item.file.name.replace(/\.[^.]+$/, ""));
       form.set("category", item.category);
       if (item.chapter_id) form.set("chapter_id", String(item.chapter_id));
       form.set("file", item.file);
-      const uploaded = await run(() => api.post("/materials", form));
-      if (uploaded) successCount += 1;
+      try {
+        await api.upload("/materials", form, {
+          onProgress: ({ percent }) => {
+            item.progress = percent;
+          },
+        });
+        item.progress = 100;
+        item.status = "uploaded";
+        successCount += 1;
+      } catch (error) {
+        item.status = "failed";
+        item.error = (error as Error).message;
+        failureCount += 1;
+      }
     }
-    if (!successCount) return;
-    emit("notice", "success", successCount === uploadQueue.value.length ? "已上传" : `已上传 ${successCount}/${uploadQueue.value.length} 个文件`);
-    uploadOpen.value = false;
-    uploadQueue.value = [];
-    await loadMaterials();
-    await loadCourseHome();
-    scheduleMaterialRefreshes();
+    if (successCount) {
+      await loadMaterials();
+      await loadCourseHome();
+      scheduleMaterialRefreshes();
+    }
+    if (!failureCount) {
+      emit("notice", "success", successCount === 1 ? "资料已上传，正在解析" : `已上传 ${successCount} 个文件，正在解析`);
+      uploadOpen.value = false;
+      uploadQueue.value = [];
+      return;
+    }
+    uploadQueue.value = uploadQueue.value.filter((item) => item.status !== "uploaded");
+    emit("notice", successCount ? "warning" : "error", successCount ? `已上传 ${successCount} 个文件，${failureCount} 个失败` : `上传失败，${failureCount} 个文件未提交`);
   });
 }
 async function deleteMaterial(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`delete-material-${id}`, async () => { await run(() => api.delete(`/materials/${id}`), "已删除"); await loadMaterials(); }); }
@@ -1542,19 +1627,12 @@ async function reprocessMaterial(id: number) {
 function closePreview() {
   previewItem.value = null;
   previewDetail.value = null;
-  previewMode.value = "markdown";
 }
 async function previewMaterial(item: any) {
-  if (isMaterialProcessing(item)) {
-    emit("notice", "info", "资料正在解析中，完成后可预览");
-    return;
-  }
   previewItem.value = item;
   previewDetail.value = null;
-  previewMode.value = "markdown";
   const detail = await withAction<MaterialDetail>(`preview-material-${item.id}`, () => api.get(`/materials/${item.id}`));
   if (detail) previewDetail.value = detail;
-  if (!hasPreviewMarkdown.value && item.preview_url) previewMode.value = "file";
 }
 async function openPptWorkbench(materialId: number) {
   if (!ensureCurrentCourseOperable()) return;
@@ -1847,7 +1925,7 @@ function onTeacherDocumentKeydown(event: KeyboardEvent) {
   uploadOpen.value = false;
   chapterNameOpen.value = false;
   reminderOpen.value = false;
-  previewItem.value = null;
+  closePreview();
   lessonPreview.value = null;
   quizEditorOpen.value = false;
   studentDrawer.value = null;

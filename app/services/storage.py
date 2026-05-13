@@ -1,3 +1,4 @@
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
@@ -193,6 +194,46 @@ class StorageService:
 
     def absolute_path(self, relative_path: str) -> Path:
         return STORAGE_DIR / relative_path
+
+    def read_bytes(self, relative_path: str, db: Session | None = None) -> bytes:
+        path = self.absolute_path(relative_path)
+        if path.is_file():
+            return path.read_bytes()
+
+        oss_config = self._resolve_oss_config(db)
+        if oss_config is None:
+            raise FileNotFoundError(relative_path)
+        if oss_config.provider != "aliyun":
+            raise bad_request(f"当前启用的存储服务不是阿里云 OSS: {oss_config.provider}")
+
+        try:
+            import oss2
+        except ImportError as exc:
+            raise bad_request("缺少 oss2 依赖，无法读取 OSS 文件") from exc
+
+        config = self._clean_oss_config(oss_config.config)
+        missing = self._missing_oss_fields(config)
+        if missing:
+            raise bad_request(f"OSS 配置缺少字段: {', '.join(missing)}")
+        region = config.get("region")
+        endpoint = self._oss_endpoint(config)
+        try:
+            if region and config.get("signature_version", "v4") != "v1":
+                auth = oss2.AuthV4(config["access_key_id"], config["access_key_secret"])
+                bucket = oss2.Bucket(auth, endpoint, config["bucket"], region=region)
+            else:
+                auth = oss2.Auth(config["access_key_id"], config["access_key_secret"])
+                bucket = oss2.Bucket(auth, endpoint, config["bucket"])
+            result = bucket.get_object(relative_path)
+            buffer = BytesIO()
+            while True:
+                chunk = result.read(1024 * 256)
+                if not chunk:
+                    break
+                buffer.write(chunk)
+            return buffer.getvalue()
+        except Exception as exc:
+            raise bad_request(f"OSS 文件读取失败: {exc}") from exc
 
     def public_url(self, relative_path: str, db: Session | None = None) -> str:
         oss_config = self._resolve_oss_config(db)

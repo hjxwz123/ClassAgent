@@ -23,12 +23,23 @@ async def lifespan(_: FastAPI):
     db_session.init_db()
     for directory in (STORAGE_DIR, UPLOAD_DIR, GENERATED_DIR, VECTOR_DIR):
         directory.mkdir(parents=True, exist_ok=True)
+    settings = get_settings()
+    requeue_material_ids: list[int] = []
     with db_session.SessionLocal() as db:
         ensure_default_admin(db)
         ensure_system_settings(db)
-        from app.services.materials import recover_stale_material_processing_tasks
+        from app.services.materials import recover_interrupted_material_processing, recover_stale_material_processing_tasks
 
-        recover_stale_material_processing_tasks(db)
+        if settings.celery_task_always_eager:
+            requeue_material_ids = recover_interrupted_material_processing(db, assume_local_queue_lost=True)
+        else:
+            recover_stale_material_processing_tasks(db)
+    if settings.celery_task_always_eager:
+        from app.services.materials import dispatch_material_processing, start_material_processing_runtime
+
+        start_material_processing_runtime()
+        for material_id in requeue_material_ids:
+            dispatch_material_processing(material_id)
     request_log_writer.start()
     try:
         yield
