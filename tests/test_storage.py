@@ -97,6 +97,45 @@ def test_aliyun_oss_upload_failure_returns_bad_request(client, monkeypatch):
     assert "OSS 上传失败" in exc_info.value.detail["message"]
 
 
+def test_aliyun_oss_read_failure_hides_provider_detail(client, monkeypatch):
+    _add_service_config(
+        provider="aliyun",
+        config={
+            "access_key_id": "ak",
+            "access_key_secret": "secret",
+            "bucket": "classagent",
+            "region": "cn-beijing",
+        },
+    )
+
+    class FakeBucket:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def get_object(self, *args, **kwargs):
+            raise RuntimeError("{'Code': 'NoSuchKey', 'Key': 'uploads/missing-sensitive.txt', 'RequestId': 'secret-request'}")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "oss2",
+        SimpleNamespace(
+            Auth=lambda *args, **kwargs: object(),
+            AuthV4=lambda *args, **kwargs: object(),
+            Bucket=FakeBucket,
+        ),
+    )
+
+    with db_session.SessionLocal() as db, pytest.raises(AppError) as exc_info:
+        storage_service.read_bytes("uploads/missing-sensitive.txt", db=db)
+
+    assert exc_info.value.status_code == 400
+    message = exc_info.value.detail["message"]
+    assert message == "资料文件读取失败，请稍后重试或联系管理员"
+    assert "NoSuchKey" not in message
+    assert "missing-sensitive" not in message
+    assert "secret-request" not in message
+
+
 def test_aliyun_oss_deletes_disposable_local_upload_copy(client, monkeypatch):
     _add_service_config(
         provider="aliyun",

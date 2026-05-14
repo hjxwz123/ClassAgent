@@ -136,7 +136,7 @@ flowchart TB
   subgraph Infra[数据与外部服务]
     MySQL[(MySQL)]
     Redis[(Redis / Celery)]
-    Vector[(Chroma 向量库)]
+    Vector[(Chroma / Qdrant 向量库)]
     OSS[对象存储]
     OCR[OCR]
     DocMind[文档解析]
@@ -174,7 +174,7 @@ flowchart TB
 - Pydantic / Pydantic Settings
 - MySQL
 - Redis / Celery
-- ChromaDB
+- ChromaDB / Qdrant
 - AI 服务、Embedding、OCR、DocMind、TTS、OSS 适配层
 
 ### 前端
@@ -293,7 +293,12 @@ frontend/dist
 | `CELERY_BROKER_URL` | Celery Broker |
 | `CELERY_RESULT_BACKEND` | Celery 结果后端 |
 | `PUBLIC_BASE_URL` | 外部访问基础地址 |
-| `CHROMA_PERSIST_DIR` | 向量库持久化目录 |
+| `VECTOR_STORE_PROVIDER` | 向量库实现，支持 `chroma` 或 `qdrant` |
+| `CHROMA_PERSIST_DIR` | Chroma 本地持久化目录 |
+| `QDRANT_URL` | Qdrant 服务地址 |
+| `QDRANT_API_KEY` | Qdrant API Key，本地无认证时可留空 |
+| `QDRANT_COLLECTION_PREFIX` | Qdrant collection 前缀 |
+| `QDRANT_TIMEOUT_SECONDS` | Qdrant 请求超时时间 |
 | `EMBEDDING_DIMENSION` | Embedding 维度 |
 | `EXTERNAL_AI_MODE` | 外部 AI 服务模式 |
 | `EXTERNAL_STORAGE_MODE` | 外部存储模式 |
@@ -347,7 +352,7 @@ npm run preview
 
 - 使用 MySQL 和 Redis 作为基础服务。
 - 上传文件、生成音频、解析产物和日志建议接入对象存储或独立持久化卷。
-- 向量库目录需要随环境隔离，避免测试和生产数据混用。
+- Chroma 向量库目录或 Qdrant collection 前缀需要随环境隔离，避免测试和生产数据混用。
 - 后端建议放在反向代理后，并配置 HTTPS、上传大小限制和长连接超时。
 - SSE 问答流式接口需要关闭代理缓冲或为对应路径单独配置。
 - 管理员端应限制访问来源，并定期轮换模型和云服务密钥。

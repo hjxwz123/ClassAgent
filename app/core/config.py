@@ -43,8 +43,12 @@ class Settings(BaseSettings):
     material_processing_stale_minutes: int = 10
     material_processing_watchdog_interval_seconds: int = 30
     public_base_url: str = "http://127.0.0.1:8000"
-    vector_store_provider: Literal["chroma"] = "chroma"
+    vector_store_provider: Literal["chroma", "qdrant"] = "chroma"
     chroma_persist_dir: str = str(VECTOR_DIR / "chroma")
+    qdrant_url: str = "http://127.0.0.1:6333"
+    qdrant_api_key: str | None = None
+    qdrant_collection_prefix: str = "classagent"
+    qdrant_timeout_seconds: float = 10.0
     embedding_dimension: int = 1536
     vector_query_limit: int = 8
     vector_max_distance: float = 0.9

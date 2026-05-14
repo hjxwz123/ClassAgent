@@ -931,16 +931,29 @@ def get_service_health(db: Session) -> dict:
     active_chunk_ids = set(db.scalars(active_chunk_statement))
     chunk_count = len(active_chunk_ids)
     try:
-        vector_ready = len(active_chunk_ids & vector_store.indexed_chunk_ids(db))
+        vector_available = vector_store.is_available()
+    except Exception:
+        vector_available = False
+    try:
+        vector_ready = len(active_chunk_ids & vector_store.indexed_chunk_ids(db)) if vector_available else 0
     except Exception:
         vector_ready = 0
-    if not VECTOR_DIR.exists():
+        vector_available = False
+    if not vector_available:
         vector_status = "down"
     elif chunk_count and vector_ready < chunk_count:
         vector_status = "processing"
     else:
         vector_status = "ok"
-    items.append({"key": "vector", "name": "向量数据库", "status": vector_status, "metric": f"{vector_ready}/{chunk_count}", "detail": "Chroma"})
+    items.append(
+        {
+            "key": "vector",
+            "name": "向量数据库",
+            "status": vector_status,
+            "metric": f"{vector_ready}/{chunk_count}",
+            "detail": vector_store.provider_label,
+        }
+    )
 
     try:
         broker_client = redis.Redis.from_url(settings.celery_broker_url, socket_connect_timeout=2, socket_timeout=2)
@@ -1254,7 +1267,7 @@ def _database_path_from_sqlite_url(database_url: str) -> Path:
 
 
 def _copy_vectors(target_dir: Path) -> None:
-    if VECTOR_DIR.exists():
+    if vector_store.provider == "chroma" and VECTOR_DIR.exists():
         shutil.copytree(VECTOR_DIR, target_dir / "vectors", dirs_exist_ok=True)
 
 
@@ -1298,7 +1311,13 @@ def create_backup(db: Session, *, trigger_user_id: int | None) -> BackupRecord:
             with dump_target.open("wb") as output:
                 subprocess.run(_mysql_command_args(bind_url, "mysqldump"), stdout=output, check=True, timeout=300)
         (temp_root / "metadata.json").write_text(
-            json.dumps({"database": "sqlite" if database_url.startswith("sqlite:///") else "mysql"}, ensure_ascii=False),
+            json.dumps(
+                {
+                    "database": "sqlite" if database_url.startswith("sqlite:///") else "mysql",
+                    "vector_store_provider": vector_store.provider,
+                },
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
         _copy_vectors(temp_root)
@@ -1405,7 +1424,7 @@ def restore_backup(db: Session, *, backup_id: int) -> dict:
                     subprocess.run(_mysql_command_args(bind_url, "mysql"), stdin=input_file, check=True, timeout=300)
             else:
                 raise bad_request("备份文件与当前数据库类型不匹配")
-            if vector_backup.exists():
+            if vector_store.provider == "chroma" and vector_backup.exists():
                 if VECTOR_DIR.exists():
                     shutil.rmtree(VECTOR_DIR)
                 shutil.copytree(vector_backup, VECTOR_DIR)

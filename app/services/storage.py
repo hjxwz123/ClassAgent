@@ -1,3 +1,4 @@
+import logging
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -30,6 +31,8 @@ OSS_DELETE_LOCAL_AFTER_UPLOAD_PREFIXES = (
     "generated/audio/",
     "docmind_images/",
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 class StorageService:
@@ -233,7 +236,8 @@ class StorageService:
                 buffer.write(chunk)
             return buffer.getvalue()
         except Exception as exc:
-            raise bad_request(f"OSS 文件读取失败: {exc}") from exc
+            LOGGER.warning("OSS file read failed for %s", relative_path, exc_info=True)
+            raise bad_request("资料文件读取失败，请稍后重试或联系管理员") from exc
 
     def public_url(self, relative_path: str, db: Session | None = None) -> str:
         oss_config = self._resolve_oss_config(db)
