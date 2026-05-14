@@ -100,6 +100,7 @@ const previewSize = ref({ width: 0, height: 0 });
 let resizeObserver: ResizeObserver | null = null;
 let pdfResizeTimer: number | undefined;
 let pdfLastRenderSize = { width: 0, height: 0 };
+let disposed = false;
 const apiBase = (import.meta.env.VITE_API_BASE_URL || "/api/v1").replace(/\/$/, "");
 
 function widestElement(...elements: Array<HTMLElement | null | undefined>) {
@@ -222,6 +223,7 @@ const pdfSource = computed(() => {
 });
 
 async function loadFile() {
+  if (disposed) return;
   const material = props.material;
   requestSeq.value += 1;
   const currentSeq = requestSeq.value;
@@ -258,6 +260,7 @@ async function loadFile() {
       if (currentSeq !== requestSeq.value) return;
       state.value = "ready";
       await nextTick();
+      if (disposed || currentSeq !== requestSeq.value) return;
       updatePreviewSize();
       scrollToPage();
       return;
@@ -273,6 +276,7 @@ async function loadFile() {
     }
     state.value = "ready";
     await nextTick();
+    if (disposed || currentSeq !== requestSeq.value) return;
     updatePreviewSize();
     scrollToPage();
   } catch (error) {
@@ -302,6 +306,7 @@ async function resolveResponseError(response: Response) {
 }
 
 async function handlePdfLoaded(documentProxy: any) {
+  if (disposed) return;
   pdfDoc.value = documentProxy ? markRaw(documentProxy) : null;
   await updatePdfLayout();
   handleRendered();
@@ -310,7 +315,12 @@ async function handlePdfLoaded(documentProxy: any) {
 function isPdfRenderRaceError(error: unknown) {
   const name = (error as Error)?.name || "";
   const message = (error as Error)?.message || "";
-  return name === "RenderingCancelledException" || message.includes("Cannot use the same canvas during multiple render() operations");
+  return (
+    name === "RenderingCancelledException" ||
+    message.includes("Cannot use the same canvas during multiple render() operations") ||
+    message.includes("sendWithPromise") ||
+    message.includes("Worker was destroyed")
+  );
 }
 
 function recordPdfRenderSize() {
@@ -318,6 +328,7 @@ function recordPdfRenderSize() {
 }
 
 function schedulePdfRerender(force = false) {
+  if (disposed) return;
   if (normalizedType.value !== "pdf" || state.value !== "ready" || !pdfBytes.value) return;
   const next = readPreviewSize();
   const widthChanged = Math.abs(next.width - pdfLastRenderSize.width) >= 12;
@@ -332,13 +343,15 @@ function schedulePdfRerender(force = false) {
 }
 
 async function updatePdfLayout() {
-  if (normalizedType.value !== "pdf" || !pdfDoc.value || !stageRef.value) return;
+  if (disposed || normalizedType.value !== "pdf" || !pdfDoc.value || !stageRef.value) return;
+  const doc = pdfDoc.value;
+  const stage = stageRef.value;
   try {
     const pageNumber = Math.max(1, Number(pdfPageProp.value || 1));
-    const page = await pdfDoc.value.getPage(pageNumber);
+    const page = await doc.getPage(pageNumber);
+    if (disposed || doc !== pdfDoc.value || stage !== stageRef.value) return;
     const viewport = page.getViewport({ scale: 1 });
     const container = containerRef.value;
-    const stage = stageRef.value;
     const widthSource = widestElement(stage, container, container?.parentElement as HTMLElement | null) || stage;
     const styles = window.getComputedStyle(stage);
     const paddingX = Number.parseFloat(styles.paddingLeft || "0") + Number.parseFloat(styles.paddingRight || "0");
@@ -351,6 +364,7 @@ async function updatePdfLayout() {
     pdfFitsHeight.value = isSinglePdfPage.value && renderedHeight <= availableHeight + 1;
     pdfScale.value = basePdfRenderScale();
   } catch (error) {
+    if (isPdfRenderRaceError(error)) return;
     handleError(error);
   }
 }
@@ -386,8 +400,10 @@ function scrollToPage() {
 }
 
 function handleRendered() {
+  if (disposed) return;
   if (state.value === "loading") state.value = "ready";
   void nextTick(async () => {
+    if (disposed) return;
     if (normalizedType.value === "pdf") recordPdfRenderSize();
     await updatePdfLayout();
     scrollToPage();
@@ -403,6 +419,7 @@ function handlePdfRenderError(error: unknown) {
 }
 
 function handleError(error: unknown) {
+  if (disposed || isPdfRenderRaceError(error)) return;
   state.value = "error";
   errorText.value = (error as Error)?.message || "原课件预览失败";
 }
@@ -454,7 +471,9 @@ watch(
 );
 
 onMounted(() => {
+  disposed = false;
   resizeObserver = new ResizeObserver(() => {
+    if (disposed) return;
     updatePreviewSize();
     void updatePdfLayout();
   });
@@ -468,6 +487,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  disposed = true;
   requestSeq.value += 1;
   if (pdfResizeTimer) window.clearTimeout(pdfResizeTimer);
   resizeObserver?.disconnect();
