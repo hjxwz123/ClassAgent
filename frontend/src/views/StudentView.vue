@@ -158,6 +158,7 @@
           </section>
           <section v-else-if="classroomTab === 'qa'" key="qa" class="class-chat">
             <div class="class-chat-scroll">
+              <div v-if="classConversationLoading && !classMessages.length" class="chat-local-loading compact"><LoadingMark :label="false" /></div>
               <ChatList :messages="classMessages" :thinking="classThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" @toggle-thought="toggleThought" @copy="copyText" />
             </div>
             <div class="class-chat-dock">
@@ -175,7 +176,7 @@
               </div>
               <form class="chat-input compact" @submit.prevent="askInClass">
                 <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
-                <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
+                <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || (classConversationLoading && !classMessages.length) || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
                 <textarea
                   ref="classQuestionInput"
                   v-model="classQuestion"
@@ -185,7 +186,7 @@
                   @compositionend="handleQuestionCompositionEnd('class')"
                   @keydown="handleClassQuestionKeydown"
                 ></textarea>
-                <button :disabled="(!classQuestion.trim() && !classQaAttachments.length) || classThinking || classQaImageUploading" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
+                <button :disabled="(!classQuestion.trim() && !classQaAttachments.length) || classThinking || (classConversationLoading && !classMessages.length) || classQaImageUploading" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
               </form>
               <div class="quick-tags">
                 <button v-for="item in quickPageQuestions" :key="item" @click="sendQuickClass(item)">{{ item }}</button>
@@ -393,8 +394,15 @@
               <div v-if="todayTasks.length" class="circle-stat"><RingProgress :value="todayDoneRate" /><span>{{ doneTasks }}/{{ todayTasks.length }}</span></div>
               <button v-else class="white-pill" @click="go('studentPlans')"><Plus :size="14" />制定计划</button>
             </article>
-            <article v-if="todayTasks.length" class="today-plan">
-              <CalendarCheck :size="20" /><div><strong>今日计划</strong><small>查看并打卡今天的学习任务</small></div><span>{{ doneTasks }}/{{ todayTasks.length }}</span><AppProgress :value="todayDoneRate" /><button @click="go('studentPlans')">查看</button>
+            <article class="today-plan" :class="{ 'is-empty': !todayTasks.length }">
+              <CalendarCheck :size="20" />
+              <div class="today-plan-copy">
+                <strong>今日计划</strong>
+                <small>{{ todayTasks.length ? todayPlanSummary : '今天还没有学习安排，点击制定计划后可在首页直接查看和打卡' }}</small>
+              </div>
+              <span v-if="todayTasks.length" class="today-plan-count">{{ doneTasks }}/{{ todayTasks.length }}</span>
+              <AppProgress v-if="todayTasks.length" :value="todayDoneRate" />
+              <button @click="go('studentPlans')">{{ todayTasks.length ? '查看' : '制定计划' }}</button>
             </article>
             <article class="continue-card">
               <div class="continue-cover" :style="courseCoverStyle(continueLesson?.course || activeCourse)"><Presentation :size="32" /><span>P{{ continueProgressPage }}</span></div>
@@ -411,12 +419,14 @@
             <div class="home-grid">
               <article class="panel-card">
                 <div class="section-head"><h2><BookOpen :size="18" />我的课程</h2><button @click="go('studentCourses')">查看全部</button></div>
-                <button v-for="course in courses.slice(0, 3)" :key="course.id" class="home-course" @click="openCourse(course.id)">
-                  <span :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)">
-                    <strong v-if="!course.cover_url" class="course-cover-mini-text">{{ courseCoverText(course) }}</strong>
-                  </span>
-                  <div><strong>{{ course.name }}</strong><small>{{ course.teacher?.nickname || '教师' }} · {{ course.term }}</small><AppProgress :value="course.progress_percent || 0" /><em>{{ course.progress_percent || 0 }}%</em></div>
-                </button>
+                <div v-if="courses.length" class="home-course-strip" :class="{ 'single-course': courses.length === 1 }">
+                  <button v-for="course in courses" :key="course.id" class="home-course" @click="openCourse(course.id)">
+                    <span :class="{ 'has-image': course.cover_url }" :style="courseCoverStyle(course)">
+                      <strong v-if="!course.cover_url" class="course-cover-mini-text">{{ courseCoverText(course) }}</strong>
+                    </span>
+                    <div><strong>{{ course.name }}</strong><small>{{ course.teacher?.nickname || '教师' }} · {{ course.term }}</small><AppProgress :value="course.progress_percent || 0" /><em>{{ course.progress_percent || 0 }}%</em></div>
+                  </button>
+                </div>
                 <button class="join-dashed" @click="joinOpen = true"><Plus :size="16" />加入新课程</button>
               </article>
               <article class="panel-card">
@@ -618,9 +628,10 @@
                     <button class="action-circle-btn" type="button" :class="{ active: historyOpen }" title="问答历史" aria-label="问答历史" @click="toggleQaHistory"><Clock :size="18" /></button>
                   </div>
                 </div>
-                <div v-if="!globalMessages.length" class="qa-welcome"><Sparkles :size="48" /><h2>{{ courseScopeName }}专属问答</h2></div>
-                <ChatList v-else :messages="globalMessages" :thinking="globalThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
-                <div v-if="!globalMessages.length" class="prompt-grid"><button v-for="item in promptCards" :key="item.text" @click="sendGlobalQuick(item.text)"><component :is="item.icon" :size="18" />{{ item.text }}</button></div>
+                <div v-if="globalConversationLoading && !globalMessages.length" class="chat-local-loading"><LoadingMark :label="false" /></div>
+                <div v-if="!globalMessages.length && !globalConversationLoading" class="qa-welcome"><Sparkles :size="48" /><h2>{{ courseScopeName }}专属问答</h2></div>
+                <ChatList v-else-if="globalMessages.length" :messages="globalMessages" :thinking="globalThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
+                <div v-if="!globalMessages.length && !globalConversationLoading" class="prompt-grid"><button v-for="item in promptCards" :key="item.text" @click="sendGlobalQuick(item.text)"><component :is="item.icon" :size="18" />{{ item.text }}</button></div>
                 <div class="qa-latest-anchor" aria-hidden="true"></div>
               </div>
             </section>
@@ -1126,7 +1137,7 @@
             </div>
             <section class="input-box">
               <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
-              <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
+              <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || (globalConversationLoading && !globalMessages.length) || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
               <textarea
                 v-model="globalQuestion"
                 placeholder="输入问题"
@@ -1135,7 +1146,7 @@
                 @compositionend="handleQuestionCompositionEnd('global')"
                 @keydown="handleGlobalQuestionKeydown"
               ></textarea>
-              <button :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || globalThinking || globalQaImageUploading" :data-loading="globalThinking" class="send-btn"><Send :size="20" /></button>
+              <button :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || globalThinking || (globalConversationLoading && !globalMessages.length) || globalQaImageUploading" :data-loading="globalThinking" class="send-btn"><Send :size="20" /></button>
             </section>
           </div>
         </form>
@@ -1223,7 +1234,7 @@ import "../styles/student/classagent.css";
 
 type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };
 type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: any[]; attachments?: QaAttachment[]; thought?: string; thoughtOpen?: boolean; record_id?: number; favorite?: boolean; outOfScope?: boolean; streaming?: boolean };
-type QaHistoryConversation = { id: number; conversation_id: number; question: string; answer: string; created_at: string; attachments?: QaAttachment[]; sources?: any[]; thinking_process?: string; reasoning_content?: string; thought?: string; is_favorite?: boolean; record_count: number };
+type QaHistoryConversation = { id: number; conversation_id: number; course_id: number; user_id: number; title: string; question: string; answer_preview?: string; created_at: string; updated_at?: string; lesson_page_id?: number | null; attachments?: QaAttachment[]; is_favorite?: boolean; record_count: number };
 type QaInputScope = "class" | "global";
 type StudentSearchResultType = "course" | "lesson" | "material" | "knowledge" | "qa";
 type StudentSearchResult = {
@@ -1246,11 +1257,12 @@ const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "e
 const route = useRoute();
 const router = useRouter();
 
-const LESSON_LAYOUT_STORAGE_KEY = "student_lesson_panel_ratio";
-const LESSON_LAYOUT_DEFAULT_RATIO = 0.28;
+const LESSON_LAYOUT_STORAGE_KEY = "student_lesson_panel_ratio_v2";
+const LESSON_LAYOUT_DEFAULT_RATIO = 0.24;
 const LESSON_LAYOUT_MIN_RATIO = 0.18;
 const LESSON_LAYOUT_MAX_RATIO = 0.62;
 const LESSON_RESIZER_WIDTH = 18;
+const LESSON_LAYOUT_MIN_RIGHT = 336;
 
 function savedLessonPanelRatio() {
   const value = Number(localStorage.getItem(LESSON_LAYOUT_STORAGE_KEY));
@@ -1352,6 +1364,7 @@ const classroomTab = ref<"script" | "activity" | "qa" | "note">("script");
 const classMessages = ref<ChatMessage[]>([]);
 const classQuestion = ref("");
 const classThinking = ref(false);
+const classConversationLoading = ref(false);
 const classConversationId = ref<number | null>(null);
 const classQaImageInput = ref<HTMLInputElement | null>(null);
 const classQuestionInput = ref<HTMLTextAreaElement | null>(null);
@@ -1386,15 +1399,18 @@ let courseHomeLoadSeq = 0;
 let suppressCourseScopedReset = false;
 let qaScrollFrame = 0;
 let lessonSelectionTimer: number | undefined;
+let qaConversationLoadSeq = 0;
+let classConversationLoadSeq = 0;
 
 const globalMessages = ref<ChatMessage[]>([]);
 const globalQuestion = ref("");
 const globalThinking = ref(false);
+const globalConversationLoading = ref(false);
 const globalConversationId = ref<number | null>(null);
 const globalQaImageInput = ref<HTMLInputElement | null>(null);
 const globalQaAttachments = ref<QaAttachment[]>([]);
 const globalQaImageUploading = ref(false);
-const qaHistory = ref<any[]>([]);
+const qaHistory = ref<QaHistoryConversation[]>([]);
 const qaKeyword = ref("");
 const historyOpen = ref(false);
 const showFavorites = ref(false);
@@ -1562,6 +1578,15 @@ const todayTasks = computed(() => {
 });
 const doneTasks = computed(() => todayTasks.value.filter((task: any) => task.status === "done").length);
 const todayDoneRate = computed(() => todayTasks.value.length ? Math.round(doneTasks.value / todayTasks.value.length * 100) : 0);
+const nextTodayTask = computed(() => todayTasks.value.find((task: any) => task.status !== "done") || todayTasks.value[0] || null);
+const todayPlanSummary = computed(() => {
+  const task = nextTodayTask.value;
+  if (!task) return "";
+  const title = String(task.title || "学习任务").trim();
+  const minutes = Number(task.estimated_minutes || 0);
+  const timeText = Number.isFinite(minutes) && minutes > 0 ? `${minutes}分钟` : (task.task_type || "学习");
+  return `${task.status === "done" ? "已完成" : "待完成"}：${title} · ${timeText}`;
+});
 const continueLesson = computed(() => dashboard.value.continue_learning || null);
 const continueProgress = computed(() => continueLesson.value?.progress?.progress_percent || 0);
 const continueProgressPage = computed(() => continueLesson.value?.progress?.current_page || 1);
@@ -1636,13 +1661,12 @@ const lessonAskContextPreview = computed(() => selectionPreviewText(lessonAskCon
 const classQuestionPlaceholder = computed(() => lessonAskContext.value ? "需要问点什么？" : "问问 AI 这一页...");
 const studyLayoutStyle = computed(() => {
   if (compactLessonLayout.value || !aiPanelOpen.value) return undefined;
-  const ratio = clampLessonPanelRatio(lessonPanelRatio.value, lessonLayoutWidth.value || studyMainRef.value?.clientWidth || 0);
-  const right = Math.round(ratio * 1000);
-  const left = Math.max(1, 1000 - right);
-  const leftMin = classroomOriginalMaterial.value ? 680 : 520;
-  const rightMin = 320;
+  const totalWidth = studyMainRef.value?.clientWidth || lessonLayoutWidth.value || 0;
+  const bounds = lessonPanelBounds(totalWidth);
+  const ratio = clampLessonPanelRatio(lessonPanelRatio.value, totalWidth);
+  const rightWidth = Math.round(Math.min(bounds.maxRight, Math.max(bounds.minRight, ratio * bounds.availableWidth)));
   return {
-    gridTemplateColumns: `minmax(min(${leftMin}px,72vw),${left}fr) ${LESSON_RESIZER_WIDTH}px minmax(${rightMin}px,${Math.max(1, right)}fr)`,
+    gridTemplateColumns: `minmax(min(${bounds.minLeft}px,72vw),1fr) ${LESSON_RESIZER_WIDTH}px minmax(${bounds.minRight}px,${rightWidth}px)`,
   };
 });
 const activePageActivities = computed<PageActivity[]>(() => activePage.value?.pedagogy || []);
@@ -1713,29 +1737,13 @@ const audioDuration = computed(() => timeLabel(audioRef.value?.duration || activ
 const completionSummary = computed(() => "本次学习完成度良好，建议继续完成配套练习并整理课时笔记。");
 const filteredQaHistory = computed<QaHistoryConversation[]>(() => {
   const keyword = qaKeyword.value.trim();
-  const groups = new Map<number, QaHistoryConversation>();
-  const lessonConversationIds = new Set(
-    qaHistory.value
-      .filter(isLessonQaRecord)
-      .map((record) => Number(record.conversation_id || record.id))
-      .filter((id) => Number.isFinite(id) && id > 0)
-  );
-  qaHistory.value.forEach((record) => {
-    const conversationId = Number(record.conversation_id || record.id);
-    if (isLessonQaRecord(record) || lessonConversationIds.has(conversationId)) return;
-    if (showFavorites.value && !record.is_favorite) return;
-    if (keyword && !String(record.question || "").includes(keyword) && !String(record.answer || "").includes(keyword)) return;
-    const existing = groups.get(conversationId);
-    if (!existing) {
-      groups.set(conversationId, { ...record, conversation_id: conversationId, record_count: 1 });
-      return;
-    }
-    existing.record_count += 1;
-    const isFavorite = Boolean(existing.is_favorite || record.is_favorite);
-    existing.is_favorite = isFavorite;
-    if (timestampMs(record.created_at) > timestampMs(existing.created_at)) Object.assign(existing, { ...record, conversation_id: conversationId, record_count: existing.record_count, is_favorite: isFavorite });
-  });
-  return [...groups.values()].sort((left, right) => timestampMs(right.created_at) - timestampMs(left.created_at));
+  return qaHistory.value
+    .filter((item) => {
+      if (showFavorites.value && !item.is_favorite) return false;
+      if (!keyword) return true;
+      return [item.title, item.question, item.answer_preview].some((value) => String(value || "").includes(keyword));
+    })
+    .sort((left, right) => timestampMs(right.created_at) - timestampMs(left.created_at));
 });
 const selectedKnowledge = computed(() => knowledge.value.find((item) => item.id === selectedKnowledgeId.value) || knowledge.value[0] || null);
 const knowledgeMastery = computed(() => {
@@ -2087,7 +2095,11 @@ async function loadActive() {
       await loadLessonStudyRoute();
       return;
     }
-    if (active.value === "studentHome") await loadDashboard();
+    if (active.value === "studentHome") {
+      await loadDashboard();
+      const dashboardTasks = Array.isArray(dashboard.value.today_tasks) ? dashboard.value.today_tasks : [];
+      if (!dashboardTasks.length) await loadPlans();
+    }
     if (active.value === "studentCourses") await loadCourses();
     if (["studentQa", "studentWrongBook", "studentTutoring", "studentKnowledge", "studentQuizzes"].includes(active.value) && !courses.value.length) await loadCourses();
     if (["studentCourseHome", "studentMaterials"].includes(active.value)) await loadCourseHome();
@@ -2392,14 +2404,15 @@ async function performGlobalSearch(keyword: string, currentSearchSeq: number) {
         });
       });
       qa.forEach((item: any) => {
-        const score = searchScore(keyword, item?.question, item?.answer, courseName);
+        const answerPreview = item?.answer_preview || item?.answer || "";
+        const score = searchScore(keyword, item?.title, item?.question, answerPreview, courseName);
         if (score < 0) return;
         results.push({
-          key: `qa-${item.id}`,
+          key: `qa-${item.conversation_id || item.id}`,
           type: "qa",
-          title: item?.question || "历史问答",
+          title: item?.title || item?.question || "历史问答",
           subtitle: `${courseName} · ${formatTime(item?.created_at)}`,
-          excerpt: searchExcerpt(item?.answer),
+          excerpt: searchExcerpt(answerPreview),
           courseId,
           qaItem: item,
           rank: score + 55,
@@ -2515,8 +2528,10 @@ function isStudentNavActive(key: string) {
 }
 function courseGradient(id = 1) { const items = ["linear-gradient(135deg,#121614,#00B8D4)", "linear-gradient(135deg,#121614,#2E7D32)", "linear-gradient(135deg,#121614,#D9A05B)", "linear-gradient(135deg,#121614,#D94925)"]; return items[id % items.length]; }
 function courseCoverText(course?: any) {
-  const text = String(course?.name || "课程").replace(/\s+/g, "");
-  return text.slice(0, 4) || "课程";
+  const chars = Array.from(String(course?.name || "课程").replace(/\s+/g, "") || "课程");
+  if (chars.length <= 3) return chars.join("");
+  const coverChars = chars.slice(0, 4);
+  return `${coverChars.slice(0, 2).join("")}\n${coverChars.slice(2, 4).join("")}`;
 }
 function courseCoverStyle(course?: any) {
   if (course?.cover_url) {
@@ -2555,7 +2570,6 @@ function timestampMs(value?: string | Date | null) { return parseAppDate(value)?
 function relativeTime(value?: string | Date | null) { const date = parseAppDate(value); if (!date) return "刚刚"; const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
 function formatTime(value?: string | Date | null) { const date = parseAppDate(value); return date ? date.toLocaleString("zh-CN", { hour12: false, timeZone: BEIJING_TIME_ZONE }) : "-"; }
 function timeLabel(value: number) { if (!Number.isFinite(value)) return "00:00"; return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(Math.floor(value % 60)).padStart(2, "0")}`; }
-function isLessonQaRecord(record: any) { return record?.lesson_page_id !== null && record?.lesson_page_id !== undefined; }
 function payloadList(activity: PageActivity | null | undefined, key: string) {
   const value = activity?.payload?.[key];
   if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8);
@@ -2624,6 +2638,8 @@ function resetClassroomState() {
   classConversationId.value = null;
   classQuestion.value = "";
   classThinking.value = false;
+  classConversationLoading.value = false;
+  classConversationLoadSeq += 1;
   classQaAttachments.value = [];
   classQaImageUploading.value = false;
   clearLessonAskContext();
@@ -2677,7 +2693,7 @@ async function loadLessonStudyRoute() {
       emit("notice", "warning", `学习进度加载失败：${(error as Error).message}`);
     }
     if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId) await loadNote(activePage.value?.id || 0);
-    if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId) await loadClassQaHistory();
+    if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId) void loadClassQaHistory();
   } catch (error) {
     if (loadSeq !== lessonLoadSeq) return;
     resetClassroomState();
@@ -2821,17 +2837,21 @@ async function prepareLessonSelectionQuestion() {
   classQuestionInput.value?.focus();
 }
 
-function clampLessonPanelRatio(value: number, totalWidth = studyMainRef.value?.clientWidth || 0) {
+function lessonPanelBounds(totalWidth = studyMainRef.value?.clientWidth || lessonLayoutWidth.value || 0) {
+  const availableWidth = Math.max(totalWidth - LESSON_RESIZER_WIDTH, 1);
+  const minLeft = classroomOriginalMaterial.value ? 760 : 700;
+  const minRight = LESSON_LAYOUT_MIN_RIGHT;
+  const preferredMaxRight = classroomOriginalMaterial.value ? availableWidth * 0.38 : availableWidth * 0.42;
+  const hardMaxRight = classroomOriginalMaterial.value ? 640 : 680;
+  const maxRight = Math.min(hardMaxRight, Math.max(420, preferredMaxRight), Math.max(minRight, availableWidth - minLeft));
+  return { availableWidth, minLeft, minRight, maxRight };
+}
+
+function clampLessonPanelRatio(value: number, totalWidth = studyMainRef.value?.clientWidth || lessonLayoutWidth.value || 0) {
   if (totalWidth > 900) {
-    const splitterWidth = LESSON_RESIZER_WIDTH;
-    const minLeft = classroomOriginalMaterial.value ? 680 : 520;
-    const minRight = 320;
-    const width = Math.max(totalWidth - splitterWidth, 1);
-    const maxRight = classroomOriginalMaterial.value
-      ? Math.min(880, Math.max(480, width * 0.52))
-      : Math.min(860, Math.max(420, width * 0.56));
-    const minRatio = minRight / width;
-    const maxRatio = Math.min(maxRight / width, (width - minLeft) / width, LESSON_LAYOUT_MAX_RATIO);
+    const { availableWidth, minLeft, minRight, maxRight } = lessonPanelBounds(totalWidth);
+    const minRatio = minRight / availableWidth;
+    const maxRatio = Math.min(maxRight / availableWidth, (availableWidth - minLeft) / availableWidth, LESSON_LAYOUT_MAX_RATIO);
     if (maxRatio > minRatio) return Math.min(maxRatio, Math.max(minRatio, value));
   }
   return Math.min(LESSON_LAYOUT_MAX_RATIO, Math.max(LESSON_LAYOUT_MIN_RATIO, value));
@@ -2911,6 +2931,7 @@ function onLessonFullscreenChange() {
 watch(
   () => classroomLesson.value?.lesson.id,
   () => {
+    lessonPanelRatio.value = savedLessonPanelRatio();
     lessonPanelRatioCustomized.value = false;
   }
 );
@@ -3013,7 +3034,7 @@ async function handleQaImageChange(event: Event, scope: "class" | "global") {
 }
 
 async function askInClass() {
-  if ((!classQuestion.value.trim() && !classQaAttachments.value.length) || !classroomLesson.value || classThinking.value || classQaImageUploading.value) return;
+  if ((!classQuestion.value.trim() && !classQaAttachments.value.length) || !classroomLesson.value || classThinking.value || (classConversationLoading.value && !classMessages.value.length) || classQaImageUploading.value) return;
   const lessonPageId = Number(activePage.value?.id || 0);
   if (!lessonPageId) {
     emit("notice", "warning", "当前课件页还未加载完成，请稍后再提问。");
@@ -3079,7 +3100,7 @@ function submitQuestionOnEnter(event: KeyboardEvent, scope: QaInputScope, submit
 function handleClassQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, "class", askInClass); }
 function handleGlobalQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, "global", askGlobal); }
 async function askGlobal() {
-  if ((!globalQuestion.value.trim() && !globalQaAttachments.value.length) || !selectedCourseId.value || globalThinking.value || globalQaImageUploading.value) return;
+  if ((!globalQuestion.value.trim() && !globalQaAttachments.value.length) || !selectedCourseId.value || globalThinking.value || (globalConversationLoading.value && !globalMessages.value.length) || globalQaImageUploading.value) return;
   const question = globalQuestion.value.trim() || "请分析这张图片";
   const attachments = globalQaAttachments.value.map((item) => ({ ...item }));
   globalQuestion.value = "";
@@ -3118,27 +3139,34 @@ async function sendCourseQuick(text: string) { quickCourseQuestion.value = text;
 async function askCourseQuick() { if (!quickCourseQuestion.value.trim()) return; globalQuestion.value = quickCourseQuestion.value; quickCourseQuestion.value = ""; await go("studentQa"); await askGlobal(); }
 async function loadQaHistory() {
   if (!selectedCourseId.value) return;
-  const records = (await run<any[]>(() => api.get("/qa/history", { course_id: selectedCourseId.value, keyword: qaKeyword.value }))) || [];
-  const lessonConversationIds = new Set(
-    records
-      .filter(isLessonQaRecord)
-      .map((record) => Number(record.conversation_id || record.id))
-      .filter((id) => Number.isFinite(id) && id > 0)
-  );
-  qaHistory.value = records.filter((record) => {
-    const conversationId = Number(record.conversation_id || record.id);
-    return !isLessonQaRecord(record) && !lessonConversationIds.has(conversationId);
-  });
+  qaHistory.value = (await run<QaHistoryConversation[]>(() => api.get("/qa/history", { course_id: selectedCourseId.value, keyword: qaKeyword.value }))) || [];
 }
 async function loadClassQaHistory() {
   if (!classroomLesson.value) return;
   const lessonId = classroomLesson.value.lesson.id;
   const courseId = classroomLesson.value.lesson.course_id;
-  const records = (await run<any[]>(() => api.get("/qa/history", { course_id: courseId, lesson_id: lessonId }))) || [];
-  const ordered = [...records].sort((left, right) => timestampMs(left.created_at) - timestampMs(right.created_at) || Number(left.id || 0) - Number(right.id || 0));
-  classMessages.value = qaRecordsToMessages(ordered);
-  const latest = ordered[ordered.length - 1];
-  classConversationId.value = latest?.conversation_id ? Number(latest.conversation_id) : null;
+  const summaries = (await run<QaHistoryConversation[]>(() => api.get("/qa/history", { course_id: courseId, lesson_id: lessonId }))) || [];
+  const latest = [...summaries].sort((left, right) => timestampMs(right.created_at) - timestampMs(left.created_at) || Number(right.id || 0) - Number(left.id || 0))[0];
+  const conversationId = Number(latest?.conversation_id || 0);
+  if (!conversationId) {
+    classMessages.value = [];
+    classConversationId.value = null;
+    return;
+  }
+  const loadSeq = ++classConversationLoadSeq;
+  classConversationLoading.value = true;
+  classMessages.value = [];
+  try {
+    const records = await api.get<any[]>(`/qa/conversations/${conversationId}`);
+    if (loadSeq !== classConversationLoadSeq || classroomLesson.value?.lesson.id !== lessonId) return;
+    const ordered = [...(records || [])].sort((left, right) => timestampMs(left.created_at) - timestampMs(right.created_at) || Number(left.id || 0) - Number(right.id || 0));
+    classMessages.value = qaRecordsToMessages(ordered);
+    classConversationId.value = conversationId;
+  } catch (error) {
+    if (loadSeq === classConversationLoadSeq) emit("notice", "error", (error as Error).message);
+  } finally {
+    if (loadSeq === classConversationLoadSeq) classConversationLoading.value = false;
+  }
 }
 function closeQaHistory() { historyOpen.value = false; }
 async function toggleQaHistory() {
@@ -3169,33 +3197,51 @@ function qaRecordsToMessages(records: any[]) {
 async function loadQaRouteConversation() {
   const conversationId = routeQaConversationId();
   if (!conversationId) return;
-  const records = await run<any[]>(() => api.get(`/qa/conversations/${conversationId}`));
-  if (!records?.length) return;
-  if (records.some((record) => record?.lesson_page_id)) {
-    globalConversationId.value = null;
-    globalMessages.value = [];
-    globalQaAttachments.value = [];
-    historyOpen.value = false;
-    if (route.path !== "/qa") await router.replace("/qa");
+  if (conversationId === globalConversationId.value && globalMessages.value.length) {
+    globalConversationLoading.value = false;
     await loadQaHistory();
     return;
   }
-  const courseId = Number(records[0]?.course_id || 0);
-  if (courseId && selectedCourseId.value !== courseId) {
-    suppressCourseScopedReset = true;
-    selectedCourseId.value = courseId;
-    if (courseId) localStorage.setItem("student_current_course_id", String(courseId));
-    await nextTick();
-    suppressCourseScopedReset = false;
+  const loadSeq = ++qaConversationLoadSeq;
+  globalConversationLoading.value = true;
+  globalMessages.value = [];
+  globalQaAttachments.value = [];
+  try {
+    const records = await api.get<any[]>(`/qa/conversations/${conversationId}`);
+    if (loadSeq !== qaConversationLoadSeq) return;
+    if (!records?.length) return;
+    if (records.some((record) => record?.lesson_page_id)) {
+      globalConversationId.value = null;
+      globalMessages.value = [];
+      globalQaAttachments.value = [];
+      historyOpen.value = false;
+      if (route.path !== "/qa") await router.replace("/qa");
+      await loadQaHistory();
+      return;
+    }
+    const courseId = Number(records[0]?.course_id || 0);
+    if (courseId && selectedCourseId.value !== courseId) {
+      suppressCourseScopedReset = true;
+      selectedCourseId.value = courseId;
+      if (courseId) localStorage.setItem("student_current_course_id", String(courseId));
+      await nextTick();
+      suppressCourseScopedReset = false;
+    }
+    globalConversationId.value = conversationId;
+    globalMessages.value = qaRecordsToMessages(records);
+    await loadCourseHome();
+    await loadQaHistory();
+    scrollQaToLatest(false);
+  } catch (error) {
+    if (loadSeq === qaConversationLoadSeq) emit("notice", "error", (error as Error).message);
+  } finally {
+    if (loadSeq === qaConversationLoadSeq) globalConversationLoading.value = false;
   }
-  globalConversationId.value = conversationId;
-  globalMessages.value = qaRecordsToMessages(records);
-  await loadCourseHome();
-  await loadQaHistory();
-  scrollQaToLatest(false);
 }
 async function startNewQaConversation() {
   historyOpen.value = false;
+  qaConversationLoadSeq += 1;
+  globalConversationLoading.value = false;
   globalConversationId.value = null;
   globalMessages.value = [];
   globalQuestion.value = "";
@@ -3207,6 +3253,9 @@ async function openQaConversation(item: any) {
   const conversationId = Number(item?.conversation_id || 0);
   if (!conversationId) return;
   historyOpen.value = false;
+  globalConversationLoading.value = true;
+  globalMessages.value = [];
+  globalQaAttachments.value = [];
   if (routeQaConversationId() === conversationId) {
     await loadQaRouteConversation();
     return;

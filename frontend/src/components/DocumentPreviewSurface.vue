@@ -1,7 +1,7 @@
 <template>
   <div ref="containerRef" class="document-preview-surface" :class="{ compact, bare }">
-    <div v-if="state === 'loading'" class="document-preview-state loading">
-      <span>正在加载原课件</span>
+    <div v-if="state === 'loading'" class="document-preview-state loading" role="status" aria-label="课件加载中">
+      <LoadingMark :label="false" class="document-preview-loading-mark" />
     </div>
     <div v-else-if="state === 'error'" class="document-preview-state error">
       <span>{{ errorText || "原课件预览失败" }}</span>
@@ -16,6 +16,7 @@
         class="document-preview-view document-preview-pdf"
         :source="pdfSource"
         :page="pdfPageProp"
+        :width="pdfRenderWidth"
         :scale="pdfScale"
         text-layer
         @loaded="handlePdfLoaded"
@@ -58,6 +59,7 @@ import VuePdfEmbed from "vue-pdf-embed";
 import "@vue-office/docx/lib/index.css";
 import "vue-pdf-embed/dist/styles/textLayer.css";
 import { renderRichText } from "../utils/richText";
+import LoadingMark from "./LoadingMark.vue";
 
 type MaterialLike = {
   id?: number | null;
@@ -115,9 +117,30 @@ function basePdfRenderScale() {
 
 function fallbackPreviewSize() {
   return {
-    width: props.compact ? 860 : 1180,
+    width: props.compact ? 860 : 1280,
     height: props.compact ? 520 : 700,
   };
+}
+
+function elementBoxSize(element: HTMLElement | null | undefined) {
+  if (!element) return { width: 0, height: 0 };
+  const rect = element.getBoundingClientRect();
+  return {
+    width: Math.max(element.clientWidth || 0, rect.width || 0),
+    height: Math.max(element.clientHeight || 0, rect.height || 0),
+  };
+}
+
+function previewMeasureCandidates() {
+  const container = containerRef.value;
+  const stage = stageRef.value;
+  return [
+    stage,
+    container,
+    container?.parentElement as HTMLElement | null | undefined,
+    container?.closest(".lesson-original-preview") as HTMLElement | null | undefined,
+    container?.closest(".slide-stage") as HTMLElement | null | undefined,
+  ];
 }
 
 function readPreviewSize() {
@@ -127,11 +150,14 @@ function readPreviewSize() {
   const styles = window.getComputedStyle(element);
   const paddingX = Number.parseFloat(styles.paddingLeft || "0") + Number.parseFloat(styles.paddingRight || "0");
   const paddingY = Number.parseFloat(styles.paddingTop || "0") + Number.parseFloat(styles.paddingBottom || "0");
-  const width = Math.max(320, Math.floor(element.clientWidth - paddingX));
-  const height = Math.max(240, Math.floor(element.clientHeight - paddingY));
+  const candidateSizes = previewMeasureCandidates().map(elementBoxSize);
+  const measuredWidth = Math.max(...candidateSizes.map((size) => size.width), 0);
+  const measuredHeight = Math.max(...candidateSizes.map((size) => size.height), 0);
+  const width = Math.floor(measuredWidth - paddingX);
+  const height = Math.floor(measuredHeight - paddingY);
   return {
-    width: Number.isFinite(width) && width > 0 ? width : fallback.width,
-    height: Number.isFinite(height) && height > 0 ? height : fallback.height,
+    width: Number.isFinite(width) && width >= 480 ? width : fallback.width,
+    height: Number.isFinite(height) && height >= 240 ? height : fallback.height,
   };
 }
 
@@ -166,16 +192,17 @@ const docxOptions = computed(() => ({
   ignoreHeight: false,
 }));
 const pptxOptions = computed(() => ({
-  width: previewSize.value.width || fallbackPreviewSize().width,
+  width: previewContentWidth.value,
   height: previewSize.value.height || fallbackPreviewSize().height,
 }));
 const pptxRenderKey = computed(() => {
-  const fallback = fallbackPreviewSize();
-  const width = Math.max(1, Math.round((previewSize.value.width || fallback.width) / 16) * 16);
-  const height = Math.max(1, Math.round((previewSize.value.height || fallback.height) / 16) * 16);
+  const width = Math.max(1, Math.round(previewContentWidth.value / 16) * 16);
+  const height = Math.max(1, Math.round((previewSize.value.height || fallbackPreviewSize().height) / 16) * 16);
   return `${props.material?.id || "material"}-${normalizedType.value}-${width}x${height}`;
 });
 const pdfRenderKey = computed(() => `${props.material?.id || "material"}-${pdfPageProp.value || "all"}-${pdfRenderTick.value}`);
+const previewContentWidth = computed(() => Math.max(640, Math.floor(previewSize.value.width || fallbackPreviewSize().width)));
+const pdfRenderWidth = computed(() => previewContentWidth.value);
 
 function cloneBytesAsArrayBuffer(bytes: Uint8Array | null) {
   if (!bytes) return null;
@@ -229,9 +256,9 @@ async function loadFile() {
     if (isTextLike.value) {
       textSource.value = await response.text();
       if (currentSeq !== requestSeq.value) return;
-      updatePreviewSize();
       state.value = "ready";
       await nextTick();
+      updatePreviewSize();
       scrollToPage();
       return;
     }
@@ -244,9 +271,9 @@ async function loadFile() {
       binaryBytes.value = bytes;
       if (isPptx.value) pptxBytes.value = bytes;
     }
-    updatePreviewSize();
     state.value = "ready";
     await nextTick();
+    updatePreviewSize();
     scrollToPage();
   } catch (error) {
     if (currentSeq !== requestSeq.value) return;
@@ -498,6 +525,7 @@ onBeforeUnmount(() => {
 }
 
 .document-preview-view.docx-view {
+  width: 100%;
   height: 100%;
   background: #eef2f7;
 }
@@ -535,6 +563,12 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-bg-surface, #fff) 94%, var(--color-bg-muted, #f8fafc));
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
   padding: 0 16px;
+}
+
+.document-preview-loading-mark {
+  width: 76px;
+  height: 76px;
+  filter: drop-shadow(0 14px 24px rgba(15, 23, 42, 0.14));
 }
 
 .document-preview-state.loading {
@@ -586,21 +620,25 @@ onBeforeUnmount(() => {
   backdrop-filter: none;
 }
 
-.document-preview-surface.bare .document-preview-state.loading span {
-  background: rgba(15, 23, 42, 0.76);
-  color: #fff;
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.18);
+.document-preview-surface.bare .document-preview-state.loading .document-preview-loading-mark {
+  width: 88px;
+  height: 88px;
 }
 
 :deep(.vue-office-docx) {
+  width: 100%;
   height: 100%;
 }
 
 :deep(.vue-office-docx .docx-wrapper) {
+  width: 100%;
   padding: 0;
 }
 
 :deep(.vue-office-docx .docx-wrapper > section.docx) {
+  width: 100% !important;
+  max-width: none !important;
+  box-sizing: border-box;
   margin: 0 auto 8px;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
@@ -630,8 +668,8 @@ onBeforeUnmount(() => {
 }
 
 :deep(.vue-pdf-embed__page) {
-  width: fit-content;
-  max-width: 100%;
+  width: 100% !important;
+  max-width: none;
   margin: 0 auto;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
@@ -674,14 +712,17 @@ onBeforeUnmount(() => {
 }
 
 :deep(.vue-office-pptx .vue-office-pptx-main) {
+  width: 100%;
   min-height: 100%;
 }
 
 :deep(.pptx-preview-wrapper) {
-  max-width: 100%;
+  width: 100% !important;
+  max-width: none;
 }
 
 :deep(.pptx-preview-slide-wrapper) {
+  width: 100% !important;
   margin-bottom: 16px;
 }
 </style>

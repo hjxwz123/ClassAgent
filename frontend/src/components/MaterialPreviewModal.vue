@@ -24,7 +24,9 @@
           </div>
         </header>
         <div class="material-preview-body">
-          <div v-if="loading" class="material-preview-loading">正在读取资料内容</div>
+          <div v-if="loading" class="material-preview-loading" role="status" aria-label="资料加载中">
+            <LoadingMark :label="false" />
+          </div>
           <div v-else-if="mode === 'parsed' && hasParsedPreview" class="material-preview-markdown markdown-body" v-html="parsedPreviewHtml"></div>
           <DocumentPreviewSurface v-else-if="mode === 'file' && hasFilePreview" :material="material" compact />
           <div v-else class="material-preview-empty">
@@ -41,6 +43,7 @@
 import { computed, ref, watch } from "vue";
 import { Download, FileText, X } from "../icons";
 import DocumentPreviewSurface from "./DocumentPreviewSurface.vue";
+import LoadingMark from "./LoadingMark.vue";
 import type { MaterialDetail } from "../types";
 import { extractStructuredText, renderRichText } from "../utils/richText";
 
@@ -342,6 +345,12 @@ watch(
   z-index: 2;
   background: color-mix(in srgb, var(--color-bg-surface) 86%, transparent);
   backdrop-filter: blur(4px);
+}
+
+.material-preview-loading .loading-mark {
+  width: 80px;
+  height: 80px;
+  filter: drop-shadow(0 14px 24px rgba(15, 23, 42, 0.14));
 }
 
 .material-preview-markdown {

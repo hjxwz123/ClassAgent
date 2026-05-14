@@ -370,46 +370,23 @@
               </div>
             </article>
 
-            <article class="aliyun-card aliyun-email">
-              <header class="aliyun-card-head">
-                <div class="aliyun-card-title">
-                  <span class="aliyun-card-icon"><FileText :size="20" /></span>
-                  <h2>邮件服务</h2>
-                </div>
-                <span class="tag" :class="statusClass(serviceStatus('email'))">{{ statusText(serviceStatus('email')) }}</span>
-                <div class="aliyun-card-actions">
-                  <button class="btn btn-secondary btn-sm" @click="testServiceType('email')"><RefreshCw :size="14" />测试</button>
-                  <button class="btn btn-primary btn-sm" @click="saveServiceType('email')"><Save :size="14" />保存</button>
-                  <button class="btn btn-ghost btn-sm aliyun-delete" @click="deleteServiceType('email')"><Trash2 :size="14" />删除</button>
-                </div>
-              </header>
-              <div class="aliyun-field-grid">
-                <label>供应商 / 类型<AppSelect v-model="serviceDrafts.email.provider" :options="emailProviderOptions" /></label>
-                <label>配置名称<input v-model="serviceDrafts.email.name" class="input" /></label>
-                <label>Host<input v-model="serviceDrafts.email.host" class="input" /></label>
-                <label>Port<input v-model.number="serviceDrafts.email.port" class="input" type="number" /></label>
-                <label>发件人<input v-model="serviceDrafts.email.sender" class="input" /></label>
-                <label>用户名<input v-model="serviceDrafts.email.username" class="input" /></label>
-                <label>密码<PasswordField v-model="serviceDrafts.email.password" /></label>
-                <label>SSL<span class="aliyun-check"><AppCheckbox v-model="serviceDrafts.email.use_ssl" variant="switch" label="启用" /></span></label>
-              </div>
-            </article>
           </div>
         </section>
 
         <section v-if="active === 'adminSystem'" key="adminSystem" class="admin-page page-view">
           <div class="page-header">
-            <div class="breadcrumb"><span>系统管理</span><ChevronRight :size="14" /><span>系统参数</span></div>
+            <div class="breadcrumb"><span>系统管理</span><ChevronRight :size="14" /><span>系统设置</span></div>
             <div class="header-actions">
-              <button class="btn btn-secondary" @click="restoreSettings">恢复默认</button>
-              <button class="btn btn-primary" @click="saveSettings"><Save :size="14" />保存修改</button>
+              <button v-if="settingTab !== 'email'" class="btn btn-secondary" @click="restoreSettings">恢复默认</button>
+              <button v-else class="btn btn-secondary" @click="testServiceType('email')"><RefreshCw :size="14" />测试邮箱</button>
+              <button class="btn btn-primary" @click="settingTab === 'email' ? saveServiceType('email') : saveSettings()"><Save :size="14" />保存修改</button>
             </div>
           </div>
           <div class="config-layout">
             <aside class="config-nav"><button v-for="item in settingCategories" :key="item.key" class="config-nav-item" :class="{ active: settingTab === item.key }" @click="settingTab = item.key">{{ item.label }}</button></aside>
             <section class="config-content">
               <div v-if="changedSettings.length" class="alert alert-warning"><AlertTriangle :size="16" />{{ changedSettings.length }} 处未保存<button class="link-btn" @click="saveSettings">保存</button><button class="link-btn" @click="loadSettings">放弃</button></div>
-              <article class="card settings-card">
+              <article v-if="settingTab !== 'email'" class="card settings-card">
                 <div class="card-body">
                   <div v-for="item in activeSettingRows" :key="item.key" class="param-row">
                     <div class="param-info">
@@ -420,6 +397,65 @@
                       <SettingControl :item="item" :drafts="settingDrafts" />
                     </div>
                     <div class="param-current">当前值：{{ formatSettingValue(settingDrafts[item.key]) }}</div>
+                  </div>
+                </div>
+              </article>
+              <article v-else class="card settings-card system-email-card">
+                <header class="system-email-head">
+                  <div class="system-email-title">
+                    <span class="system-email-icon"><FileText :size="20" /></span>
+                    <div>
+                      <h2>邮箱设置</h2>
+                      <p>用于验证码、通知、备份结果等系统邮件发送</p>
+                    </div>
+                  </div>
+                  <span class="tag" :class="statusClass(serviceStatus('email'))">{{ statusText(serviceStatus('email')) }}</span>
+                  <div class="system-email-actions">
+                    <button class="btn btn-secondary btn-sm" @click="testServiceType('email')"><RefreshCw :size="14" />测试</button>
+                    <button class="btn btn-primary btn-sm" @click="saveServiceType('email')"><Save :size="14" />保存</button>
+                    <button class="btn btn-ghost btn-sm aliyun-delete" @click="deleteServiceType('email')"><Trash2 :size="14" />删除</button>
+                  </div>
+                </header>
+                <div class="card-body system-email-body">
+                  <div class="param-row">
+                    <div class="param-info"><div class="param-title">供应商 / 类型</div><div class="param-desc">当前仅支持 SMTP</div></div>
+                    <div class="param-control"><AppSelect v-model="serviceDrafts.email.provider" :options="emailProviderOptions" /></div>
+                    <div class="param-current">当前值：{{ serviceDrafts.email.provider || '-' }}</div>
+                  </div>
+                  <div class="param-row">
+                    <div class="param-info"><div class="param-title">配置名称</div><div class="param-desc">后台展示名称</div></div>
+                    <div class="param-control"><input v-model="serviceDrafts.email.name" class="input" /></div>
+                    <div class="param-current">当前值：{{ serviceDrafts.email.name || '-' }}</div>
+                  </div>
+                  <div class="param-row">
+                    <div class="param-info"><div class="param-title">SMTP Host</div><div class="param-desc">邮件服务器地址</div></div>
+                    <div class="param-control"><input v-model="serviceDrafts.email.host" class="input" placeholder="smtp.example.com" /></div>
+                    <div class="param-current">当前值：{{ serviceDrafts.email.host || '-' }}</div>
+                  </div>
+                  <div class="param-row">
+                    <div class="param-info"><div class="param-title">SMTP Port</div><div class="param-desc">SSL 常用 465，TLS 常用 587</div></div>
+                    <div class="param-control"><input v-model.number="serviceDrafts.email.port" class="input" type="number" /></div>
+                    <div class="param-current">当前值：{{ serviceDrafts.email.port || '-' }}</div>
+                  </div>
+                  <div class="param-row">
+                    <div class="param-info"><div class="param-title">发件人</div><div class="param-desc">邮件 From 地址</div></div>
+                    <div class="param-control"><input v-model="serviceDrafts.email.sender" class="input" type="email" /></div>
+                    <div class="param-current">当前值：{{ serviceDrafts.email.sender || '-' }}</div>
+                  </div>
+                  <div class="param-row">
+                    <div class="param-info"><div class="param-title">用户名</div><div class="param-desc">SMTP 登录账号</div></div>
+                    <div class="param-control"><input v-model="serviceDrafts.email.username" class="input" /></div>
+                    <div class="param-current">当前值：{{ serviceDrafts.email.username || '-' }}</div>
+                  </div>
+                  <div class="param-row">
+                    <div class="param-info"><div class="param-title">密码</div><div class="param-desc">加密存储，留空则不修改</div></div>
+                    <div class="param-control"><PasswordField v-model="serviceDrafts.email.password" /></div>
+                    <div class="param-current">当前值：{{ serviceDrafts.email.password ? '已填写' : '未填写' }}</div>
+                  </div>
+                  <div class="param-row">
+                    <div class="param-info"><div class="param-title">SSL</div><div class="param-desc">启用 SSL 加密连接</div></div>
+                    <div class="param-control"><span class="aliyun-check"><AppCheckbox v-model="serviceDrafts.email.use_ssl" variant="switch" label="启用" /></span></div>
+                    <div class="param-current">当前值：{{ serviceDrafts.email.use_ssl ? '启用' : '关闭' }}</div>
                   </div>
                 </div>
               </article>
@@ -722,8 +758,9 @@ const navGroups = [
   { title: "概览", items: [{ key: "adminDashboard", label: "总览仪表盘", icon: LayoutDashboard }] },
   { title: "用户与课程", items: [{ key: "adminUsers", label: "用户管理", icon: Users }, { key: "adminCourses", label: "课程管理", icon: BookOpen }, { key: "adminMaterials", label: "资料审核", icon: FileCheck }] },
   { title: "AI 与服务", items: [{ key: "adminModels", label: "AI 模型配置", icon: Sparkles }, { key: "adminServices", label: "阿里云服务", icon: Cloud }] },
-  { title: "系统", items: [{ key: "adminSystem", label: "系统参数", icon: Settings }, { key: "adminMonitor", label: "系统监控", icon: Activity }, { key: "adminLogs", label: "日志管理", icon: FileText }, { key: "adminBackups", label: "数据备份", icon: Database }] }
+  { title: "系统", items: [{ key: "adminSystem", label: "系统设置", icon: Settings }, { key: "adminMonitor", label: "系统监控", icon: Activity }, { key: "adminLogs", label: "日志管理", icon: FileText }, { key: "adminBackups", label: "数据备份", icon: Database }] }
 ];
+const cloudServiceKeys: ServiceKey[] = ["oss", "ocr", "doc_parser", "tts"];
 const llmPurposes = [
   { key: "qa", label: "课程问答", icon: FileText },
   { key: "script", label: "讲解脚本", icon: Sparkles },
@@ -740,7 +777,8 @@ const settingCategories = [
   { key: "classroom", label: "课时音频" },
   { key: "quiz", label: "测验参数" },
   { key: "interface", label: "界面公告" },
-  { key: "backup", label: "备份参数" }
+  { key: "backup", label: "备份参数" },
+  { key: "email", label: "邮箱设置" }
 ];
 const settingRows = [
   { key: "upload.max_size_mb", category: "upload", label: "单文件大小", desc: "上传文件上限", type: "number" },
@@ -1001,6 +1039,10 @@ async function loadSettings() {
   Object.assign(backupPolicy, { enabled: !!schedule.enabled, frequency: schedule.frequency || "daily", time: schedule.time || "03:00", retention: schedule.retention || 30 });
   backupNotifyEmail.value = String(settingDrafts["backup.notify_email"] || "");
 }
+async function loadSystemSettingsPage() {
+  await loadSettings();
+  await loadServices();
+}
 async function loadMonitor() {
   overview.value = (await run(() => api.get("/admin/monitoring/overview"))) || {};
   monitorSeriesData.value = (await run(() => api.get("/admin/monitoring/timeseries"))) || { points: [] };
@@ -1030,7 +1072,7 @@ async function loadActive() {
     if (active.value === "adminMaterials") await loadMaterials();
     if (active.value === "adminModels") await loadModels();
     if (active.value === "adminServices") await loadServices();
-    if (active.value === "adminSystem") await loadSettings();
+    if (active.value === "adminSystem") await loadSystemSettingsPage();
     if (active.value === "adminMonitor") await loadMonitor();
     if (active.value === "adminLogs") await loadLogs();
     if (active.value === "adminBackups") await loadBackups();
@@ -1239,7 +1281,7 @@ async function saveServiceType(type: ServiceKey) {
   await run(() => api.post("/admin/service-configs", { config_id: draft.config_id, service_type: type, provider: draft.provider, name: draft.name, is_enabled: draft.is_enabled, config: serviceConfigPayload(type) }), "已保存");
   await loadServices();
 }
-async function saveAllServices() { for (const key of Object.keys(serviceDrafts) as ServiceKey[]) await saveServiceType(key); }
+async function saveAllServices() { for (const key of cloudServiceKeys) await saveServiceType(key); }
 async function testServiceType(type: ServiceKey) { const id = serviceDrafts[type].config_id; if (!id) return emit("notice", "warning", "先保存"); const data = await run(() => api.post<any>(`/admin/service-configs/${id}/test`)); if (data) emit("notice", data.success ? "success" : "warning", data.message); }
 async function deleteServiceType(type: ServiceKey) { const id = serviceDrafts[type].config_id; if (!id) return; await run(() => api.delete(`/admin/service-configs/${id}`), "已删除"); serviceDrafts[type].config_id = null; await loadServices(); }
 async function testAllServices() { const data = await run(() => api.post<any>("/admin/service-health/test-all")); if (data) emit("notice", data.success ? "success" : "warning", data.success ? "全部正常" : "存在异常"); await loadHealth(); }
