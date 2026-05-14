@@ -318,6 +318,8 @@ function isPdfRenderRaceError(error: unknown) {
   return (
     name === "RenderingCancelledException" ||
     message.includes("Cannot use the same canvas during multiple render() operations") ||
+    message.includes("reading 'getPage'") ||
+    message.includes('reading "getPage"') ||
     message.includes("sendWithPromise") ||
     message.includes("Worker was destroyed")
   );
@@ -419,7 +421,11 @@ function handlePdfRenderError(error: unknown) {
 }
 
 function handleError(error: unknown) {
-  if (disposed || isPdfRenderRaceError(error)) return;
+  if (disposed) return;
+  if (isPdfRenderRaceError(error)) {
+    schedulePdfRerender(true);
+    return;
+  }
   state.value = "error";
   errorText.value = (error as Error)?.message || "原课件预览失败";
 }
