@@ -143,6 +143,8 @@
 .class-chat-dock .qa-attachment-strip.compact{max-height:88px;overflow-y:auto}
 .class-chat-dock .quick-tags{width:100%;display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
 .class-chat-dock .quick-tags button{flex:0 0 auto;border-color:var(--class-chat-border);background:#fff;color:var(--class-chat-muted);box-shadow:0 4px 12px #0f172a09}
+.class-chat-dock .lesson-quick-tags{min-width:0;max-height:40px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-gutter:auto;padding:0 2px 4px}
+.class-chat-dock .lesson-quick-tags button{width:max-content;max-width:none;min-height:34px;display:inline-flex;align-items:center;justify-content:center;overflow:visible;border-radius:999px;text-overflow:clip;white-space:nowrap;padding:0 14px;line-height:1.2}
 .class-chat-dock .quick-tags button:hover{background:var(--class-chat-primary-50);color:var(--class-chat-primary);transform:translateY(-1px)}
 .class-chat .chat-list{display:flex;flex-direction:column;gap:16px;min-height:180px;padding:14px 0 8px}
 .class-chat .chat-msg{width:100%;max-width:none;display:flex;gap:10px;align-items:flex-start;animation:bubble-in-c9e07e67 .22s ease-out both}

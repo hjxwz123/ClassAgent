@@ -640,7 +640,9 @@ html.theme-dark .tutoring-page .tutor-submit-btn {
 }
 
 html.theme-dark .lesson-ai,
+html.theme-dark .study-room .script-view,
 html.theme-dark .activity-view,
+html.theme-dark .class-chat,
 html.theme-dark .note-view,
 html.theme-dark .note-tools,
 html.theme-dark .note-editor,
@@ -656,14 +658,89 @@ html.theme-dark .player-bar {
 }
 
 html.theme-dark .study-room .study-tabs,
+html.theme-dark .study-room .study-tabs button:hover:not(.active),
 html.theme-dark .study-room .reading,
+html.theme-dark .study-room .activity-hero span,
 html.theme-dark .study-room .activity-band section,
 html.theme-dark .study-room .activity-item,
+html.theme-dark .study-room .activity-question,
+html.theme-dark .study-room .class-chat .chat-bubble,
+html.theme-dark .study-room .class-chat .chat-msg.user .chat-avatar,
+html.theme-dark .study-room .class-chat .thinking,
+html.theme-dark .study-room .class-chat .thought,
+html.theme-dark .study-room .class-chat .thought-toggle,
+html.theme-dark .study-room .class-chat-dock,
+html.theme-dark .study-room .class-chat-dock .quick-tags button,
+html.theme-dark .study-room .lesson-qa-selection-context,
+html.theme-dark .study-room .qa-attachment-chip,
 html.theme-dark .study-room .note-tools button,
+html.theme-dark .study-room .lesson-markdown th,
 html.theme-dark .study-room .player-bar .popover-button.select-menu > button {
   background: var(--dark-surface-2) !important;
   color: var(--dark-body) !important;
   border-color: var(--dark-border) !important;
+}
+
+html.theme-dark .study-room .class-chat {
+  --class-chat-primary: var(--color-primary-500);
+  --class-chat-primary-50: var(--dark-cyan-soft);
+  --class-chat-border: var(--dark-border);
+  --class-chat-text: var(--dark-body);
+  --class-chat-muted: var(--dark-muted);
+}
+
+html.theme-dark .study-room .study-tabs button.active,
+html.theme-dark .study-room .activity-question:hover,
+html.theme-dark .study-room .class-chat .source-tags .tag,
+html.theme-dark .study-room .class-chat .msg-actions button:hover:not(:disabled),
+html.theme-dark .study-room .class-chat-dock .quick-tags button:hover,
+html.theme-dark .study-room .lesson-qa-selection-context button:hover {
+  background: var(--dark-cyan-soft) !important;
+  color: var(--dark-cyan-text) !important;
+  border-color: var(--dark-cyan-border) !important;
+}
+
+html.theme-dark .study-room .lesson-qa-selection-context button,
+html.theme-dark .study-room .qa-attachment-chip button {
+  background: var(--dark-surface-3) !important;
+  color: var(--dark-sub) !important;
+}
+
+html.theme-dark .study-room .lesson-selection-popover {
+  background: rgba(15, 23, 42, .96) !important;
+  color: var(--dark-body) !important;
+  border-color: var(--dark-border-strong) !important;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, .42) !important;
+}
+
+html.theme-dark .study-room .lesson-selection-popover::after {
+  background: rgba(15, 23, 42, .96) !important;
+  border-color: var(--dark-border-strong) !important;
+}
+
+html.theme-dark .study-room .lesson-selection-popover button {
+  color: var(--dark-body) !important;
+}
+
+html.theme-dark .study-room .lesson-selection-popover button:hover {
+  background: var(--dark-cyan-soft) !important;
+  color: var(--dark-cyan-text) !important;
+}
+
+html.theme-dark .study-room .class-chat .chat-msg.user .chat-bubble {
+  background: var(--color-primary-600) !important;
+  color: #F8FAFC !important;
+  border-color: transparent !important;
+}
+
+html.theme-dark .study-room .lesson-markdown :not(pre) > code {
+  background: var(--dark-surface-2) !important;
+  color: var(--dark-cyan-text) !important;
+}
+
+html.theme-dark .study-room .lesson-markdown pre code {
+  background: transparent !important;
+  color: inherit !important;
 }
 
 html.theme-dark .study-room .sticky-tools button {

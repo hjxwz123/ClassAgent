@@ -188,8 +188,8 @@
                 ></textarea>
                 <button :disabled="(!classQuestion.trim() && !classQaAttachments.length) || classThinking || (classConversationLoading && !classMessages.length) || classQaImageUploading" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
               </form>
-              <div class="quick-tags">
-                <button v-for="item in quickPageQuestions" :key="item" @click="sendQuickClass(item)">{{ item }}</button>
+              <div class="quick-tags lesson-quick-tags">
+                <button v-for="item in quickPageQuestions" :key="item" :title="item" @click="sendQuickClass(item)">{{ item }}</button>
               </div>
             </div>
           </section>
@@ -392,7 +392,6 @@
             <article class="hello-card">
               <div><Sun :size="24" /><section><h1>{{ greeting }}，{{ user.nickname }}</h1><p>{{ todayText }} · 距本学期结束还有 {{ termLeftDays }} 天</p></section></div>
               <div v-if="todayTasks.length" class="circle-stat"><RingProgress :value="todayDoneRate" /><span>{{ doneTasks }}/{{ todayTasks.length }}</span></div>
-              <button v-else class="white-pill" @click="go('studentPlans')"><Plus :size="14" />制定计划</button>
             </article>
             <article class="today-plan" :class="{ 'is-empty': !todayTasks.length }">
               <CalendarCheck :size="20" />
