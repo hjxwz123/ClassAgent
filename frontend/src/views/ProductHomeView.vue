@@ -688,7 +688,7 @@ onBeforeUnmount(() => {
 :global(body.product-home-active),
 :global(#app.product-home-active) {
   min-height: 100%;
-  background: #121614 !important;
+  background: #0E3329 !important;
   overscroll-behavior-y: none;
 }
 
@@ -715,7 +715,14 @@ onBeforeUnmount(() => {
 
   min-height: 100vh;
   overflow-x: hidden;
-  background: #121614;
+  background:
+    radial-gradient(
+      ellipse 100% 80% at 50% 40%,
+      #15392F 0%,
+      #0E3329 55%,
+      #082018 100%
+    );
+  background-attachment: fixed;
   color: #f4f4f0;
   font-family: var(--ca-font-sans);
   cursor: default;
@@ -730,19 +737,57 @@ onBeforeUnmount(() => {
 }
 .board-texture {
   z-index: 0;
-  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" opacity="0.04"/%3E%3C/svg%3E');
+  background-image:
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" opacity="0.12"/%3E%3C/svg%3E'),
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="grain"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="2" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23grain)" opacity="0.08"/%3E%3C/svg%3E');
+  background-blend-mode: overlay, soft-light;
+  mix-blend-mode: overlay;
+  opacity: 0.85;
 }
 .board-smudge {
   z-index: 1;
-  background: radial-gradient(
-      circle at 20% 30%,
-      rgba(244, 244, 240, 0.03) 0%,
-      transparent 40%
-    ),
+  background:
+    /* 中心被反复擦拭的微亮区域 */
     radial-gradient(
-      circle at 80% 70%,
-      rgba(244, 244, 240, 0.02) 0%,
-      transparent 35%
+      ellipse 70% 50% at 50% 45%,
+      rgba(220, 230, 215, 0.06) 0%,
+      transparent 60%
+    ),
+    /* 左上粉笔灰痕迹 */
+    radial-gradient(
+      ellipse 30% 25% at 22% 28%,
+      rgba(244, 244, 240, 0.05) 0%,
+      transparent 65%
+    ),
+    /* 右下粉笔擦拭余迹 */
+    radial-gradient(
+      ellipse 35% 30% at 78% 72%,
+      rgba(244, 244, 240, 0.04) 0%,
+      transparent 60%
+    ),
+    /* 边角自然变暗（暗角，让中心更突出） */
+    radial-gradient(
+      ellipse 120% 100% at 50% 50%,
+      transparent 55%,
+      rgba(0, 0, 0, 0.22) 100%
+    ),
+    /* 水平方向粉笔擦拭条纹 */
+    repeating-linear-gradient(
+      90deg,
+      rgba(244, 244, 240, 0.012) 0px,
+      rgba(244, 244, 240, 0.012) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    /* 微弱的横向擦痕（更宽的扫拭痕迹） */
+    repeating-linear-gradient(
+      88deg,
+      transparent 0px,
+      transparent 60px,
+      rgba(244, 244, 240, 0.018) 60px,
+      rgba(244, 244, 240, 0.018) 62px,
+      transparent 62px,
+      transparent 140px
     );
 }
 
@@ -755,7 +800,7 @@ onBeforeUnmount(() => {
   z-index: 50;
   padding: 16px 0;
   border-bottom: 1px solid rgba(244, 244, 240, 0.05);
-  background: rgba(18, 22, 20, 0.8);
+  background: rgba(14, 51, 41, 0.8);
   backdrop-filter: blur(16px);
 }
 .product-nav-inner {
@@ -909,7 +954,7 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 2;
   height: 800vh;
-  background: #121614;
+  background: transparent;
 }
 .home-stage {
   position: fixed;
@@ -923,7 +968,7 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   perspective: 1800px;
-  background: #121614;
+  background: transparent;
 }
 
 /* ====== 场景 1：黑板 ====== */
@@ -937,7 +982,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   padding-top: 40px;
   transform-origin: center;
-  background: #121614;
+  background: transparent;
   /* 已删去导致 3D 渲染黑屏的 will-change */
 }
 .formula-writing-canvas {
@@ -1146,7 +1191,7 @@ onBeforeUnmount(() => {
   perspective: 1800px;
   padding: 92px 24px 48px;
   box-sizing: border-box;
-  background: #121614;
+  background: transparent;
   /* 已删去导致 3D 渲染黑屏的 will-change */
 }
 .book {
@@ -1617,8 +1662,47 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 10;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-  background: #181c1a;
+  background: #143A30;
   padding: 128px 24px;
+  overflow: hidden;
+  isolation: isolate;
+}
+.roles-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="rolesNoise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23rolesNoise)" opacity="0.12"/%3E%3C/svg%3E');
+  mix-blend-mode: overlay;
+  opacity: 0.8;
+}
+.roles-section::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    /* 顶部粉笔横向擦拭痕迹 */
+    radial-gradient(
+      ellipse 80% 25% at 50% 8%,
+      rgba(244, 244, 240, 0.04) 0%,
+      transparent 70%
+    ),
+    /* 底部粉笔擦拭痕迹 */
+    radial-gradient(
+      ellipse 60% 30% at 30% 90%,
+      rgba(244, 244, 240, 0.03) 0%,
+      transparent 65%
+    ),
+    /* 暗角 */
+    radial-gradient(
+      ellipse 120% 100% at 50% 50%,
+      transparent 60%,
+      rgba(0, 0, 0, 0.2) 100%
+    );
 }
 .section-inner {
   max-width: 1280px;
@@ -1649,7 +1733,7 @@ onBeforeUnmount(() => {
 .role-card {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 2px;
-  background: #121614;
+  background: #0E3329;
   padding: 40px;
   transition: border-color 500ms;
 }
@@ -1719,9 +1803,40 @@ onBeforeUnmount(() => {
   position: relative;
   z-index: 10;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-  background: #121614;
+  background: #0E3329;
   padding: 128px 24px;
   text-align: center;
+  overflow: hidden;
+  isolation: isolate;
+}
+.product-footer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="footerNoise"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23footerNoise)" opacity="0.12"/%3E%3C/svg%3E');
+  mix-blend-mode: overlay;
+  opacity: 0.85;
+}
+.product-footer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 60% 50% at 50% 50%,
+      rgba(244, 244, 240, 0.05) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 120% 100% at 50% 50%,
+      transparent 55%,
+      rgba(0, 0, 0, 0.22) 100%
+    );
 }
 .product-footer h2 {
   margin: 0 0 48px;
@@ -1782,11 +1897,11 @@ onBeforeUnmount(() => {
 :global(html.product-home-active.product-home-dark-active),
 :global(body.product-home-active.product-home-dark-active),
 :global(#app.product-home-active.product-home-dark-active) {
-  background: #121614 !important;
+  background: #0E3329 !important;
 }
 
 .product-home.product-home-dark {
-  --home-bg: #121614;
+  --home-bg: #0E3329;
   --home-canvas-line: rgba(244, 244, 240, 0.13);
   --home-canvas-muted: #f4f4f0;
   --home-canvas-text: rgba(244, 244, 240, 0.82);
@@ -2176,11 +2291,11 @@ onBeforeUnmount(() => {
   to { transform: translateX(0) scale(1); opacity: .62; }
 }
 @keyframes home-leave-nav-surface {
-  to { border-bottom-color: transparent; background: rgba(18, 22, 20, 0); backdrop-filter: blur(0); }
+  to { border-bottom-color: transparent; background: rgba(14, 51, 41, 0); backdrop-filter: blur(0); }
 }
 @keyframes home-enter-nav-surface {
-  from { border-bottom-color: transparent; background: rgba(18, 22, 20, 0); backdrop-filter: blur(0); }
-  to { border-bottom-color: rgba(244, 244, 240, 0.05); background: rgba(18, 22, 20, 0.8); backdrop-filter: blur(16px); }
+  from { border-bottom-color: transparent; background: rgba(14, 51, 41, 0); backdrop-filter: blur(0); }
+  to { border-bottom-color: rgba(244, 244, 240, 0.05); background: rgba(14, 51, 41, 0.8); backdrop-filter: blur(16px); }
 }
 @keyframes home-leave-nav-items {
   to { opacity: 0; transform: translateY(-12px); }

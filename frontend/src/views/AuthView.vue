@@ -767,9 +767,9 @@ form {
 
 .auth.auth-dark {
   background:
-    radial-gradient(circle at 16% 18%, rgba(0, 240, 255, .12), transparent 28%),
-    radial-gradient(circle at 84% 78%, rgba(59, 130, 246, .14), transparent 32%),
-    #030712;
+    radial-gradient(circle at 16% 18%, rgba(0, 240, 255, .08), transparent 32%),
+    radial-gradient(circle at 84% 78%, rgba(244, 244, 240, .05), transparent 36%),
+    radial-gradient(ellipse 100% 80% at 50% 40%, #15392F 0%, #0E3329 55%, #082018 100%);
   color: #F8FAFC;
 }
 

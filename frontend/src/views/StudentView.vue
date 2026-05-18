@@ -4109,6 +4109,20 @@ function onStudentDocumentPointerDown(event: PointerEvent) {
   userMenuOpen.value = false;
 }
 function onStudentDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    if (!classroomOpen.value) return;
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    if (searchOpen.value || historyOpen.value || joinOpen.value || planModalOpen.value || completeOpen.value) return;
+    const target = event.target as HTMLElement | null;
+    if (target) {
+      const tag = target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable) return;
+    }
+    event.preventDefault();
+    if (event.key === "ArrowLeft") void prevPage();
+    else void nextPage();
+    return;
+  }
   if (event.key !== "Escape") return;
   if (searchOpen.value) closeSearch();
   hideLessonSelectionMenu();
@@ -4130,7 +4144,7 @@ function onStudentWindowFocus() {
 
 onMounted(async () => {
   document.addEventListener("pointerdown", onStudentDocumentPointerDown);
-  document.addEventListener("keydown", onStudentDocumentKeydown);
+  window.addEventListener("keydown", onStudentDocumentKeydown, { capture: true });
   document.addEventListener("selectionchange", scheduleLessonSelectionCheck);
   document.addEventListener("visibilitychange", onStudentVisibilityChange);
   document.addEventListener("fullscreenchange", onLessonFullscreenChange);
@@ -4155,7 +4169,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => {
   document.removeEventListener("pointerdown", onStudentDocumentPointerDown);
-  document.removeEventListener("keydown", onStudentDocumentKeydown);
+  window.removeEventListener("keydown", onStudentDocumentKeydown, { capture: true } as EventListenerOptions);
   document.removeEventListener("selectionchange", scheduleLessonSelectionCheck);
   document.removeEventListener("visibilitychange", onStudentVisibilityChange);
   document.removeEventListener("fullscreenchange", onLessonFullscreenChange);
