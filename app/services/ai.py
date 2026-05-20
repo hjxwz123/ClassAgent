@@ -21,6 +21,46 @@ def _clean_text(value: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _pack_rag_contexts(contexts: Sequence[str], *, limit: int = 12000) -> str:
+    items: list[str] = []
+    for item in contexts:
+        clean = _clean_text(str(item))
+        if clean:
+            items.append(clean)
+    if not items:
+        return ""
+    separator = "\n\n"
+    full_context = separator.join(items)
+    if len(full_context) <= limit:
+        return full_context
+
+    separator_budget = len(separator) * max(len(items) - 1, 0)
+    available = max(1, limit - separator_budget)
+    min_item_budget = 90
+    if available // len(items) < min_item_budget:
+        item_count = max(1, min(len(items), limit // (min_item_budget + len(separator))))
+        if item_count == 1:
+            items = [items[0]]
+        else:
+            indexes = [round(index * (len(items) - 1) / (item_count - 1)) for index in range(item_count)]
+            items = [items[index] for index in dict.fromkeys(indexes)]
+        separator_budget = len(separator) * max(len(items) - 1, 0)
+        available = max(1, limit - separator_budget)
+
+    packed: list[str] = []
+    remaining = available
+    for index, item in enumerate(items):
+        remaining_items = len(items) - index
+        allowance = max(1, remaining // remaining_items)
+        if len(item) > allowance:
+            text = item[: max(1, allowance - 3)].rstrip() + "..."
+        else:
+            text = item
+        packed.append(text)
+        remaining -= len(text)
+    return separator.join(packed)[:limit]
+
+
 def _parse_json_payload(value: str) -> Any:
     text = value.strip()
     if text.startswith("```"):
@@ -564,6 +604,7 @@ RAG_ANSWER_SYSTEM_PROMPT = (
 RAG_ANSWER_USER_INSTRUCTIONS = (
     "请用中文回答。若问题提到某一页，优先使用资料中标注的当前页内容；"
     "若要求“用例子解释”，请基于资料里的公式、条件或概念构造一个简短例子，并给出关键依据。"
+    "若问题明确要求多个章节或页码范围，请按范围逐章或逐页组织，不能只回答资料中排在前面的部分。"
 )
 
 
@@ -1129,6 +1170,8 @@ class AIService:
                     "你是高校课程教学结构提炼助手。你的任务是把老师上传课件中的单页内容提炼为可被 QA、题目辅导、"
                     "出题、复盘和教学分析复用的结构化教学对象。不要生成新 PPT，不要虚构与页面矛盾的知识。"
                     "如果页面有例题或方法，请抽象成可迁移的题型模板：题型、条件、步骤、易错点、可替换变量槽位。"
+                    "如果该页只是封面、目录、课程/教师介绍、参考资料、联系方式、致谢、行政安排，或缺少可讲解的课程知识，"
+                    "应返回 is_teaching_page=false 且数组字段为空。"
                     "必须只返回 JSON 对象。"
                 ),
                 user_prompt=(
@@ -1140,6 +1183,7 @@ class AIService:
                     f"讲解稿参考：{clean_script[:1800]}\n"
                     "返回字段："
                     "{"
+                    "\"is_teaching_page\":true或false,"
                     "\"page_summary\":\"100字内页面摘要\","
                     "\"learning_objectives\":[\"学习目标\"],"
                     "\"key_points\":[\"页面重点\"],"
@@ -1257,8 +1301,8 @@ class AIService:
                 True,
                 None,
             )
-        context = "\n\n".join(_clean_text(item) for item in contexts if item)
-        chat_messages = self._rag_answer_messages(context=context[:12000], history=history, question=question)
+        context = _pack_rag_contexts(contexts)
+        chat_messages = self._rag_answer_messages(context=context, history=history, question=question)
         result = self._call_chat_with_meta(
             db,
             purpose="qa",

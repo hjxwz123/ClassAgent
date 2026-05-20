@@ -9,6 +9,7 @@ from app.core.enums import LessonStatus, MaterialCategory, MaterialType, Process
 from app.core.errors import AppError
 from app.db import session as db_session
 from app.db.models import (
+    Chapter,
     Course,
     CourseMaterial,
     KnowledgeChunk,
@@ -20,8 +21,9 @@ from app.db.models import (
     StudentLearningSignal,
     User,
 )
-from app.services.ai import ai_service, sanitize_quiz_source_text
+from app.services.ai import _pack_rag_contexts, ai_service, sanitize_quiz_source_text
 from app.services.learning import QUIZ_SOURCE_CONTEXT_HARD_LIMIT, _course_source_text_for_quiz
+from app.services.pedagogy import ensure_lesson_pedagogy_artifacts, page_activity_payload
 
 
 def fake_quiz_questions(*, topic, source_text, count, db=None):
@@ -1201,6 +1203,124 @@ def test_qa_uses_chapter_context_for_chapter_overview_when_vector_search_misses(
     assert any("资料片段：" in item or "页面内容：" in item or "资料：" in item for item in captured["contexts"])
 
 
+def test_qa_chapter_range_uses_all_requested_chapters_when_vector_search_misses(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    with db_session.SessionLocal() as db:
+        db_course = db.get(Course, course["id"])
+        assert db_course is not None
+        range_page_id = None
+        for number in range(5, 8):
+            chapter = Chapter(
+                course_id=db_course.id,
+                title=f"第{number}章 范围章节{number}",
+                description=f"第{number}章说明",
+                order_index=number,
+            )
+            db.add(chapter)
+            db.flush()
+            material = CourseMaterial(
+                course_id=db_course.id,
+                chapter_id=chapter.id,
+                uploader_id=db_course.teacher_id,
+                title=f"第{number}章课件",
+                category=MaterialCategory.COURSEWARE.value,
+                material_type=MaterialType.PDF.value,
+                size_bytes=128,
+                original_filename=f"chapter-{number}.pdf",
+                storage_path=f"tests/chapter-{number}.pdf",
+                extracted_text=f"第{number}章完整资料讲解重点{number}",
+                parse_status=ProcessStatus.READY.value,
+                vector_status=ProcessStatus.READY.value,
+            )
+            db.add(material)
+            db.flush()
+            lesson = Lesson(
+                course_id=db_course.id,
+                chapter_id=chapter.id,
+                material_id=material.id,
+                title=f"第{number}章课时",
+                summary=f"第{number}章总结",
+                page_count=2,
+                status=LessonStatus.PUBLISHED.value,
+            )
+            db.add(lesson)
+            db.flush()
+            concept_page = LessonPage(
+                lesson_id=lesson.id,
+                page_number=1,
+                page_title=f"第{number}章概念",
+                page_text=f"第{number}章核心概念完整页面内容",
+                script_text=f"第{number}章核心概念讲解文稿",
+                script_status=ProcessStatus.READY.value,
+            )
+            method_page = LessonPage(
+                lesson_id=lesson.id,
+                page_number=2,
+                page_title=f"第{number}章方法",
+                page_text=f"第{number}章方法步骤完整页面内容",
+                script_text=f"第{number}章方法步骤讲解文稿",
+                script_status=ProcessStatus.READY.value,
+            )
+            db.add_all(
+                [
+                    concept_page,
+                    method_page,
+                ]
+            )
+            db.flush()
+            if number == 5:
+                range_page_id = concept_page.id
+        db.commit()
+
+    from app.services import qa as qa_service
+
+    captured: dict[str, list[str]] = {}
+    monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        qa_service.ai_service,
+        "classify_qa_question_scope",
+        lambda **kwargs: {"scope": "specific", "chapter_id": None, "confidence": 0.1, "reason": "test"},
+    )
+
+    def answer_question(**kwargs):
+        captured["contexts"] = list(kwargs["contexts"])
+        return "已讲解第5到第7章。", False, None
+
+    monkeypatch.setattr(qa_service.ai_service, "answer_question", answer_question)
+    assert range_page_id is not None
+    response = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "lesson_page_id": range_page_id, "question": "请为我详细讲解5-7章的知识"},
+        headers=student_headers,
+    )
+    assert response.status_code == 200, response.text
+    joined_context = "\n".join(captured["contexts"])
+    assert "第5章核心概念完整页面内容" in joined_context
+    assert "第6章核心概念完整页面内容" in joined_context
+    assert "第7章核心概念完整页面内容" in joined_context
+
+
+def test_qa_chapters_from_query_supports_chapter_ranges_and_lists():
+    from app.services.qa import _chapters_from_query
+
+    chapters = [Chapter(id=number, title=f"第{number}章 测试章节", order_index=number) for number in range(1, 9)]
+
+    assert [chapter.id for chapter in _chapters_from_query("请讲解第五到第七章", chapters)] == [5, 6, 7]
+    assert [chapter.id for chapter in _chapters_from_query("复习第5、6、7章", chapters)] == [5, 6, 7]
+
+
+def test_rag_context_packing_keeps_later_chapters_when_context_is_long():
+    contexts = [f"第{number}章 " + (f"核心内容{number}" * 1200) for number in range(5, 8)]
+
+    packed = _pack_rag_contexts(contexts, limit=1200)
+
+    assert len(packed) <= 1200
+    assert "第5章" in packed
+    assert "第6章" in packed
+    assert "第7章" in packed
+
+
 def test_qa_uses_course_context_for_course_overview_when_vector_search_misses(client, monkeypatch):
     course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
 
@@ -1231,6 +1351,69 @@ def test_qa_uses_course_context_for_course_overview_when_vector_search_misses(cl
     assert captured["contexts"]
     assert any(item.startswith("课程：") for item in captured["contexts"])
     assert any("章节结构：" in item or "资料片段：" in item or "页面内容：" in item or "资料：" in item for item in captured["contexts"])
+
+
+def test_lesson_activity_skips_non_teaching_pages(client):
+    course, chapter, _lesson_id, _teacher_headers, _student_headers = bootstrap_course_with_material(client)
+
+    with db_session.SessionLocal() as db:
+        db_course = db.get(Course, course["id"])
+        assert db_course is not None
+        material = CourseMaterial(
+            course_id=db_course.id,
+            chapter_id=chapter["id"],
+            uploader_id=db_course.teacher_id,
+            title="含介绍页课件",
+            category=MaterialCategory.COURSEWARE.value,
+            material_type=MaterialType.PDF.value,
+            size_bytes=128,
+            original_filename="intro.pdf",
+            storage_path="tests/intro.pdf",
+            extracted_text="课程介绍与线性变换定义",
+            parse_status=ProcessStatus.READY.value,
+            vector_status=ProcessStatus.READY.value,
+        )
+        db.add(material)
+        db.flush()
+        lesson = Lesson(
+            course_id=db_course.id,
+            chapter_id=chapter["id"],
+            material_id=material.id,
+            title="含介绍页课时",
+            summary="测试",
+            page_count=2,
+            status=LessonStatus.PUBLISHED.value,
+        )
+        db.add(lesson)
+        db.flush()
+        intro_page = LessonPage(
+            lesson_id=lesson.id,
+            page_number=1,
+            page_title="课程介绍",
+            page_text="授课教师：张老师。邮箱：teacher@example.com。课程群二维码。",
+            script_text="授课教师和联系方式介绍。",
+            script_status=ProcessStatus.READY.value,
+        )
+        teaching_page = LessonPage(
+            lesson_id=lesson.id,
+            page_number=2,
+            page_title="线性变换定义",
+            page_text="线性变换定义：保持向量加法和数乘结构的映射。矩阵可以表示线性变换。",
+            script_text="本页讲解线性变换定义、性质和矩阵表示方法。",
+            script_status=ProcessStatus.READY.value,
+        )
+        db.add_all([intro_page, teaching_page])
+        db.flush()
+        intro_page_id = intro_page.id
+        teaching_page_id = teaching_page.id
+        ensure_lesson_pedagogy_artifacts(db, lesson=lesson, pages=[intro_page, teaching_page])
+        db.commit()
+        activities = page_activity_payload(db, lesson_page_ids=[intro_page_id, teaching_page_id])
+        intro_activities = activities.get(intro_page_id, [])
+        teaching_activities = activities.get(teaching_page_id, [])
+
+    assert intro_activities == []
+    assert teaching_activities
 
 
 def test_qa_falls_back_to_database_chunks_when_vector_store_is_readonly(client, monkeypatch):
