@@ -20,6 +20,7 @@ from app.services.teacher import (
     get_teacher_profile,
     get_teacher_analysis,
     get_teacher_course_home,
+    get_teacher_course_lessons,
     get_teacher_dashboard,
     get_teacher_materials_summary,
     get_teacher_student_detail,
@@ -164,6 +165,16 @@ def course_home_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     return success_response(data=get_teacher_course_home(db, course_id=course_id, user=user), request_id=request.state.request_id)
+
+
+@router.get("/courses/{course_id}/lessons")
+def course_lessons_endpoint(
+    course_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    return success_response(data=get_teacher_course_lessons(db, course_id=course_id, user=user), request_id=request.state.request_id)
 
 
 @router.get("/courses/{course_id}/materials/summary")
