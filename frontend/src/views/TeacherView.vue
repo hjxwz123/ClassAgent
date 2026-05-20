@@ -281,7 +281,8 @@
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
           <article class="filter-card"><div class="search-box"><Search :size="16" /><input v-model="lessonFilter.keyword" placeholder="课时名称" /></div><AppSelect v-model="lessonFilter.chapter_id" :options="lessonChapterOptions" /><AppSelect v-model="lessonFilter.status" :options="lessonStatusOptions" /><AppSelect v-model="lessonSort" :options="lessonSortOptions" /></article>
-          <TransitionGroup name="card-list" tag="div" class="lesson-card-list"><article v-for="lesson in filteredLessons" :key="lesson.id" class="lesson-card"><div class="lesson-thumb">{{ lesson.page_count || 0 }}</div><section><h2>{{ lesson.title }}<span class="tag" :class="statusClass(lesson.status)">{{ statusText(lesson.status) }}</span></h2><p>{{ chapterName(lesson.chapter_id) }} · {{ lesson.page_count }}页 · {{ lesson.learned_count || 0 }}/{{ courseHome.quick_counts?.student_count || 0 }}人 · {{ shortDate(lesson.published_at || lesson.created_at) }}</p><AppProgress :value="lesson.average_progress || 0" :tone="Number(lesson.average_progress || 0) >= 70 ? 'success' : Number(lesson.average_progress || 0) >= 30 ? 'warning' : 'danger'" /></section><div class="lesson-actions"><button class="icon-action" :data-loading="isPending(`preview-lesson-${lesson.id}`)" :disabled="isPending(`preview-lesson-${lesson.id}`)" @click="openLessonPreview(lesson.id)"><Presentation :size="16" />预览</button><button class="icon-action" @click="openLessonScript(lesson)"><Wand2 :size="16" />脚本</button><button class="icon-action" :data-loading="isPending(`duplicate-lesson-${lesson.id}`)" :disabled="isPending(`duplicate-lesson-${lesson.id}`)" @click="duplicateLesson(lesson.id)"><Copy :size="16" />复制</button><AppCheckbox variant="switch" :label="lesson.status === 'published' ? '已发布' : '草稿'" :model-value="lesson.status === 'published'" :disabled="isPending(`toggle-lesson-${lesson.id}`)" @update:model-value="toggleLessonPublish(lesson)" /><button class="icon-action danger" :data-loading="isPending(`delete-lesson-${lesson.id}`)" :disabled="isPending(`delete-lesson-${lesson.id}`)" @click="deleteLesson(lesson.id)"><Trash2 :size="16" />删除</button></div></article><EmptyState v-if="!filteredLessons.length" key="empty" text="暂无课时" /></TransitionGroup>
+          <TransitionGroup name="card-list" tag="div" class="lesson-card-list"><article v-for="lesson in pagedLessons" :key="lesson.id" class="lesson-card"><div class="lesson-thumb">{{ lesson.page_count || 0 }}</div><section><h2>{{ lesson.title }}<span class="tag" :class="statusClass(lesson.status)">{{ statusText(lesson.status) }}</span></h2><p>{{ chapterName(lesson.chapter_id) }} · {{ lesson.page_count }}页 · {{ lesson.learned_count || 0 }}/{{ courseHome.quick_counts?.student_count || 0 }}人 · {{ shortDate(lesson.published_at || lesson.created_at) }}</p><AppProgress :value="lesson.average_progress || 0" :tone="Number(lesson.average_progress || 0) >= 70 ? 'success' : Number(lesson.average_progress || 0) >= 30 ? 'warning' : 'danger'" /></section><div class="lesson-actions"><button class="icon-action" :data-loading="isPending(`preview-lesson-${lesson.id}`)" :disabled="isPending(`preview-lesson-${lesson.id}`)" @click="openLessonPreview(lesson.id)"><Presentation :size="16" />预览</button><button class="icon-action" @click="openLessonScript(lesson)"><Wand2 :size="16" />脚本</button><button class="icon-action" :data-loading="isPending(`duplicate-lesson-${lesson.id}`)" :disabled="isPending(`duplicate-lesson-${lesson.id}`)" @click="duplicateLesson(lesson.id)"><Copy :size="16" />复制</button><AppCheckbox variant="switch" :label="lesson.status === 'published' ? '已发布' : '草稿'" :model-value="lesson.status === 'published'" :disabled="isPending(`toggle-lesson-${lesson.id}`)" @update:model-value="toggleLessonPublish(lesson)" /><button class="icon-action danger" :data-loading="isPending(`delete-lesson-${lesson.id}`)" :disabled="isPending(`delete-lesson-${lesson.id}`)" @click="deleteLesson(lesson.id)"><Trash2 :size="16" />删除</button></div></article><EmptyState v-if="!filteredLessons.length" key="empty" text="暂无课时" /></TransitionGroup>
+          <nav v-if="lessonPageCount > 1" class="lesson-pager"><button class="btn btn-ghost btn-sm" :disabled="lessonPage <= 1" @click="lessonPage = Math.max(1, lessonPage - 1)"><ChevronLeft :size="14" />上一页</button><span class="lesson-pager-info">{{ lessonPage }} / {{ lessonPageCount }} · 共 {{ filteredLessons.length }} 个课时</span><button class="btn btn-ghost btn-sm" :disabled="lessonPage >= lessonPageCount" @click="lessonPage = Math.min(lessonPageCount, lessonPage + 1)">下一页<ChevronRight :size="14" /></button></nav>
         </template>
       </section>
 
@@ -726,6 +727,8 @@ const weakQuizTaskMaxPolls = 240;
 const courseFilter = reactive({ keyword: "", term: "", status: "" });
 const materialFilter = reactive({ keyword: "", type: "", status: "" });
 const lessonFilter = reactive({ keyword: "", chapter_id: 0, status: "" });
+const lessonPage = ref(1);
+const lessonPageSize = 12;
 const studentFilter = reactive({ keyword: "", progress: "", active: "" });
 const courseForm = reactive({ id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, allow_general_ai_answer: false, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] as any[] });
 const weakQuizForm = reactive({
@@ -822,11 +825,22 @@ const filteredMaterials = computed(() => {
   return rows;
 });
 const filteredLessons = computed(() => {
-  const rows = (courseHome.value.lessons || lessons.value).filter((lesson: any) => (!lessonFilter.keyword || lesson.title.includes(lessonFilter.keyword)) && (!lessonFilter.chapter_id || lesson.chapter_id === lessonFilter.chapter_id) && (!lessonFilter.status || lesson.status === lessonFilter.status));
+  const source = lessons.value.length ? lessons.value : (courseHome.value.lessons || []);
+  const rows = source.filter((lesson: any) => (!lessonFilter.keyword || lesson.title.includes(lessonFilter.keyword)) && (!lessonFilter.chapter_id || lesson.chapter_id === lessonFilter.chapter_id) && (!lessonFilter.status || lesson.status === lessonFilter.status));
   if (lessonSort.value === "published") return [...rows].sort((a: any, b: any) => new Date(b.published_at || b.created_at || 0).getTime() - new Date(a.published_at || a.created_at || 0).getTime());
   if (lessonSort.value === "students") return [...rows].sort((a: any, b: any) => Number(b.learned_count || 0) - Number(a.learned_count || 0));
   return [...rows].sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
 });
+const lessonPageCount = computed(() => Math.max(1, Math.ceil(filteredLessons.value.length / lessonPageSize)));
+const pagedLessons = computed(() => {
+  const start = (lessonPage.value - 1) * lessonPageSize;
+  return filteredLessons.value.slice(start, start + lessonPageSize);
+});
+watch(filteredLessons, (rows) => {
+  const maxPage = Math.max(1, Math.ceil(rows.length / lessonPageSize));
+  if (lessonPage.value > maxPage) lessonPage.value = maxPage;
+});
+watch([() => lessonFilter.keyword, () => lessonFilter.chapter_id, () => lessonFilter.status, lessonSort], () => { lessonPage.value = 1; });
 const filteredStudents = computed(() => (studentPayload.value.items || []).filter((item: any) => {
   const nameMatch = !studentFilter.keyword || item.student.nickname.includes(studentFilter.keyword);
   const progressMatch = !studentFilter.progress || (studentFilter.progress === "none" ? item.progress_percent < 5 : studentFilter.progress === "done" ? item.progress_percent > 80 : item.progress_percent >= 5 && item.progress_percent <= 80);
@@ -977,7 +991,11 @@ async function loadMaterials() {
   const rows = (await run(() => api.get<any[]>("/materials", { course_id: currentCourse.value!.id, keyword: materialFilter.keyword, category: "" }))) || [];
   materials.value = applyMaterialProcessingOverrides(rows);
 }
-async function loadLessons() { await loadCourseHome(); }
+async function loadLessons() {
+  if (!currentCourse.value) return;
+  const result = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/lessons`))) as { items?: any[] } | undefined;
+  lessons.value = result?.items || [];
+}
 async function loadStudents() { if (!currentCourse.value) return; studentPayload.value = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/students`))) || { stats: {}, items: [] }; }
 function analysisDays() { return analysisRange.value === "本周" ? 7 : analysisRange.value === "本月" ? 30 : 120; }
 function analysisCacheKey() { return currentCourse.value ? `${currentCourse.value.id}:${analysisDays()}` : ""; }
@@ -1771,7 +1789,7 @@ async function markAllReviewed() {
     else if (materialDetail.value?.lesson_id) await openLessonWorkbench(materialDetail.value.lesson_id);
   });
 }
-async function publishLessonFromMaterial() { if (!ensureCurrentCourseOperable()) return; if (!materialDetail.value?.lesson_id) return emit("notice", "warning", "暂无可发布的课时"); await withAction("publish-lesson", () => api.post(`/lessons/${materialDetail.value!.lesson_id}/publish`), "已发布"); }
+async function publishLessonFromMaterial() { if (!ensureCurrentCourseOperable()) return; if (!materialDetail.value?.lesson_id) return emit("notice", "warning", "暂无可发布的课时"); await withAction("publish-lesson", async () => { await run(() => api.post(`/lessons/${materialDetail.value!.lesson_id}/publish`)); await Promise.all([loadCourseHome(), loadLessons()]); }, "已发布"); }
 async function toggleLessonPublish(lesson: any) { if (!ensureCurrentCourseOperable()) return; await withAction(`toggle-lesson-${lesson.id}`, async () => { await run(() => api.post(`/lessons/${lesson.id}/${lesson.status === 'published' ? 'unpublish' : 'publish'}`), "已更新"); await loadLessons(); }); }
 async function duplicateLesson(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`duplicate-lesson-${id}`, async () => { await run(() => api.post(`/teacher/lessons/${id}/duplicate`), "已复制"); await loadLessons(); }); }
 async function deleteLesson(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`delete-lesson-${id}`, async () => { await run(() => api.delete(`/teacher/lessons/${id}`), "已删除"); await loadLessons(); }); }

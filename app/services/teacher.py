@@ -517,6 +517,18 @@ def get_teacher_course_home(db: Session, *, course_id: int, user: User) -> dict:
     }
 
 
+def get_teacher_course_lessons(db: Session, *, course_id: int, user: User) -> dict:
+    _assert_course_access(db, course_id=course_id, user=user)
+    counts = _course_counts(db, course_id)
+    student_total = counts["student_count"]
+    items = []
+    for lesson in db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc())):
+        data = _as_dict(lesson)
+        data.update(_lesson_progress(db, lesson, student_total))
+        items.append(data)
+    return {"items": items, "total": len(items)}
+
+
 def get_teacher_materials_summary(db: Session, *, course_id: int, user: User) -> dict:
     from app.services.materials import repair_materials_with_existing_pages
 
