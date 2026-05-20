@@ -34,6 +34,15 @@ _QA_FALLBACK_PAGE_SCAN_LIMIT = 240
 _QA_VECTOR_CONTEXT_LIMIT = 8
 _QA_DETAIL_VECTOR_CONTEXT_LIMIT = 10
 _QA_RELATED_PAGE_CONTEXT_LIMIT = 6
+_QA_CHAPTER_RANGE_MAX = 8
+_CHAPTER_NUM_TOKEN = r"\d{1,3}|[零〇一二两三四五六七八九十百]{1,8}"
+_CHAPTER_RANGE_PATTERN = re.compile(
+    rf"(?:第\s*)?(?P<start>{_CHAPTER_NUM_TOKEN})\s*(?:章\s*)?(?:[-~—–至到])\s*(?:第\s*)?(?P<end>{_CHAPTER_NUM_TOKEN})\s*章"
+)
+_CHAPTER_SINGLE_PATTERN = re.compile(rf"(?:第\s*)?(?P<num>{_CHAPTER_NUM_TOKEN})\s*章")
+_CHAPTER_LIST_PATTERN = re.compile(
+    rf"(?P<body>(?:第\s*)?(?:{_CHAPTER_NUM_TOKEN})\s*(?:章)?(?:\s*(?:[、,，/]|和|与|及)\s*(?:第\s*)?(?:{_CHAPTER_NUM_TOKEN})\s*(?:章)?)+)"
+)
 _QA_QUERY_STOPWORDS = {
     "前序对话",
     "当前问题",
@@ -278,6 +287,87 @@ def _score_text_for_query(*, title: str, text: str, page_number: int | None, que
     )
 
 
+def _chapter_number_token(value: str) -> int | None:
+    token = str(value or "").strip().replace("两", "二").replace("〇", "零")
+    if not token:
+        return None
+    if token.isdigit():
+        number = int(token)
+        return number if number > 0 else None
+    digits = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+    if token in digits and digits[token] > 0:
+        return digits[token]
+    if "百" in token:
+        left, _, right = token.partition("百")
+        hundred = digits.get(left, 1 if not left else 0)
+        tail = _chapter_number_token(right) if right else 0
+        number = hundred * 100 + int(tail or 0)
+        return number if number > 0 else None
+    if "十" in token:
+        left, _, right = token.partition("十")
+        ten = digits.get(left, 1 if not left else 0)
+        one = digits.get(right, 0) if right else 0
+        number = ten * 10 + one
+        return number if number > 0 else None
+    return None
+
+
+def _chapter_display_number(chapter: Chapter) -> int | None:
+    for match in _CHAPTER_SINGLE_PATTERN.finditer(chapter.title or ""):
+        number = _chapter_number_token(match.group("num"))
+        if number is not None:
+            return number
+    try:
+        order_index = int(chapter.order_index or 0)
+    except (TypeError, ValueError):
+        order_index = 0
+    return order_index if order_index > 0 else None
+
+
+def _chapters_from_query(query: str, chapters: list[Chapter]) -> list[Chapter]:
+    if not query or not chapters:
+        return []
+    by_number: dict[int, list[Chapter]] = {}
+    for chapter in chapters:
+        number = _chapter_display_number(chapter)
+        if number is not None:
+            by_number.setdefault(number, []).append(chapter)
+
+    selected_ids: set[int] = set()
+    for match in _CHAPTER_RANGE_PATTERN.finditer(query):
+        start = _chapter_number_token(match.group("start"))
+        end = _chapter_number_token(match.group("end"))
+        if start is None or end is None:
+            continue
+        if start > end:
+            start, end = end, start
+        if end - start + 1 > _QA_CHAPTER_RANGE_MAX:
+            end = start + _QA_CHAPTER_RANGE_MAX - 1
+        for number in range(start, end + 1):
+            selected_ids.update(chapter.id for chapter in by_number.get(number, []))
+
+    range_spans = [match.span() for match in _CHAPTER_RANGE_PATTERN.finditer(query)]
+    for match in _CHAPTER_SINGLE_PATTERN.finditer(query):
+        if any(start <= match.start() and match.end() <= end for start, end in range_spans):
+            continue
+        number = _chapter_number_token(match.group("num"))
+        if number is not None:
+            selected_ids.update(chapter.id for chapter in by_number.get(number, []))
+
+    for match in _CHAPTER_LIST_PATTERN.finditer(query):
+        body = match.group("body")
+        if "章" not in body:
+            continue
+        for value in re.findall(rf"(?:第\s*)?({_CHAPTER_NUM_TOKEN})\s*(?:章)?", body):
+            number = _chapter_number_token(value)
+            if number is not None:
+                selected_ids.update(chapter.id for chapter in by_number.get(number, []))
+
+    if not selected_ids:
+        return []
+    return [chapter for chapter in chapters if chapter.id in selected_ids]
+
+
 def _page_context_text(page: LessonPage, lesson: Lesson) -> str:
     page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
     script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
@@ -411,7 +501,14 @@ def _material_keyword_context(
     return contexts, sources
 
 
-def _chapter_context(db: Session, *, course_id: int, chapter_id: int | None, limit: int = 8) -> tuple[list[str], list[dict]]:
+def _chapter_context(
+    db: Session,
+    *,
+    course_id: int,
+    chapter_id: int | None,
+    limit: int = 8,
+    page_limit: int | None = None,
+) -> tuple[list[str], list[dict]]:
     if chapter_id is None:
         return [], []
     chapter = db.get(Chapter, chapter_id)
@@ -424,12 +521,14 @@ def _chapter_context(db: Session, *, course_id: int, chapter_id: int | None, lim
         contexts.append(f"{heading}\n章节说明：{chapter.description}")
         sources.append({"chapter_id": chapter.id, "chapter_title": chapter.title, "type": "chapter"})
 
+    chunk_limit = max(0, int(limit))
+    page_limit = max(1, int(page_limit if page_limit is not None else max(limit * 3, 12)))
     chunks = list(
         db.scalars(
             select(KnowledgeChunk)
             .where(KnowledgeChunk.course_id == course_id, KnowledgeChunk.chapter_id == chapter_id)
             .order_by(KnowledgeChunk.id)
-            .limit(limit)
+            .limit(chunk_limit)
         )
     )
     for chunk in chunks:
@@ -440,24 +539,22 @@ def _chapter_context(db: Session, *, course_id: int, chapter_id: int | None, lim
         source = dict(chunk.source_meta or {})
         source.update({"chapter_id": chapter.id, "chapter_title": chapter.title, "chunk_id": chunk.id, "title": chunk.title})
         sources.append(source)
-    if contexts:
-        return contexts, sources
 
     page_rows = db.execute(
         select(LessonPage, Lesson)
         .join(Lesson, Lesson.id == LessonPage.lesson_id)
         .where(Lesson.course_id == course_id, Lesson.chapter_id == chapter_id)
         .order_by(Lesson.id, LessonPage.page_number)
-        .limit(limit)
+        .limit(page_limit)
     )
     for page, lesson in page_rows:
         page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
         script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
         pieces = [f"{heading}", f"课时：{lesson.title}", f"页面：第{page.page_number}页 {page.page_title or ''}".strip()]
         if page_text:
-            pieces.append(f"页面内容：{_trim_context(page_text)}")
+            pieces.append(f"页面内容：{_trim_context(page_text, limit=1000)}")
         if script_text and script_text != page_text:
-            pieces.append(f"讲解文稿：{_trim_context(script_text)}")
+            pieces.append(f"讲解文稿：{_trim_context(script_text, limit=800)}")
         if len(pieces) <= 3:
             continue
         contexts.append("\n".join(pieces))
@@ -605,6 +702,8 @@ def _qa_contexts_and_sources(
     course = db.get(Course, course_id)
     chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
     chapter_rows = [{"id": chapter.id, "title": chapter.title, "order_index": chapter.order_index} for chapter in chapters]
+    explicit_chapters = _chapters_from_query(payload.question, chapters)
+    explicit_chapter_ids = [chapter.id for chapter in explicit_chapters]
     classification = ai_service.classify_qa_question_scope(
         question=payload.question,
         course_name=course.name if course else "",
@@ -613,40 +712,92 @@ def _qa_contexts_and_sources(
     )
     scope = classification.get("scope")
     classified_chapter_id = classification.get("chapter_id")
+    if explicit_chapter_ids:
+        scope = "chapter_overview"
+        if len(explicit_chapter_ids) == 1:
+            classified_chapter_id = explicit_chapter_ids[0]
+    explicit_chapter_scope = bool(explicit_chapter_ids)
     retrieval_chapter_id = payload.chapter_id if payload.chapter_id is not None else (classified_chapter_id if scope == "chapter_overview" else None)
     lesson_id = _lesson_id_for_page(db, course_id=course_id, lesson_page_id=payload.lesson_page_id)
-    artifact_hits = search_pedagogy_artifacts(
-        db,
-        course_id=course_id,
-        query=question_for_ai,
-        chapter_id=None if lesson_id is not None else retrieval_chapter_id,
-        lesson_id=lesson_id,
-        lesson_page_id=None,
-        types=QA_ARTIFACT_TYPES,
-        limit=10 if lesson_id is not None else 8,
-    )
-    chunks = search_course_knowledge(
-        db,
-        course_id=course_id,
-        query=question_for_ai,
-        chapter_id=None if lesson_id is not None else retrieval_chapter_id,
-        lesson_id=lesson_id,
-        lesson_page_id=None,
-        limit=_QA_DETAIL_VECTOR_CONTEXT_LIMIT if lesson_id is not None else _QA_VECTOR_CONTEXT_LIMIT,
-    )
+    artifact_hits = []
+    chunks = []
+    if explicit_chapter_scope:
+        artifact_limit = max(2, 8 // max(len(explicit_chapter_ids), 1))
+        chunk_limit = max(2, _QA_VECTOR_CONTEXT_LIMIT // max(len(explicit_chapter_ids), 1))
+        for chapter_id in explicit_chapter_ids:
+            artifact_hits.extend(
+                search_pedagogy_artifacts(
+                    db,
+                    course_id=course_id,
+                    query=question_for_ai,
+                    chapter_id=chapter_id,
+                    lesson_id=None,
+                    lesson_page_id=None,
+                    types=QA_ARTIFACT_TYPES,
+                    limit=artifact_limit,
+                )
+            )
+            chunks.extend(
+                search_course_knowledge(
+                    db,
+                    course_id=course_id,
+                    query=question_for_ai,
+                    chapter_id=chapter_id,
+                    lesson_id=None,
+                    lesson_page_id=None,
+                    limit=chunk_limit,
+                )
+            )
+    else:
+        artifact_hits = search_pedagogy_artifacts(
+            db,
+            course_id=course_id,
+            query=question_for_ai,
+            chapter_id=None if lesson_id is not None else retrieval_chapter_id,
+            lesson_id=lesson_id,
+            lesson_page_id=None,
+            types=QA_ARTIFACT_TYPES,
+            limit=10 if lesson_id is not None else 8,
+        )
+        chunks = search_course_knowledge(
+            db,
+            course_id=course_id,
+            query=question_for_ai,
+            chapter_id=None if lesson_id is not None else retrieval_chapter_id,
+            lesson_id=lesson_id,
+            lesson_page_id=None,
+            limit=_QA_DETAIL_VECTOR_CONTEXT_LIMIT if lesson_id is not None else _QA_VECTOR_CONTEXT_LIMIT,
+        )
     page_contexts, page_sources = _lesson_page_context(db, course_id=course_id, lesson_page_id=payload.lesson_page_id)
     fallback_chapter_id = payload.chapter_id if payload.chapter_id is not None else (retrieval_chapter_id if scope == "chapter_overview" else None)
-    related_page_contexts, related_page_sources = _page_keyword_context(
-        db,
-        course_id=course_id,
-        query=question_for_ai,
-        lesson_id=lesson_id,
-        chapter_id=fallback_chapter_id,
-        exclude_page_id=payload.lesson_page_id,
-        limit=_QA_RELATED_PAGE_CONTEXT_LIMIT,
-    )
+    related_page_contexts: list[str] = []
+    related_page_sources: list[dict] = []
+    if explicit_chapter_scope:
+        page_limit = max(2, _QA_RELATED_PAGE_CONTEXT_LIMIT // max(len(explicit_chapter_ids), 1))
+        for chapter_id in explicit_chapter_ids:
+            chapter_page_contexts, chapter_page_sources = _page_keyword_context(
+                db,
+                course_id=course_id,
+                query=question_for_ai,
+                lesson_id=None,
+                chapter_id=chapter_id,
+                exclude_page_id=payload.lesson_page_id,
+                limit=page_limit,
+            )
+            related_page_contexts.extend(chapter_page_contexts)
+            related_page_sources.extend(chapter_page_sources)
+    else:
+        related_page_contexts, related_page_sources = _page_keyword_context(
+            db,
+            course_id=course_id,
+            query=question_for_ai,
+            lesson_id=lesson_id,
+            chapter_id=fallback_chapter_id,
+            exclude_page_id=payload.lesson_page_id,
+            limit=_QA_RELATED_PAGE_CONTEXT_LIMIT,
+        )
     rewritten_query = ""
-    if not artifact_hits and not chunks and not related_page_contexts:
+    if not explicit_chapter_ids and not artifact_hits and not chunks and not related_page_contexts:
         rewritten_query = ai_service.rewrite_retrieval_query(question=payload.question, history=history, db=db)
         if rewritten_query and rewritten_query.strip() not in {payload.question.strip(), question_for_ai.strip()}:
             artifact_hits = search_pedagogy_artifacts(
@@ -684,30 +835,53 @@ def _qa_contexts_and_sources(
     course_sources: list[dict] = []
     material_contexts: list[str] = []
     material_sources: list[dict] = []
-    if scope == "chapter_overview":
-        chapter_contexts, chapter_sources = _chapter_context(db, course_id=course_id, chapter_id=retrieval_chapter_id)
+    if explicit_chapter_scope:
+        for chapter_id in explicit_chapter_ids:
+            current_contexts, current_sources = _chapter_context(
+                db,
+                course_id=course_id,
+                chapter_id=chapter_id,
+                limit=8,
+                page_limit=28,
+            )
+            chapter_contexts.extend(current_contexts)
+            chapter_sources.extend(current_sources)
+    elif scope == "chapter_overview":
+        chapter_contexts, chapter_sources = _chapter_context(db, course_id=course_id, chapter_id=retrieval_chapter_id, page_limit=32)
     if scope == "course_overview" and not page_contexts and not chapter_contexts:
         course_contexts, course_sources = _course_context(db, course_id=course_id)
     if not related_page_contexts and not chunks:
         material_query = rewritten_query or question_for_ai
-        material_contexts, material_sources = _material_keyword_context(
-            db,
-            course_id=course_id,
-            query=material_query,
-            chapter_id=fallback_chapter_id,
-        )
+        if explicit_chapter_scope:
+            for chapter_id in explicit_chapter_ids:
+                current_contexts, current_sources = _material_keyword_context(
+                    db,
+                    course_id=course_id,
+                    query=material_query,
+                    chapter_id=chapter_id,
+                    limit=2,
+                )
+                material_contexts.extend(current_contexts)
+                material_sources.extend(current_sources)
+        else:
+            material_contexts, material_sources = _material_keyword_context(
+                db,
+                course_id=course_id,
+                query=material_query,
+                chapter_id=fallback_chapter_id,
+            )
     structured_contexts = artifact_contexts(artifact_hits)
     contexts = _merge_contexts(
-        [*structured_contexts, *page_contexts, *related_page_contexts, *chapter_contexts, *course_contexts, *material_contexts],
+        [*page_contexts, *chapter_contexts, *course_contexts, *structured_contexts, *related_page_contexts, *material_contexts],
         chunks,
         trailing=lesson_outline_contexts,
     )
     sources = [
-        *artifact_sources(artifact_hits),
         *page_sources,
-        *related_page_sources,
         *chapter_sources,
         *course_sources,
+        *artifact_sources(artifact_hits),
+        *related_page_sources,
         *material_sources,
         *(chunk.source_meta or {} for chunk in chunks),
         *lesson_outline_sources,

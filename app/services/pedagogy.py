@@ -103,6 +103,14 @@ _NOISE_IMAGE_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 _PROBLEM_INTENT_PATTERN = re.compile(r"题|例|求|解|证明|推导|计算|判断|步骤|方法|模板|变式|思路")
+_NON_TEACHING_TITLE_PATTERN = re.compile(
+    r"(封面|目录|大纲|课程介绍|教师介绍|教材介绍|参考资料|参考文献|致谢|谢谢|联系方式|课程安排|章节安排|考核方式|学习要求|版权|声明|结束)",
+    flags=re.IGNORECASE,
+)
+_TEACHING_SIGNAL_PATTERN = re.compile(
+    r"(定义|定理|性质|公式|证明|推导|算法|步骤|方法|模型|概念|原理|例题|例|计算|求解|应用|分析|比较|分类|结构|流程|规则|条件|结论|矩阵|函数|系统|网络|数据|语法|语义|线性|概率|统计)",
+    flags=re.IGNORECASE,
+)
 
 
 def _compact_text(value: Any, *, limit: int | None = None) -> str:
@@ -210,6 +218,40 @@ def _fallback_page_payload(*, page: LessonPage, lesson: Lesson) -> dict[str, Any
         "discussion_prompts": [f"请举一个与 {main} 同结构但条件变化的例子，并说明步骤是否变化。"],
         "demo_ideas": [f"用一个小例子演示 {main} 从条件识别到结论形成的过程。"],
     }
+
+
+def _payload_says_non_teaching(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    for key in ("is_teaching_page", "activity_applicable", "has_teaching_content", "should_generate_activity"):
+        if key in payload and payload.get(key) is False:
+            return True
+    return False
+
+
+def _is_teachable_page(page: LessonPage, lesson: Lesson, payload: Any | None = None) -> bool:
+    if _payload_says_non_teaching(payload):
+        return False
+    title = _compact_text(page.page_title or "", limit=120)
+    page_text = _compact_text(page.page_text, limit=1600)
+    script_text = _compact_text(page.script_text, limit=800)
+    combined = " ".join(part for part in [title, page_text, script_text] if part).strip()
+    if not combined:
+        return False
+    title_is_non_teaching = bool(title and _NON_TEACHING_TITLE_PATTERN.search(title))
+    has_teaching_signal = bool(_TEACHING_SIGNAL_PATTERN.search(combined))
+    if len(combined) < 60 and not has_teaching_signal:
+        return False
+    if title_is_non_teaching and (len(combined) < 420 or not has_teaching_signal):
+        return False
+    if len(combined) < 120 and not has_teaching_signal:
+        return False
+    administrative_hits = len(
+        re.findall(r"(上课时间|办公室|邮箱|成绩|考勤|迟到|请假|教材|参考书|二维码|扫码|课程群|联系电话|答疑时间)", combined)
+    )
+    if administrative_hits >= 2 and not has_teaching_signal:
+        return False
+    return True
 
 
 def _normalize_page_payload(payload: Any, *, page: LessonPage, lesson: Lesson) -> dict[str, Any]:
@@ -343,6 +385,8 @@ def _page_artifacts(
     order_base: int,
     use_ai: bool = True,
 ) -> list[PedagogyArtifact]:
+    if not _is_teachable_page(page, lesson):
+        return []
     raw_payload: dict[str, Any] | None = None
     if use_ai:
         raw_payload = ai_service.generate_pedagogy_artifacts(
@@ -354,6 +398,8 @@ def _page_artifacts(
             script_text=page.script_text,
             db=db,
         )
+    if _payload_says_non_teaching(raw_payload):
+        return []
     payload = _normalize_page_payload(
         raw_payload,
         page=page,
@@ -788,10 +834,18 @@ def page_activity_payload(db: Session, *, lesson_page_ids: Sequence[int]) -> dic
     ids = [int(item) for item in lesson_page_ids if int(item or 0) > 0]
     if not ids:
         return {}
+    page_rows = db.execute(
+        select(LessonPage, Lesson)
+        .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .where(LessonPage.id.in_(ids))
+    )
+    teachable_pages = {page.id for page, lesson in page_rows if _is_teachable_page(page, lesson)}
+    if not teachable_pages:
+        return {}
     artifacts = list(
         db.scalars(
             select(PedagogyArtifact)
-            .where(PedagogyArtifact.lesson_page_id.in_(ids))
+            .where(PedagogyArtifact.lesson_page_id.in_(teachable_pages))
             .order_by(PedagogyArtifact.lesson_page_id, PedagogyArtifact.order_index, PedagogyArtifact.id)
         )
     )
