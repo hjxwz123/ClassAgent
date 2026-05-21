@@ -306,21 +306,44 @@ def _synthesize_or_none(script_text: str, db: Session) -> tuple[str | None, floa
         return None, None, str(exc)
 
 
+def _fallback_lesson_summary(*, title: str, pages: list[dict[str, Any]]) -> str:
+    merged = " ".join(str(page.get("page_text") or "").strip() for page in pages if str(page.get("page_text") or "").strip())
+    return f"{title}：{merged[:200] or '该资料已解析出课件页面，可继续补充讲解脚本。'}"
+
+
+def _fallback_page_script(page_data: dict[str, Any]) -> str:
+    heading = str(page_data.get("page_title") or "本页内容").strip() or "本页内容"
+    content = re.sub(r"\s+", " ", str(page_data.get("page_text") or "")).strip()
+    summary = content[:220] if len(content) > 220 else content
+    return (
+        f"{heading}的核心内容如下：\n"
+        f"1. 先理解本页定义与背景：{summary or '本页暂无可提取文字。'}\n"
+        "2. 再关注概念之间的联系与典型应用。\n"
+        "3. 最后结合课程上下文总结本页重点并准备继续学习。"
+    )
+
+
 def _summarize_lesson_with_limit(db: Session, *, title: str, pages: list[dict[str, Any]]) -> str:
-    with _material_ai_limiter:
-        return ai_service.summarize_lesson(title, [page["page_text"] for page in pages], db=db)
+    try:
+        with _material_ai_limiter:
+            return ai_service.summarize_lesson(title, [page["page_text"] for page in pages], db=db)
+    except Exception:
+        return _fallback_lesson_summary(title=title, pages=pages)
 
 
 def _generate_page_script_with_new_session(page_data: dict[str, Any]) -> str:
     from app.db import session as db_session
 
     with db_session.SessionLocal() as task_db:
-        with _material_ai_limiter:
-            return ai_service.generate_page_script(
-                title=page_data.get("page_title"),
-                content=page_data["page_text"],
-                db=task_db,
-            )
+        try:
+            with _material_ai_limiter:
+                return ai_service.generate_page_script(
+                    title=page_data.get("page_title"),
+                    content=page_data["page_text"],
+                    db=task_db,
+                )
+        except Exception:
+            return _fallback_page_script(page_data)
 
 
 def _generate_page_scripts(

@@ -73,11 +73,44 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
             statements.append("ALTER TABLE wrong_questions ADD COLUMN last_wrong_at DATETIME")
         if "last_correct_at" not in wrong_columns:
             statements.append("ALTER TABLE wrong_questions ADD COLUMN last_correct_at DATETIME")
+    if target_engine.dialect.name == "mysql":
+        _append_mysql_longtext_updates(inspector, table_names, statements)
     if not statements:
         return
     with target_engine.begin() as connection:
         for statement in statements:
             connection.execute(text(statement))
+
+
+def _append_mysql_longtext_updates(inspector, table_names: list[str], statements: list[str]) -> None:
+    targets = {
+        "course_materials": {
+            "extracted_text": "LONGTEXT NULL",
+        },
+        "lessons": {
+            "summary": "LONGTEXT NULL",
+        },
+        "lesson_pages": {
+            "page_text": "LONGTEXT NOT NULL",
+            "script_text": "LONGTEXT NULL",
+            "subtitle_text": "LONGTEXT NULL",
+        },
+        "knowledge_chunks": {
+            "content": "LONGTEXT NOT NULL",
+        },
+        "pedagogy_artifacts": {
+            "summary": "LONGTEXT NULL",
+            "content": "LONGTEXT NOT NULL",
+        },
+    }
+    for table_name, columns in targets.items():
+        if table_name not in table_names:
+            continue
+        existing_columns = {column["name"]: str(column["type"]).upper() for column in inspector.get_columns(table_name)}
+        for column_name, definition in columns.items():
+            column_type = existing_columns.get(column_name)
+            if column_type is not None and "LONGTEXT" not in column_type:
+                statements.append(f"ALTER TABLE {table_name} MODIFY COLUMN {column_name} {definition}")
 
 
 def drop_db() -> None:

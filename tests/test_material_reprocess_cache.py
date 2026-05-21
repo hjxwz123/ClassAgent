@@ -99,13 +99,13 @@ def test_reprocess_reuses_cached_pages_without_recalling_doc_parser(client, monk
     with db_session.SessionLocal() as db:
         stored_material = db.get(CourseMaterial, material["id"])
         assert stored_material is not None
-        assert stored_material.parse_status == "failed"
+        assert stored_material.parse_status == "ready"
         assert stored_material.extracted_text == "第一页课件内容。\n\n第二页课件内容。"
         assert stored_material.metadata_json["doc_parser_cache"]["page_count"] == 2
         assert stored_material.metadata_json["doc_parser_cache"]["source"] == "aliyun_docmind"
         first_task = db.scalar(select(AsyncTaskLog).where(AsyncTaskLog.target_id == material["id"]).order_by(AsyncTaskLog.id.desc()))
         assert first_task is not None
-        assert "script api failed" in str((first_task.detail or {}).get("error"))
+        assert first_task.status == "ready"
 
     reprocess_resp = client.post(f"/api/v1/materials/{material['id']}/reprocess", headers=teacher_headers)
     assert reprocess_resp.status_code == 200, reprocess_resp.text
