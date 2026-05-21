@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import (
@@ -25,6 +26,10 @@ from app.core.enums import (
     UserStatus,
 )
 from app.db.base import Base, SoftDeleteMixin, TimestampMixin
+
+
+def _long_text() -> Text:
+    return Text().with_variant(mysql.LONGTEXT(), "mysql")
 
 
 class User(TimestampMixin, SoftDeleteMixin, Base):
@@ -116,7 +121,7 @@ class CourseMaterial(TimestampMixin, SoftDeleteMixin, Base):
     original_filename: Mapped[str] = mapped_column(String(255))
     storage_path: Mapped[str] = mapped_column(String(500))
     preview_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extracted_text: Mapped[str | None] = mapped_column(_long_text(), nullable=True)
     parse_status: Mapped[str] = mapped_column(String(32), default=ProcessStatus.PENDING.value)
     vector_status: Mapped[str] = mapped_column(String(32), default=ProcessStatus.PENDING.value)
     metadata_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
@@ -130,7 +135,7 @@ class Lesson(TimestampMixin, Base):
     chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True, index=True)
     material_id: Mapped[int | None] = mapped_column(ForeignKey("course_materials.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255), index=True)
-    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary: Mapped[str | None] = mapped_column(_long_text(), nullable=True)
     page_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), default=LessonStatus.DRAFT.value)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -144,12 +149,12 @@ class LessonPage(TimestampMixin, Base):
     lesson_id: Mapped[int] = mapped_column(ForeignKey("lessons.id"), index=True)
     page_number: Mapped[int] = mapped_column(Integer)
     page_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    page_text: Mapped[str] = mapped_column(Text)
-    script_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    page_text: Mapped[str] = mapped_column(_long_text())
+    script_text: Mapped[str | None] = mapped_column(_long_text(), nullable=True)
     script_status: Mapped[str] = mapped_column(String(32), default=ProcessStatus.PENDING.value)
     audio_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     audio_duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
-    subtitle_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    subtitle_text: Mapped[str | None] = mapped_column(_long_text(), nullable=True)
 
 
 class PageNote(TimestampMixin, Base):
@@ -172,7 +177,7 @@ class KnowledgeChunk(TimestampMixin, Base):
     lesson_page_id: Mapped[int | None] = mapped_column(ForeignKey("lesson_pages.id"), nullable=True, index=True)
     chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(255))
-    content: Mapped[str] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(_long_text())
     tokens: Mapped[list | None] = mapped_column(JSON, nullable=True)
     embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)
     source_meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -189,8 +194,8 @@ class PedagogyArtifact(TimestampMixin, Base):
     chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True, index=True)
     artifact_type: Mapped[str] = mapped_column(String(64), index=True)
     title: Mapped[str] = mapped_column(String(255))
-    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    content: Mapped[str] = mapped_column(Text)
+    summary: Mapped[str | None] = mapped_column(_long_text(), nullable=True)
+    content: Mapped[str] = mapped_column(_long_text())
     keywords: Mapped[list | None] = mapped_column(JSON, nullable=True)
     payload: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, default=1)
