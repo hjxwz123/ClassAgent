@@ -774,9 +774,10 @@ form {
 }
 
 .auth.auth-dark .auth-card {
-  border-color: rgba(148,163,184,.26);
-  background: rgba(15,23,42,.9);
-  box-shadow: 0 30px 80px rgba(0,0,0,.46);
+  border-color: rgba(183, 228, 192, .32) !important;
+  background: linear-gradient(180deg, rgba(255,253,244,.98), rgba(247,241,222,.96)) !important;
+  color: #18251E !important;
+  box-shadow: 0 30px 80px rgba(0,0,0,.36);
 }
 
 .auth.auth-dark .auth-home-link {
@@ -789,21 +790,27 @@ form {
   color: #CBD5E1;
 }
 
-.auth.auth-dark .auth-copy h1,
-.auth.auth-dark .brand strong {
+.auth.auth-dark .auth-copy h1 {
   color: #F8FAFC;
 }
 
 .auth.auth-dark .auth-copy p,
-.auth.auth-dark .chalk-line,
-.auth.auth-dark .label,
-.auth.auth-dark .brand small {
+.auth.auth-dark .chalk-line {
   color: #CBD5E1;
+}
+
+.auth.auth-dark .brand strong,
+.auth.auth-dark .label {
+  color: #18251E !important;
+}
+
+.auth.auth-dark .brand small {
+  color: #536256 !important;
 }
 
 .auth.auth-dark .brand,
 .auth.auth-dark .brand span {
-  color: #67E8F9;
+  color: #4F8C5D !important;
 }
 
 .auth.auth-dark .brand span {
@@ -811,44 +818,50 @@ form {
 }
 
 .auth.auth-dark .tabs {
-  border-color: rgba(148,163,184,.24);
-  background: #0F172A;
+  border-color: rgba(79,140,93,.18) !important;
+  background: #E8DFC4 !important;
 }
 
 .auth.auth-dark .tabs button {
-  color: #CBD5E1;
+  color: #536256 !important;
 }
 
 .auth.auth-dark .tabs button.active {
-  background: rgba(0,240,255,.14);
-  color: #67E8F9;
+  background: #FFFDF4 !important;
+  color: #18251E !important;
   box-shadow: none;
 }
 
 .auth.auth-dark .input,
 .auth.auth-dark :deep(.password-field) {
-  border-color: rgba(148,163,184,.28);
-  background: #0F172A;
-  color: #F8FAFC;
+  border-color: rgba(79,140,93,.24) !important;
+  background: #FFFDF4 !important;
+  color: #18251E !important;
 }
 
 .auth.auth-dark :deep(.password-field input) {
-  color: #F8FAFC;
+  background: #FFFDF4 !important;
+  color: #18251E !important;
+}
+
+.auth.auth-dark .input::placeholder,
+.auth.auth-dark :deep(.password-field input)::placeholder {
+  color: #6B7A6F !important;
 }
 
 .auth.auth-dark .input:focus,
 .auth.auth-dark :deep(.password-field:focus-within) {
-  border-color: #22D3EE;
-  box-shadow: 0 0 0 3px rgba(34,211,238,.16);
+  border-color: #4F8C5D !important;
+  box-shadow: 0 0 0 3px rgba(79,140,93,.16) !important;
 }
 
 .auth.auth-dark :deep(.password-tool) {
-  color: #CBD5E1;
+  color: #536256 !important;
 }
 
 .auth.auth-dark :deep(.password-tool:hover) {
-  background: transparent;
-  color: #F8FAFC;
+  background: rgba(79,140,93,.08) !important;
+  color: #18251E !important;
 }
 
 .auth.auth-dark .form-error {
@@ -859,13 +872,13 @@ form {
 
 .auth.auth-dark .auth-submit,
 .auth.auth-dark .send-code-btn {
-  background: #0891B2;
-  color: #F8FAFC;
+  background: #103A2D !important;
+  color: #F8FAFC !important;
 }
 
 .auth.auth-dark .auth-submit:hover,
 .auth.auth-dark .send-code-btn:hover {
-  background: #0E7490;
+  background: #1B5A43 !important;
 }
 
 /* ====== 页面进入：黑板底色常驻，标题从左上承接，登录卡右侧滑入 ====== */

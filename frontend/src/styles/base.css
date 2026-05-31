@@ -1,5 +1,17 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #app { min-height: 100%; }
+:root {
+  --route-transition-bg: #F8FAFC;
+}
+html.theme-dark {
+  --route-transition-bg: #0E3329;
+}
+html.product-home-active.product-home-light-active {
+  --route-transition-bg: #F8FAFC;
+}
+html.product-home-active.product-home-dark-active {
+  --route-transition-bg: #0E3329;
+}
 body {
   margin: 0;
   font-family: var(--font-family-base);
@@ -346,7 +358,7 @@ svg { display: block; flex-shrink: 0; }
   width: 100%;
   min-height: 100vh;
   overflow: hidden;
-  background: #121614;
+  background: var(--route-transition-bg, #F8FAFC);
   transition: opacity 980ms linear;
   transform: none;
   filter: none;
@@ -361,7 +373,7 @@ svg { display: block; flex-shrink: 0; }
   width: 100%;
   min-height: 100vh;
   overflow: hidden;
-  background: #121614;
+  background: var(--route-transition-bg, #F8FAFC);
   pointer-events: none;
   transition: opacity 980ms linear;
   transform: none;

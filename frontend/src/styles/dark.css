@@ -981,61 +981,63 @@ html.theme-dark .admin-shell .info-row span {
 
 /* Auth */
 html.theme-dark .auth-card {
-  background: rgba(15, 23, 42, .94) !important;
-  border-color: rgba(148, 163, 184, .28) !important;
-  color: var(--dark-body) !important;
+  background: linear-gradient(180deg, rgba(255, 253, 244, .98), rgba(247, 241, 222, .96)) !important;
+  border-color: rgba(183, 228, 192, .32) !important;
+  color: #18251E !important;
 }
 
 html.theme-dark .auth-card .brand,
 html.theme-dark .auth-card .brand strong,
 html.theme-dark .auth-card .label {
-  color: var(--dark-text) !important;
+  color: #18251E !important;
 }
 
 html.theme-dark .auth-card .brand small {
-  color: var(--dark-muted) !important;
+  color: #536256 !important;
 }
 
 html.theme-dark .auth-card .tabs {
-  background: var(--dark-surface-2) !important;
-  border-color: var(--dark-border) !important;
+  background: #E8DFC4 !important;
+  border-color: rgba(79, 140, 93, .18) !important;
 }
 
 html.theme-dark .auth-card .tabs button {
-  color: var(--dark-sub) !important;
+  color: #536256 !important;
 }
 
 html.theme-dark .auth-card .tabs button.active,
 html.theme-dark .auth-submit,
 html.theme-dark .send-code-btn {
-  background: linear-gradient(135deg, #00B8D4, #3B82F6) !important;
+  background: #103A2D !important;
   color: #F8FAFC !important;
 }
 
 html.theme-dark .auth-card .input,
 html.theme-dark .auth-card .password-field {
-  background: var(--dark-surface-2) !important;
-  color: var(--dark-body) !important;
-  border-color: var(--dark-border) !important;
+  background: #FFFDF4 !important;
+  color: #18251E !important;
+  border-color: rgba(79, 140, 93, .24) !important;
 }
 
 html.theme-dark .auth-card .password-field input {
-  color: var(--dark-body) !important;
+  background: #FFFDF4 !important;
+  color: #18251E !important;
 }
 
 /* Product home paper and CTA dark pass */
 html.theme-dark .product-home.product-home-dark .register-link,
 html.theme-dark .product-home.product-home-dark .workbench-link {
-  background: rgba(0, 184, 212, .18) !important;
+  background: rgba(183, 228, 192, .18) !important;
   color: #F8FAFC !important;
-  border: 1px solid rgba(0, 240, 255, .28) !important;
+  border: 1px solid rgba(183, 228, 192, .34) !important;
 }
 
 html.theme-dark .product-home.product-home-dark .book {
-  --book-paper: #0F172A !important;
-  --book-ink: #F8FAFC !important;
-  --book-muted: #CBD5E1 !important;
-  background: var(--dark-surface) !important;
+  --book-paper: #F7F1DE !important;
+  --book-ink: #18251E !important;
+  --book-muted: #536256 !important;
+  --book-accent: #4F8C5D !important;
+  background: #F7F1DE !important;
 }
 
 html.theme-dark .product-home.product-home-dark .book-base-left,
@@ -1047,9 +1049,9 @@ html.theme-dark .product-home.product-home-dark .wrong-paper,
 html.theme-dark .product-home.product-home-dark .paper-note,
 html.theme-dark .product-home.product-home-dark .radar-demo,
 html.theme-dark .product-home.product-home-dark .formula-span {
-  background: var(--dark-surface) !important;
-  color: var(--dark-body) !important;
-  border-color: var(--dark-border) !important;
+  background: #FFFDF4 !important;
+  color: #18251E !important;
+  border-color: rgba(79, 140, 93, .18) !important;
 }
 
 html.theme-dark .product-home.product-home-dark .book-page h3,
@@ -1057,7 +1059,7 @@ html.theme-dark .product-home.product-home-dark .book-final-left h2,
 html.theme-dark .product-home.product-home-dark .book-final-right h2,
 html.theme-dark .product-home.product-home-dark .data-network h3,
 html.theme-dark .product-home.product-home-dark .turn-hint strong {
-  color: var(--dark-text) !important;
+  color: #18251E !important;
 }
 
 html.theme-dark .product-home.product-home-dark .book-copy,
@@ -1067,7 +1069,7 @@ html.theme-dark .product-home.product-home-dark .data-network p,
 html.theme-dark .product-home.product-home-dark .paper-note,
 html.theme-dark .product-home.product-home-dark .book-final-left p,
 html.theme-dark .product-home.product-home-dark .book-final-right footer p {
-  color: var(--dark-sub) !important;
+  color: #536256 !important;
 }
 
 /* Additional dark pass for dense scoped chunks and teleported controls. */
