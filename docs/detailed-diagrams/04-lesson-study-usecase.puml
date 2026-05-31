@@ -1,0 +1,42 @@
+@startuml
+!include plantuml-style.iuml
+title 课时学习与笔记详细用例图（清晰版）
+left to right direction
+
+actor "学生" as Student
+actor "教师" as Teacher
+actor "管理员" as Admin
+actor "TTS 服务" as TTS
+
+rectangle "课时学习与笔记" {
+  usecase "学生课时学习" as UCStudy
+  usecase "教师课时发布管理" as UCTeacherLesson
+
+  package "学习明细" {
+    usecase "查看课时列表\nGET /lessons?course_id=" as UCList
+    usecase "查看课时详情\nGET /lessons/{lesson_id}" as UCDetail
+    usecase "播放页面讲解音频" as UCAudio
+    usecase "上报学习进度\nPOST /lessons/{lesson_id}/progress" as UCProgress
+    usecase "查询学习进度\nGET /lessons/{lesson_id}/progress" as UCGetProgress
+    usecase "读取 / 保存页面笔记\nGET|PUT /student/pages/{page_id}/note" as UCNote
+  }
+
+  package "发布明细" {
+    usecase "发布课时\nPOST /lessons/{lesson_id}/publish" as UCPublish
+    usecase "下线课时\nPOST /lessons/{lesson_id}/unpublish" as UCUnpublish
+    usecase "校验可见课时范围" as UCAccess
+  }
+}
+
+Student --> UCStudy
+Teacher --> UCTeacherLesson
+Admin --> UCTeacherLesson
+TTS --> UCAudio
+
+UCDetail ..> UCAccess : <<include>>
+UCProgress ..> UCAccess : <<include>>
+UCNote ..> UCAccess : <<include>>
+UCPublish ..> UCDetail : <<extend>>
+UCUnpublish ..> UCDetail : <<extend>>
+
+@enduml

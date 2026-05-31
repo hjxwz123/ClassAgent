@@ -1,0 +1,22 @@
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam actorFontName Noto Sans CJK SC
+skinparam usecaseFontName Noto Sans CJK SC
+skinparam packageFontName Noto Sans CJK SC
+skinparam classFontName Noto Sans CJK SC
+skinparam classAttributeFontName Noto Sans CJK SC
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide circle
+skinparam linetype ortho
+skinparam nodesep 90
+skinparam ranksep 70
+skinparam dpi 140
+skinparam wrapWidth 220
+skinparam ArrowColor #7A1D3F
+skinparam ActorBorderColor #7A1D3F
+skinparam UsecaseBorderColor #7A1D3F
+skinparam ClassBorderColor #7A1D3F
+skinparam NoteBorderColor #7A1D3F
+skinparam NoteBackgroundColor #FFF7D6

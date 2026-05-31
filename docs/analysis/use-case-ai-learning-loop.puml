@@ -1,0 +1,88 @@
+@startuml
+title AI 学习闭环用例图
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam actorFontName Noto Sans CJK SC
+skinparam usecaseFontName Noto Sans CJK SC
+skinparam packageFontName Noto Sans CJK SC
+
+actor "教师" as Teacher
+actor "学生" as Student
+actor "管理员" as Admin
+actor "外部大模型服务" as LLM
+actor "文档解析服务" as DocParser
+actor "Embedding / 向量库" as VectorService
+actor "OCR 服务" as OCR
+actor "TTS 服务" as TTS
+
+rectangle "资料到学情闭环" {
+  usecase "配置 AI / 文档 / OCR / TTS / Embedding 服务" as UCConfig
+  usecase "上传课程资料" as UCUpload
+  usecase "解析资料" as UCParse
+  usecase "生成课时页" as UCLesson
+  usecase "生成讲稿与音频" as UCScriptAudio
+  usecase "构建知识块与向量索引" as UCIndex
+  usecase "发布课时" as UCPublish
+  usecase "学生学习课时" as UCStudy
+  usecase "课件页 / 课程问答" as UCQA
+  usecase "图片题目识别" as UCOCR
+  usecase "题目辅导" as UCTutoring
+  usecase "生成测验 / 弱点练习" as UCQuiz
+  usecase "学生提交测验" as UCSubmit
+  usecase "形成错题记录" as UCWrong
+  usecase "沉淀学习信号" as UCSignal
+  usecase "生成薄弱点画像" as UCWeak
+  usecase "生成学习计划" as UCPlan
+  usecase "查看班级学情分析" as UCAnalysis
+  usecase "提醒学生复习" as UCRemind
+}
+
+Admin --> UCConfig
+Teacher --> UCUpload
+Teacher --> UCPublish
+Teacher --> UCQuiz
+Teacher --> UCAnalysis
+Teacher --> UCRemind
+Student --> UCStudy
+Student --> UCQA
+Student --> UCOCR
+Student --> UCTutoring
+Student --> UCSubmit
+Student --> UCPlan
+
+DocParser --> UCParse
+VectorService --> UCIndex
+VectorService --> UCQA
+LLM --> UCScriptAudio
+LLM --> UCQA
+LLM --> UCTutoring
+LLM --> UCQuiz
+LLM --> UCPlan
+LLM --> UCAnalysis
+OCR --> UCOCR
+TTS --> UCScriptAudio
+
+UCUpload ..> UCParse : <<include>>
+UCParse ..> UCLesson : <<include>>
+UCLesson ..> UCScriptAudio : <<include>>
+UCParse ..> UCIndex : <<include>>
+UCPublish ..> UCLesson : <<include>>
+UCStudy ..> UCQA : <<extend>>
+UCQA ..> UCIndex : <<include>>
+UCOCR ..> UCQA : <<extend>>
+UCOCR ..> UCTutoring : <<extend>>
+UCTutoring ..> UCSignal : <<include>>
+UCQA ..> UCSignal : <<include>>
+UCQuiz ..> UCIndex : <<include>>
+UCSubmit ..> UCWrong : <<extend>>
+UCWrong ..> UCSignal : <<include>>
+UCSignal ..> UCWeak : <<include>>
+UCWeak ..> UCQuiz : <<include>>
+UCWeak ..> UCPlan : <<include>>
+UCWeak ..> UCAnalysis : <<include>>
+UCAnalysis ..> UCRemind : <<extend>>
+
+@enduml

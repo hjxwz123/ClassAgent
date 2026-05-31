@@ -1,0 +1,96 @@
+@startuml
+!include plantuml-style.iuml
+title 管理员用户、课程、资料治理详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "账号治理" {
+  class "用户 User" as User <<entity>> {
+    id
+    role
+    status
+    deletedAt
+  }
+
+  class "管理员 Admin" as Admin <<role>> {
+    governanceScope
+  }
+
+  class "教师 Teacher" as Teacher <<role>> {
+    employeeNo
+  }
+
+  class "学生 Student" as Student <<role>> {
+    studentNo
+  }
+}
+
+package "课程治理" {
+  class "课程 Course" as Course <<entity>> {
+    id
+    teacherId
+    status
+    deletedAt
+  }
+
+  class "课程成员 CourseMembership" as Membership <<entity>> {
+    courseId
+    userId
+    role
+  }
+
+  class "课程接管 CourseTakeover" as Takeover <<entity>> {
+    courseId
+    oldTeacherId
+    newTeacherId
+    reason
+  }
+}
+
+package "内容治理" {
+  class "章节 Chapter" as Chapter <<entity>> {
+    courseId
+    title
+  }
+
+  class "课时 Lesson" as Lesson <<entity>> {
+    courseId
+    chapterId
+    status
+  }
+
+  class "课程资料 CourseMaterial" as Material <<entity>> {
+    courseId
+    uploaderId
+    storagePath
+    parseStatus
+    deletedAt
+  }
+
+  class "知识块 KnowledgeChunk" as Chunk <<entity>> {
+    courseId
+    materialId
+    content
+  }
+}
+
+package "治理审计" {
+  class "操作日志 OperationLog" as OperationLog <<entity>> {
+    userId
+    action
+    targetType
+    targetId
+  }
+}
+
+User <|-- Admin
+User <|-- Teacher
+User <|-- Student
+Course "1" o-- "0..*" Membership : 成员
+Course "1" o-- "0..*" Takeover : 接管记录
+Course "1" *-- "0..*" Chapter : 章节
+Course "1" o-- "0..*" Lesson : 课时
+Course "1" o-- "0..*" Material : 资料
+Material "1" o-- "0..*" Chunk : 知识块
+
+@enduml

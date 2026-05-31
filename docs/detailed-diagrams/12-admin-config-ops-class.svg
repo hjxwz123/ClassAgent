@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentScriptType="application/ecmascript" contentStyleType="text/css" height="924.5833px" preserveAspectRatio="none" style="width:2932px;height:924px;" version="1.1" viewBox="0 0 2932 924" width="2932.7083px" zoomAndPan="magnify"><defs/><g><text fill="#000000" font-family="Noto Sans CJK SC" font-size="26.25" lengthAdjust="spacingAndGlyphs" textLength="525" x="1220.625" y="30.4498">配置、监控、日志与备份详细类图（清晰版）</text><!--MD5=[ddd464be35597dd7ea73d28436fc7649]
+cluster 管理员--><rect fill="#FFFFFF" height="522.8125" style="stroke: #000000; stroke-width: 2.1875;" width="163.3333" x="2432.5" y="83.9473"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="61.25" x="2483.5417" y="110.5472">管理员</text><!--MD5=[aa078a9cc398fff35cd573c3f2519638]
+cluster 配置中心--><rect fill="#FFFFFF" height="800.625" style="stroke: #000000; stroke-width: 2.1875;" width="1067.5" x="32.0833" y="73.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="525" y="99.6097">配置中心</text><!--MD5=[db920835d36b19318217e30846e4a37e]
+cluster 监控日志--><rect fill="#FFFFFF" height="506.0417" style="stroke: #000000; stroke-width: 2.1875;" width="1200.2083" x="1147.7083" y="402.5931"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="1706.9792" y="429.193">监控日志</text><!--MD5=[947d2bdd20ef7a16b561cbb36ca1214f]
+cluster 备份恢复--><rect fill="#FFFFFF" height="522.8125" style="stroke: #000000; stroke-width: 2.1875;" width="250.8333" x="2665.8333" y="83.9473"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="2750.4167" y="110.5472">备份恢复</text><!--MD5=[3fd616f346a44cd59a91eb10b19e157c]
+class User--><rect fill="#FEFECE" height="146.6148" id="User" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="87.5" x="2470.4167" y="140.8223"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="2481.3542" y="168.4141">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="78.75" x="2474.7917" y="193.7542">用户 User</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="2471.875" x2="2556.4583" y1="206.086" y2="206.086"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="14.5833" x="2479.1667" y="230.5275">id</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="29.1667" x="2479.1667" y="253.7556">role</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="45.2083" x="2479.1667" y="276.9838">status</text><!--MD5=[db6d18d8099558415abc41d00477ab92]
+class Admin--><rect fill="#FEFECE" height="100.1585" id="Admin" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="116.6667" x="2455.8333" y="482.8014"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="49.5833" x="2489.375" y="510.3932">«role»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="107.9167" x="2460.2083" y="535.7334">管理员 Admin</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="2457.2917" x2="2571.0417" y1="548.0651" y2="548.0651"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="96.25" x="2464.5833" y="572.5066">adminScope</text><!--MD5=[45c31eb870855aa21db07a501994e4d9]
+class ModelConfig--><rect fill="#FEFECE" height="169.843" id="ModelConfig" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="185.2083" x="890.3125" y="129.8848"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="950.1042" y="157.4766">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="176.4583" x="894.6875" y="182.8167">模型配置 ModelConfig</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="891.7708" x2="1074.0625" y1="195.1485" y2="195.1485"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="64.1667" x="899.0625" y="219.59">provider</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="91.875" x="899.0625" y="242.8181">modelName</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="62.7083" x="899.0625" y="266.0463">purpose</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="67.0833" x="899.0625" y="289.2745">isDefault</text><!--MD5=[50f312cb8c6a6a3490ccb40da2fa97f5]
+class ServiceConfig--><rect fill="#FEFECE" height="146.6148" id="ServiceConfig" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="195.4167" x="472.5" y="140.8223"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="537.3958" y="168.4141">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="186.6667" x="476.875" y="193.7542">服务配置 ServiceConfig</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="473.9583" x2="666.4583" y1="206.086" y2="206.086"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="90.4167" x="481.25" y="230.5275">serviceType</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="64.1667" x="481.25" y="253.7556">provider</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="72.9167" x="481.25" y="276.9838">isEnabled</text><!--MD5=[eba0f87483fbdb8841b3c5f23dd1ebb7]
+class Setting--><rect fill="#FEFECE" height="123.3867" id="Setting" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="204.1667" x="96.25" y="152.4889"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="165.5208" y="180.0807">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="195.4167" x="100.625" y="205.4209">系统参数 SystemSetting</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="97.7083" x2="298.9583" y1="217.7526" y2="217.7526"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="78.75" x="105" y="242.1941">settingKey</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="91.875" x="105" y="265.4223">settingValue</text><!--MD5=[f38a85e47f7d4f812523dd9b6d7d2c16]
+class Adapter--><rect fill="#FEFECE" height="123.3867" id="Adapter" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="201.25" x="469.5833" y="471.1348"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="86.0417" x="527.1875" y="498.7266">«external»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="192.5" x="473.9583" y="524.0667">外部服务适配器 Adapter</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="471.0417" x2="669.375" y1="536.3985" y2="536.3985"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="90.4167" x="478.3333" y="560.84">serviceType</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="64.1667" x="478.3333" y="584.0681">provider</text><!--MD5=[d306fc71cc7bd4f9744f1d55354d906e]
+class LLM--><rect fill="#FEFECE" height="76.9304" id="LLM" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="100.625" x="56.1458" y="773.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="86.0417" x="63.4375" y="800.6016">«external»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="91.875" x="60.5208" y="825.9417">LLM 适配器</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="57.6042" x2="155.3125" y1="838.2735" y2="838.2735"/><!--MD5=[4538dba3ae836fe0687cd89691790898]
+class OSS--><rect fill="#FEFECE" height="76.9304" id="OSS" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="99.1667" x="288.75" y="773.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="86.0417" x="295.3125" y="800.6016">«external»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="90.4167" x="293.125" y="825.9417">OSS 适配器</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="290.2083" x2="386.4583" y1="838.2735" y2="838.2735"/><!--MD5=[af7ae68068e26c55510a857402957431]
+class OCR--><rect fill="#FEFECE" height="76.9304" id="OCR" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="102.0833" x="519.1667" y="773.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="86.0417" x="527.1875" y="800.6016">«external»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="93.3333" x="523.5417" y="825.9417">OCR 适配器</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="520.625" x2="619.7917" y1="838.2735" y2="838.2735"/><!--MD5=[0c21d7a5a5555e4278001068caacbd33]
+class TTS--><rect fill="#FEFECE" height="76.9304" id="TTS" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="96.25" x="752.5" y="773.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="86.0417" x="757.6042" y="800.6016">«external»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="87.5" x="756.875" y="825.9417">TTS 适配器</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="753.9583" x2="847.2917" y1="838.2735" y2="838.2735"/><!--MD5=[93b867cf5e7a1e913dd5047074c12207]
+class Mail--><rect fill="#FEFECE" height="76.9304" id="Mail" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="96.25" x="980" y="773.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="86.0417" x="985.1042" y="800.6016">«external»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="87.5" x="984.375" y="825.9417">邮件适配器</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="981.4583" x2="1074.7917" y1="838.2735" y2="838.2735"/><!--MD5=[934b0aa45af97a13a75843b4ac2c3b6e]
+class LoginLog--><rect fill="#FEFECE" height="123.3867" id="LoginLog" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="158.9583" x="1836.7708" y="471.1348"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1883.4375" y="498.7266">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="150.2083" x="1841.1458" y="524.0667">登录日志 LoginLog</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1838.2292" x2="1994.2708" y1="536.3985" y2="536.3985"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="1845.5208" y="560.84">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="58.3333" x="1845.5208" y="584.0681">success</text><!--MD5=[571c42cc3302dcace62a05bb4951ff61]
+class OperationLog--><rect fill="#FEFECE" height="146.6148" id="OperationLog" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="196.875" x="2126.9792" y="459.4681"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="2192.6042" y="487.0599">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="188.125" x="2131.3542" y="512.4001">操作日志 OperationLog</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="2128.4375" x2="2322.3958" y1="524.7318" y2="524.7318"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="2135.7292" y="549.1733">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="48.125" x="2135.7292" y="572.4015">action</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="2135.7292" y="595.6296">targetType</text><!--MD5=[227a9c1e91779888ec5ef2627493f7a0]
+class ApiLog--><rect fill="#FEFECE" height="146.6148" id="ApiLog" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="239.1667" x="1796.6667" y="738.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1883.4375" y="765.6016">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="230.4167" x="1801.0417" y="790.9417">API 请求日志 ApiRequestLog</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1798.125" x2="2034.375" y1="803.2735" y2="803.2735"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="35" x="1805.4167" y="827.715">path</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="1805.4167" y="850.9431">statusCode</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="86.0417" x="1805.4167" y="874.1713">durationMs</text><!--MD5=[fec335c53e6985c9a15b8954b7814644]
+class Usage--><rect fill="#FEFECE" height="146.6148" id="Usage" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="202.7083" x="1502.8125" y="459.4681"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1571.3542" y="487.0599">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="193.9583" x="1507.1875" y="512.4001">AI 用量日志 AIUsageLog</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1504.2708" x2="1704.0625" y1="524.7318" y2="524.7318"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="58.3333" x="1511.5625" y="549.1733">module</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="91.875" x="1511.5625" y="572.4015">modelName</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="58.3333" x="1511.5625" y="595.6296">success</text><!--MD5=[b34797a66dc35cbf1d65f7e3ca75530e]
+class Task--><rect fill="#FEFECE" height="123.3867" id="Task" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="199.7917" x="1171.7708" y="471.1348"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1238.8542" y="498.7266">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="191.0417" x="1176.1458" y="524.0667">异步任务 AsyncTaskLog</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1173.2292" x2="1370.1042" y1="536.3985" y2="536.3985"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="74.375" x="1180.5208" y="560.84">taskName</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="45.2083" x="1180.5208" y="584.0681">status</text><!--MD5=[8c39f54b9c68e3f3441fda97840ad587]
+class ErrorLog--><rect fill="#FEFECE" height="146.6148" id="ErrorLog" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="217.2917" x="1208.2292" y="738.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1284.0625" y="765.6016">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="208.5417" x="1212.6042" y="790.9417">错误日志 SystemErrorLog</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1209.6875" x2="1424.0625" y1="803.2735" y2="803.2735"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="35" x="1216.9792" y="827.715">level</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="51.0417" x="1216.9792" y="850.9431">source</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="64.1667" x="1216.9792" y="874.1713">message</text><!--MD5=[26d0b21f735a4dc2cc68cbe7838b08a4]
+class Backup--><rect fill="#FEFECE" height="146.6148" id="Backup" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="202.7083" x="2689.8958" y="140.8223"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="2758.4375" y="168.4141">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="193.9583" x="2694.2708" y="193.7542">备份记录 BackupRecord</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="2691.3542" x2="2891.1458" y1="206.086" y2="206.086"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="96.25" x="2698.6458" y="230.5275">triggerUserId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="58.3333" x="2698.6458" y="253.7556">filePath</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="45.2083" x="2698.6458" y="276.9838">status</text><!--MD5=[16c6990ddd535d1bcdf845f67bf0a53c]
+class FileSystem--><rect fill="#FEFECE" height="100.1585" id="FileSystem" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="173.5417" x="2719.0625" y="482.8014"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="86.0417" x="2762.8125" y="510.3932">«external»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="164.7917" x="2723.4375" y="535.7334">文件系统 FileSystem</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="2720.5208" x2="2891.1458" y1="548.0651" y2="548.0651"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="55.4167" x="2727.8125" y="572.5066">archive</text><!--MD5=[933987b91d2b08b1b4941f3221fa6cec]
+reverse link User to Admin--><path d="M2514.1667,317.5431 C2514.1667,317.5431 2514.1667,482.4514 2514.1667,482.4514 " fill="none" id="User&lt;-Admin" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="2503.9583,317.5431,2514.1667,288.3764,2524.375,317.5431,2503.9583,317.5431" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[eb0ff6bed0656cb003b54374c896521e]
+reverse link Adapter to LLM--><path d="M440.3583,533.8431 C440.3583,533.8431 126.5104,533.8431 126.5104,533.8431 C126.5104,533.8431 126.5104,695.8639 126.5104,772.441 " fill="none" id="Adapter&lt;-LLM" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="440.3583,523.6348,469.525,533.8431,440.3583,544.0514,440.3583,523.6348" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[2366b7d6e92b8a182fc39257ff8745cd]
+reverse link Adapter to OSS--><path d="M494.375,624.2598 C494.375,624.2598 494.375,812.3848 494.375,812.3848 C494.375,812.3848 433.7958,812.3848 388.1354,812.3848 " fill="none" id="Adapter&lt;-OSS" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="484.1667,624.2598,494.375,595.0931,504.5833,624.2598,484.1667,624.2598" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[edf52a19be5433b1b3d957dfe83a103b]
+reverse link Adapter to OCR--><path d="M570.2083,624.7848 C570.2083,624.7848 570.2083,772.9514 570.2083,772.9514 " fill="none" id="Adapter&lt;-OCR" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="560,624.7848,570.2083,595.6181,580.4167,624.7848,560,624.7848" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[54cf9bd238351a8d503d0d645f440aff]
+reverse link Adapter to TTS--><path d="M646.0417,624.2598 C646.0417,624.2598 646.0417,812.3848 646.0417,812.3848 C646.0417,812.3848 706.8104,812.3848 752.1354,812.3848 " fill="none" id="Adapter&lt;-TTS" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="635.8333,624.2598,646.0417,595.0931,656.25,624.2598,635.8333,624.2598" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[ce70ae7005e1891f41411fbc62979209]
+reverse link Adapter to Mail--><path d="M700.3646,533.8431 C700.3646,533.8431 1043.6854,533.8431 1043.6854,533.8431 C1043.6854,533.8431 1043.6854,695.8639 1043.6854,772.441 " fill="none" id="Adapter&lt;-Mail" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="700.3646,544.0514,671.1979,533.8431,700.3646,523.6348,700.3646,544.0514" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[ea0fc7a3fa49b2be8a3f115cc516fe21]
+link ModelConfig to Usage--><path d="M1011.8354,299.3868 C1011.8354,372.1577 1011.8354,465.3014 1011.8354,465.3014 C1011.8354,465.3014 1332.9896,465.3014 1502.3458,465.3014 " fill="none" id="ModelConfig-Usage" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="75.8333" x="1295" y="373.5431">用量统计</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="1004.5295" y="333.3596">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="1460.5566" y="453.4183">0..*</text><!--MD5=[78bfb6794389f0a8532156d9f9627b0d]
+reverse link ServiceConfig to Adapter--><path d="M570.2083,307.3348 C570.2083,307.3348 570.2083,470.8723 570.2083,470.8723 " fill="none" id="ServiceConfig&lt;-Adapter" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#FFFFFF" points="570.2083,288.3764,564.375,297.1264,570.2083,305.8764,576.0417,297.1264,570.2083,288.3764" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="94.7917" x="571.6667" y="373.5431">运行适配器</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="559.3779" y="321.0898">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="536.9515" y="453.8127">0..*</text><!--MD5=[79cdc399eece9d205cd396ed9d14b736]
+link Task to ErrorLog--><path d="M1289.8958,595.6181 C1289.8958,595.6181 1289.8958,730.7035 1289.8958,730.7035 " fill="none" id="Task-&gt;ErrorLog" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="1289.8958,737.9952,1295.7292,724.8702,1289.8958,730.7035,1284.0625,724.8702,1289.8958,737.9952" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="1311.0417" y="681.2514">异常</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="1259.681" y="628.3698">0..*</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="1253.0592" y="721.1282">0..*</text><!--MD5=[413bdf818bef6524a253bae2bfd72e0d]
+reverse link Backup to FileSystem--><path d="M2805.8333,307.3348 C2805.8333,307.3348 2805.8333,482.4514 2805.8333,482.4514 " fill="none" id="Backup&lt;-FileSystem" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#FFFFFF" points="2805.8333,288.3764,2800,297.1264,2805.8333,305.8764,2811.6667,297.1264,2805.8333,288.3764" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="2821.875" y="373.5431">文件</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="2796.7803" y="321.0898">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="2794.6201" y="465.7992">1</text><!--MD5=[e5444e9de2400508385695cc0707c156]
+link LoginLog to OperationLog--><!--MD5=[bcace54fdc7c07937c2543a72b7fe8e8]
+link LoginLog to ApiLog--><!--MD5=[2db5036165dad95a35355710d08f4c48]
+@startuml
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam actorFontName Noto Sans CJK SC
+skinparam usecaseFontName Noto Sans CJK SC
+skinparam packageFontName Noto Sans CJK SC
+skinparam classFontName Noto Sans CJK SC
+skinparam classAttributeFontName Noto Sans CJK SC
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide circle
+skinparam linetype ortho
+skinparam nodesep 90
+skinparam ranksep 70
+skinparam dpi 140
+skinparam wrapWidth 220
+skinparam ArrowColor #7A1D3F
+skinparam ActorBorderColor #7A1D3F
+skinparam UsecaseBorderColor #7A1D3F
+skinparam ClassBorderColor #7A1D3F
+skinparam NoteBorderColor #7A1D3F
+skinparam NoteBackgroundColor #FFF7D6
+title 配置、监控、日志与备份详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "管理员" {
+  class "用户 User" as User <<entity>> {
+    id
+    role
+    status
+  }
+
+  class "管理员 Admin" as Admin <<role>> {
+    adminScope
+  }
+}
+
+package "配置中心" {
+  class "模型配置 ModelConfig" as ModelConfig <<entity>> {
+    provider
+    modelName
+    purpose
+    isDefault
+  }
+
+  class "服务配置 ServiceConfig" as ServiceConfig <<entity>> {
+    serviceType
+    provider
+    isEnabled
+  }
+
+  class "系统参数 SystemSetting" as Setting <<entity>> {
+    settingKey
+    settingValue
+  }
+
+  abstract class "外部服务适配器 Adapter" as Adapter <<external>> {
+    serviceType
+    provider
+  }
+
+  class "LLM 适配器" as LLM <<external>>
+  class "OSS 适配器" as OSS <<external>>
+  class "OCR 适配器" as OCR <<external>>
+  class "TTS 适配器" as TTS <<external>>
+  class "邮件适配器" as Mail <<external>>
+}
+
+package "监控日志" {
+  class "登录日志 LoginLog" as LoginLog <<entity>> {
+    userId
+    success
+  }
+
+  class "操作日志 OperationLog" as OperationLog <<entity>> {
+    userId
+    action
+    targetType
+  }
+
+  class "API 请求日志 ApiRequestLog" as ApiLog <<entity>> {
+    path
+    statusCode
+    durationMs
+  }
+
+  class "AI 用量日志 AIUsageLog" as Usage <<entity>> {
+    module
+    modelName
+    success
+  }
+
+  class "异步任务 AsyncTaskLog" as Task <<entity>> {
+    taskName
+    status
+  }
+
+  class "错误日志 SystemErrorLog" as ErrorLog <<entity>> {
+    level
+    source
+    message
+  }
+}
+
+package "备份恢复" {
+  class "备份记录 BackupRecord" as Backup <<entity>> {
+    triggerUserId
+    filePath
+    status
+  }
+
+  class "文件系统 FileSystem" as FileSystem <<external>> {
+    archive
+  }
+}
+
+User <|- - Admin
+Adapter <|- - LLM
+Adapter <|- - OSS
+Adapter <|- - OCR
+Adapter <|- - TTS
+Adapter <|- - Mail
+
+ModelConfig "1" - - "0..*" Usage : 用量统计
+ServiceConfig "1" o- - "0..*" Adapter : 运行适配器
+Task "0..*" - -> "0..*" ErrorLog : 异常
+Backup "1" o- - "1" FileSystem : 文件
+
+@enduml
+
+PlantUML version 1.2020.02(Sun Mar 01 18:22:07 CST 2020)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Java Version: 21.0.10+7-Ubuntu-124.04
+Operating System: Linux
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>

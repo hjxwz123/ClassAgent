@@ -1,0 +1,110 @@
+@startuml
+!include plantuml-style.iuml
+title 教师工作台详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "教师身份" {
+  class "用户 User" as User <<entity>> {
+    id
+    role
+    nickname
+  }
+
+  class "教师 Teacher" as Teacher <<role>> {
+    employeeNo
+    organization
+  }
+
+  class "学生 Student" as Student <<role>> {
+    studentNo
+  }
+
+  class "用户偏好 UserPreference" as Preference <<entity>> {
+    userId
+    preferenceKey
+  }
+}
+
+package "课程建设" {
+  class "课程 Course" as Course <<entity>> {
+    id
+    teacherId
+    status
+  }
+
+  class "章节 Chapter" as Chapter <<entity>> {
+    courseId
+    title
+  }
+
+  class "课时 Lesson" as Lesson <<entity>> {
+    courseId
+    chapterId
+    status
+  }
+
+  class "课程资料 CourseMaterial" as Material <<entity>> {
+    courseId
+    parseStatus
+    vectorStatus
+  }
+}
+
+package "学生管理" {
+  class "课程成员 CourseMembership" as Membership <<entity>> {
+    courseId
+    userId
+    role
+  }
+
+  class "提醒记录 StudentReminder" as Reminder <<entity>> {
+    courseId
+    studentId
+    remindType
+    sentAt
+  }
+}
+
+package "教学分析" {
+  class "学习进度 LearningProgress" as Progress <<entity>> {
+    lessonId
+    userId
+    progressPercent
+  }
+
+  class "问答记录 QARecord" as QA <<entity>> {
+    userId
+    courseId
+    question
+  }
+
+  class "错题 WrongQuestion" as Wrong <<entity>> {
+    userId
+    courseId
+    wrongCount
+  }
+
+  class "测验 Quiz" as Quiz <<entity>> {
+    courseId
+    creatorId
+    status
+  }
+
+  class "作答记录 QuizAttempt" as Attempt <<entity>> {
+    quizId
+    userId
+    score
+  }
+}
+
+User <|-- Teacher
+User <|-- Student
+Course "1" *-- "0..*" Chapter : 章节
+Course "1" o-- "0..*" Lesson : 课时
+Chapter "0..1" -- "0..*" Lesson : 归档
+Course "1" o-- "0..*" Material : 资料
+Membership "1" o-- "0..*" Reminder : 提醒
+Quiz "1" -- "0..*" Attempt : 提交
+
+@enduml

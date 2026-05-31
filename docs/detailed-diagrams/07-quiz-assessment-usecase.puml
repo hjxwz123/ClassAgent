@@ -1,0 +1,52 @@
+@startuml
+!include plantuml-style.iuml
+title 测验与作答详细用例图（清晰版）
+left to right direction
+
+actor "学生" as Student
+actor "教师" as Teacher
+actor "管理员" as Admin
+actor "异步任务 Worker" as Worker
+actor "课程知识库" as KnowledgeBase
+actor "大模型服务" as LLM
+
+rectangle "测验与作答" {
+  usecase "学生测验" as UCStudentQuiz
+  usecase "教师测验管理" as UCTeacherQuiz
+  usecase "AI 题目生成" as UCAIGen
+
+  package "题目生成明细" {
+    usecase "生成课程测验 / 自练\nPOST /learning/quizzes/generate" as UCGenerate
+    usecase "生成薄弱点专项测验\nPOST /learning/teacher/weak-quizzes/generate" as UCWeakGenerate
+    usecase "查询生成任务\nGET /learning/generation-tasks/{task_id}" as UCTask
+    usecase "生成题目并保存测验" as UCQuestionGen
+  }
+
+  package "测验管理明细" {
+    usecase "测验列表 / 详情\nGET /learning/quizzes*" as UCQuery
+    usecase "编辑测验内容\nPUT /learning/quizzes/{quiz_id}" as UCEdit
+    usecase "发布测验\nPOST /learning/quizzes/{quiz_id}/publish" as UCPublish
+  }
+
+  package "作答评估明细" {
+    usecase "提交测验答案\nPOST /learning/quizzes/{quiz_id}/submit" as UCSubmit
+    usecase "判分、反馈并更新错题本" as UCGrade
+    usecase "查看作答记录\nGET /learning/attempts/*" as UCAttempt
+    usecase "查看薄弱测验提交\nGET /learning/teacher/weak-quizzes/{id}/attempts" as UCTeacherStats
+  }
+}
+
+Student --> UCStudentQuiz
+Teacher --> UCTeacherQuiz
+Admin --> UCTeacherQuiz
+Worker --> UCAIGen
+KnowledgeBase --> UCAIGen
+LLM --> UCAIGen
+
+UCGenerate ..> UCTask : <<include>>
+UCWeakGenerate ..> UCTask : <<include>>
+UCTask ..> UCQuestionGen : <<extend>>
+UCSubmit ..> UCGrade : <<include>>
+UCTeacherStats ..> UCAttempt : <<include>>
+
+@enduml

@@ -1,0 +1,47 @@
+@startuml
+!include plantuml-style.iuml
+title 资料处理与知识库详细用例图（清晰版）
+left to right direction
+
+actor "教师" as Teacher
+actor "管理员" as Admin
+actor "学生" as Student
+actor "异步任务 Worker" as Worker
+actor "文件 / AI / 向量外部服务" as ExternalServices
+
+rectangle "资料处理与知识库" {
+  usecase "资料浏览" as UCBrowse
+  usecase "资料管理" as UCMaterialManage
+  usecase "资料处理流水线" as UCPipeline
+
+  package "资料接口明细" {
+    usecase "上传课程资料\nPOST /materials" as UCUpload
+    usecase "查看资料列表 / 详情\nGET /materials*" as UCList
+    usecase "查看资料内容\nGET /materials/{id}/content" as UCContent
+    usecase "编辑资料元信息\nPATCH /materials/{id}" as UCEdit
+    usecase "删除资料\nDELETE /materials/{id}" as UCDelete
+    usecase "重新处理资料\nPOST /materials/{id}/reprocess" as UCReprocess
+  }
+
+  package "处理明细" {
+    usecase "解析文档并抽取页面" as UCParse
+    usecase "生成课时与课时页" as UCLesson
+    usecase "生成讲解脚本 / 音频" as UCScriptAudio
+    usecase "生成知识块与向量索引" as UCKnowledge
+    usecase "审核 / 重写页面脚本\nPATCH|POST /materials/pages/*/script" as UCReviewScript
+  }
+}
+
+Student --> UCBrowse
+Teacher --> UCMaterialManage
+Admin --> UCMaterialManage
+Worker --> UCPipeline
+ExternalServices --> UCPipeline
+
+UCUpload ..> UCParse : <<include>>
+UCReprocess ..> UCParse : <<include>>
+UCParse ..> UCLesson : <<include>>
+UCParse ..> UCKnowledge : <<include>>
+UCScriptAudio ..> UCReviewScript : <<extend>>
+
+@enduml

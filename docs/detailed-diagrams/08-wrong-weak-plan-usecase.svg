@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentScriptType="application/ecmascript" contentStyleType="text/css" height="2590px" preserveAspectRatio="none" style="width:1115px;height:2590px;" version="1.1" viewBox="0 0 1115 2590" width="1115.625px" zoomAndPan="magnify"><defs/><g><text fill="#000000" font-family="Noto Sans CJK SC" font-size="26.25" lengthAdjust="spacingAndGlyphs" textLength="551.25" x="298.9583" y="30.4498">错题、薄弱点与学习计划详细用例图（清晰版）</text><!--MD5=[7a09dd0f93a85d15ca55f52b124badbe]
+cluster 错题、薄弱点与学习计划--><rect fill="#FFFFFF" height="2156.875" style="stroke: #000000; stroke-width: 2.1875;" width="972.7083" x="126.875" y="192.5931"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="224.5833" x="500.9375" y="219.193">错题、薄弱点与学习计划</text><!--MD5=[b2fa6af54b3e2011d870f182e0393e81]
+cluster 错题本--><polygon fill="#FFFFFF" points="161.875,261.1348,231.875,261.1348,242.0833,299.448,1047.0833,299.448,1047.0833,659.2598,161.875,659.2598,161.875,261.1348" style="stroke: #000000; stroke-width: 2.1875;"/><line style="stroke: #000000; stroke-width: 2.1875;" x1="161.875" x2="242.0833" y1="299.448" y2="299.448"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="61.25" x="167.7083" y="287.7347">错题本</text><!--MD5=[d8f7c6425544eeeee6493e4a7d128d24]
+cluster 薄弱点--><polygon fill="#FFFFFF" points="184.4792,710.3014,254.4792,710.3014,264.6875,748.6146,1047.0833,748.6146,1047.0833,1309.6764,184.4792,1309.6764,184.4792,710.3014" style="stroke: #000000; stroke-width: 2.1875;"/><line style="stroke: #000000; stroke-width: 2.1875;" x1="184.4792" x2="264.6875" y1="748.6146" y2="748.6146"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="61.25" x="190.3125" y="736.9013">薄弱点</text><!--MD5=[530fe56b659d5d56ab514cec616faa08]
+cluster 学习计划--><polygon fill="#FFFFFF" points="191.7708,1360.7181,282.1875,1360.7181,292.3958,1399.0313,1064.5833,1399.0313,1064.5833,1980.5098,191.7708,1980.5098,191.7708,1360.7181" style="stroke: #000000; stroke-width: 2.1875;"/><line style="stroke: #000000; stroke-width: 2.1875;" x1="191.7708" x2="292.3958" y1="1399.0313" y2="1399.0313"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="197.6042" y="1387.318">学习计划</text><ellipse cx="378.2872" cy="2112.9766" fill="#FEFECE" rx="90.9956" ry="25.2793" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="317.0372" y="2122.654">学生学习支持</text><ellipse cx="378.2252" cy="2298.6756" fill="#FEFECE" rx="122.2877" ry="27.9575" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="183.75" x="286.3502" y="2308.3531">教师薄弱点教学支持</text><ellipse cx="378.1908" cy="360.1063" fill="#FEFECE" rx="192.9825" ry="42.0965" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="102.0833" x="327.1491" y="348.2514">查看错题本</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="300.4167" x="227.9825" y="377.8146">GET /learning/wrong-questions</text><ellipse cx="378.3068" cy="585.1472" fill="#FEFECE" rx="174.1402" ry="51.3041" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="317.0568" y="565.838">生成错题重练</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="320.8333" x="217.8902" y="595.4012">POST /learning/wrong-questions/</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="77.2917" x="339.661" y="624.9644">practice</text><ellipse cx="901.0377" cy="386.8006" fill="#FEFECE" rx="122.2877" ry="27.9575" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="183.75" x="809.1627" y="396.4781">复制错题为练习测验</text><ellipse cx="378.7628" cy="810.6533" fill="#FEFECE" rx="170.9503" ry="42.7477" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="142.9167" x="307.3044" y="800.4498">查看个人薄弱点</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="256.6667" x="250.4294" y="830.013">GET /learning/weak-points</text><ellipse cx="901.0377" cy="926.384" fill="#FEFECE" rx="122.2877" ry="27.9575" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="183.75" x="809.1627" y="936.0614">聚合错题与学习信号</text><ellipse cx="378.2642" cy="1040.2216" fill="#FEFECE" rx="159.5142" ry="54.2951" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="183.75" x="286.3892" y="1024.4558">教师查看班级薄弱点</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="275.625" x="240.4517" y="1054.019">GET /learning/teacher/weak-</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="74.375" x="341.0767" y="1083.5822">quizzes</text><ellipse cx="378.321" cy="1255.4031" fill="#FEFECE" rx="130.4044" ry="29.5809" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="204.1667" x="276.2377" y="1265.0806">按薄弱点生成专项测验</text><ellipse cx="378.3194" cy="1913.3897" fill="#FEFECE" rx="137.6944" ry="42.9841" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="317.0694" y="1903.5555">创建学习计划</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="204.1667" x="276.2361" y="1933.1187">POST /learning/plans</text><ellipse cx="901.0997" cy="1911.7266" fill="#FEFECE" rx="90.9956" ry="25.2793" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="839.8497" y="1921.404">生成计划任务</text><ellipse cx="378.2759" cy="1694.4573" fill="#FEFECE" rx="137.6509" ry="43.5309" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="138.5417" x="309.0051" y="1685.4649">查看计划 / 任务</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="201.25" x="277.6509" y="1715.0281">GET /learning/plans*</text><ellipse cx="378.5813" cy="1468.7116" fill="#FEFECE" rx="163.4771" ry="51.1185" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="337.7479" y="1448.8259">任务打卡</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="301.875" x="227.6438" y="1478.3891">POST /learning/tasks/{task_id}/</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="75.8333" x="340.6646" y="1507.9523">checkin</text><ellipse cx="901.551" cy="1694.5688" fill="#FEFECE" rx="140.301" ry="42.9132" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="840.301" y="1684.624">查看学习记录</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="208.5417" x="797.2802" y="1714.1872">GET /learning/records</text><!--MD5=[494c489cc4328319247ec2e1625e02a3]
+entity Student--><ellipse cx="29.8958" cy="2033.7389" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M29.8958,2045.4056 L29.8958,2084.7806 M10.9375,2057.0723 L48.8542,2057.0723 M29.8958,2084.7806 L10.9375,2106.6556 M29.8958,2084.7806 L48.8542,2106.6556 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="40.8333" x="9.4792" y="2133.9847">学生</text><!--MD5=[e64da02f5594507ded6bc1fdafafe102]
+entity Teacher--><ellipse cx="29.8958" cy="2284.5723" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M29.8958,2296.2389 L29.8958,2335.6139 M10.9375,2307.9056 L48.8542,2307.9056 M29.8958,2335.6139 L10.9375,2357.4889 M29.8958,2335.6139 L48.8542,2357.4889 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="40.8333" x="9.4792" y="2384.818">教师</text><!--MD5=[823f69c0793ff4acbd80a559420afab7]
+entity Worker--><ellipse cx="378.4375" cy="63.5306" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M378.4375,75.1973 L378.4375,114.5723 M359.4792,86.8639 L397.3958,86.8639 M378.4375,114.5723 L359.4792,136.4473 M378.4375,114.5723 L397.3958,136.4473 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="153.125" x="301.875" y="163.7763">异步任务 Worker</text><!--MD5=[762d9b1ee2eb630aa40151fb5f0602e7]
+entity LLM--><ellipse cx="378.4375" cy="2471.2389" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M378.4375,2482.9056 L378.4375,2522.2806 M359.4792,2494.5723 L397.3958,2494.5723 M378.4375,2522.2806 L359.4792,2544.1556 M378.4375,2522.2806 L397.3958,2544.1556 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="102.0833" x="327.3958" y="2571.4847">大模型服务</text><!--MD5=[f399dca2ad308c5f8c46779d1cf8eb6f]
+link Student to UCStudentSupport--><path d="M51.1729,2113.2181 C51.1729,2113.2181 279.9125,2113.2181 279.9125,2113.2181 " fill="none" id="Student-&gt;UCStudentSupport" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="287.2042,2113.2181,274.0792,2107.3848,279.9125,2113.2181,274.0792,2119.0514,287.2042,2113.2181" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[0c6a63b3d70bda9f117c11dd7c8512bb]
+link Teacher to UCTeacherSupport--><path d="M51.1729,2298.4264 C51.1729,2298.4264 248.5,2298.4264 248.5,2298.4264 " fill="none" id="Teacher-&gt;UCTeacherSupport" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="255.7917,2298.4264,242.6667,2292.5931,248.5,2298.4264,242.6667,2304.2598,255.7917,2298.4264" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[45a4091d4891f9fde494003745312be1]
+link Worker to UCCopyQuiz--><path d="M455.0146,109.4681 C600.2354,109.4681 901.25,109.4681 901.25,109.4681 C901.25,109.4681 901.25,351.1723 901.25,351.1723 " fill="none" id="Worker-&gt;UCCopyQuiz" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="901.25,358.4639,907.0833,345.3389,901.25,351.1723,895.4167,345.3389,901.25,358.4639" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[45920daf98433637cab3ffc06714d30e]
+link LLM to UCPlanTask--><path d="M429.5229,2517.1764 C561.0792,2517.1764 901.25,2517.1764 901.25,2517.1764 C901.25,2517.1764 901.25,1944.8827 901.25,1944.8827 " fill="none" id="LLM-&gt;UCPlanTask" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="901.25,1937.591,895.4167,1950.716,901.25,1944.8827,907.0833,1950.716,901.25,1937.591" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[eae87f4001f84c2bdb8291999d9f7455]
+link UCPractice to UCCopyQuiz--><path d="M553.1313,584.8848 C691.0604,584.8848 860.4167,584.8848 860.4167,584.8848 C860.4167,584.8848 860.4167,420.1806 860.4167,420.1806 " fill="none" id="UCPractice-&gt;UCCopyQuiz" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="860.4167,412.8889,854.5833,426.0139,860.4167,420.1806,866.25,426.0139,860.4167,412.8889" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="624.1667" y="420.2098">«include»</text><!--MD5=[abc464c9426b644336f6f6f1c8b77d01]
+link UCWeak to UCAggregate--><path d="M549.0771,810.9264 C714.9771,810.9264 942.0833,810.9264 942.0833,810.9264 C942.0833,810.9264 942.0833,892.6952 942.0833,892.6952 " fill="none" id="UCWeak-&gt;UCAggregate" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="942.0833,899.9868,947.9167,886.8618,942.0833,892.6952,936.25,886.8618,942.0833,899.9868" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="624.1667" y="821.2514">«include»</text><!--MD5=[c01654795b322cc437cb0a0ce9ee5f2f]
+link UCTeacherWeak to UCAggregate--><path d="M538.1396,1039.8848 C691.8917,1039.8848 901.25,1039.8848 901.25,1039.8848 C901.25,1039.8848 901.25,961.5431 901.25,961.5431 " fill="none" id="UCTeacherWeak-&gt;UCAggregate" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="901.25,954.2514,895.4167,967.3764,901.25,961.5431,907.0833,967.3764,901.25,954.2514" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="624.1667" y="1019.5848">«include»</text><!--MD5=[e832c336479d6c2dec249b7e40b8e9bf]
+link UCPlan to UCPlanTask--><path d="M516.4833,1911.9681 C516.4833,1911.9681 802.5792,1911.9681 802.5792,1911.9681 " fill="none" id="UCPlan-&gt;UCPlanTask" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="809.8708,1911.9681,796.7458,1906.1348,802.5792,1911.9681,796.7458,1917.8014,809.8708,1911.9681" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="624.1667" y="1820.2098">«include»</text><!--MD5=[7f373a201bed4f5496988943fab5d328]
+link UCPlanQuery to UCCheckin--><!--MD5=[00c296549f8d60164bf2ab441ae1fe6f]
+link UCPlanQuery to UCRecords--><!--MD5=[78ef7e9c58fe9bb5a163ebab91d6f154]
+@startuml
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam actorFontName Noto Sans CJK SC
+skinparam usecaseFontName Noto Sans CJK SC
+skinparam packageFontName Noto Sans CJK SC
+skinparam classFontName Noto Sans CJK SC
+skinparam classAttributeFontName Noto Sans CJK SC
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide circle
+skinparam linetype ortho
+skinparam nodesep 90
+skinparam ranksep 70
+skinparam dpi 140
+skinparam wrapWidth 220
+skinparam ArrowColor #7A1D3F
+skinparam ActorBorderColor #7A1D3F
+skinparam UsecaseBorderColor #7A1D3F
+skinparam ClassBorderColor #7A1D3F
+skinparam NoteBorderColor #7A1D3F
+skinparam NoteBackgroundColor #FFF7D6
+title 错题、薄弱点与学习计划详细用例图（清晰版）
+left to right direction
+
+actor "学生" as Student
+actor "教师" as Teacher
+actor "异步任务 Worker" as Worker
+actor "大模型服务" as LLM
+
+rectangle "错题、薄弱点与学习计划" {
+  usecase "学生学习支持" as UCStudentSupport
+  usecase "教师薄弱点教学支持" as UCTeacherSupport
+
+  package "错题本" {
+    usecase "查看错题本\nGET /learning/wrong-questions" as UCWrong
+    usecase "生成错题重练\nPOST /learning/wrong-questions/practice" as UCPractice
+    usecase "复制错题为练习测验" as UCCopyQuiz
+  }
+
+  package "薄弱点" {
+    usecase "查看个人薄弱点\nGET /learning/weak-points" as UCWeak
+    usecase "聚合错题与学习信号" as UCAggregate
+    usecase "教师查看班级薄弱点\nGET /learning/teacher/weak-quizzes" as UCTeacherWeak
+    usecase "按薄弱点生成专项测验" as UCWeakQuiz
+  }
+
+  package "学习计划" {
+    usecase "创建学习计划\nPOST /learning/plans" as UCPlan
+    usecase "生成计划任务" as UCPlanTask
+    usecase "查看计划 / 任务\nGET /learning/plans*" as UCPlanQuery
+    usecase "任务打卡\nPOST /learning/tasks/{task_id}/checkin" as UCCheckin
+    usecase "查看学习记录\nGET /learning/records" as UCRecords
+  }
+}
+
+Student - -> UCStudentSupport
+Teacher - -> UCTeacherSupport
+Worker - -> UCCopyQuiz
+LLM - -> UCPlanTask
+
+UCPractice ..> UCCopyQuiz : <<include>>
+UCWeak ..> UCAggregate : <<include>>
+UCTeacherWeak ..> UCAggregate : <<include>>
+UCPlan ..> UCPlanTask : <<include>>
+
+@enduml
+
+PlantUML version 1.2020.02(Sun Mar 01 18:22:07 CST 2020)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Java Version: 21.0.10+7-Ubuntu-124.04
+Operating System: Linux
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>

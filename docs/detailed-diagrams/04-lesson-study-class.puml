@@ -1,0 +1,104 @@
+@startuml
+!include plantuml-style.iuml
+title 课时学习与笔记详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "课程访问" {
+  class "用户 User" as User <<entity>> {
+    id
+    role
+    nickname
+  }
+
+  class "学生 Student" as Student <<role>> {
+    studentNo
+  }
+
+  class "教师 Teacher" as Teacher <<role>> {
+    employeeNo
+  }
+
+  class "课程成员 CourseMembership" as Membership <<entity>> {
+    courseId
+    userId
+    role
+    joinedAt
+  }
+}
+
+package "课时内容" {
+  class "课程 Course" as Course <<entity>> {
+    id
+    teacherId
+    status
+  }
+
+  class "章节 Chapter" as Chapter <<entity>> {
+    courseId
+    title
+    orderIndex
+  }
+
+  class "课程资料 CourseMaterial" as Material <<entity>> {
+    courseId
+    title
+    previewUrl
+  }
+
+  class "课时 Lesson" as Lesson <<entity>> {
+    courseId
+    chapterId
+    materialId
+    title
+    pageCount
+    status
+    publishedAt
+  }
+
+  class "课时页 LessonPage" as Page <<entity>> {
+    lessonId
+    pageNumber
+    pageTitle
+    pageText
+    scriptText
+  }
+
+  class "教学产物 PedagogyArtifact" as Artifact <<entity>> {
+    lessonPageId
+    artifactType
+    title
+    content
+  }
+}
+
+package "学习行为" {
+  class "学习进度 LearningProgress" as Progress <<entity>> {
+    lessonId
+    userId
+    currentPage
+    progressPercent
+    completedAt
+  }
+
+  class "页笔记 PageNote" as Note <<entity>> {
+    userId
+    lessonId
+    lessonPageId
+    content
+  }
+}
+
+User <|-- Student
+User <|-- Teacher
+Course "1" o-- "0..*" Membership : 成员
+Course "1" *-- "0..*" Chapter : 章节
+Course "1" *-- "0..*" Lesson : 课时
+Chapter "0..1" -- "0..*" Lesson : 归档
+Material "0..1" -- "0..*" Lesson : 来源
+Lesson "1" *-- "1..*" Page : 页面
+Page "1" *-- "0..*" Artifact : 活动层
+Lesson "1" -- "0..*" Progress : 进度
+Page "1" -- "0..*" Note : 页面笔记
+
+@enduml

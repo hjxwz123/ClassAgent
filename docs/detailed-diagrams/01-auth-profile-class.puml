@@ -1,0 +1,92 @@
+@startuml
+!include plantuml-style.iuml
+title 认证与个人中心详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "账号主体" {
+  abstract class "用户 User" as User <<entity>> {
+    id
+    email
+    passwordHash
+    role
+    status
+    nickname
+    avatarUrl
+    lastLoginAt
+  }
+
+  class "学生 Student" as Student <<role>> {
+    studentNo
+    school
+  }
+
+  class "教师 Teacher" as Teacher <<role>> {
+    employeeNo
+    organization
+  }
+
+  class "管理员 Admin" as Admin <<role>> {
+    adminScope
+  }
+}
+
+package "个人资料" {
+  class "用户偏好 UserPreference" as Preference <<entity>> {
+    userId
+    preferenceKey
+    preferenceValue
+  }
+
+  class "头像文件 AvatarFile" as Avatar <<entity>> {
+    userId
+    storagePath
+    publicUrl
+  }
+}
+
+package "认证凭证" {
+  class "邮箱验证码 EmailCode" as EmailCode <<entity>> {
+    email
+    purpose
+    code
+    expiresAt
+    usedAt
+  }
+
+  class "密码重置请求 PasswordResetRequest" as ResetRequest <<entity>> {
+    email
+    codeId
+    requestedAt
+    completedAt
+  }
+}
+
+package "审计记录" {
+  class "登录日志 LoginLog" as LoginLog <<entity>> {
+    userId
+    loginIp
+    userAgent
+    success
+  }
+
+  class "操作日志 OperationLog" as OperationLog <<entity>> {
+    userId
+    action
+    targetType
+    targetId
+  }
+}
+
+User <|-- Student
+User <|-- Teacher
+User <|-- Admin
+
+User "1" *-- "0..*" Preference : 偏好
+User "1" o-- "0..1" Avatar : 当前头像
+EmailCode "1" -- "0..*" ResetRequest : 重置凭证
+User "1" -- "0..*" LoginLog : 登录
+User "0..1" -- "0..*" OperationLog : 操作
+User "0..1" -- "0..*" EmailCode : 绑定邮箱
+
+@enduml
