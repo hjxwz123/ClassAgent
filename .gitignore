@@ -25,4 +25,4 @@ coverage.xml
 frontend/node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo
-readme
+readmedocs/
