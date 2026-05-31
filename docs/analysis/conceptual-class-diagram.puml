@@ -1,0 +1,405 @@
+@startuml
+title 智学黑板 ClassAgent 完整概念类总览图
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam classFontName Noto Sans CJK SC
+skinparam classAttributeFontName Noto Sans CJK SC
+hide methods
+
+package "账号与权限" {
+  abstract class "用户" as User {
+    id
+    email
+    role
+    status
+    nickname
+    avatarUrl
+  }
+
+  class "学生" as Student
+  class "教师" as Teacher
+  class "管理员" as Admin
+
+  class "用户偏好" as UserPreference {
+    preferenceKey
+    preferenceValue
+  }
+
+  class "邮箱验证码" as EmailCode {
+    email
+    purpose
+    code
+    expiresAt
+    usedAt
+  }
+}
+
+package "课程与内容" {
+  class "课程" as Course {
+    id
+    name
+    courseCode
+    term
+    status
+    allowGeneralAiAnswer
+  }
+
+  class "课程成员" as CourseMembership {
+    role
+    joinedAt
+  }
+
+  class "章节" as Chapter {
+    title
+    description
+    orderIndex
+  }
+
+  class "课程资料" as CourseMaterial {
+    title
+    category
+    materialType
+    storagePath
+    parseStatus
+    vectorStatus
+  }
+
+  class "课时" as Lesson {
+    title
+    summary
+    pageCount
+    status
+    publishedAt
+  }
+
+  class "课时页" as LessonPage {
+    pageNumber
+    pageTitle
+    pageText
+    scriptText
+    audioUrl
+    subtitleText
+  }
+
+  class "教学产物" as PedagogyArtifact {
+    artifactType
+    title
+    summary
+    content
+    keywords
+  }
+
+  class "知识块" as KnowledgeChunk {
+    title
+    content
+    tokens
+    embedding
+    sourceMeta
+  }
+
+  class "知识点" as KnowledgePoint {
+    name
+    description
+    contentByLevel
+  }
+}
+
+package "学习过程" {
+  class "学习进度" as LearningProgress {
+    currentPage
+    progressPercent
+    totalStudySeconds
+    completedAt
+  }
+
+  class "页笔记" as PageNote {
+    content
+  }
+
+  class "问答会话" as QAConversation {
+    title
+  }
+
+  class "问答记录" as QARecord {
+    question
+    answer
+    thinkingProcess
+    isOutOfScope
+    sources
+    feedback
+  }
+
+  class "学习信号" as StudentLearningSignal {
+    sourceType
+    sourceId
+    intent
+    score
+    confidence
+  }
+
+  class "题目记录" as ProblemRecord {
+    sourceType
+    imagePath
+    rawText
+    ocrText
+    correctedText
+  }
+
+  class "分级辅导" as ProblemGuidance {
+    level
+    content
+    similarQuestions
+  }
+}
+
+package "测验、错题与计划" {
+  class "测验" as Quiz {
+    title
+    description
+    quizType
+    status
+    totalScore
+    publishedAt
+  }
+
+  class "测验题目" as QuizQuestion {
+    questionType
+    stem
+    options
+    referenceAnswer
+    explanation
+    score
+    difficulty
+  }
+
+  class "测验作答" as QuizAttempt {
+    score
+    totalScore
+    accuracy
+    aiFeedback
+    submittedAt
+  }
+
+  class "作答明细" as QuizAnswer {
+    userAnswer
+    isCorrect
+    score
+    feedback
+  }
+
+  class "错题" as WrongQuestion {
+    wrongCount
+    isResolved
+    lastAttemptId
+    lastWrongAt
+    lastCorrectAt
+  }
+
+  class "学习计划" as StudyPlan {
+    title
+    goal
+    availableDays
+    dailyMinutes
+    status
+    summary
+  }
+
+  class "计划任务" as StudyPlanTask {
+    title
+    taskDate
+    taskType
+    estimatedMinutes
+    status
+  }
+
+  class "学习打卡" as StudyCheckin {
+    notes
+    checkedInAt
+  }
+}
+
+package "配置、日志与运维" {
+  abstract class "系统配置项" as ConfigItem {
+    scope
+    keyOrName
+    value
+    enabled
+  }
+
+  class "模型配置" as ModelConfig {
+    provider
+    modelName
+    purpose
+    endpoint
+    isDefault
+  }
+
+  class "外部服务配置" as ServiceConfig {
+    serviceType
+    provider
+    name
+    isEnabled
+  }
+
+  class "系统参数" as SystemSetting {
+    category
+    settingKey
+    settingValue
+    description
+  }
+
+  abstract class "日志记录" as LogRecord {
+    createdAt
+    detail
+  }
+
+  class "操作日志" as OperationLog {
+    action
+    targetType
+    targetId
+  }
+
+  class "登录日志" as LoginLog {
+    loginIp
+    userAgent
+    success
+  }
+
+  class "API 请求日志" as ApiRequestLog {
+    requestId
+    method
+    path
+    statusCode
+    durationMs
+  }
+
+  class "AI 用量日志" as AIUsageLog {
+    module
+    provider
+    modelName
+    promptTokens
+    completionTokens
+    estimatedCost
+    success
+  }
+
+  class "异步任务日志" as AsyncTaskLog {
+    taskName
+    targetType
+    targetId
+    status
+  }
+
+  class "系统错误日志" as SystemErrorLog {
+    level
+    source
+    message
+  }
+
+  class "备份记录" as BackupRecord {
+    filePath
+    status
+    detail
+  }
+}
+
+User <|-- Student
+User <|-- Teacher
+User <|-- Admin
+ConfigItem <|-- ModelConfig
+ConfigItem <|-- ServiceConfig
+ConfigItem <|-- SystemSetting
+LogRecord <|-- OperationLog
+LogRecord <|-- LoginLog
+LogRecord <|-- ApiRequestLog
+LogRecord <|-- AIUsageLog
+LogRecord <|-- AsyncTaskLog
+LogRecord <|-- SystemErrorLog
+LogRecord <|-- BackupRecord
+
+User "1" *-- "0..*" UserPreference : 保存偏好
+User "1" -- "0..*" EmailCode : 申请验证码
+Teacher "1" -- "0..*" Course : 授课
+Admin "1" -- "0..*" Course : 管理 / 接管
+Course "1" o-- "0..*" CourseMembership : 聚合成员关系
+User "1" -- "0..*" CourseMembership : 参与课程
+
+Course "1" *-- "0..*" Chapter : 组织章节
+Course "1" *-- "0..*" CourseMaterial : 管理资料
+Chapter "0..1" -- "0..*" CourseMaterial : 绑定资料
+CourseMaterial "1" *-- "0..1" Lesson : 处理生成课时
+Course "1" *-- "0..*" Lesson : 课程课时
+Chapter "0..1" -- "0..*" Lesson : 章节课时
+Lesson "1" *-- "1..*" LessonPage : 包含页面
+LessonPage "1" *-- "0..*" PedagogyArtifact : 活动层 / 讲解产物
+Course "1" *-- "0..*" KnowledgeChunk : 知识索引
+CourseMaterial "0..1" -- "0..*" KnowledgeChunk : 来源资料
+LessonPage "0..1" -- "0..*" KnowledgeChunk : 来源页面
+Chapter "0..1" -- "0..*" KnowledgeChunk : 来源章节
+Course "1" *-- "0..*" KnowledgePoint : 知识体系
+Chapter "0..1" -- "0..*" KnowledgePoint : 章节知识点
+
+Student "1" -- "0..*" LearningProgress : 产生进度
+LearningProgress "*" -- "1" Lesson : 对应课时
+Student "1" -- "0..*" PageNote : 保存笔记
+PageNote "*" -- "1" LessonPage : 标注页面
+Student "1" -- "0..*" QAConversation : 发起会话
+Course "1" -- "0..*" QAConversation : 限定课程
+QAConversation "1" *-- "1..*" QARecord : 包含问答
+QARecord "*" --> "0..*" KnowledgeChunk : 引用来源
+QARecord "0..*" --> "0..1" LessonPage : 页面上下文
+QARecord "0..*" --> "0..*" StudentLearningSignal : 沉淀信号
+
+Student "1" -- "0..*" ProblemRecord : 提交题目
+Course "1" -- "0..*" ProblemRecord : 课程范围
+ProblemRecord "1" *-- "0..*" ProblemGuidance : 生成辅导
+ProblemRecord "*" --> "0..*" KnowledgePoint : 关联知识点
+ProblemRecord "0..*" --> "0..*" StudentLearningSignal : 沉淀信号
+
+Course "1" *-- "0..*" Quiz : 组织测验
+Chapter "0..1" -- "0..*" Quiz : 章节测验
+Teacher "1" -- "0..*" Quiz : 创建测验
+Quiz "1" *-- "1..*" QuizQuestion : 包含题目
+QuizQuestion "*" --> "0..1" KnowledgePoint : 考查知识点
+Student "1" -- "0..*" QuizAttempt : 提交作答
+QuizAttempt "*" -- "1" Quiz : 针对测验
+QuizAttempt "1" *-- "1..*" QuizAnswer : 作答明细
+QuizAnswer "*" -- "1" QuizQuestion : 回答题目
+QuizAnswer "0..*" --> "0..1" WrongQuestion : 错误时生成 / 更新
+Student "1" -- "0..*" WrongQuestion : 拥有错题
+WrongQuestion "*" -- "1" QuizQuestion : 来源题目
+WrongQuestion "*" --> "0..1" KnowledgePoint : 暴露薄弱点
+WrongQuestion "0..*" --> "0..*" StudentLearningSignal : 强化信号
+StudentLearningSignal "*" --> "1" KnowledgePoint : 指向知识点
+StudentLearningSignal "*" -- "1" Course : 所属课程
+
+Student "1" -- "0..*" StudyPlan : 制定计划
+Course "1" -- "0..*" StudyPlan : 计划课程
+StudyPlan "1" *-- "1..*" StudyPlanTask : 拆分任务
+StudyPlanTask "1" *-- "0..*" StudyCheckin : 任务打卡
+Student "1" -- "0..*" StudyCheckin : 执行打卡
+StudyPlanTask "*" --> "0..*" KnowledgePoint : 练习目标
+
+Admin "1" -- "0..*" ModelConfig : 维护
+Admin "1" -- "0..*" ServiceConfig : 维护
+Admin "1" -- "0..*" SystemSetting : 维护
+ModelConfig ..> QARecord : 支持问答
+ModelConfig ..> Quiz : 支持出题
+ModelConfig ..> StudyPlan : 支持计划生成
+ServiceConfig ..> CourseMaterial : 支持存储 / 解析
+ServiceConfig ..> LessonPage : 支持音频 / 字幕
+ServiceConfig ..> ProblemRecord : 支持 OCR
+AsyncTaskLog ..> CourseMaterial : 处理任务
+AsyncTaskLog ..> Quiz : 生成任务
+
+User "0..1" -- "0..*" OperationLog : 触发操作
+User "1" -- "0..*" LoginLog : 登录行为
+User "0..1" -- "0..*" ApiRequestLog : 发起请求
+User "0..1" -- "0..*" AIUsageLog : 使用 AI
+Course "0..1" -- "0..*" AIUsageLog : 课程上下文
+Admin "0..1" -- "0..*" BackupRecord : 触发备份
+Admin "1" -- "0..*" SystemErrorLog : 处理错误
+
+@enduml

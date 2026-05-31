@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentScriptType="application/ecmascript" contentStyleType="text/css" height="2464.5833px" preserveAspectRatio="none" style="width:1831px;height:2464px;" version="1.1" viewBox="0 0 1831 2464" width="1831.6667px" zoomAndPan="magnify"><defs/><g><text fill="#000000" font-family="Noto Sans CJK SC" font-size="26.25" lengthAdjust="spacingAndGlyphs" textLength="472.5" x="696.3542" y="30.4498">资料处理与知识库详细用例图（清晰版）</text><!--MD5=[a9e44e1d3c17cd9f055279f08a27d9bf]
+cluster 资料处理与知识库--><rect fill="#FFFFFF" height="2048.9583" style="stroke: #000000; stroke-width: 2.1875;" width="1516.6667" x="298.9583" y="73.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="163.3333" x="975.625" y="99.6097">资料处理与知识库</text><!--MD5=[49c48748b6c0bc0fcd502e1feaeacc79]
+cluster 资料接口明细--><polygon fill="#FFFFFF" points="333.9583,752.5931,465.2083,752.5931,475.4167,790.9063,1239.5833,790.9063,1239.5833,1575.0931,333.9583,1575.0931,333.9583,752.5931" style="stroke: #000000; stroke-width: 2.1875;"/><line style="stroke: #000000; stroke-width: 2.1875;" x1="333.9583" x2="475.4167" y1="790.9063" y2="790.9063"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="339.7917" y="779.193">资料接口明细</text><!--MD5=[8f82d8b21d09845a0fc98a94b61be10e]
+cluster 处理明细--><polygon fill="#FFFFFF" points="928.2292,141.5514,1018.6458,141.5514,1028.8542,179.8646,1780.625,179.8646,1780.625,717.5931,928.2292,717.5931,928.2292,141.5514" style="stroke: #000000; stroke-width: 2.1875;"/><line style="stroke: #000000; stroke-width: 2.1875;" x1="928.2292" x2="1028.8542" y1="179.8646" y2="179.8646"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="934.0625" y="168.1513">处理明细</text><ellipse cx="549.9346" cy="1889.8516" fill="#FEFECE" rx="62.1221" ry="25.2793" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="509.1012" y="1899.529">资料浏览</text><ellipse cx="549.9346" cy="1707.5599" fill="#FEFECE" rx="62.1221" ry="25.2793" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="509.1012" y="1717.2374">资料管理</text><ellipse cx="549.4948" cy="2072.1433" fill="#FEFECE" rx="105.4323" ry="25.2793" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="142.9167" x="478.0365" y="2081.8207">资料处理流水线</text><ellipse cx="549.768" cy="1286.2105" fill="#FEFECE" rx="107.893" ry="44.3466" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="488.518" y="1278.4457">上传课程资料</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="153.125" x="473.2055" y="1308.0089">POST /materials</text><ellipse cx="549.484" cy="1506.7249" fill="#FEFECE" rx="126.5673" ry="44.6526" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="179.375" x="459.7965" y="1503.8288">查看资料列表 / 详情</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="150.2083" x="474.3798" y="1533.392">GET /materials*</text><ellipse cx="549.8012" cy="851.7847" fill="#FEFECE" rx="172.822" ry="42.3166" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="488.5512" y="840.8993">查看资料内容</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="262.5" x="418.5512" y="870.4625">GET /materials/{id}/content</text><ellipse cx="1074.2822" cy="1506.3118" fill="#FEFECE" rx="142.4072" ry="43.5103" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="142.9167" x="1002.8238" y="1497.2879">编辑资料元信息</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="208.5417" x="970.0113" y="1526.8511">PATCH /materials/{id}</text><ellipse cx="1074.2274" cy="1288.9415" fill="#FEFECE" rx="141.6232" ry="41.9734" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="1033.394" y="1277.5047">删除资料</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="215.8333" x="966.3107" y="1307.0679">DELETE /materials/{id}</text><ellipse cx="549.6708" cy="1067.4111" fill="#FEFECE" rx="192.3792" ry="42.1097" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="488.4208" y="1056.1942">重新处理资料</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="294.5833" x="402.3792" y="1085.7574">POST /materials/{id}/reprocess</text><ellipse cx="1073.8502" cy="395.5506" fill="#FEFECE" rx="122.2877" ry="27.9575" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="183.75" x="981.9752" y="405.2281">解析文档并抽取页面</text><ellipse cx="1581.603" cy="417.3304" fill="#FEFECE" rx="114.5196" ry="26.4039" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="163.3333" x="1499.9363" y="427.0078">生成课时与课时页</text><ellipse cx="1074.3414" cy="581.878" fill="#FEFECE" rx="120.5914" ry="27.6183" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="179.375" x="984.6539" y="591.5555">生成讲解脚本 / 音频</text><ellipse cx="1581.446" cy="228.7365" fill="#FEFECE" rx="130.4044" ry="29.5809" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="204.1667" x="1479.3627" y="238.4139">生成知识块与向量索引</text><ellipse cx="1581.4595" cy="627.2679" fill="#FEFECE" rx="175.6262" ry="52.5915" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="179.375" x="1491.772" y="610.6518">审核 / 重写页面脚本</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="315" x="1423.9595" y="640.215">PATCH|POST /materials/pages/*/</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="53.9583" x="1554.4803" y="669.7782">script</text><!--MD5=[e64da02f5594507ded6bc1fdafafe102]
+entity Teacher--><ellipse cx="115.9375" cy="1342.4889" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M115.9375,1354.1556 L115.9375,1393.5306 M96.9792,1365.8223 L134.8958,1365.8223 M115.9375,1393.5306 L96.9792,1415.4056 M115.9375,1393.5306 L134.8958,1415.4056 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="40.8333" x="95.5208" y="1442.7347">教师</text><!--MD5=[97ab183161fd5d1db7fba7485cf76add]
+entity Admin--><ellipse cx="115.9375" cy="1593.3223" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M115.9375,1604.9889 L115.9375,1644.3639 M96.9792,1616.6556 L134.8958,1616.6556 M115.9375,1644.3639 L96.9792,1666.2389 M115.9375,1644.3639 L134.8958,1666.2389 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="61.25" x="85.3125" y="1693.568">管理员</text><!--MD5=[494c489cc4328319247ec2e1625e02a3]
+entity Student--><ellipse cx="115.9375" cy="1844.1556" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M115.9375,1855.8223 L115.9375,1895.1973 M96.9792,1867.4889 L134.8958,1867.4889 M115.9375,1895.1973 L96.9792,1917.0723 M115.9375,1895.1973 L134.8958,1917.0723 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="40.8333" x="95.5208" y="1944.4013">学生</text><!--MD5=[823f69c0793ff4acbd80a559420afab7]
+entity Worker--><ellipse cx="115.9375" cy="2094.9889" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M115.9375,2106.6556 L115.9375,2146.0306 M96.9792,2118.3223 L134.8958,2118.3223 M115.9375,2146.0306 L96.9792,2167.9056 M115.9375,2146.0306 L134.8958,2167.9056 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="153.125" x="39.375" y="2195.2347">异步任务 Worker</text><!--MD5=[c7cfc8e5f96cfc3ab124b32464654232]
+entity ExternalServices--><ellipse cx="115.9375" cy="2345.8223" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M115.9375,2357.4889 L115.9375,2396.8639 M96.9792,2369.1556 L134.8958,2369.1556 M115.9375,2396.8639 L96.9792,2418.7389 M115.9375,2396.8639 L134.8958,2418.7389 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="214.375" x="8.75" y="2446.068">文件 / AI / 向量外部服务</text><!--MD5=[f3fa1a28b30418e80fff9ff68f454a65]
+link Student to UCBrowse--><path d="M137.4479,1890.0931 C137.4479,1890.0931 480.3458,1890.0931 480.3458,1890.0931 " fill="none" id="Student-&gt;UCBrowse" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="487.6375,1890.0931,474.5125,1884.2598,480.3458,1890.0931,474.5125,1895.9264,487.6375,1890.0931" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[3d33c6834de098c26653ed1aa6aa4802]
+link Teacher to UCMaterialManage--><path d="M137.55,1389.8848 C152.8333,1389.8848 170.625,1389.8848 170.625,1389.8848 C170.625,1389.8848 170.625,1687.866 170.625,1687.866 C170.625,1687.866 503.3437,1687.866 503.3437,1687.866 " fill="none" id="Teacher-&gt;UCMaterialManage" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="510.6354,1687.866,497.5104,1682.0327,503.3437,1687.866,497.5104,1693.6993,510.6354,1687.866" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[08d9e20b986c2ffb0b4675e3a49a5edc]
+link Admin to UCMaterialManage--><path d="M147.1458,1693.466 C147.1458,1693.466 490.7292,1693.466 490.7292,1693.466 " fill="none" id="Admin-&gt;UCMaterialManage" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="498.0208,1693.466,484.8958,1687.6327,490.7292,1693.466,484.8958,1699.2993,498.0208,1693.466" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[344c44e6730f1134b4c792215532f1a4]
+link Worker to UCPipeline--><path d="M192.5,2086.7202 C192.5,2086.7202 454.7521,2086.7202 454.7521,2086.7202 " fill="none" id="Worker-&gt;UCPipeline" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="462.0437,2086.7202,448.9187,2080.8868,454.7521,2086.7202,448.9187,2092.5535,462.0437,2086.7202" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[7b2b56ab68fec01d2a63c9328bea42a1]
+link ExternalServices to UCPipeline--><path d="M208.5417,2331.8806 C208.5417,2244.4973 208.5417,2092.3202 208.5417,2092.3202 C208.5417,2092.3202 476.2917,2092.3202 476.2917,2092.3202 " fill="none" id="ExternalServices-&gt;UCPipeline" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="483.5833,2092.3202,470.4751,2086.4494,476.2917,2092.2993,470.4417,2098.116,483.5833,2092.3202" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[6f0f7627ff336c92082f8011c022c9a6]
+link UCUpload to UCParse--><path d="M657.5917,1288.8952 C739.1125,1288.8952 837.0833,1288.8952 837.0833,1288.8952 C837.0833,1288.8952 837.0833,404.5327 837.0833,404.5327 C837.0833,404.5327 951.0521,404.5327 951.0521,404.5327 " fill="none" id="UCUpload-&gt;UCParse" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="958.3437,404.5327,945.2187,398.6993,951.0521,404.5327,945.2187,410.366,958.3437,404.5327" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="794.7917" y="1255.8348">«include»</text><!--MD5=[ae555aa566650c71c0f4949a354c26ea]
+link UCReprocess to UCParse--><path d="M733.5417,1054.5848 C733.5417,960.3618 733.5417,386.0702 733.5417,386.0702 C733.5417,386.0702 951.0083,386.0702 951.0083,386.0702 " fill="none" id="UCReprocess-&gt;UCParse" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="958.3,386.0702,945.175,380.2368,951.0083,386.0702,945.175,391.9035,958.3,386.0702" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="794.7917" y="726.4598">«include»</text><!--MD5=[cbd9e27e3113e20bae581cd391efc427]
+link UCParse to UCLesson--><path d="M1185.4354,406.9681 C1185.4354,406.9681 1468.7896,406.9681 1468.7896,406.9681 " fill="none" id="UCParse-&gt;UCLesson" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="1476.0813,406.9681,1462.9563,401.1348,1468.7896,406.9681,1462.9563,412.8014,1476.0813,406.9681" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="1268.75" y="389.5848">«include»</text><!--MD5=[99367c74ec124a27438b32e7b41d520d]
+link UCParse to UCKnowledge--><path d="M1174.3958,379.2598 C1288.6854,379.2598 1459.7917,379.2598 1459.7917,379.2598 C1459.7917,379.2598 1459.7917,247.1493 1459.7917,247.1493 " fill="none" id="UCParse-&gt;UCKnowledge" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="1459.7917,239.8577,1453.9583,252.9827,1459.7917,247.1493,1465.625,252.9827,1459.7917,239.8577" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="1268.75" y="221.8764">«include»</text><!--MD5=[aadd7f023824715fb4c55b070f901d08]
+link UCScriptAudio to UCReviewScript--><path d="M1186.0625,592.1764 C1186.0625,592.1764 1443.2542,592.1764 1443.2542,592.1764 " fill="none" id="UCScriptAudio-&gt;UCReviewScript" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="1450.5458,592.1764,1437.4208,586.3431,1443.2542,592.1764,1437.4208,598.0098,1450.5458,592.1764" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="77.2917" x="1272.3958" y="557.2931">«extend»</text><!--MD5=[42a7dad12ac24bc820badaeb0cc6f360]
+link UCList to UCContent--><!--MD5=[bea485ca8d4ab2a0a12b57b86fd48c4a]
+link UCList to UCEdit--><!--MD5=[139338d53d9f1e34fde101fead03b08f]
+link UCEdit to UCDelete--><!--MD5=[5be55410ac2e25a68d2025ce0855fb9b]
+@startuml
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam actorFontName Noto Sans CJK SC
+skinparam usecaseFontName Noto Sans CJK SC
+skinparam packageFontName Noto Sans CJK SC
+skinparam classFontName Noto Sans CJK SC
+skinparam classAttributeFontName Noto Sans CJK SC
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide circle
+skinparam linetype ortho
+skinparam nodesep 90
+skinparam ranksep 70
+skinparam dpi 140
+skinparam wrapWidth 220
+skinparam ArrowColor #7A1D3F
+skinparam ActorBorderColor #7A1D3F
+skinparam UsecaseBorderColor #7A1D3F
+skinparam ClassBorderColor #7A1D3F
+skinparam NoteBorderColor #7A1D3F
+skinparam NoteBackgroundColor #FFF7D6
+title 资料处理与知识库详细用例图（清晰版）
+left to right direction
+
+actor "教师" as Teacher
+actor "管理员" as Admin
+actor "学生" as Student
+actor "异步任务 Worker" as Worker
+actor "文件 / AI / 向量外部服务" as ExternalServices
+
+rectangle "资料处理与知识库" {
+  usecase "资料浏览" as UCBrowse
+  usecase "资料管理" as UCMaterialManage
+  usecase "资料处理流水线" as UCPipeline
+
+  package "资料接口明细" {
+    usecase "上传课程资料\nPOST /materials" as UCUpload
+    usecase "查看资料列表 / 详情\nGET /materials*" as UCList
+    usecase "查看资料内容\nGET /materials/{id}/content" as UCContent
+    usecase "编辑资料元信息\nPATCH /materials/{id}" as UCEdit
+    usecase "删除资料\nDELETE /materials/{id}" as UCDelete
+    usecase "重新处理资料\nPOST /materials/{id}/reprocess" as UCReprocess
+  }
+
+  package "处理明细" {
+    usecase "解析文档并抽取页面" as UCParse
+    usecase "生成课时与课时页" as UCLesson
+    usecase "生成讲解脚本 / 音频" as UCScriptAudio
+    usecase "生成知识块与向量索引" as UCKnowledge
+    usecase "审核 / 重写页面脚本\nPATCH|POST /materials/pages/*/script" as UCReviewScript
+  }
+}
+
+Student - -> UCBrowse
+Teacher - -> UCMaterialManage
+Admin - -> UCMaterialManage
+Worker - -> UCPipeline
+ExternalServices - -> UCPipeline
+
+UCUpload ..> UCParse : <<include>>
+UCReprocess ..> UCParse : <<include>>
+UCParse ..> UCLesson : <<include>>
+UCParse ..> UCKnowledge : <<include>>
+UCScriptAudio ..> UCReviewScript : <<extend>>
+
+@enduml
+
+PlantUML version 1.2020.02(Sun Mar 01 18:22:07 CST 2020)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Java Version: 21.0.10+7-Ubuntu-124.04
+Operating System: Linux
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>

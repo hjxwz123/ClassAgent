@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentScriptType="application/ecmascript" contentStyleType="text/css" height="1085px" preserveAspectRatio="none" style="width:2318px;height:1085px;" version="1.1" viewBox="0 0 2318 1085" width="2318.75px" zoomAndPan="magnify"><defs/><g><text fill="#000000" font-family="Noto Sans CJK SC" font-size="26.25" lengthAdjust="spacingAndGlyphs" textLength="420" x="966.1458" y="30.4498">认证与个人中心详细类图（清晰版）</text><!--MD5=[798e90954bc9f28f62680c2f6d835f8a]
+cluster 账号主体--><rect fill="#FFFFFF" height="661.3542" style="stroke: #000000; stroke-width: 2.1875;" width="656.25" x="32.0833" y="73.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="319.375" y="99.6097">账号主体</text><!--MD5=[7d2fa54ea5308abee2c5ccc3bf379fcb]
+cluster 个人资料--><rect fill="#FFFFFF" height="227.5" style="stroke: #000000; stroke-width: 2.1875;" width="560" x="772.9167" y="518.5306"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="1012.0833" y="545.1305">个人资料</text><!--MD5=[e671367a9a9c5153efb62e671d691ee3]
+cluster 认证凭证--><rect fill="#FFFFFF" height="573.125" style="stroke: #000000; stroke-width: 2.1875;" width="364.5833" x="1367.9167" y="495.9264"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="1509.375" y="522.5263">认证凭证</text><!--MD5=[6e0d412f3bed1be3c4907086555b3113]
+cluster 审计记录--><rect fill="#FFFFFF" height="249.375" style="stroke: #000000; stroke-width: 2.1875;" width="535.2083" x="1767.5" y="507.5931"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="1994.2708" y="534.193">审计记录</text><!--MD5=[3fd616f346a44cd59a91eb10b19e157c]
+class User--><rect fill="#FEFECE" height="262.7556" id="User" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="128.3333" x="536.6667" y="129.8848"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="568.0208" y="157.4766">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="78.75" x="561.4583" y="182.8167">用户 User</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="538.125" x2="663.5417" y1="195.1485" y2="195.1485"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="14.5833" x="545.4167" y="219.59">id</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="40.8333" x="545.4167" y="242.8181">email</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="110.8333" x="545.4167" y="266.0463">passwordHash</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="29.1667" x="545.4167" y="289.2745">role</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="45.2083" x="545.4167" y="312.5026">status</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="74.375" x="545.4167" y="335.7308">nickname</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="68.5417" x="545.4167" y="358.9589">avatarUrl</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="545.4167" y="382.1871">lastLoginAt</text><!--MD5=[d6181cb537bdc20c0a3007a98a56832d]
+class Student--><rect fill="#FEFECE" height="123.3867" id="Student" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="113.75" x="55.4167" y="587.0723"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="49.5833" x="87.5" y="614.6641">«role»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="105" x="59.7917" y="640.0042">学生 Student</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="56.875" x2="167.7083" y1="652.336" y2="652.336"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="80.2083" x="64.1667" y="676.7775">studentNo</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="51.0417" x="64.1667" y="700.0056">school</text><!--MD5=[61a83f88cb8b7d3a80bc8c481f3736bf]
+class Teacher--><rect fill="#FEFECE" height="123.3867" id="Teacher" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="115.2083" x="301.1458" y="587.0723"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="49.5833" x="333.9583" y="614.6641">«role»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="106.4583" x="305.5208" y="640.0042">教师 Teacher</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="302.6042" x2="414.8958" y1="652.336" y2="652.336"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="96.25" x="309.8958" y="676.7775">employeeNo</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="94.7917" x="309.8958" y="700.0056">organization</text><!--MD5=[db6d18d8099558415abc41d00477ab92]
+class Admin--><rect fill="#FEFECE" height="100.1585" id="Admin" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="116.6667" x="548.3333" y="598.7389"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="49.5833" x="581.875" y="626.3307">«role»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="107.9167" x="552.7083" y="651.6709">管理员 Admin</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="549.7917" x2="663.5417" y1="664.0026" y2="664.0026"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="96.25" x="557.0833" y="688.4441">adminScope</text><!--MD5=[c295e1c3388ec71a3041064b1ac10ed6]
+class Preference--><rect fill="#FEFECE" height="146.6148" id="Preference" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="214.375" x="796.9792" y="575.4056"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="871.3542" y="602.9974">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="205.625" x="801.3542" y="628.3376">用户偏好 UserPreference</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="798.4375" x2="1009.8958" y1="640.6693" y2="640.6693"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="805.7292" y="665.1108">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="109.375" x="805.7292" y="688.339">preferenceKey</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="805.7292" y="711.5671">preferenceValue</text><!--MD5=[1c3155a0f96520b9ef6e8aad0c2f1673]
+class Avatar--><rect fill="#FEFECE" height="146.6148" id="Avatar" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="166.25" x="1143.3333" y="575.4056"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1193.6458" y="602.9974">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="157.5" x="1147.7083" y="628.3376">头像文件 AvatarFile</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1144.7917" x2="1308.125" y1="640.6693" y2="640.6693"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="1152.0833" y="665.1108">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="90.4167" x="1152.0833" y="688.339">storagePath</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="70" x="1152.0833" y="711.5671">publicUrl</text><!--MD5=[5db7c87a91b838e81f20fa24e5440965]
+class EmailCode--><rect fill="#FEFECE" height="193.0712" id="EmailCode" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="188.125" x="1448.8542" y="552.8014"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1510.1042" y="580.3932">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="179.375" x="1453.2292" y="605.7334">邮箱验证码 EmailCode</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1450.3125" x2="1635.5208" y1="618.0651" y2="618.0651"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="40.8333" x="1457.6042" y="642.5066">email</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="62.7083" x="1457.6042" y="665.7348">purpose</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="1457.6042" y="688.963">code</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="68.5417" x="1457.6042" y="712.1911">expiresAt</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="52.5" x="1457.6042" y="735.4193">usedAt</text><!--MD5=[dfb953a395c5a013c705289f7d6a4c27]
+class ResetRequest--><rect fill="#FEFECE" height="169.843" id="ResetRequest" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="316.4583" x="1391.9792" y="876.5514"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1517.3958" y="904.1432">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="307.7083" x="1396.3542" y="929.4834">密码重置请求 PasswordResetRequest</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1393.4375" x2="1706.9792" y1="941.8151" y2="941.8151"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="40.8333" x="1400.7292" y="966.2566">email</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="52.5" x="1400.7292" y="989.4848">codeId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="91.875" x="1400.7292" y="1012.713">requestedAt</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="97.7083" x="1400.7292" y="1035.9411">completedAt</text><!--MD5=[934b0aa45af97a13a75843b4ac2c3b6e]
+class LoginLog--><rect fill="#FEFECE" height="169.843" id="LoginLog" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="158.9583" x="1791.5625" y="564.4681"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1838.2292" y="592.0599">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="150.2083" x="1795.9375" y="617.4001">登录日志 LoginLog</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1793.0208" x2="1949.0625" y1="629.7318" y2="629.7318"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="1800.3125" y="654.1733">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="52.5" x="1800.3125" y="677.4015">loginIp</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="75.8333" x="1800.3125" y="700.6296">userAgent</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="58.3333" x="1800.3125" y="723.8578">success</text><!--MD5=[571c42cc3302dcace62a05bb4951ff61]
+class OperationLog--><rect fill="#FEFECE" height="169.843" id="OperationLog" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="196.875" x="2081.7708" y="564.4681"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="2147.3958" y="592.0599">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="188.125" x="2086.1458" y="617.4001">操作日志 OperationLog</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="2083.2292" x2="2277.1875" y1="629.7318" y2="629.7318"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="2090.5208" y="654.1733">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="48.125" x="2090.5208" y="677.4015">action</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="2090.5208" y="700.6296">targetType</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="58.3333" x="2090.5208" y="723.8578">targetId</text><!--MD5=[29fe19ce294944fa80f389ae9bd987a4]
+reverse link User to Student--><path d="M507.2958,261.1348 C507.2958,261.1348 112.2917,261.1348 112.2917,261.1348 C112.2917,261.1348 112.2917,477.0702 112.2917,586.7223 " fill="none" id="User&lt;-Student" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="507.2958,250.9264,536.4625,261.1348,507.2958,271.3431,507.2958,250.9264" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[d87c224b488f6c9759d0a77cb4053101]
+reverse link User to Teacher--><path d="M542.5,421.7118 C542.5,421.7118 542.5,593.6348 542.5,593.6348 C542.5,593.6348 470.2688,593.6348 416.3833,593.6348 " fill="none" id="User&lt;-Teacher" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="532.2917,421.7118,542.5,392.5452,552.7083,421.7118,532.2917,421.7118" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[933987b91d2b08b1b4941f3221fa6cec]
+reverse link User to Admin--><path d="M577.5,421.6389 C577.5,421.6389 577.5,598.5056 577.5,598.5056 " fill="none" id="User&lt;-Admin" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="567.2917,421.6389,577.5,392.4723,587.7083,421.6389,567.2917,421.6389" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[c71f76d5bb1fd346b8ba82267a1f464b]
+reverse link User to Preference--><path d="M606.6667,411.5181 C606.6667,411.5181 606.6667,581.9681 606.6667,581.9681 C606.6667,581.9681 711.55,581.9681 796.7604,581.9681 " fill="none" id="User&lt;-Preference" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="606.6667,392.5598,600.8333,401.3098,606.6667,410.0598,612.5,401.3098,606.6667,392.5598" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="826.875" y="466.8764">偏好</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="596.5164" y="426.108">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="754.8223" y="570.4022">0..*</text><!--MD5=[90bff154b92e3eaeb4e90120bdc55d58]
+reverse link User to Avatar--><path d="M684.3813,326.7598 C684.3813,326.7598 1226.4583,326.7598 1226.4583,326.7598 C1226.4583,326.7598 1226.4583,479.9577 1226.4583,575.1139 " fill="none" id="User&lt;-Avatar" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#FFFFFF" points="665.4229,326.7598,674.1729,332.5931,682.9229,326.7598,674.1729,320.9264,665.4229,326.7598" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="75.8333" x="1118.5417" y="466.8764">当前头像</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="676.5304" y="330.944">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="32.0833" x="1192.0189" y="558.2063">0..1</text><!--MD5=[a445261a3ddfe9dc4ba580c45668872f]
+link EmailCode to ResetRequest--><path d="M1542.9167,745.666 C1542.9167,787.3743 1542.9167,835.7473 1542.9167,876.0702 " fill="none" id="EmailCode-ResetRequest" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="75.8333" x="1547.2917" y="819.7931">重置凭证</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="1532.1501" y="779.6949">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="1509.3955" y="859.265">0..*</text><!--MD5=[d8e7c88c4582fa5a6533a186e93fcfeb]
+link User to LoginLog--><path d="M665.1312,261.1348 C923.3437,261.1348 1871.0417,261.1348 1871.0417,261.1348 C1871.0417,261.1348 1871.0417,450.266 1871.0417,564.3952 " fill="none" id="User-LoginLog" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="1764.5833" y="466.8764">登录</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="676.626" y="254.781">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="1838.4548" y="547.6423">0..*</text><!--MD5=[bd8b5b9ee989791fe6a2257f8591cf4a]
+link User to OperationLog--><path d="M665.1896,195.5098 C961.5375,195.5098 2180.2083,195.5098 2180.2083,195.5098 C2180.2083,195.5098 2180.2083,432.9993 2180.2083,564.2785 " fill="none" id="User-OperationLog" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="2063.5417" y="466.8764">操作</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="32.0833" x="676.4955" y="180.2437">0..1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="2147.6214" y="547.5107">0..*</text><!--MD5=[1cb52652a1b018fd1352b7ef67ee14d8]
+link User to EmailCode--><path d="M635.8333,392.4139 C635.8333,474.4014 635.8333,564.4681 635.8333,564.4681 C635.8333,564.4681 1216.7896,564.4681 1448.8396,564.4681 " fill="none" id="User-EmailCode" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="75.8333" x="1437.9167" y="466.8764">绑定邮箱</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="32.0833" x="640.0602" y="426.4033">0..1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="1406.2501" y="549.5574">0..*</text><!--MD5=[a04376b4b4ed6d83fd92d90d04abe1a6]
+@startuml
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam actorFontName Noto Sans CJK SC
+skinparam usecaseFontName Noto Sans CJK SC
+skinparam packageFontName Noto Sans CJK SC
+skinparam classFontName Noto Sans CJK SC
+skinparam classAttributeFontName Noto Sans CJK SC
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide circle
+skinparam linetype ortho
+skinparam nodesep 90
+skinparam ranksep 70
+skinparam dpi 140
+skinparam wrapWidth 220
+skinparam ArrowColor #7A1D3F
+skinparam ActorBorderColor #7A1D3F
+skinparam UsecaseBorderColor #7A1D3F
+skinparam ClassBorderColor #7A1D3F
+skinparam NoteBorderColor #7A1D3F
+skinparam NoteBackgroundColor #FFF7D6
+title 认证与个人中心详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "账号主体" {
+  abstract class "用户 User" as User <<entity>> {
+    id
+    email
+    passwordHash
+    role
+    status
+    nickname
+    avatarUrl
+    lastLoginAt
+  }
+
+  class "学生 Student" as Student <<role>> {
+    studentNo
+    school
+  }
+
+  class "教师 Teacher" as Teacher <<role>> {
+    employeeNo
+    organization
+  }
+
+  class "管理员 Admin" as Admin <<role>> {
+    adminScope
+  }
+}
+
+package "个人资料" {
+  class "用户偏好 UserPreference" as Preference <<entity>> {
+    userId
+    preferenceKey
+    preferenceValue
+  }
+
+  class "头像文件 AvatarFile" as Avatar <<entity>> {
+    userId
+    storagePath
+    publicUrl
+  }
+}
+
+package "认证凭证" {
+  class "邮箱验证码 EmailCode" as EmailCode <<entity>> {
+    email
+    purpose
+    code
+    expiresAt
+    usedAt
+  }
+
+  class "密码重置请求 PasswordResetRequest" as ResetRequest <<entity>> {
+    email
+    codeId
+    requestedAt
+    completedAt
+  }
+}
+
+package "审计记录" {
+  class "登录日志 LoginLog" as LoginLog <<entity>> {
+    userId
+    loginIp
+    userAgent
+    success
+  }
+
+  class "操作日志 OperationLog" as OperationLog <<entity>> {
+    userId
+    action
+    targetType
+    targetId
+  }
+}
+
+User <|- - Student
+User <|- - Teacher
+User <|- - Admin
+
+User "1" *- - "0..*" Preference : 偏好
+User "1" o- - "0..1" Avatar : 当前头像
+EmailCode "1" - - "0..*" ResetRequest : 重置凭证
+User "1" - - "0..*" LoginLog : 登录
+User "0..1" - - "0..*" OperationLog : 操作
+User "0..1" - - "0..*" EmailCode : 绑定邮箱
+
+@enduml
+
+PlantUML version 1.2020.02(Sun Mar 01 18:22:07 CST 2020)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Java Version: 21.0.10+7-Ubuntu-124.04
+Operating System: Linux
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>

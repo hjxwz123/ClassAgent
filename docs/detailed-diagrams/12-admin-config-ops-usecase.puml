@@ -1,0 +1,50 @@
+@startuml
+!include plantuml-style.iuml
+title 配置、监控、日志与备份详细用例图（清晰版）
+left to right direction
+
+actor "管理员" as Admin
+actor "基础设施\nDB / Redis / Celery / 向量库" as Infra
+actor "外部服务\nOSS / OCR / TTS / 邮件 / LLM" as External
+actor "备份文件系统" as Files
+
+rectangle "配置、监控、日志与备份" {
+  usecase "配置管理" as UCConfig
+  usecase "监控与日志" as UCObserve
+  usecase "备份管理" as UCBackup
+
+  package "配置明细" {
+    usecase "模型配置\nGET|POST|DELETE /admin/model-configs*" as UCModelConfig
+    usecase "模型测试\nPOST /admin/model-configs/{id}/test" as UCTestModel
+    usecase "模型用量\nGET /admin/model-usage" as UCModelUsage
+    usecase "服务配置\nGET|POST|DELETE /admin/service-configs*" as UCServiceConfig
+    usecase "服务测试\nPOST /admin/service-configs/{id}/test" as UCTestService
+    usecase "系统参数\nGET|PUT|POST /admin/system-settings*" as UCSettings
+    usecase "加密 / 解密敏感配置" as UCEncrypt
+  }
+
+  package "监控明细" {
+    usecase "服务健康\nGET /admin/service-health" as UCHealth
+    usecase "一键测试全部服务\nPOST /admin/service-health/test-all" as UCTestAll
+    usecase "监控总览 / 时序\nGET /admin/monitoring/*" as UCMonitoring
+    usecase "日志查询与错误处理\nGET|POST /admin/logs/*" as UCLogs
+  }
+
+  package "备份明细" {
+    usecase "备份列表 / 创建 / 删除\nGET|POST|DELETE /admin/backups*" as UCBackupCrud
+    usecase "校验 / 恢复 / 下载备份\nverify|restore|download" as UCRestoreVerify
+  }
+}
+
+Admin --> UCConfig
+Admin --> UCObserve
+Admin --> UCBackup
+External --> UCConfig
+Infra --> UCObserve
+Files --> UCBackup
+
+UCServiceConfig ..> UCTestService : <<extend>>
+UCTestAll ..> UCHealth : <<include>>
+UCBackupCrud ..> UCRestoreVerify : <<extend>>
+
+@enduml

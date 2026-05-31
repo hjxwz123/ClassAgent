@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentScriptType="application/ecmascript" contentStyleType="text/css" height="2218.125px" preserveAspectRatio="none" style="width:1626px;height:2218px;" version="1.1" viewBox="0 0 1626 2218" width="1626.0417px" zoomAndPan="magnify"><defs/><g><text fill="#000000" font-family="Noto Sans CJK SC" font-size="26.25" lengthAdjust="spacingAndGlyphs" textLength="393.75" x="632.9167" y="30.4498">课程与成员详细用例图（清晰版）</text><!--MD5=[4192a29f02ad7a440c56ecdce26ad48e]
+cluster 课程与成员--><rect fill="#FFFFFF" height="1904.5833" style="stroke: #000000; stroke-width: 2.1875;" width="1464.1667" x="145.8333" y="73.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="102.0833" x="826.875" y="99.6097">课程与成员</text><!--MD5=[50f853dc9264c878e491c48e163614e7]
+cluster 教师侧明细--><polygon fill="#FFFFFF" points="759.7917,1051.5514,870.625,1051.5514,880.8333,1089.8646,1575,1089.8646,1575,1887.1764,759.7917,1887.1764,759.7917,1051.5514" style="stroke: #000000; stroke-width: 2.1875;"/><line style="stroke: #000000; stroke-width: 2.1875;" x1="759.7917" x2="880.8333" y1="1089.8646" y2="1089.8646"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="102.0833" x="765.625" y="1078.1513">教师侧明细</text><!--MD5=[75bb923e1572d95980529f496ccc8d46]
+cluster 学生侧明细--><polygon fill="#FFFFFF" points="180.8333,141.5514,291.6667,141.5514,301.875,179.8646,1133.8542,179.8646,1133.8542,959.6764,180.8333,959.6764,180.8333,141.5514" style="stroke: #000000; stroke-width: 2.1875;"/><line style="stroke: #000000; stroke-width: 2.1875;" x1="180.8333" x2="301.875" y1="179.8646" y2="179.8646"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="102.0833" x="186.6667" y="168.1513">学生侧明细</text><!--MD5=[72da89acad4acb57adeaaad2af22fb71]
+cluster 治理明细--><polygon fill="#FFFFFF" points="217.2917,1010.7181,307.7083,1010.7181,317.9167,1049.0313,580.4167,1049.0313,580.4167,1423.4264,217.2917,1423.4264,217.2917,1010.7181" style="stroke: #000000; stroke-width: 2.1875;"/><line style="stroke: #000000; stroke-width: 2.1875;" x1="217.2917" x2="317.9167" y1="1049.0313" y2="1049.0313"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="223.125" y="1037.318">治理明细</text><ellipse cx="398.7039" cy="1557.3516" fill="#FEFECE" rx="90.9956" ry="25.2793" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="337.4539" y="1567.029">教师课程管理</text><ellipse cx="398.6419" cy="1743.0506" fill="#FEFECE" rx="122.2877" ry="27.9575" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="183.75" x="306.7669" y="1752.7281">学生选课与学习入口</text><ellipse cx="398.5573" cy="1927.7683" fill="#FEFECE" rx="105.4323" ry="25.2793" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="142.9167" x="327.099" y="1937.4457">管理员课程治理</text><ellipse cx="979.7709" cy="1385.4489" fill="#FEFECE" rx="93.8334" ry="42.96" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="938.9376" y="1375.577">创建课程</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="137.0833" x="911.2293" y="1405.1402">POST /courses</text><ellipse cx="979.9102" cy="1602.783" fill="#FEFECE" rx="176.3686" ry="42.2732" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="918.6602" y="1591.8284">维护课程信息</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="268.3333" x="845.7436" y="1621.3916">PATCH /courses/{course_id}</text><ellipse cx="980.1484" cy="1819.977" fill="#FEFECE" rx="197.0234" ry="42.9047" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="918.8984" y="1807.9055">上传课程封面</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="312.0833" x="824.1068" y="1837.4687">POST /courses/{course_id}/cover</text><ellipse cx="979.7685" cy="1159.545" fill="#FEFECE" rx="141.956" ry="51.1185" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="938.9352" y="1139.6592">章节管理</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="261.0417" x="849.2477" y="1169.2224">POST /courses/{course_id}/</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="937.4769" y="1198.7856">chapters</text><ellipse cx="1416.151" cy="1385.8355" fill="#FEFECE" rx="135.7343" ry="51.3674" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="1375.3177" y="1365.6302">成员列表</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="247.9167" x="1292.1927" y="1395.1934">GET /courses/{course_id}/</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="91.875" x="1370.2135" y="1424.7566">members</text><ellipse cx="398.5943" cy="241.8745" fill="#FEFECE" rx="144.1151" ry="43.4481" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="142.9167" x="327.1359" y="232.7556">查看已加入课程</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="211.4583" x="292.8651" y="262.3188">GET /courses/enrolled</text><ellipse cx="398.9427" cy="460.694" fill="#FEFECE" rx="121.8593" ry="42.7884" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="102.0833" x="347.901" y="450.5543">课程码加入</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="180.8333" x="308.526" y="480.1175">POST /courses/join</text><ellipse cx="399.1443" cy="678.4219" fill="#FEFECE" rx="194.9776" ry="42.4955" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="358.3109" y="665.6455">退出课程</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="312.0833" x="243.1026" y="695.2087">POST /courses/{course_id}/leave</text><ellipse cx="398.7349" cy="894.2689" fill="#FEFECE" rx="159.5683" ry="42.5091" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="337.4849" y="883.6894">查看课程详情</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="240.625" x="278.4224" y="913.2526">GET /courses/{course_id}</text><ellipse cx="979.8835" cy="637.0698" fill="#FEFECE" rx="130.4044" ry="29.5809" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="204.1667" x="877.8002" y="646.7472">校验课程码与成员关系</text><ellipse cx="399.1369" cy="1111.127" fill="#FEFECE" rx="144.6578" ry="42.8047" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="337.8869" y="1101.0128">查看授课课程</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="215.8333" x="291.2203" y="1130.576">GET /courses/teaching</text><ellipse cx="398.7331" cy="1342.9493" fill="#FEFECE" rx="158.1081" ry="56.6062" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="138.5417" x="329.4623" y="1320.78">启用 / 停用课程</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="261.0417" x="268.2123" y="1350.3432">POST /courses/{course_id}/</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="182.2917" x="307.5873" y="1379.9064">activate|deactivate</text><!--MD5=[e64da02f5594507ded6bc1fdafafe102]
+entity Teacher--><ellipse cx="39.375" cy="1446.0306" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M39.375,1457.6973 L39.375,1497.0723 M20.4167,1469.3639 L58.3333,1469.3639 M39.375,1497.0723 L20.4167,1518.9473 M39.375,1497.0723 L58.3333,1518.9473 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="40.8333" x="18.9583" y="1546.2763">教师</text><!--MD5=[494c489cc4328319247ec2e1625e02a3]
+entity Student--><ellipse cx="39.375" cy="1696.8639" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M39.375,1708.5306 L39.375,1747.9056 M20.4167,1720.1973 L58.3333,1720.1973 M39.375,1747.9056 L20.4167,1769.7806 M39.375,1747.9056 L58.3333,1769.7806 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="40.8333" x="18.9583" y="1797.1097">学生</text><!--MD5=[97ab183161fd5d1db7fba7485cf76add]
+entity Admin--><ellipse cx="39.375" cy="1947.6973" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M39.375,1959.3639 L39.375,1998.7389 M20.4167,1971.0306 L58.3333,1971.0306 M39.375,1998.7389 L20.4167,2020.6139 M39.375,1998.7389 L58.3333,2020.6139 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="61.25" x="8.75" y="2047.943">管理员</text><!--MD5=[cf25d34b6f9695ab689953484c0b6ae1]
+entity Storage--><ellipse cx="398.8542" cy="2099.3639" fill="#FEFECE" rx="11.6667" ry="11.6667" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><path d="M398.8542,2111.0306 L398.8542,2150.4056 M379.8958,2122.6973 L417.8125,2122.6973 M398.8542,2150.4056 L379.8958,2172.2806 M398.8542,2150.4056 L417.8125,2172.2806 " fill="none" style="stroke: #7A1D3F; stroke-width: 2.1875;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="337.6042" y="2199.6097">对象存储服务</text><!--MD5=[5caaecbb2a0a89f5cec677b54695c38e]
+link Teacher to UCTeacherCourse--><path d="M60.7833,1541.916 C60.7833,1541.916 319.4042,1541.916 319.4042,1541.916 " fill="none" id="Teacher-&gt;UCTeacherCourse" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="326.6958,1541.916,313.5708,1536.0827,319.4042,1541.916,313.5708,1547.7493,326.6958,1541.916" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[33b9ebc6748879624c9e2091934fc23c]
+link Student to UCStudentCourse--><path d="M60.7833,1742.8014 C60.7833,1742.8014 268.8875,1742.8014 268.8875,1742.8014 " fill="none" id="Student-&gt;UCStudentCourse" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="276.1792,1742.8014,263.0542,1736.9681,268.8875,1742.8014,263.0542,1748.6348,276.1792,1742.8014" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[0f931668f31a2a392dfd464b66f85447]
+link Admin to UCAdminCourse--><path d="M70.0292,1943.6868 C70.0292,1943.6868 307.8542,1943.6868 307.8542,1943.6868 " fill="none" id="Admin-&gt;UCAdminCourse" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="315.1458,1943.6868,302.0208,1937.8535,307.8542,1943.6868,302.0208,1949.5202,315.1458,1943.6868" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[91a51802b9c805efb70398f6313c8638]
+link Storage to UCCover--><path d="M460.4979,2145.3014 C610.0646,2145.3014 980,2145.3014 980,2145.3014 C980,2145.3014 980,1870.566 980,1870.566 " fill="none" id="Storage-&gt;UCCover" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="980,1863.2743,974.1667,1876.3993,980,1870.566,985.8333,1876.3993,980,1863.2743" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[000074b985a537cae0ff20c0db96abe3]
+link UCJoin to UCValidate--><path d="M399.5833,504.0056 C399.5833,551.6348 399.5833,621.7077 399.5833,621.7077 C399.5833,621.7077 861.4812,621.7077 861.4812,621.7077 " fill="none" id="UCJoin-&gt;UCValidate" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="868.7729,621.7077,855.6479,615.8743,861.4812,621.7077,855.6479,627.541,868.7729,621.7077" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="646.0417" y="459.5848">«include»</text><!--MD5=[9ef67633233738686865ac29b9165429]
+link UCLeave to UCValidate--><path d="M550.4042,651.6035 C550.4042,651.6035 857.7771,651.6035 857.7771,651.6035 " fill="none" id="UCLeave-&gt;UCValidate" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="865.0688,651.6035,851.9438,645.7702,857.7771,651.6035,851.9438,657.4368,865.0688,651.6035" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="646.0417" y="631.6681">«include»</text><!--MD5=[54d135f0f3c01fdc10f8bccbde055e64]
+link UCDetail to UCValidate--><path d="M558.8042,894.0514 C730.8437,894.0514 980,894.0514 980,894.0514 C980,894.0514 980,674.616 980,674.616 " fill="none" id="UCDetail-&gt;UCValidate" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="980,667.3243,974.1667,680.4493,980,674.616,985.8333,680.4493,980,667.3243" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="84.5833" x="646.0417" y="799.3764">«include»</text><!--MD5=[4b4de58ae0396be3827b82e1506b9d83]
+link UCStatus to UCUpdate--><path d="M539.5833,1369.4389 C539.5833,1429.4785 539.5833,1571.8118 539.5833,1571.8118 C539.5833,1571.8118 852.3667,1571.8118 852.3667,1571.8118 " fill="none" id="UCStatus-&gt;UCUpdate" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333; stroke-dasharray: 7.0,7.0;"/><polygon fill="#7A1D3F" points="859.6583,1571.8118,846.5333,1565.9785,852.3667,1571.8118,846.5333,1577.6452,859.6583,1571.8118" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="77.2917" x="649.6875" y="1467.2931">«extend»</text><!--MD5=[0675470f46d9c2b008a39053bb85882f]
+link UCCreate to UCChapter--><!--MD5=[5fee3e1cce13bf533d0edbb6349723e3]
+link UCCreate to UCMembers--><!--MD5=[5171466e45e7091ad628399f210e2f59]
+@startuml
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam actorFontName Noto Sans CJK SC
+skinparam usecaseFontName Noto Sans CJK SC
+skinparam packageFontName Noto Sans CJK SC
+skinparam classFontName Noto Sans CJK SC
+skinparam classAttributeFontName Noto Sans CJK SC
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide circle
+skinparam linetype ortho
+skinparam nodesep 90
+skinparam ranksep 70
+skinparam dpi 140
+skinparam wrapWidth 220
+skinparam ArrowColor #7A1D3F
+skinparam ActorBorderColor #7A1D3F
+skinparam UsecaseBorderColor #7A1D3F
+skinparam ClassBorderColor #7A1D3F
+skinparam NoteBorderColor #7A1D3F
+skinparam NoteBackgroundColor #FFF7D6
+title 课程与成员详细用例图（清晰版）
+left to right direction
+
+actor "教师" as Teacher
+actor "学生" as Student
+actor "管理员" as Admin
+actor "对象存储服务" as Storage
+
+rectangle "课程与成员" {
+  usecase "教师课程管理" as UCTeacherCourse
+  usecase "学生选课与学习入口" as UCStudentCourse
+  usecase "管理员课程治理" as UCAdminCourse
+
+  package "教师侧明细" {
+    usecase "创建课程\nPOST /courses" as UCCreate
+    usecase "维护课程信息\nPATCH /courses/{course_id}" as UCUpdate
+    usecase "上传课程封面\nPOST /courses/{course_id}/cover" as UCCover
+    usecase "章节管理\nPOST /courses/{course_id}/chapters" as UCChapter
+    usecase "成员列表\nGET /courses/{course_id}/members" as UCMembers
+  }
+
+  package "学生侧明细" {
+    usecase "查看已加入课程\nGET /courses/enrolled" as UCEnrolled
+    usecase "课程码加入\nPOST /courses/join" as UCJoin
+    usecase "退出课程\nPOST /courses/{course_id}/leave" as UCLeave
+    usecase "查看课程详情\nGET /courses/{course_id}" as UCDetail
+    usecase "校验课程码与成员关系" as UCValidate
+  }
+
+  package "治理明细" {
+    usecase "查看授课课程\nGET /courses/teaching" as UCTeaching
+    usecase "启用 / 停用课程\nPOST /courses/{course_id}/activate|deactivate" as UCStatus
+  }
+}
+
+Teacher - -> UCTeacherCourse
+Student - -> UCStudentCourse
+Admin - -> UCAdminCourse
+Storage - -> UCCover
+
+UCJoin ..> UCValidate : <<include>>
+UCLeave ..> UCValidate : <<include>>
+UCDetail ..> UCValidate : <<include>>
+UCStatus ..> UCUpdate : <<extend>>
+
+@enduml
+
+PlantUML version 1.2020.02(Sun Mar 01 18:22:07 CST 2020)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Java Version: 21.0.10+7-Ubuntu-124.04
+Operating System: Linux
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>

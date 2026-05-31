@@ -1,0 +1,111 @@
+@startuml
+!include plantuml-style.iuml
+title 资料处理与知识库详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "课程资料" {
+  class "课程 Course" as Course <<entity>> {
+    id
+    name
+    teacherId
+    status
+  }
+
+  class "章节 Chapter" as Chapter <<entity>> {
+    id
+    courseId
+    title
+    orderIndex
+  }
+
+  class "课程资料 CourseMaterial" as Material <<entity>> {
+    id
+    courseId
+    chapterId
+    uploaderId
+    title
+    materialType
+    storagePath
+    parseStatus
+    vectorStatus
+  }
+}
+
+package "处理任务" {
+  class "异步任务 AsyncTaskLog" as Task <<entity>> {
+    taskName
+    targetType
+    targetId
+    status
+    detail
+  }
+
+  class "文档解析结果 ParseResult" as ParseResult <<value>> {
+    materialId
+    extractedText
+    pageCount
+    metadataJson
+  }
+}
+
+package "课时产物" {
+  class "课时 Lesson" as Lesson <<entity>> {
+    id
+    courseId
+    chapterId
+    materialId
+    title
+    summary
+    pageCount
+    status
+  }
+
+  class "课时页 LessonPage" as Page <<entity>> {
+    lessonId
+    pageNumber
+    pageTitle
+    pageText
+    scriptText
+    audioUrl
+    subtitleText
+  }
+
+  class "教学产物 PedagogyArtifact" as Artifact <<entity>> {
+    lessonPageId
+    artifactType
+    title
+    content
+    payload
+  }
+}
+
+package "知识库" {
+  class "知识块 KnowledgeChunk" as Chunk <<entity>> {
+    courseId
+    materialId
+    lessonPageId
+    chapterId
+    title
+    content
+    embedding
+  }
+
+  class "向量索引 VectorIndexEntry" as VectorEntry <<value>> {
+    chunkId
+    embeddingId
+    vectorStatus
+  }
+}
+
+Course "1" *-- "0..*" Chapter : 章节
+Course "1" *-- "0..*" Material : 资料库
+Chapter "0..1" -- "0..*" Material : 归档资料
+Material "1" *-- "0..*" Task : 处理记录
+Material "1" *-- "0..1" ParseResult : 解析文本
+Material "1" *-- "0..1" Lesson : 生成课时
+Lesson "1" *-- "1..*" Page : 页面
+Page "1" *-- "0..*" Artifact : 活动层
+Chunk "1" *-- "0..1" VectorEntry : 向量索引
+
+@enduml

@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentScriptType="application/ecmascript" contentStyleType="text/css" height="895.4167px" preserveAspectRatio="none" style="width:2506px;height:895px;" version="1.1" viewBox="0 0 2506 895" width="2506.875px" zoomAndPan="magnify"><defs/><g><text fill="#000000" font-family="Noto Sans CJK SC" font-size="26.25" lengthAdjust="spacingAndGlyphs" textLength="367.5" x="1086.4583" y="30.4498">学生工作台详细类图（清晰版）</text><!--MD5=[d1cc8b40d5f3d795bb08cca05ea45323]
+cluster 学生身份--><rect fill="#FFFFFF" height="516.25" style="stroke: #000000; stroke-width: 2.1875;" width="485.625" x="628.5417" y="73.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="830.5208" y="99.6097">学生身份</text><!--MD5=[4aea15e024cfe9ac4cdfbace3074377e]
+cluster 我的课程--><rect fill="#FFFFFF" height="527.9167" style="stroke: #000000; stroke-width: 2.1875;" width="631.4583" x="1200.2083" y="73.0098"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="1475.1042" y="99.6097">我的课程</text><!--MD5=[adb2ec7f056af5b0a47cf078ba4e5bc1]
+cluster 学习内容--><rect fill="#FFFFFF" height="795.5208" style="stroke: #000000; stroke-width: 2.1875;" width="574.5833" x="1916.25" y="83.9473"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="81.6667" x="2162.7083" y="110.5472">学习内容</text><!--MD5=[29b23ca74b1d879f2800771755f6374c]
+cluster 学习台聚合--><rect fill="#FFFFFF" height="516.9792" style="stroke: #000000; stroke-width: 2.1875;" width="561.4583" x="32.0833" y="83.9473"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="20.4167" font-weight="bold" lengthAdjust="spacingAndGlyphs" textLength="102.0833" x="261.7708" y="110.5472">学习台聚合</text><!--MD5=[3fd616f346a44cd59a91eb10b19e157c]
+class User--><rect fill="#FEFECE" height="169.843" id="User" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="91.875" x="998.2292" y="129.8848"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1011.3542" y="157.4766">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="78.75" x="1004.7917" y="182.8167">用户 User</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="999.6875" x2="1088.6458" y1="195.1485" y2="195.1485"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="14.5833" x="1006.9792" y="219.59">id</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="29.1667" x="1006.9792" y="242.8181">role</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="74.375" x="1006.9792" y="266.0463">nickname</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="68.5417" x="1006.9792" y="289.2745">avatarUrl</text><!--MD5=[d6181cb537bdc20c0a3007a98a56832d]
+class Student--><rect fill="#FEFECE" height="123.3867" id="Student" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="113.75" x="730.625" y="441.9681"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="49.5833" x="762.7083" y="469.5599">«role»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="105" x="735" y="494.9001">学生 Student</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="732.0833" x2="842.9167" y1="507.2318" y2="507.2318"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="80.2083" x="739.375" y="531.6733">studentNo</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="51.0417" x="739.375" y="554.9015">school</text><!--MD5=[61a83f88cb8b7d3a80bc8c481f3736bf]
+class Teacher--><rect fill="#FEFECE" height="100.1585" id="Teacher" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="115.2083" x="976.3542" y="453.6348"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="49.5833" x="1009.1667" y="481.2266">«role»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="106.4583" x="980.7292" y="506.5667">教师 Teacher</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="977.8125" x2="1090.1042" y1="518.8985" y2="518.8985"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="96.25" x="985.1042" y="543.34">employeeNo</text><!--MD5=[c295e1c3388ec71a3041064b1ac10ed6]
+class Preference--><rect fill="#FEFECE" height="146.6148" id="Preference" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="214.375" x="652.6042" y="140.8223"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="726.9792" y="168.4141">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="205.625" x="656.9792" y="193.7542">用户偏好 UserPreference</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="654.0625" x2="865.5208" y1="206.086" y2="206.086"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="661.3542" y="230.5275">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="109.375" x="661.3542" y="253.7556">preferenceKey</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="661.3542" y="276.9838">preferenceValue</text><!--MD5=[4066b0363c5a91ff3b6e03e0428953a9]
+class Course--><rect fill="#FEFECE" height="169.843" id="Course" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="107.9167" x="1496.25" y="129.8848"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1517.3958" y="157.4766">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="97.7083" x="1501.3542" y="182.8167">课程 Course</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1497.7083" x2="1602.7083" y1="195.1485" y2="195.1485"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="14.5833" x="1505" y="219.59">id</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="90.4167" x="1505" y="242.8181">courseCode</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="71.4583" x="1505" y="266.0463">teacherId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="45.2083" x="1505" y="289.2745">status</text><!--MD5=[77463bb17ddcfe3891c27a1f4a877731]
+class Membership--><rect fill="#FEFECE" height="146.6148" id="Membership" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="243.5417" x="1222.8125" y="430.3014"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1311.7708" y="457.8932">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="234.7917" x="1227.1875" y="483.2334">课程成员 CourseMembership</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1224.2708" x2="1464.8958" y1="495.5651" y2="495.5651"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1231.5625" y="520.0066">courseId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="1231.5625" y="543.2348">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="64.1667" x="1231.5625" y="566.463">joinedAt</text><!--MD5=[90d32ccc189f11441a6ce7cbb63ad387]
+class Material--><rect fill="#FEFECE" height="146.6148" id="Material" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="210" x="1598.3333" y="430.3014"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1670.5208" y="457.8932">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="201.25" x="1602.7083" y="483.2334">课程资料 CourseMaterial</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1599.7917" x2="1806.875" y1="495.5651" y2="495.5651"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1607.0833" y="520.0066">courseId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="29.1667" x="1607.0833" y="543.2348">title</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="88.9583" x="1607.0833" y="566.463">parseStatus</text><!--MD5=[43eb79777787e83dcab1adc8d2b5c2d3]
+class Lesson--><rect fill="#FEFECE" height="146.6148" id="Lesson" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="106.4583" x="2170.7292" y="140.8223"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="2191.1458" y="168.4141">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="97.7083" x="2175.1042" y="193.7542">课时 Lesson</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="2172.1875" x2="2275.7292" y1="206.086" y2="206.086"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="2179.4792" y="230.5275">courseId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="29.1667" x="2179.4792" y="253.7556">title</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="45.2083" x="2179.4792" y="276.9838">status</text><!--MD5=[6a494c20d032ff54e1efa92c1369bc7b]
+class Page--><rect fill="#FEFECE" height="146.6148" id="Page" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="166.25" x="1939.5833" y="430.3014"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="1989.8958" y="457.8932">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="157.5" x="1943.9583" y="483.2334">课时页 LessonPage</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1941.0417" x2="2104.375" y1="495.5651" y2="495.5651"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="62.7083" x="1948.3333" y="520.0066">lessonId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="97.7083" x="1948.3333" y="543.2348">pageNumber</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="68.5417" x="1948.3333" y="566.463">pageText</text><!--MD5=[5d3c9bb25b1b07c105e03cfa5bc0b7ee]
+class Note--><rect fill="#FEFECE" height="146.6148" id="Note" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="148.75" x="1996.4583" y="708.8431"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="2038.0208" y="736.4349">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="140" x="2000.8333" y="761.7751">页笔记 PageNote</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="1997.9167" x2="2143.75" y1="774.1068" y2="774.1068"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="2005.2083" y="798.5483">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="99.1667" x="2005.2083" y="821.7765">lessonPageId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="59.7917" x="2005.2083" y="845.0046">content</text><!--MD5=[f33202a4358b6dc53d5337ad154687fb]
+class Progress--><rect fill="#FEFECE" height="146.6148" id="Progress" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="230.4167" x="2237.0833" y="430.3014"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="2319.4792" y="457.8932">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="221.6667" x="2241.4583" y="483.2334">学习进度 LearningProgress</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="2238.5417" x2="2466.0417" y1="495.5651" y2="495.5651"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="62.7083" x="2245.8333" y="520.0066">lessonId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="2245.8333" y="543.2348">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="122.5" x="2245.8333" y="566.463">progressPercent</text><!--MD5=[67f5bdafb709b09f80738cdb2228938c]
+class Quiz--><rect fill="#FEFECE" height="146.6148" id="Quiz" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="84.5833" x="102.0833" y="140.8223"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="111.5625" y="168.4141">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="75.8333" x="106.4583" y="193.7542">测验 Quiz</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="103.5417" x2="185.2083" y1="206.086" y2="206.086"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="110.8333" y="230.5275">courseId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="29.1667" x="110.8333" y="253.7556">title</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="45.2083" x="110.8333" y="276.9838">status</text><!--MD5=[b8d67da13ba301b877b50f85be963816]
+class QA--><rect fill="#FEFECE" height="146.6148" id="QA" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="164.7917" x="318.6458" y="140.8223"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="368.2292" y="168.4141">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="156.0417" x="323.0208" y="193.7542">问答记录 QARecord</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="320.1042" x2="481.9792" y1="206.086" y2="206.086"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="327.3958" y="230.5275">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="327.3958" y="253.7556">courseId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="67.0833" x="327.3958" y="276.9838">question</text><!--MD5=[d4df30b25862551bb6e4155e35efa20d]
+class Wrong--><rect fill="#FEFECE" height="146.6148" id="Wrong" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="176.4583" x="56.1458" y="430.3014"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="111.5625" y="457.8932">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="167.7083" x="60.5208" y="483.2334">错题 WrongQuestion</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="57.6042" x2="231.1458" y1="495.5651" y2="495.5651"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="46.6667" x="64.8958" y="520.0066">userId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="64.8958" y="543.2348">courseId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="94.7917" x="64.8958" y="566.463">wrongCount</text><!--MD5=[357a48f9ed8faf278d9d3d5025d43346]
+class PlanTask--><rect fill="#FEFECE" height="146.6148" id="PlanTask" style="stroke: #7A1D3F; stroke-width: 2.1875;" width="205.625" x="363.8542" y="430.3014"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" font-style="italic" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="433.8542" y="457.8932">«entity»</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="17.5" lengthAdjust="spacingAndGlyphs" textLength="196.875" x="368.2292" y="483.2334">计划任务 StudyPlanTask</text><line style="stroke: #7A1D3F; stroke-width: 2.1875;" x1="365.3125" x2="568.0208" y1="495.5651" y2="495.5651"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="48.125" x="372.6042" y="520.0066">planId</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="65.625" x="372.6042" y="543.2348">taskDate</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="16.0417" lengthAdjust="spacingAndGlyphs" textLength="45.2083" x="372.6042" y="566.463">status</text><!--MD5=[29fe19ce294944fa80f389ae9bd987a4]
+reverse link User to Student--><path d="M1028.8542,328.5389 C1028.8542,328.5389 1028.8542,447.8014 1028.8542,447.8014 C1028.8542,447.8014 916.0667,447.8014 844.6958,447.8014 " fill="none" id="User&lt;-Student" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="1018.6458,328.5389,1028.8542,299.3723,1039.0625,328.5389,1018.6458,328.5389" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[d87c224b488f6c9759d0a77cb4053101]
+reverse link User to Teacher--><path d="M1059.4792,328.5389 C1059.4792,328.5389 1059.4792,453.5181 1059.4792,453.5181 " fill="none" id="User&lt;-Teacher" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="none" points="1049.2708,328.5389,1059.4792,299.3723,1069.6875,328.5389,1049.2708,328.5389" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><!--MD5=[b97e14190710fea861c63b88d7279c3d]
+reverse link Course to Membership--><path d="M1547.2917,318.141 C1547.2917,318.141 1547.2917,504.6764 1547.2917,504.6764 C1547.2917,504.6764 1509.5208,504.6764 1466.5875,504.6764 " fill="none" id="Course&lt;-Membership" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#FFFFFF" points="1547.2917,299.1827,1541.4583,307.9327,1547.2917,316.6827,1553.125,307.9327,1547.2917,299.1827" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="1440.8333" y="373.5431">成员</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="1536.1058" y="333.1306">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="1477.959" y="499.4694">0..*</text><!--MD5=[bed31c1dc9caae2db931d74c5288d4e2]
+reverse link Course to Material--><path d="M1623.3,294.6764 C1623.3,294.6764 1706.25,294.6764 1706.25,294.6764 C1706.25,294.6764 1706.25,369.9118 1706.25,430.1702 " fill="none" id="Course&lt;-Material" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#FFFFFF" points="1604.3417,294.6764,1613.0917,300.5098,1621.8417,294.6764,1613.0917,288.8431,1604.3417,294.6764" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="1662.5" y="373.5431">资料</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="1616.004" y="303.6769">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="1673.8044" y="413.2861">0..*</text><!--MD5=[b7f7f44de29154df1bc98821478002c3]
+reverse link Lesson to Page--><path d="M2203.9063,307.4077 C2203.9063,307.4077 2203.9063,504.6764 2203.9063,504.6764 C2203.9063,504.6764 2153.5208,504.6764 2105.8771,504.6764 " fill="none" id="Lesson&lt;-Page" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><polygon fill="#7A1D3F" points="2203.9063,288.4493,2198.0729,297.1993,2203.9063,305.9493,2209.7396,297.1993,2203.9063,288.4493" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="2123.3333" y="373.5431">页面</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="2190.632" y="321.1716">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="2117.264" y="499.0934">1..*</text><!--MD5=[73c505d7b1bdd76575630fb8ac32c89c]
+link Page to Note--><path d="M2051.1458,577.8556 C2051.1458,618.3098 2051.1458,668.2868 2051.1458,708.7118 " fill="none" id="Page-Note" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="2072.2917" y="652.0848">笔记</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="2043.7813" y="610.5689">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="2015.3802" y="691.8277">0..*</text><!--MD5=[7fc4495eaa52ab9767855e78cf347e81]
+link Lesson to Progress--><path d="M2257.1354,288.2598 C2257.1354,331.8202 2257.1354,386.7556 2257.1354,430.2868 " fill="none" id="Lesson-Progress" style="stroke: #7A1D3F; stroke-width: 1.4583333333333333;"/><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="37.9167" x="2327.5" y="373.5431">进度</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="10.2083" x="2250.3485" y="320.9589">1</text><text fill="#000000" font-family="Noto Sans CJK SC" font-size="18.9583" lengthAdjust="spacingAndGlyphs" textLength="30.625" x="2210.2853" y="413.4199">0..*</text><!--MD5=[377c68420107d8b1e3036b63f2d819db]
+link Quiz to QA--><!--MD5=[a26b54b4a304af19b201c830c2b652d5]
+link Quiz to Wrong--><!--MD5=[0cd81d1c4df987074901f66903bdec1c]
+link Wrong to PlanTask--><!--MD5=[998bc1f2aa26577300a92e615635de27]
+@startuml
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam actorFontName Noto Sans CJK SC
+skinparam usecaseFontName Noto Sans CJK SC
+skinparam packageFontName Noto Sans CJK SC
+skinparam classFontName Noto Sans CJK SC
+skinparam classAttributeFontName Noto Sans CJK SC
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+hide circle
+skinparam linetype ortho
+skinparam nodesep 90
+skinparam ranksep 70
+skinparam dpi 140
+skinparam wrapWidth 220
+skinparam ArrowColor #7A1D3F
+skinparam ActorBorderColor #7A1D3F
+skinparam UsecaseBorderColor #7A1D3F
+skinparam ClassBorderColor #7A1D3F
+skinparam NoteBorderColor #7A1D3F
+skinparam NoteBackgroundColor #FFF7D6
+title 学生工作台详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "学生身份" {
+  class "用户 User" as User <<entity>> {
+    id
+    role
+    nickname
+    avatarUrl
+  }
+
+  class "学生 Student" as Student <<role>> {
+    studentNo
+    school
+  }
+
+  class "教师 Teacher" as Teacher <<role>> {
+    employeeNo
+  }
+
+  class "用户偏好 UserPreference" as Preference <<entity>> {
+    userId
+    preferenceKey
+    preferenceValue
+  }
+}
+
+package "我的课程" {
+  class "课程 Course" as Course <<entity>> {
+    id
+    courseCode
+    teacherId
+    status
+  }
+
+  class "课程成员 CourseMembership" as Membership <<entity>> {
+    courseId
+    userId
+    joinedAt
+  }
+
+  class "课程资料 CourseMaterial" as Material <<entity>> {
+    courseId
+    title
+    parseStatus
+  }
+}
+
+package "学习内容" {
+  class "课时 Lesson" as Lesson <<entity>> {
+    courseId
+    title
+    status
+  }
+
+  class "课时页 LessonPage" as Page <<entity>> {
+    lessonId
+    pageNumber
+    pageText
+  }
+
+  class "页笔记 PageNote" as Note <<entity>> {
+    userId
+    lessonPageId
+    content
+  }
+
+  class "学习进度 LearningProgress" as Progress <<entity>> {
+    lessonId
+    userId
+    progressPercent
+  }
+}
+
+package "学习台聚合" {
+  class "测验 Quiz" as Quiz <<entity>> {
+    courseId
+    title
+    status
+  }
+
+  class "问答记录 QARecord" as QA <<entity>> {
+    userId
+    courseId
+    question
+  }
+
+  class "错题 WrongQuestion" as Wrong <<entity>> {
+    userId
+    courseId
+    wrongCount
+  }
+
+  class "计划任务 StudyPlanTask" as PlanTask <<entity>> {
+    planId
+    taskDate
+    status
+  }
+}
+
+User <|- - Student
+User <|- - Teacher
+Course "1" o- - "0..*" Membership : 成员
+Course "1" o- - "0..*" Material : 资料
+Lesson "1" *- - "1..*" Page : 页面
+Page "1" - - "0..*" Note : 笔记
+Lesson "1" - - "0..*" Progress : 进度
+
+@enduml
+
+PlantUML version 1.2020.02(Sun Mar 01 18:22:07 CST 2020)
+(GPL source distribution)
+Java Runtime: OpenJDK Runtime Environment
+JVM: OpenJDK 64-Bit Server VM
+Java Version: 21.0.10+7-Ubuntu-124.04
+Operating System: Linux
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>

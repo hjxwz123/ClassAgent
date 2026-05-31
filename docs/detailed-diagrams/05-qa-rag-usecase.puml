@@ -1,0 +1,50 @@
+@startuml
+!include plantuml-style.iuml
+title RAG 问答详细用例图（清晰版）
+left to right direction
+
+actor "学生" as Student
+actor "教师" as Teacher
+actor "附件 / OCR 服务" as AttachmentService
+actor "AI / 向量服务" as AIServices
+
+rectangle "课程 RAG 问答" {
+  usecase "课程提问" as UCAskFlow
+  usecase "问答记录管理" as UCRecordManage
+  usecase "图片附件处理" as UCAttachFlow
+
+  package "提问明细" {
+    usecase "普通提问\nPOST /qa/ask" as UCAsk
+    usecase "流式提问\nPOST /qa/ask/stream" as UCStream
+    usecase "检索课程知识上下文" as UCRetrieve
+    usecase "生成回答与思考过程" as UCGenerate
+    usecase "保存会话与问答记录" as UCRecord
+    usecase "抽取学习信号" as UCSignal
+  }
+
+  package "记录明细" {
+    usecase "查看历史\nGET /qa/history" as UCHistory
+    usecase "查看会话明细\nGET /qa/conversations/{id}" as UCConversation
+    usecase "收藏问答\nPOST /qa/{record_id}/favorite" as UCFavorite
+    usecase "评价问答\nPOST /qa/{record_id}/feedback" as UCFeedback
+  }
+
+  package "附件明细" {
+    usecase "上传图片附件\nPOST /qa/attachments/image" as UCAttach
+  }
+}
+
+Student --> UCAskFlow
+Student --> UCRecordManage
+Student --> UCAttachFlow
+Teacher --> UCRecordManage
+AttachmentService --> UCAttachFlow
+AIServices --> UCAskFlow
+
+UCAsk ..> UCRetrieve : <<include>>
+UCStream ..> UCRetrieve : <<include>>
+UCRetrieve ..> UCGenerate : <<include>>
+UCGenerate ..> UCRecord : <<include>>
+UCRecord ..> UCSignal : <<extend>>
+
+@enduml

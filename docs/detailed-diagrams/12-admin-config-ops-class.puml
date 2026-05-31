@@ -1,0 +1,110 @@
+@startuml
+!include plantuml-style.iuml
+title 配置、监控、日志与备份详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "管理员" {
+  class "用户 User" as User <<entity>> {
+    id
+    role
+    status
+  }
+
+  class "管理员 Admin" as Admin <<role>> {
+    adminScope
+  }
+}
+
+package "配置中心" {
+  class "模型配置 ModelConfig" as ModelConfig <<entity>> {
+    provider
+    modelName
+    purpose
+    isDefault
+  }
+
+  class "服务配置 ServiceConfig" as ServiceConfig <<entity>> {
+    serviceType
+    provider
+    isEnabled
+  }
+
+  class "系统参数 SystemSetting" as Setting <<entity>> {
+    settingKey
+    settingValue
+  }
+
+  abstract class "外部服务适配器 Adapter" as Adapter <<external>> {
+    serviceType
+    provider
+  }
+
+  class "LLM 适配器" as LLM <<external>>
+  class "OSS 适配器" as OSS <<external>>
+  class "OCR 适配器" as OCR <<external>>
+  class "TTS 适配器" as TTS <<external>>
+  class "邮件适配器" as Mail <<external>>
+}
+
+package "监控日志" {
+  class "登录日志 LoginLog" as LoginLog <<entity>> {
+    userId
+    success
+  }
+
+  class "操作日志 OperationLog" as OperationLog <<entity>> {
+    userId
+    action
+    targetType
+  }
+
+  class "API 请求日志 ApiRequestLog" as ApiLog <<entity>> {
+    path
+    statusCode
+    durationMs
+  }
+
+  class "AI 用量日志 AIUsageLog" as Usage <<entity>> {
+    module
+    modelName
+    success
+  }
+
+  class "异步任务 AsyncTaskLog" as Task <<entity>> {
+    taskName
+    status
+  }
+
+  class "错误日志 SystemErrorLog" as ErrorLog <<entity>> {
+    level
+    source
+    message
+  }
+}
+
+package "备份恢复" {
+  class "备份记录 BackupRecord" as Backup <<entity>> {
+    triggerUserId
+    filePath
+    status
+  }
+
+  class "文件系统 FileSystem" as FileSystem <<external>> {
+    archive
+  }
+}
+
+User <|-- Admin
+Adapter <|-- LLM
+Adapter <|-- OSS
+Adapter <|-- OCR
+Adapter <|-- TTS
+Adapter <|-- Mail
+
+ModelConfig "1" -- "0..*" Usage : 用量统计
+ServiceConfig "1" o-- "0..*" Adapter : 运行适配器
+Task "0..*" --> "0..*" ErrorLog : 异常
+Backup "1" o-- "1" FileSystem : 文件
+
+@enduml

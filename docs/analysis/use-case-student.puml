@@ -1,0 +1,145 @@
+@startuml
+title 学生端完整用例图
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName Noto Sans CJK SC
+skinparam titleFontName Noto Sans CJK SC
+skinparam actorFontName Noto Sans CJK SC
+skinparam usecaseFontName Noto Sans CJK SC
+skinparam packageFontName Noto Sans CJK SC
+
+actor "学生" as Student
+actor "外部大模型服务" as LLM
+actor "Embedding / 向量库" as VectorService
+actor "OCR 服务" as OCR
+actor "通知服务" as Notify
+
+rectangle "学生工作台" {
+  package "账户与课程" {
+    usecase "注册 / 登录" as UCAuth
+    usecase "查看学习台" as UCDashboard
+    usecase "维护个人资料" as UCProfile
+    usecase "维护通知偏好" as UCNotice
+    usecase "查看 / 标记通知" as UCReadNotice
+    usecase "查看我的课程" as UCMyCourses
+    usecase "预览课程码" as UCPreview
+    usecase "加入课程" as UCJoin
+    usecase "退出课程" as UCLeave
+    usecase "查看课程主页" as UCCourseHome
+  }
+
+  package "课时学习" {
+    usecase "查看课时列表" as UCLessonList
+    usecase "查看课时详情" as UCLessonDetail
+    usecase "播放课件页 / 音频 / 字幕" as UCPlayLesson
+    usecase "上报学习进度" as UCProgress
+    usecase "保存课时笔记" as UCNote
+    usecase "查看学习记录" as UCRecords
+    usecase "查看知识点讲解" as UCKnowledgePoint
+  }
+
+  package "AI 问答与题目辅导" {
+    usecase "上传问答图片" as UCUploadImage
+    usecase "课程问答" as UCCourseQA
+    usecase "课件页问答" as UCPageQA
+    usecase "流式问答" as UCStreamQA
+    usecase "检索课程知识上下文" as UCRetrieve
+    usecase "生成回答与引用来源" as UCAnswer
+    usecase "查看问答历史 / 会话" as UCHistory
+    usecase "收藏问答" as UCFavorite
+    usecase "评价问答" as UCFeedback
+    usecase "文本题目辅导" as UCTextProblem
+    usecase "图片题目辅导" as UCImageProblem
+    usecase "确认 / 修正题干" as UCConfirmProblem
+    usecase "获取分级辅导" as UCGuidance
+    usecase "查看辅导历史" as UCTutoringHistory
+  }
+
+  package "测验、错题与计划" {
+    usecase "生成章节自练" as UCPractice
+    usecase "查看测验列表 / 详情" as UCQuizView
+    usecase "提交测验" as UCSubmit
+    usecase "查看结果与解析" as UCAttempt
+    usecase "查看错题本" as UCWrongBook
+    usecase "生成错题练习" as UCWrongPractice
+    usecase "查看薄弱点" as UCWeakPoint
+    usecase "创建学习计划" as UCPlanCreate
+    usecase "查看计划 / 任务" as UCPlanTasks
+    usecase "任务打卡" as UCCheckin
+  }
+}
+
+Student --> UCAuth
+Student --> UCDashboard
+Student --> UCProfile
+Student --> UCNotice
+Student --> UCReadNotice
+Student --> UCMyCourses
+Student --> UCPreview
+Student --> UCJoin
+Student --> UCLeave
+Student --> UCCourseHome
+Student --> UCLessonList
+Student --> UCLessonDetail
+Student --> UCPlayLesson
+Student --> UCProgress
+Student --> UCNote
+Student --> UCRecords
+Student --> UCKnowledgePoint
+Student --> UCUploadImage
+Student --> UCCourseQA
+Student --> UCPageQA
+Student --> UCStreamQA
+Student --> UCHistory
+Student --> UCFavorite
+Student --> UCFeedback
+Student --> UCTextProblem
+Student --> UCImageProblem
+Student --> UCConfirmProblem
+Student --> UCGuidance
+Student --> UCTutoringHistory
+Student --> UCPractice
+Student --> UCQuizView
+Student --> UCSubmit
+Student --> UCAttempt
+Student --> UCWrongBook
+Student --> UCWrongPractice
+Student --> UCWeakPoint
+Student --> UCPlanCreate
+Student --> UCPlanTasks
+Student --> UCCheckin
+
+Notify --> UCNotice
+Notify --> UCReadNotice
+LLM --> UCAnswer
+LLM --> UCGuidance
+LLM --> UCPractice
+LLM --> UCPlanCreate
+VectorService --> UCRetrieve
+OCR --> UCUploadImage
+OCR --> UCImageProblem
+
+UCJoin ..> UCPreview : <<include>>
+UCCourseHome ..> UCLessonList : <<include>>
+UCPlayLesson ..> UCProgress : <<include>>
+UCNote ..> UCPlayLesson : <<extend>>
+UCPageQA ..> UCPlayLesson : <<extend>>
+UCCourseQA ..> UCRetrieve : <<include>>
+UCPageQA ..> UCRetrieve : <<include>>
+UCCourseQA ..> UCAnswer : <<include>>
+UCPageQA ..> UCAnswer : <<include>>
+UCStreamQA ..> UCCourseQA : <<extend>>
+UCUploadImage ..> UCCourseQA : <<extend>>
+UCImageProblem ..> UCConfirmProblem : <<include>>
+UCTextProblem ..> UCGuidance : <<include>>
+UCImageProblem ..> UCGuidance : <<include>>
+UCSubmit ..> UCAttempt : <<include>>
+UCWrongBook ..> UCSubmit : <<extend>>
+UCWrongPractice ..> UCWrongBook : <<include>>
+UCWeakPoint ..> UCWrongBook : <<include>>
+UCWeakPoint ..> UCCourseQA : <<include>>
+UCPlanCreate ..> UCWeakPoint : <<include>>
+UCCheckin ..> UCPlanTasks : <<extend>>
+
+@enduml

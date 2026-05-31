@@ -1,0 +1,109 @@
+@startuml
+!include plantuml-style.iuml
+title 测验与作答详细类图（清晰版）
+top to bottom direction
+hide methods
+
+package "参与者" {
+  class "用户 User" as User <<entity>> {
+    id
+    role
+    status
+  }
+
+  class "学生 Student" as Student <<role>> {
+    studentNo
+  }
+
+  class "教师 Teacher" as Teacher <<role>> {
+    employeeNo
+  }
+
+  class "管理员 Admin" as Admin <<role>> {
+    adminScope
+  }
+}
+
+package "测验结构" {
+  class "课程 Course" as Course <<entity>> {
+    id
+    teacherId
+    status
+  }
+
+  class "课程成员 CourseMembership" as Membership <<entity>> {
+    courseId
+    userId
+    role
+  }
+
+  class "知识点 KnowledgePoint" as Point <<entity>> {
+    courseId
+    name
+  }
+
+  class "测验 Quiz" as Quiz <<entity>> {
+    courseId
+    creatorId
+    quizType
+    status
+  }
+
+  class "测验题目 QuizQuestion" as Question <<entity>> {
+    quizId
+    knowledgePointId
+    stem
+    score
+  }
+}
+
+package "作答结果" {
+  class "作答记录 QuizAttempt" as Attempt <<entity>> {
+    quizId
+    userId
+    score
+    accuracy
+  }
+
+  class "题目答案 QuizAnswer" as Answer <<entity>> {
+    attemptId
+    questionId
+    isCorrect
+    score
+  }
+
+  class "错题 WrongQuestion" as Wrong <<entity>> {
+    userId
+    questionId
+    wrongCount
+    isResolved
+  }
+}
+
+package "AI 生成" {
+  class "生成任务 AsyncTaskLog" as GenTask <<entity>> {
+    taskName
+    targetId
+    status
+  }
+
+  class "AI 用量 AIUsageLog" as Usage <<entity>> {
+    module
+    modelName
+    success
+  }
+}
+
+User <|-- Student
+User <|-- Teacher
+User <|-- Admin
+
+Course "1" *-- "0..*" Quiz : 测验
+Course "1" o-- "0..*" Point : 知识点
+Quiz "1" *-- "1..*" Question : 题目
+Point "0..1" -- "0..*" Question : 标注
+Attempt "1" *-- "1..*" Answer : 答案
+Question "1" -- "0..*" Wrong : 错题来源
+Usage "0..*" --> "0..1" GenTask : 生成用量
+
+@enduml

@@ -1,0 +1,49 @@
+@startuml
+!include plantuml-style.iuml
+title 题目辅导详细用例图（清晰版）
+left to right direction
+
+actor "学生" as Student
+actor "图片 / OCR 服务" as ImageOcr
+actor "向量库" as Vector
+actor "大模型服务" as LLM
+
+rectangle "题目辅导" {
+  usecase "题目输入" as UCProblemInput
+  usecase "分级辅导" as UCGuidanceFlow
+  usecase "辅导历史" as UCHistoryFlow
+
+  package "输入明细" {
+    usecase "文本题目输入\nPOST /tutoring/problems/text" as UCText
+    usecase "图片题目输入\nPOST /tutoring/problems/image" as UCImage
+    usecase "确认 / 修正题干\nPOST /tutoring/problems/{id}/confirm" as UCConfirm
+    usecase "分析知识点与常见错因" as UCAnalyze
+  }
+
+  package "辅导明细" {
+    usecase "获取分级辅导\nGET /tutoring/problems/{id}/guidance?level=" as UCGuidance
+    usecase "检索课程知识与教学产物" as UCRetrieve
+    usecase "生成提示 / 思路 / 详解" as UCGenerate
+    usecase "生成相似题" as UCSimilar
+  }
+
+  package "历史明细" {
+    usecase "查看辅导历史\nGET /tutoring/history" as UCHistory
+  }
+}
+
+Student --> UCProblemInput
+Student --> UCGuidanceFlow
+Student --> UCHistoryFlow
+ImageOcr --> UCProblemInput
+Vector --> UCGuidanceFlow
+LLM --> UCGuidanceFlow
+
+UCText ..> UCAnalyze : <<include>>
+UCImage ..> UCAnalyze : <<include>>
+UCConfirm ..> UCAnalyze : <<include>>
+UCGuidance ..> UCRetrieve : <<include>>
+UCRetrieve ..> UCGenerate : <<include>>
+UCGenerate ..> UCSimilar : <<extend>>
+
+@enduml

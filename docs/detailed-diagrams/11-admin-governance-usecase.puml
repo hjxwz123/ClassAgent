@@ -1,0 +1,53 @@
+@startuml
+!include plantuml-style.iuml
+title 管理员用户、课程、资料治理详细用例图（清晰版）
+left to right direction
+
+actor "管理员" as Admin
+actor "对象存储服务" as Storage
+actor "向量库" as VectorStore
+
+rectangle "管理员治理" {
+  usecase "查看管理仪表盘\nGET /admin/dashboard" as UCDashboard
+
+  package "用户治理" {
+    usecase "用户统计与筛选\nGET /admin/users*" as UCUsers
+    usecase "创建 / 更新后台用户\nPOST|PATCH /admin/users*" as UCUserEdit
+    usecase "重置密码\nPOST /admin/users/{id}/reset-password" as UCReset
+    usecase "软删除用户\nDELETE /admin/users/{id}" as UCDeleteUser
+  }
+
+  package "课程治理" {
+    usecase "课程统计与筛选\nGET /admin/courses*" as UCCourses
+    usecase "启用 / 停用课程\nPOST /admin/courses/{id}/activate|deactivate" as UCCourseStatus
+    usecase "接管课程教师\nPOST /admin/courses/{id}/takeover" as UCTakeover
+  }
+
+  package "资料治理" {
+    usecase "资料统计与筛选\nGET /admin/materials*" as UCMaterials
+    usecase "删除违规 / 无效资料\nDELETE /admin/materials/{id}" as UCDeleteMaterial
+    usecase "记录治理操作日志" as UCOperationLog
+  }
+}
+
+Admin --> UCDashboard
+Admin --> UCUsers
+Admin --> UCCourses
+Admin --> UCMaterials
+Admin --> UCDeleteMaterial
+Storage --> UCDeleteMaterial
+VectorStore --> UCDeleteMaterial
+
+UCUserEdit ..> UCOperationLog : <<include>>
+UCReset ..> UCOperationLog : <<include>>
+UCDeleteUser ..> UCOperationLog : <<include>>
+UCCourseStatus ..> UCOperationLog : <<include>>
+UCTakeover ..> UCCourses : <<include>>
+UCDeleteMaterial ..> UCOperationLog : <<include>>
+
+note bottom of UCDeleteMaterial
+  删除资料时同步清理文件对象、
+  KnowledgeChunk 和向量索引。
+end note
+
+@enduml
