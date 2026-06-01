@@ -1,0 +1,25 @@
+.plan-banner { display: flex; margin-bottom: 24rpx; }
+.plan-banner__cell { flex: 1; text-align: center; color: #fff; }
+.plan-banner__cell .num { font-size: 48rpx; font-weight: 700; }
+.plan-banner__cell text { font-size: 22rpx; opacity: 0.85; }
+
+.plan-task { display: flex; align-items: center; gap: 20rpx; padding: 20rpx 0; border-bottom: 1rpx solid var(--ca-border); font-size: 30rpx; }
+.plan-task:last-child { border-bottom: none; }
+.plan-task--done { color: var(--ca-muted); text-decoration: line-through; }
+
+.calendar__week { display: flex; margin-bottom: 12rpx; }
+.calendar__wd { flex: 1; text-align: center; font-size: 24rpx; color: var(--ca-muted); }
+.calendar__grid { display: flex; flex-wrap: wrap; }
+.cal-cell {
+  width: calc(100% / 7); height: 80rpx; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; font-size: 28rpx; color: var(--ca-ink-soft); position: relative;
+}
+.cal-cell--today { color: var(--ca-student-hover); font-weight: 700; }
+.cal-cell--done {
+  color: #fff;
+}
+.cal-cell--done text {
+  width: 56rpx; height: 56rpx; line-height: 56rpx; text-align: center;
+  background: var(--ca-student); border-radius: 9999rpx;
+}
+.cal-cell__dot { width: 10rpx; height: 10rpx; border-radius: 9999rpx; background: var(--ca-warning); position: absolute; bottom: 12rpx; }

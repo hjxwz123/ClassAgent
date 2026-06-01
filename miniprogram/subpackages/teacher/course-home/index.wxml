@@ -1,0 +1,70 @@
+<view class="page">
+  <block wx:if="{{loading}}">
+    <view class="card"><view class="skeleton skeleton-line"></view></view>
+  </block>
+
+  <block wx:elif="{{home}}">
+    <!-- 横幅 -->
+    <view class="banner banner--teacher fade-in">
+      <view class="h2" style="color:#fff">{{home.course.name}}</view>
+      <view class="text-sub" style="color:rgba(255,255,255,0.85);margin-top:8rpx">{{home.course.term}}</view>
+      <view class="row gap-16 mt-16">
+        <view class="tag tag--code" catchtap="copyCode">{{home.course.course_code}} 复制</view>
+        <text class="tag {{home.course.status === 'active' ? 'tag--success' : 'tag--warning'}}">{{home.course.status === 'active' ? '已上架' : '已下架'}}</text>
+      </view>
+    </view>
+
+    <!-- 快捷入口 2x2 -->
+    <view class="quick-grid">
+      <view class="quick quick--teacher" bindtap="goStudents"><text class="quick__icon">◔</text><text>学生</text></view>
+      <view class="quick quick--teacher" bindtap="goAnalytics"><text class="quick__icon">◈</text><text>分析</text></view>
+      <view class="quick quick--teacher"><text class="quick__icon">▤</text><text>资料({{home.quick_counts.material_count}})</text></view>
+      <view class="quick quick--teacher"><text class="quick__icon">▶</text><text>课时({{home.quick_counts.lesson_count}})</text></view>
+    </view>
+
+    <!-- 课时概览 -->
+    <view class="section-title">课时概览</view>
+    <view class="card" wx:if="{{home.lessons.length}}">
+      <view wx:for="{{home.lessons}}" wx:key="id" class="t-lesson-row">
+        <view class="flex-1">
+          <view class="ellipsis">{{item.title}}</view>
+          <view class="progress mt-8" style="width:240rpx"><view class="progress__bar progress__bar--teacher" style="width:{{item.progress_percent || item.completion_rate || 0}}%"></view></view>
+        </view>
+        <text class="tag {{item.status === 'published' ? 'tag--success' : 'tag--warning'}}">{{item.status === 'published' ? '已发布' : '草稿'}}</text>
+      </view>
+      <view class="text-muted mt-16" style="font-size:24rpx">课时编辑与脚本审核请前往桌面端</view>
+    </view>
+    <view wx:else class="card text-sub">暂无课时</view>
+
+    <!-- 资料状态 -->
+    <view class="section-title">资料状态</view>
+    <view class="stats-grid">
+      <view class="stat-card"><view class="stat-card__value num" style="color:var(--ca-teacher)">{{home.material_stats.total || home.quick_counts.material_count}}</view><view class="stat-card__label">资料总数</view></view>
+      <view class="stat-card"><view class="stat-card__value num" style="color:var(--ca-success)">{{home.material_stats.ready || 0}}</view><view class="stat-card__label">已就绪</view></view>
+      <view class="stat-card"><view class="stat-card__value num" style="color:var(--ca-warning)">{{home.material_stats.pending || 0}}</view><view class="stat-card__label">处理中</view></view>
+    </view>
+
+    <!-- 学生进度 -->
+    <block wx:if="{{home.student_progress.length}}">
+      <view class="section-title">学生进度</view>
+      <view class="card">
+        <view wx:for="{{home.student_progress}}" wx:key="membership_id" class="t-lesson-row">
+          <text class="flex-1 ellipsis">{{item.student.nickname}}</text>
+          <view class="progress" style="width:200rpx"><view class="progress__bar progress__bar--teacher" style="width:{{item.progress_percent}}%"></view></view>
+          <text class="text-muted" style="font-size:24rpx;width:80rpx;text-align:right">{{item.progress_percent}}%</text>
+        </view>
+      </view>
+    </block>
+
+    <!-- 近期活动 -->
+    <block wx:if="{{home.activities.length}}">
+      <view class="section-title">近期活动</view>
+      <view class="card">
+        <view wx:for="{{home.activities}}" wx:key="index" wx:if="{{index < 6}}" class="todo-row">
+          <text class="flex-1 ellipsis">{{item.title}}</text>
+          <text class="text-muted" style="font-size:24rpx">{{item.meta}}</text>
+        </view>
+      </view>
+    </block>
+  </block>
+</view>

@@ -1,0 +1,12 @@
+.result-hero { text-align: center; margin-bottom: 24rpx; }
+.result-hero__score { font-size: 72rpx; font-weight: 700; }
+.result-hero__label { font-size: 26rpx; opacity: 0.85; }
+.result-hero__meta { display: flex; justify-content: center; gap: 32rpx; margin-top: 16rpx; font-size: 26rpx; opacity: 0.9; }
+
+.ai-card { border-color: var(--ca-student-light); }
+.ai-card__spark { color: var(--ca-student-glow); font-size: 36rpx; }
+
+.ana-card__stem { font-size: 30rpx; line-height: 1.6; margin: 16rpx 0; }
+.ana-line { display: flex; gap: 16rpx; font-size: 28rpx; padding: 8rpx 0; }
+.ana-line__k { width: 130rpx; color: var(--ca-sub); flex-shrink: 0; }
+.ana-exp { margin-top: 16rpx; padding: 16rpx; background: var(--ca-bg); border-radius: 12rpx; font-size: 26rpx; color: var(--ca-ink-soft); }

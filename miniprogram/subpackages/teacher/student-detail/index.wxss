@@ -1,0 +1,6 @@
+.weak-strip { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.weak-strip__tag { margin: 0; }
+.qa-row { display: flex; align-items: center; gap: 16rpx; padding: 18rpx 0; border-bottom: 1rpx solid var(--ca-border); font-size: 28rpx; }
+.qa-row:last-child { border-bottom: none; }
+.t-lesson-row { display: flex; align-items: center; gap: 16rpx; padding: 20rpx 0; border-bottom: 1rpx solid var(--ca-border); }
+.t-lesson-row:last-child { border-bottom: none; }

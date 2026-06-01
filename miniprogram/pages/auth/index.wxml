@@ -1,0 +1,89 @@
+<view class="auth">
+  <view class="auth__brand">
+    <view class="auth__logo">智</view>
+    <view class="auth__title">智学黑板</view>
+    <view class="auth__slogan">AI 驱动的课程学习助手</view>
+  </view>
+
+  <view class="auth__card fade-in">
+    <view class="seg">
+      <view class="seg__item {{mode === 'login' ? 'seg__item--on' : ''}}" data-mode="login" bindtap="switchMode">登录</view>
+      <view class="seg__item {{mode === 'register' ? 'seg__item--on' : ''}}" data-mode="register" bindtap="switchMode">注册</view>
+      <view class="seg__item {{mode === 'reset' ? 'seg__item--on' : ''}}" data-mode="reset" bindtap="switchMode">找回</view>
+    </view>
+
+    <!-- 登录 -->
+    <block wx:if="{{mode === 'login'}}">
+      <view class="field">
+        <view class="field__label">邮箱</view>
+        <input class="input {{errors.email ? 'input--error' : ''}}" type="text" placeholder="you@example.com" value="{{login.email}}" data-group="login" data-field="email" bindinput="onInput" />
+        <view wx:if="{{errors.email}}" class="field__error">{{errors.email}}</view>
+      </view>
+      <view class="field">
+        <view class="field__label">密码</view>
+        <input class="input {{errors.password ? 'input--error' : ''}}" password placeholder="请输入密码" value="{{login.password}}" data-group="login" data-field="password" bindinput="onInput" />
+        <view wx:if="{{errors.password}}" class="field__error">{{errors.password}}</view>
+      </view>
+      <button class="btn btn--primary btn--block mt-8" loading="{{submitting}}" bindtap="doLogin">登录</button>
+    </block>
+
+    <!-- 注册 -->
+    <block wx:elif="{{mode === 'register'}}">
+      <view class="field">
+        <view class="field__label">我是</view>
+        <view class="role-pick">
+          <view class="role-pick__item {{register.role === 'student' ? 'role-pick__item--on' : ''}}" data-role="student" bindtap="pickRole">学生</view>
+          <view class="role-pick__item {{register.role === 'teacher' ? 'role-pick__item--on' : ''}}" data-role="teacher" bindtap="pickRole">教师</view>
+        </view>
+      </view>
+      <view class="field">
+        <view class="field__label">邮箱</view>
+        <input class="input {{errors.email ? 'input--error' : ''}}" placeholder="you@example.com" value="{{register.email}}" data-group="register" data-field="email" bindinput="onInput" />
+        <view wx:if="{{errors.email}}" class="field__error">{{errors.email}}</view>
+      </view>
+      <view class="field">
+        <view class="field__label">昵称</view>
+        <input class="input {{errors.nickname ? 'input--error' : ''}}" placeholder="如何称呼你" value="{{register.nickname}}" data-group="register" data-field="nickname" bindinput="onInput" />
+        <view wx:if="{{errors.nickname}}" class="field__error">{{errors.nickname}}</view>
+      </view>
+      <view wx:if="{{register.role === 'student'}}" class="field">
+        <view class="field__label">学号（选填）</view>
+        <input class="input" placeholder="学号" value="{{register.student_no}}" data-group="register" data-field="student_no" bindinput="onInput" />
+      </view>
+      <view wx:if="{{register.role === 'teacher'}}" class="field">
+        <view class="field__label">工号（选填）</view>
+        <input class="input" placeholder="工号" value="{{register.employee_no}}" data-group="register" data-field="employee_no" bindinput="onInput" />
+      </view>
+      <view class="field">
+        <view class="field__label">密码</view>
+        <input class="input {{errors.password ? 'input--error' : ''}}" password placeholder="至少 8 位" value="{{register.password}}" data-group="register" data-field="password" bindinput="onInput" />
+        <view wx:if="{{errors.password}}" class="field__error">{{errors.password}}</view>
+      </view>
+      <button class="btn btn--primary btn--block mt-8" loading="{{submitting}}" bindtap="doRegister">注册</button>
+    </block>
+
+    <!-- 找回 -->
+    <block wx:else>
+      <view class="field">
+        <view class="field__label">邮箱</view>
+        <input class="input {{errors.email ? 'input--error' : ''}}" placeholder="you@example.com" value="{{reset.email}}" data-group="reset" data-field="email" bindinput="onInput" />
+        <view wx:if="{{errors.email}}" class="field__error">{{errors.email}}</view>
+      </view>
+      <block wx:if="{{resetRequested}}">
+        <view wx:if="{{debugCode}}" class="hint-box">调试验证码：<text class="num">{{debugCode}}</text></view>
+        <view class="field">
+          <view class="field__label">验证码</view>
+          <input class="input {{errors.code ? 'input--error' : ''}}" placeholder="邮件中的验证码" value="{{reset.code}}" data-group="reset" data-field="code" bindinput="onInput" />
+          <view wx:if="{{errors.code}}" class="field__error">{{errors.code}}</view>
+        </view>
+        <view class="field">
+          <view class="field__label">新密码</view>
+          <input class="input {{errors.new_password ? 'input--error' : ''}}" password placeholder="至少 8 位" value="{{reset.new_password}}" data-group="reset" data-field="new_password" bindinput="onInput" />
+          <view wx:if="{{errors.new_password}}" class="field__error">{{errors.new_password}}</view>
+        </view>
+        <button class="btn btn--primary btn--block mt-8" loading="{{submitting}}" bindtap="confirmReset">重置密码</button>
+      </block>
+      <button wx:else class="btn btn--primary btn--block mt-8" loading="{{submitting}}" bindtap="requestReset">获取验证码</button>
+    </block>
+  </view>
+</view>

@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "学习首页",
+  "usingComponents": {},
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark"
+}

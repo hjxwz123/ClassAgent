@@ -1,0 +1,50 @@
+.hero__streak { margin-top: 20rpx; font-size: 26rpx; opacity: 0.9; }
+.hero__streak-num { font-size: 40rpx; font-weight: 700; }
+
+.task-list { display: flex; flex-direction: column; gap: 16rpx; }
+.task-row { display: flex; align-items: center; gap: 16rpx; font-size: 28rpx; color: var(--ca-ink-soft); }
+.task-row__dot { color: var(--ca-muted); font-size: 28rpx; }
+.task-row__dot--done { color: var(--ca-success); }
+.task-row__done { color: var(--ca-muted); text-decoration: line-through; }
+
+.continue__title { font-size: 36rpx; font-weight: 600; margin-top: 16rpx; }
+
+.course-scroll { white-space: nowrap; margin-bottom: 8rpx; }
+.course-chip {
+  display: inline-block;
+  width: 300rpx;
+  vertical-align: top;
+  margin-right: 20rpx;
+  padding: 24rpx;
+  background: var(--ca-card);
+  border: 1rpx solid var(--ca-border);
+  border-radius: 16rpx;
+  box-shadow: var(--ca-shadow-card);
+  white-space: normal;
+}
+.course-chip__name { font-size: 30rpx; font-weight: 600; height: 80rpx; }
+
+.stats-grid { display: flex; gap: 20rpx; margin-bottom: 8rpx; }
+.stat-card {
+  flex: 1;
+  background: var(--ca-card);
+  border: 1rpx solid var(--ca-border);
+  border-radius: 16rpx;
+  padding: 28rpx 16rpx;
+  text-align: center;
+  box-shadow: var(--ca-shadow-card);
+}
+.stat-card__value { font-size: 48rpx; font-weight: 700; color: var(--ca-student-hover); }
+.stat-card__unit { font-size: 26rpx; margin-left: 4rpx; }
+.stat-card__label { font-size: 24rpx; color: var(--ca-sub); margin-top: 8rpx; }
+
+.ai-card { border-color: var(--ca-student-light); }
+.ai-card__spark { color: var(--ca-student-glow); font-size: 36rpx; }
+.weak-row { display: flex; flex-wrap: wrap; }
+
+.activity-row { display: flex; align-items: center; gap: 16rpx; padding: 16rpx 0; border-bottom: 1rpx solid var(--ca-border); font-size: 28rpx; }
+.activity-row:last-child { border-bottom: none; }
+.activity-row__type { font-size: 22rpx; padding: 4rpx 12rpx; border-radius: 9999rpx; background: #EFEEE9; color: var(--ca-sub); flex-shrink: 0; }
+.activity-row__type--qa { background: var(--ca-student-light); color: var(--ca-student-hover); }
+.activity-row__type--quiz { background: var(--ca-warning-bg); color: var(--ca-warning); }
+.activity-row__type--tutoring { background: var(--ca-info-bg); color: var(--ca-info); }

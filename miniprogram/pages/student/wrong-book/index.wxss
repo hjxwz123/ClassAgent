@@ -1,0 +1,11 @@
+.stat-banner { display: flex; }
+.stat-banner__cell { flex: 1; text-align: center; }
+.stat-banner__num { font-size: 44rpx; font-weight: 700; }
+.stat-banner__lbl { font-size: 22rpx; opacity: 0.85; margin-top: 4rpx; }
+
+.weak-strip { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.weak-strip__tag { margin: 0; }
+
+.wrong-card__stem { font-size: 30rpx; color: var(--ca-ink); line-height: 1.6; margin-top: 16rpx; }
+.wrong-card__exp { margin-top: 16rpx; padding: 16rpx; background: var(--ca-bg); border-radius: 12rpx; font-size: 26rpx; color: var(--ca-ink-soft); }
+.wrong-card__exp-title { font-size: 24rpx; color: var(--ca-sub); margin-bottom: 8rpx; }

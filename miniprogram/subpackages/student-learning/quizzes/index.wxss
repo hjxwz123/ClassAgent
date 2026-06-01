@@ -1,0 +1,4 @@
+.quiz-top { display: flex; }
+.quiz-top__cell { flex: 1; text-align: center; color: #fff; }
+.quiz-top__cell .num { font-size: 48rpx; font-weight: 700; }
+.quiz-top__cell text { font-size: 22rpx; opacity: 0.85; }

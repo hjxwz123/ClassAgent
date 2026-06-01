@@ -1,0 +1,83 @@
+{
+  "pages": [
+    "pages/auth/index",
+    "pages/student/home/index",
+    "pages/student/courses/index",
+    "pages/student/qa/index",
+    "pages/student/wrong-book/index",
+    "pages/student/profile/index",
+    "pages/teacher/home/index",
+    "pages/teacher/courses/index",
+    "pages/teacher/students/index",
+    "pages/teacher/analytics/index",
+    "pages/teacher/profile/index"
+  ],
+  "subPackages": [
+    {
+      "root": "subpackages/student-course",
+      "name": "student-course",
+      "pages": [
+        "course-home/index",
+        "lesson-study/index",
+        "materials/index"
+      ]
+    },
+    {
+      "root": "subpackages/student-learning",
+      "name": "student-learning",
+      "pages": [
+        "quizzes/index",
+        "quiz-answer/index",
+        "quiz-result/index",
+        "tutoring/index",
+        "knowledge/index",
+        "plans/index"
+      ]
+    },
+    {
+      "root": "subpackages/teacher",
+      "name": "teacher",
+      "pages": [
+        "course-home/index",
+        "student-detail/index"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/student/home/index": {
+      "network": "all",
+      "packages": ["student-course", "student-learning"]
+    }
+  },
+  "tabBar": {
+    "custom": true,
+    "color": "#999990",
+    "selectedColor": "#00B8D4",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      { "pagePath": "pages/student/home/index", "text": "首页" },
+      { "pagePath": "pages/student/courses/index", "text": "课程" },
+      { "pagePath": "pages/student/qa/index", "text": "AI 问答" },
+      { "pagePath": "pages/student/wrong-book/index", "text": "错题本" },
+      { "pagePath": "pages/student/profile/index", "text": "我的" },
+      { "pagePath": "pages/teacher/home/index", "text": "工作台" },
+      { "pagePath": "pages/teacher/courses/index", "text": "课程" },
+      { "pagePath": "pages/teacher/students/index", "text": "学生" },
+      { "pagePath": "pages/teacher/analytics/index", "text": "分析" },
+      { "pagePath": "pages/teacher/profile/index", "text": "我的" }
+    ]
+  },
+  "window": {
+    "navigationBarBackgroundColor": "#F9F8F6",
+    "navigationBarTitleText": "智学黑板",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F9F8F6",
+    "backgroundColorTop": "#F9F8F6",
+    "backgroundColorBottom": "#F9F8F6",
+    "enablePullDownRefresh": false
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

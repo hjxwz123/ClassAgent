@@ -1,0 +1,83 @@
+<view class="page page--tab">
+  <view class="course-sel course-sel--teacher" bindtap="toggleCoursePicker">
+    <text class="ellipsis">{{courseName}}</text>
+    <text class="course-sel__arrow">▾</text>
+  </view>
+
+  <!-- 统计 -->
+  <view class="banner banner--teacher mt-16 fade-in stat-banner">
+    <view class="stat-banner__cell"><view class="stat-banner__num num">{{stats.total || 0}}</view><view class="stat-banner__lbl">学生总数</view></view>
+    <view class="stat-banner__cell"><view class="stat-banner__num num">{{stats.active_7d || 0}}</view><view class="stat-banner__lbl">活跃学生</view></view>
+    <view class="stat-banner__cell"><view class="stat-banner__num num">{{stats.average_completion || 0}}%</view><view class="stat-banner__lbl">平均完成</view></view>
+    <view class="stat-banner__cell"><view class="stat-banner__num num">{{stats.inactive_14d || 0}}</view><view class="stat-banner__lbl">长期未活</view></view>
+  </view>
+
+  <view class="search mt-16">
+    <text class="search__icon">🔍</text>
+    <input class="search__input" placeholder="搜索学生姓名" value="{{keyword}}" bindinput="onSearch" />
+  </view>
+  <view class="chips mt-16">
+    <view class="chip chip--teacher {{filter === 'all' ? 'chip--on' : ''}}" data-filter="all" bindtap="setFilter">全部</view>
+    <view class="chip chip--teacher {{filter === 'active' ? 'chip--on' : ''}}" data-filter="active" bindtap="setFilter">活跃</view>
+    <view class="chip chip--teacher {{filter === 'inactive' ? 'chip--on' : ''}}" data-filter="inactive" bindtap="setFilter">未活跃</view>
+  </view>
+
+  <block wx:if="{{loading}}">
+    <view class="card"><view class="skeleton skeleton-line"></view></view>
+  </block>
+
+  <block wx:elif="{{filtered.length}}">
+    <view wx:for="{{filtered}}" wx:key="membership_id" class="card stu-card fade-in" data-id="{{student.id}}">
+      <view class="row gap-16" data-id="{{item.student.id}}" bindtap="openDetail">
+        <view class="stu-avatar">
+          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" class="stu-avatar__img" />
+          <text wx:else>{{item.name[0]}}</text>
+        </view>
+        <view class="flex-1">
+          <view style="font-weight:600">{{item.name}}</view>
+          <view class="text-muted" style="font-size:24rpx">{{item.no || '无学号'}} · {{item.lastText}}</view>
+        </view>
+      </view>
+      <view class="progress mt-16"><view class="progress__bar progress__bar--teacher" style="width:{{item.progress_percent}}%"></view></view>
+      <view class="row-between mt-16">
+        <view class="row gap-24">
+          <text class="text-sub">课时 {{item.studied_lessons}}/{{item.lesson_total}}</text>
+          <text class="text-sub">问答 {{item.qa_count}}</text>
+          <text class="text-sub">错题 {{item.wrong_count}}</text>
+        </view>
+        <button class="btn btn--outline btn--sm" catchtap="openRemind" data-id="{{item.student.id}}">提醒</button>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="empty"><view class="empty__icon">👥</view><view class="empty__text">暂无学生数据</view></view>
+</view>
+
+<!-- 课程选择 -->
+<view wx:if="{{coursePickerOpen}}" class="sheet-mask" bindtap="toggleCoursePicker"></view>
+<view wx:if="{{coursePickerOpen}}" class="sheet" catchtap="">
+  <view class="sheet__handle"></view>
+  <view class="sheet__title">选择课程</view>
+  <scroll-view scroll-y style="max-height:50vh">
+    <view wx:for="{{courses}}" wx:key="id" class="pick-row" data-id="{{item.id}}" bindtap="pickCourse">
+      <text class="flex-1 ellipsis">{{item.name}}</text>
+      <text wx:if="{{item.id === courseId}}" class="text-teacher">✓</text>
+    </view>
+  </scroll-view>
+</view>
+
+<!-- 提醒 -->
+<view wx:if="{{remindOpen}}" class="sheet-mask" bindtap="closeRemind"></view>
+<view wx:if="{{remindOpen}}" class="sheet" catchtap="">
+  <view class="sheet__handle"></view>
+  <view class="sheet__title">提醒 {{remindStudent.name}}</view>
+  <view class="field">
+    <view class="field__label">标题</view>
+    <input class="input" value="{{remindForm.title}}" bindinput="onRemindTitle" />
+  </view>
+  <view class="field">
+    <view class="field__label">提醒内容</view>
+    <textarea class="textarea" value="{{remindForm.message}}" bindinput="onRemindMsg" />
+  </view>
+  <button class="btn btn--teacher btn--block mt-8" bindtap="sendRemind">发送提醒</button>
+</view>

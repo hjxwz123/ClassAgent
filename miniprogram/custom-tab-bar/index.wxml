@@ -1,0 +1,18 @@
+<view class="tabbar {{role === 'teacher' ? 'tabbar--teacher' : 'tabbar--student'}}">
+  <view
+    wx:for="{{list}}"
+    wx:key="path"
+    class="tab {{item.center ? 'tab--center' : ''}} {{selected === index ? 'tab--active' : ''}}"
+    data-index="{{index}}"
+    bindtap="onTap"
+  >
+    <block wx:if="{{item.center}}">
+      <view class="tab__fab">{{item.icon}}</view>
+      <text class="tab__text tab__text--center">{{item.text}}</text>
+    </block>
+    <block wx:else>
+      <text class="tab__icon">{{item.icon}}</text>
+      <text class="tab__text">{{item.text}}</text>
+    </block>
+  </view>
+</view>

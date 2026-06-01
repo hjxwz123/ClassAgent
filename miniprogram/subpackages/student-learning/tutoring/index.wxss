@@ -1,0 +1,11 @@
+.upload-zone {
+  border: 2rpx dashed var(--ca-student); border-radius: 16rpx;
+  padding: 60rpx 24rpx; text-align: center; background: var(--ca-student-light);
+}
+.upload-zone__icon { font-size: 72rpx; }
+
+.step-card__content {
+  margin-top: 16rpx; padding: 20rpx; background: var(--ca-bg); border-radius: 12rpx;
+  font-size: 28rpx; line-height: 1.7; color: var(--ca-ink-soft); white-space: pre-wrap;
+}
+.hist-card { font-size: 28rpx; }
