@@ -1,0 +1,61 @@
+<view class="exam">
+  <!-- 顶部 -->
+  <view class="exam__nav" style="padding-top:{{statusBar}}px">
+    <view class="exam__nav-bar">
+      <view class="exam__exit" bindtap="exit">退出</view>
+      <view class="exam__title ellipsis">{{quiz.title || '作答'}}</view>
+      <view class="exam__time num">{{timeText}}</view>
+    </view>
+    <view wx:if="{{questions.length}}" class="exam__progress">
+      <view class="exam__progress-bar" style="width:{{(current + 1) / questions.length * 100}}%"></view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="exam__loading">AI 正在准备题目…</view>
+
+  <block wx:elif="{{view}}">
+    <scroll-view scroll-y class="exam__body">
+      <view class="row gap-8">
+        <text class="tag tag--info">{{typeLabel[view.question_type] || '题目'}}</text>
+        <text class="text-muted">第 {{current + 1}}/{{questions.length}} 题 · {{view.score}}分</text>
+      </view>
+      <view class="exam__stem">{{view.stem}}</view>
+
+      <!-- 选择题 -->
+      <block wx:if="{{view.isChoice}}">
+        <view wx:for="{{view.opts}}" wx:key="index" class="opt {{item.selected ? 'opt--on' : ''}}" data-index="{{item.index}}" bindtap="selectOption">
+          <view class="opt__letter">{{item.letter}}</view>
+          <view class="flex-1">{{item.text}}</view>
+          <view wx:if="{{item.selected}}" class="opt__check">✓</view>
+        </view>
+      </block>
+      <!-- 填空 -->
+      <block wx:elif="{{view.question_type === 'blank'}}">
+        <input class="input mt-16" placeholder="填写答案" value="{{view.textAnswer}}" bindinput="onTextAnswer" />
+      </block>
+      <!-- 简答 -->
+      <block wx:else>
+        <textarea class="textarea mt-16" style="min-height:240rpx" placeholder="写下你的答案" value="{{view.textAnswer}}" bindinput="onTextAnswer" maxlength="500" />
+      </block>
+    </scroll-view>
+
+    <!-- 底部操作 -->
+    <view class="exam__foot">
+      <view class="exam__foot-btn" bindtap="prev">上一题</view>
+      <view class="exam__foot-panel" bindtap="togglePanel">{{answeredCount}}/{{questions.length}}</view>
+      <view wx:if="{{current < questions.length - 1}}" class="exam__foot-btn exam__foot-btn--primary" bindtap="next">下一题</view>
+      <view wx:else class="exam__foot-btn exam__foot-btn--primary" bindtap="submit">交卷</view>
+    </view>
+  </block>
+</view>
+
+<!-- 题号面板 -->
+<view wx:if="{{panelOpen}}" class="sheet-mask" bindtap="togglePanel"></view>
+<view wx:if="{{panelOpen}}" class="sheet" catchtap="">
+  <view class="sheet__handle"></view>
+  <view class="sheet__title">题号 · 已答 {{answeredCount}}/{{questions.length}}</view>
+  <view class="num-grid">
+    <view wx:for="{{questions}}" wx:key="id" class="num-cell {{index === current ? 'num-cell--cur' : (answers[item.id] !== undefined && answers[item.id] !== '' ? 'num-cell--done' : '')}}" data-index="{{index}}" bindtap="jump">{{index + 1}}</view>
+  </view>
+  <button class="btn btn--primary btn--block mt-16" loading="{{submitting}}" bindtap="submit">交卷</button>
+</view>

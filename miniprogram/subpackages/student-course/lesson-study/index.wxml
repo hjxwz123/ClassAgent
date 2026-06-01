@@ -1,0 +1,139 @@
+<view class="study">
+  <!-- 顶部栏 -->
+  <view class="study__nav" style="padding-top:{{statusBar}}px">
+    <view class="study__nav-bar">
+      <view class="study__back" bindtap="back">‹</view>
+      <view class="study__title">
+        <view class="ellipsis">{{lesson.title || '课时学习'}}</view>
+        <view class="study__sub" wx:if="{{pages.length}}">第 {{current + 1}}/{{pages.length}} 页</view>
+      </view>
+      <view class="study__set" bindtap="cycleSubtitle">字幕</view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="study__loading">正在打开课时…</view>
+
+  <block wx:elif="{{pages.length}}">
+    <!-- 主舞台 -->
+    <swiper class="stage" current="{{current}}" bindchange="onSwiperChange" duration="240">
+      <swiper-item wx:for="{{pages}}" wx:key="id">
+        <scroll-view scroll-y class="stage__scroll">
+          <view class="slide">
+            <view wx:if="{{item.page_title}}" class="slide__title">{{item.page_title}}</view>
+            <view class="slide__body">{{item.page_text}}</view>
+          </view>
+        </scroll-view>
+      </swiper-item>
+    </swiper>
+
+    <!-- 字幕悬浮 -->
+    <view wx:if="{{subtitleMode !== 'hidden' && pages[current].subtitle_text}}" class="subtitle">
+      {{pages[current].subtitle_text}}
+    </view>
+
+    <!-- 播放控制条 -->
+    <view class="controls">
+      <view class="controls__btn" bindtap="prevPage">‹ 上一页</view>
+      <view class="controls__center">
+        <view class="controls__icon" data-tab="script" bindtap="openDrawer">AI</view>
+        <view class="controls__icon" bindtap="toggleThumb">▦</view>
+      </view>
+      <view class="controls__btn controls__btn--primary" bindtap="nextPage">{{current === pages.length - 1 ? '完成' : '下一页 ›'}}</view>
+    </view>
+
+    <!-- 底部 AI 把手 -->
+    <view class="handle" data-tab="script" bindtap="openDrawer">
+      <view class="handle__bar"></view>
+      <text>上滑展开 文稿 · 活动 · 问答 · 笔记</text>
+    </view>
+  </block>
+
+  <view wx:else class="study__loading">本课时暂无内容</view>
+</view>
+
+<!-- AI 抽屉 -->
+<view wx:if="{{drawerOpen}}" class="sheet-mask" bindtap="closeDrawer"></view>
+<view wx:if="{{drawerOpen}}" class="drawer" catchtap="">
+  <view class="sheet__handle"></view>
+  <view class="drawer__tabs">
+    <view class="drawer__tab {{drawerTab === 'script' ? 'drawer__tab--on' : ''}}" data-tab="script" bindtap="switchDrawerTab">文稿</view>
+    <view class="drawer__tab {{drawerTab === 'activity' ? 'drawer__tab--on' : ''}}" data-tab="activity" bindtap="switchDrawerTab">活动</view>
+    <view class="drawer__tab {{drawerTab === 'qa' ? 'drawer__tab--on' : ''}}" data-tab="qa" bindtap="switchDrawerTab">问答</view>
+    <view class="drawer__tab {{drawerTab === 'note' ? 'drawer__tab--on' : ''}}" data-tab="note" bindtap="switchDrawerTab">笔记</view>
+  </view>
+
+  <scroll-view scroll-y class="drawer__body">
+    <!-- 文稿 -->
+    <block wx:if="{{drawerTab === 'script'}}">
+      <view wx:if="{{pages[current].script_text}}" class="drawer__text">{{pages[current].script_text}}</view>
+      <view wx:else class="empty"><view class="empty__text">本页暂无讲解文稿</view></view>
+    </block>
+
+    <!-- 活动 -->
+    <block wx:elif="{{drawerTab === 'activity'}}">
+      <block wx:if="{{pages[current].pedagogy.length}}">
+        <view wx:for="{{pages[current].pedagogy}}" wx:key="id" class="act-card act-card--{{item.scene_type}}">
+          <view class="row gap-8"><text class="tag tag--ai">{{item.label}}</text></view>
+          <view class="act-card__title">{{item.title}}</view>
+          <view class="text-body mt-8">{{item.content}}</view>
+        </view>
+      </block>
+      <view wx:else class="empty"><view class="empty__text">本页暂无互动活动</view></view>
+    </block>
+
+    <!-- 问答 -->
+    <block wx:elif="{{drawerTab === 'qa'}}">
+      <view wx:if="{{!qaMessages.length}}" class="text-sub" style="padding:24rpx 0">基于本页内容向 AI 提问</view>
+      <view wx:for="{{qaMessages}}" wx:key="index" class="dqa dqa--{{item.role}}">
+        <view class="dqa__bubble dqa__bubble--{{item.role}} {{item.error ? 'dqa__bubble--err' : ''}}">
+          <view wx:if="{{item.pending}}" class="typing"><text></text><text></text><text></text></view>
+          <text wx:else>{{item.text}}</text>
+        </view>
+      </view>
+    </block>
+
+    <!-- 笔记 -->
+    <block wx:elif="{{drawerTab === 'note'}}">
+      <view class="row-between mb-16">
+        <text class="text-sub">本页笔记</text>
+        <text class="note-state note-state--{{noteState === '保存失败' ? 'err' : 'ok'}}">{{noteState}}</text>
+      </view>
+      <textarea class="textarea" style="min-height:300rpx" value="{{note}}" placeholder="记录你的想法，自动保存" bindinput="onNoteInput" />
+    </block>
+  </scroll-view>
+
+  <!-- 问答输入固定底部 -->
+  <view wx:if="{{drawerTab === 'qa'}}" class="drawer__input">
+    <textarea class="qa__textarea" auto-height placeholder="向 AI 提问本页内容…" value="{{qaInput}}" bindinput="onQaInput" show-confirm-bar="{{false}}" />
+    <button class="qa__send {{qaInput && !qaSending ? 'qa__send--on' : ''}}" disabled="{{!qaInput || qaSending}}" bindtap="sendPageQa">发送</button>
+  </view>
+</view>
+
+<!-- 缩略图 -->
+<view wx:if="{{thumbOpen}}" class="sheet-mask" bindtap="toggleThumb"></view>
+<view wx:if="{{thumbOpen}}" class="sheet" catchtap="">
+  <view class="sheet__handle"></view>
+  <view class="sheet__title">页面缩略图</view>
+  <scroll-view scroll-y style="max-height:56vh">
+    <view class="thumb-grid">
+      <view wx:for="{{pages}}" wx:key="id" class="thumb {{index === current ? 'thumb--on' : ''}}" data-index="{{index}}" bindtap="jumpPage">
+        <view class="thumb__num num">{{index + 1}}</view>
+        <view class="thumb__title clamp-2">{{item.page_title || item.page_text}}</view>
+      </view>
+    </view>
+  </scroll-view>
+</view>
+
+<!-- 完成卡 -->
+<view wx:if="{{completeOpen}}" class="sheet-mask"></view>
+<view wx:if="{{completeOpen}}" class="complete">
+  <view class="complete__icon">🎉</view>
+  <view class="complete__title">课时完成！</view>
+  <view class="complete__stats">
+    <view class="complete__stat"><view class="num">{{studyMinutes}}</view><text>学习分钟</text></view>
+    <view class="complete__stat"><view class="num">{{pages.length}}</view><text>学习页数</text></view>
+    <view class="complete__stat"><view class="num">{{qaMessages.length}}</view><text>互动次数</text></view>
+  </view>
+  <button class="btn btn--primary btn--block mt-16" bindtap="goPractice">去做练习</button>
+  <button class="btn btn--outline btn--block mt-16" bindtap="backToCourse">回到课程</button>
+</view>

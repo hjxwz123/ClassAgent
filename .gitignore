@@ -1,5 +1,6 @@
 *.md
 !/README.md
+docs/
 .venv/
 __pycache__/
 .pytest_cache/

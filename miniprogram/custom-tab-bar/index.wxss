@@ -1,0 +1,71 @@
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  height: 112rpx;
+  padding-bottom: env(safe-area-inset-bottom);
+  background: #ffffff;
+  border-top: 1rpx solid #e6e4dd;
+  box-shadow: 0 -8rpx 24rpx rgba(18, 22, 20, 0.04);
+}
+
+.tab {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+}
+
+.tab__icon {
+  font-size: 40rpx;
+  line-height: 1;
+  color: #999990;
+}
+
+.tab__text {
+  font-size: 22rpx;
+  color: #999990;
+}
+
+.tabbar--student .tab--active .tab__icon,
+.tabbar--student .tab--active .tab__text {
+  color: #00b8d4;
+}
+
+.tabbar--teacher .tab--active .tab__icon,
+.tabbar--teacher .tab--active .tab__text {
+  color: #d94925;
+}
+
+/* 学生端中央凸起 AI 按钮 */
+.tab--center {
+  justify-content: flex-end;
+  padding-bottom: 12rpx;
+}
+
+.tab__fab {
+  position: absolute;
+  top: -36rpx;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 9999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 46rpx;
+  color: #ffffff;
+  background: linear-gradient(135deg, #00e5ff 0%, #00b8d4 100%);
+  box-shadow: 0 8rpx 24rpx rgba(0, 184, 212, 0.28);
+}
+
+.tab__text--center {
+  margin-top: 4rpx;
+  color: #00b8d4;
+  font-weight: 500;
+}

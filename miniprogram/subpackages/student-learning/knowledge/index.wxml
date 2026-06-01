@@ -1,0 +1,66 @@
+<view class="page">
+  <view class="search">
+    <text class="search__icon">🔍</text>
+    <input class="search__input" placeholder="搜索知识点" value="{{keyword}}" bindinput="onSearch" />
+  </view>
+
+  <!-- 章节 Chips -->
+  <view wx:if="{{chapters.length}}" class="chips mt-16">
+    <view wx:for="{{chapters}}" wx:key="id" class="chip {{chapterId === item.id ? 'chip--on' : ''}}" data-id="{{item.id}}" bindtap="selectChapter">{{item.title}}</view>
+  </view>
+
+  <!-- 薄弱标签 -->
+  <view wx:if="{{weakPoints.length}}" class="weak-line mt-16">
+    <text class="text-sub" style="margin-right:12rpx">薄弱：</text>
+    <text wx:for="{{weakPoints}}" wx:key="knowledge_point" wx:if="{{index < 4}}" class="tag tag--warning" style="margin-right:12rpx">{{item.knowledge_point}}</text>
+  </view>
+
+  <!-- 知识点选择 -->
+  <scroll-view scroll-x class="kp-scroll mt-16" wx:if="{{filtered.length}}" enhanced show-scrollbar="{{false}}">
+    <view wx:for="{{filtered}}" wx:key="id" class="kp-chip {{selected.id === item.id ? 'kp-chip--on' : ''}}" data-id="{{item.id}}" bindtap="select">{{item.name}}</view>
+  </scroll-view>
+
+  <block wx:if="{{loading}}">
+    <view class="card"><view class="skeleton skeleton-line"></view><view class="skeleton skeleton-line" style="width:70%"></view></view>
+  </block>
+
+  <block wx:elif="{{selected}}">
+    <!-- 详情头 -->
+    <view class="card">
+      <view class="h2">{{selected.name}}</view>
+      <view class="text-sub mt-8">所属：{{chapterName(selected.chapter_id)}}</view>
+      <!-- 难度分段 -->
+      <view class="seg-tabs mt-16">
+        <view wx:for="{{levels}}" wx:key="value" class="seg-tabs__item {{level === item.value ? 'seg-tabs__item--on' : ''}}" data-level="{{item.value}}" bindtap="setLevel">{{item.label}}</view>
+      </view>
+
+      <!-- 内容块 -->
+      <view class="kblock kblock--def">
+        <view class="kblock__title">定义</view>
+        <view class="kblock__body">{{content.definition || '暂无内容'}}</view>
+      </view>
+      <view class="kblock kblock--ai">
+        <view class="kblock__title">核心原理</view>
+        <view class="kblock__body">{{content.principle || '暂无内容'}}</view>
+      </view>
+      <view class="kblock kblock--ex">
+        <view class="kblock__title">例题解析</view>
+        <view class="kblock__body">{{content.example || '暂无内容'}}</view>
+      </view>
+      <view class="kblock kblock--warn">
+        <view class="kblock__title">常见易错点</view>
+        <view class="kblock__body">{{content.common_mistake || '暂无内容'}}</view>
+      </view>
+
+      <view class="cta mt-16">
+        <view class="row gap-8"><text class="ai-spark">✦</text><text>生成练习题</text></view>
+        <view class="row gap-16 mt-16">
+          <button class="btn btn--outline btn--sm flex-1" loading="{{generating}}" data-count="5" bindtap="generate">练习 5 题</button>
+          <button class="btn btn--primary btn--sm flex-1" loading="{{generating}}" data-count="10" bindtap="generate">练习 10 题</button>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="empty"><view class="empty__icon">🧩</view><view class="empty__text">暂无知识点</view></view>
+</view>

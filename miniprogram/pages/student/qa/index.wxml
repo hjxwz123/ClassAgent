@@ -1,0 +1,111 @@
+<view class="qa">
+  <!-- 顶部栏 -->
+  <view class="qa__top">
+    <view class="course-sel" bindtap="toggleCoursePicker">
+      <text class="ellipsis">{{courseName}}</text>
+      <text class="course-sel__arrow">▾</text>
+    </view>
+    <view class="qa__actions">
+      <text class="qa__action" bindtap="goTutoring">题目辅导</text>
+      <text class="qa__action" bindtap="newConversation">新对话</text>
+      <text class="qa__action" bindtap="openHistory">历史</text>
+    </view>
+  </view>
+
+  <!-- 对话区 -->
+  <scroll-view scroll-y class="qa__scroll" scroll-into-view="{{scrollTo}}" scroll-with-animation>
+    <!-- 空状态 -->
+    <view wx:if="{{!messages.length}}" class="qa__empty">
+      <view class="qa__welcome-icon">✦</view>
+      <view class="qa__welcome">课程专属 AI 问答</view>
+      <view class="text-sub">回答基于本课程的课件与学习记录</view>
+      <view class="prompt-grid">
+        <view wx:for="{{prompts}}" wx:key="*this" class="prompt-card" data-text="{{item}}" bindtap="usePrompt">{{item}}</view>
+      </view>
+    </view>
+
+    <view wx:for="{{messages}}" wx:key="index" id="msg-{{index}}" class="msg msg--{{item.role}}">
+      <!-- 用户消息 -->
+      <block wx:if="{{item.role === 'user'}}">
+        <view class="bubble bubble--user">
+          <view wx:if="{{item.attachments.length}}" class="bubble__imgs">
+            <image wx:for="{{item.attachments}}" wx:for-item="att" wx:key="url" src="{{att.displayUrl || att.url}}" mode="aspectFill" class="bubble__img" data-url="{{att.displayUrl || att.url}}" data-list="{{item.attachments}}" bindtap="previewAttachment" />
+          </view>
+          <text>{{item.text}}</text>
+        </view>
+      </block>
+      <!-- AI 消息 -->
+      <block wx:else>
+        <view class="msg__ai-head"><text class="msg__ai-spark">✦</text> AI 助教</view>
+        <view class="bubble bubble--ai {{item.error ? 'bubble--error' : ''}}">
+          <view wx:if="{{item.pending}}" class="typing"><text></text><text></text><text></text></view>
+          <block wx:else>
+            <view wx:if="{{item.outOfScope}}" class="scope-hint">问题可能超出本课程范围，以下回答仅供参考</view>
+            <view wx:if="{{item.thinking}}" class="thinking-toggle" data-index="{{index}}" bindtap="toggleThinking">
+              {{item.showThinking ? '收起思考过程 ▴' : '查看思考过程 ▾'}}
+            </view>
+            <view wx:if="{{item.thinking && item.showThinking}}" class="thinking-box">{{item.thinking}}</view>
+            <text class="bubble__text" user-select>{{item.text}}</text>
+            <view wx:if="{{item.sources.length}}" class="sources">
+              <view class="sources__title">参考来源</view>
+              <view wx:for="{{item.sources}}" wx:for-item="src" wx:key="index" class="sources__item ellipsis">· {{src.title || src.snippet || src.page_title || '课件片段'}}</view>
+            </view>
+            <view wx:if="{{!item.error}}" class="msg__tools">
+              <text class="msg__tool" data-text="{{item.text}}" bindtap="copyAnswer">复制</text>
+              <text class="msg__tool {{item.favorite ? 'msg__tool--on' : ''}}" data-index="{{index}}" bindtap="favorite">{{item.favorite ? '已收藏' : '收藏'}}</text>
+              <text class="msg__tool" data-index="{{index}}" data-value="positive" bindtap="feedback">👍</text>
+              <text class="msg__tool" data-index="{{index}}" data-value="negative" bindtap="feedback">👎</text>
+            </view>
+          </block>
+        </view>
+      </block>
+    </view>
+    <view style="height:20rpx"></view>
+  </scroll-view>
+
+  <!-- 输入区 -->
+  <view class="qa__input-wrap">
+    <view wx:if="{{attachments.length}}" class="att-row">
+      <view wx:for="{{attachments}}" wx:key="url" class="att-thumb">
+        <image src="{{item.displayUrl || item.url}}" mode="aspectFill" class="att-thumb__img" />
+        <text class="att-thumb__del" data-index="{{index}}" bindtap="removeAttachment">×</text>
+      </view>
+    </view>
+    <view class="qa__input">
+      <text class="qa__img-btn" bindtap="chooseImage">📷</text>
+      <textarea class="qa__textarea" placeholder="向 AI 提问…" value="{{input}}" bindinput="onInput" auto-height maxlength="2000" cursor-spacing="20" show-confirm-bar="{{false}}" />
+      <button class="qa__send {{(input && !sending) ? 'qa__send--on' : ''}}" disabled="{{!input || sending}}" bindtap="send">发送</button>
+    </view>
+  </view>
+</view>
+
+<!-- 课程选择 -->
+<view wx:if="{{coursePickerOpen}}" class="sheet-mask" bindtap="toggleCoursePicker"></view>
+<view wx:if="{{coursePickerOpen}}" class="sheet" catchtap="">
+  <view class="sheet__handle"></view>
+  <view class="sheet__title">选择课程</view>
+  <scroll-view scroll-y style="max-height:50vh">
+    <view wx:for="{{courses}}" wx:key="id" class="pick-row {{item.id === courseId ? 'pick-row--on' : ''}}" data-id="{{item.id}}" bindtap="pickCourse">
+      <text class="flex-1 ellipsis">{{item.name}}</text>
+      <text wx:if="{{item.id === courseId}}" class="text-student">✓</text>
+    </view>
+    <view wx:if="{{!courses.length}}" class="empty"><view class="empty__text">还没有加入课程</view></view>
+  </scroll-view>
+</view>
+
+<!-- 历史 -->
+<view wx:if="{{historyOpen}}" class="sheet-mask" bindtap="closeHistory"></view>
+<view wx:if="{{historyOpen}}" class="sheet" catchtap="">
+  <view class="sheet__handle"></view>
+  <view class="sheet__title">问答历史</view>
+  <scroll-view scroll-y style="max-height:60vh">
+    <view wx:if="{{historyLoading}}" class="empty"><view class="empty__text">加载中…</view></view>
+    <block wx:elif="{{history.length}}">
+      <view wx:for="{{history}}" wx:key="id" class="hist-row" data-id="{{item.conversation_id}}" bindtap="openConversation">
+        <view class="ellipsis" style="font-weight:600">{{item.title || item.question}}</view>
+        <view class="text-muted ellipsis" style="font-size:24rpx;margin-top:6rpx">{{item.answer_preview}}</view>
+      </view>
+    </block>
+    <view wx:else class="empty"><view class="empty__text">本课程暂无问答记录</view></view>
+  </scroll-view>
+</view>

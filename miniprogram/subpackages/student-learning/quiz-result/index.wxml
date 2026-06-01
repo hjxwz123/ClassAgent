@@ -1,0 +1,46 @@
+<view class="page">
+  <block wx:if="{{loading}}">
+    <view class="card"><view class="skeleton skeleton-line"></view></view>
+  </block>
+
+  <block wx:elif="{{attempt}}">
+    <!-- 结果卡 -->
+    <view class="result-hero banner banner--student fade-in">
+      <view class="result-hero__score num">{{scoreText}}</view>
+      <view class="result-hero__label">本次得分</view>
+      <view class="result-hero__meta">
+        <text>正确率 {{accuracy}}%</text>
+        <text>{{quiz.title}}</text>
+      </view>
+    </view>
+
+    <!-- AI 建议 -->
+    <view wx:if="{{attempt.ai_feedback}}" class="card ai-card">
+      <view class="row gap-8"><text class="ai-card__spark">✦</text><text class="tag tag--ai">AI 学习建议</text></view>
+      <view class="text-body mt-16">{{attempt.ai_feedback}}</view>
+    </view>
+
+    <!-- 题目解析 -->
+    <view class="section-title">题目解析</view>
+    <view wx:for="{{rows}}" wx:key="id" class="card ana-card">
+      <view class="row-between" data-index="{{index}}" bindtap="toggleRow">
+        <view class="row gap-8 flex-1">
+          <text class="tag {{item.is_correct ? 'tag--success' : 'tag--error'}}">{{item.is_correct ? '正确' : '错误'}}</text>
+          <text class="flex-1 ellipsis">{{index + 1}}. {{item.question.stem}}</text>
+        </view>
+        <text class="text-muted">{{item.expanded ? '▴' : '▾'}}</text>
+      </view>
+      <block wx:if="{{item.expanded}}">
+        <view class="ana-card__stem">{{item.question.stem}}</view>
+        <view class="ana-line"><text class="ana-line__k">你的答案</text><text class="{{item.is_correct ? '' : 'text-accent'}}">{{item.userText}}</text></view>
+        <view class="ana-line"><text class="ana-line__k">正确答案</text><text class="text-student">{{item.correctText}}</text></view>
+        <view wx:if="{{item.question.explanation}}" class="ana-exp">
+          <view class="ana-line__k">解析</view>
+          <view>{{item.question.explanation}}</view>
+        </view>
+      </block>
+    </view>
+
+    <button class="btn btn--primary btn--block mt-16" bindtap="done">完成</button>
+  </block>
+</view>

@@ -1,0 +1,2 @@
+.course-card__name { font-size: 34rpx; font-weight: 600; line-height: 1.4; }
+.course-card__meta { display: flex; gap: 24rpx; }

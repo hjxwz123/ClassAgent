@@ -1,0 +1,67 @@
+<view class="page">
+  <block wx:if="{{loading}}">
+    <view class="card"><view class="skeleton skeleton-line"></view></view>
+  </block>
+
+  <block wx:elif="{{detail}}">
+    <!-- 学生卡 -->
+    <view class="id-card banner banner--teacher fade-in">
+      <view class="row gap-24">
+        <view class="id-card__avatar">
+          <image wx:if="{{student.avatar_url}}" src="{{student.avatar_url}}" mode="aspectFill" class="id-card__avatar-img" />
+          <text wx:else>{{student.nickname[0]}}</text>
+        </view>
+        <view class="flex-1">
+          <view class="id-card__name">{{student.nickname}}</view>
+          <view class="id-card__meta">{{student.student_no || '无学号'}}</view>
+          <view class="id-card__meta">{{student.email}}</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 统计 -->
+    <view class="stats-grid">
+      <view class="stat-card"><view class="stat-card__value num" style="color:var(--ca-teacher)">{{stats.qa_total || 0}}</view><view class="stat-card__label">问答</view></view>
+      <view class="stat-card"><view class="stat-card__value num" style="color:var(--ca-teacher)">{{stats.attempt_total || 0}}</view><view class="stat-card__label">测验</view></view>
+      <view class="stat-card"><view class="stat-card__value num" style="color:var(--ca-teacher)">{{stats.average_score || 0}}</view><view class="stat-card__label">平均分</view></view>
+      <view class="stat-card"><view class="stat-card__value num" style="color:var(--ca-accent)">{{stats.wrong_total || 0}}</view><view class="stat-card__label">错题</view></view>
+    </view>
+
+    <!-- 课时进度 -->
+    <view class="section-title">课时进度</view>
+    <view class="card" wx:if="{{lessonProgress.length}}">
+      <view wx:for="{{lessonProgress}}" wx:key="index" class="t-lesson-row">
+        <view class="flex-1">
+          <view class="ellipsis">{{item.lesson.title}}</view>
+          <view class="text-muted" style="font-size:24rpx">{{item.lastText}}</view>
+        </view>
+        <view class="progress" style="width:160rpx"><view class="progress__bar progress__bar--teacher" style="width:{{item.progress_percent}}%"></view></view>
+        <text class="text-muted" style="font-size:24rpx;width:70rpx;text-align:right">{{item.progress_percent}}%</text>
+      </view>
+    </view>
+    <view wx:else class="card text-sub">该学生暂无学习记录</view>
+
+    <!-- 薄弱点 -->
+    <block wx:if="{{weakPoints.length}}">
+      <view class="section-title">薄弱知识点</view>
+      <view class="card">
+        <view class="weak-strip">
+          <text wx:for="{{weakPoints}}" wx:key="name" class="tag tag--warning weak-strip__tag">{{item.name}} · {{item.count}}</text>
+        </view>
+      </view>
+    </block>
+
+    <!-- 问答摘要 -->
+    <block wx:if="{{qaRecords.length}}">
+      <view class="section-title">问答摘要</view>
+      <view class="card">
+        <view wx:for="{{qaRecords}}" wx:key="index" wx:if="{{index < 6}}" class="qa-row">
+          <text class="tag tag--ai" style="flex-shrink:0">Q</text>
+          <text class="flex-1 ellipsis">{{item.question}}</text>
+        </view>
+      </view>
+    </block>
+
+    <button class="btn btn--teacher btn--block mt-16" bindtap="remind">发送提醒</button>
+  </block>
+</view>
