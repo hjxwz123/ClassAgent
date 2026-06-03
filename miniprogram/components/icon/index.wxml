@@ -1,0 +1,1 @@
+<image wx:if="{{src}}" class="ca-icon" src="{{src}}" style="width:{{size}};height:{{size}}" mode="aspectFit" />

@@ -7,11 +7,11 @@
     bindtap="onTap"
   >
     <block wx:if="{{item.center}}">
-      <view class="tab__fab">{{item.icon}}</view>
+      <view class="tab__fab"><icon name="{{item.icon}}" size="46rpx" color="#ffffff" /></view>
       <text class="tab__text tab__text--center">{{item.text}}</text>
     </block>
     <block wx:else>
-      <text class="tab__icon">{{item.icon}}</text>
+      <icon class="tab__icon" name="{{item.icon}}" size="44rpx" color="{{selected === index ? activeColor : '#999990'}}" />
       <text class="tab__text">{{item.text}}</text>
     </block>
   </view>

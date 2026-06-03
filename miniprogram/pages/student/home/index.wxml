@@ -24,7 +24,7 @@
         <view class="progress mt-16"><view class="progress__bar" style="width:{{todayTotal ? (todayDone/todayTotal*100) : 0}}%"></view></view>
         <view class="task-list mt-16">
           <view wx:for="{{dashboard.today_tasks}}" wx:key="id" wx:if="{{index < 3}}" class="task-row">
-            <text class="task-row__dot {{item.status === 'done' ? 'task-row__dot--done' : ''}}">{{item.status === 'done' ? '✓' : '○'}}</text>
+            <icon class="task-row__dot {{item.status === 'done' ? 'task-row__dot--done' : ''}}" name="{{item.status === 'done' ? 'check-circle' : 'circle'}}" size="28rpx" color="{{item.status === 'done' ? '#2E7D32' : '#999990'}}" />
             <text class="flex-1 ellipsis {{item.status === 'done' ? 'task-row__done' : ''}}">{{item.title}}</text>
             <text class="text-muted">{{item.estimated_minutes}}分</text>
           </view>
@@ -50,7 +50,7 @@
       </view>
     </block>
     <view wx:else class="card empty fade-in">
-      <view class="empty__icon">📚</view>
+      <icon class="empty__icon" name="book" size="64rpx" color="#00B8D4" />
       <view class="empty__text">还没有加入课程</view>
       <button class="btn btn--primary btn--sm" bindtap="goCourses">加入课程</button>
     </view>
@@ -81,7 +81,7 @@
     <view class="section-title">AI 今日推荐</view>
     <view class="card ai-card fade-in">
       <view class="row gap-8">
-        <text class="ai-card__spark">✦</text>
+        <icon class="ai-card__spark" name="spark" size="36rpx" color="#00E5FF" />
         <text class="tag tag--ai">基于课程数据</text>
       </view>
       <view class="text-body mt-16" wx:if="{{dashboard.recommendation.text}}">{{dashboard.recommendation.text}}</view>

@@ -32,7 +32,7 @@
     <view class="card">
       <view class="achv-grid">
         <view wx:for="{{achievements}}" wx:key="key" class="achv {{item.unlocked ? 'achv--on' : ''}}">
-          <view class="achv__icon">{{item.unlocked ? '🏅' : '🔒'}}</view>
+          <icon class="achv__icon" name="{{item.unlocked ? 'medal' : 'lock'}}" size="48rpx" color="{{item.unlocked ? '#E6A700' : '#999990'}}" />
           <view class="achv__name">{{item.name}}</view>
         </view>
       </view>

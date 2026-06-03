@@ -26,7 +26,7 @@
         <view wx:for="{{view.opts}}" wx:key="index" class="opt {{item.selected ? 'opt--on' : ''}}" data-index="{{item.index}}" bindtap="selectOption">
           <view class="opt__letter">{{item.letter}}</view>
           <view class="flex-1">{{item.text}}</view>
-          <view wx:if="{{item.selected}}" class="opt__check">✓</view>
+          <icon wx:if="{{item.selected}}" class="opt__check" name="check" size="30rpx" color="#00B8D4" />
         </view>
       </block>
       <!-- 填空 -->

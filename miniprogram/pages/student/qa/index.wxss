@@ -1,4 +1,5 @@
-.qa { display: flex; flex-direction: column; height: 100vh; background: var(--ca-bg); }
+/* 高度扣除底部自定义 TabBar（112rpx + 安全区），避免输入框被遮挡 */
+.qa { display: flex; flex-direction: column; height: calc(100vh - 112rpx - env(safe-area-inset-bottom)); background: var(--ca-bg); }
 
 .qa__top {
   display: flex;
@@ -76,15 +77,11 @@
 .qa__input-wrap {
   background: var(--ca-card);
   border-top: 1rpx solid var(--ca-border);
-  padding: 16rpx 24rpx calc(env(safe-area-inset-bottom) + 16rpx);
+  /* 安全区由下方 TabBar 处理，这里只留常规内边距 */
+  padding: 16rpx 24rpx;
 }
-.att-row { display: flex; gap: 16rpx; margin-bottom: 12rpx; }
-.att-thumb { position: relative; }
-.att-thumb__img { width: 120rpx; height: 120rpx; border-radius: 12rpx; }
-.att-thumb__del { position: absolute; top: -10rpx; right: -10rpx; width: 36rpx; height: 36rpx; line-height: 34rpx; text-align: center; background: rgba(0,0,0,0.6); color: #fff; border-radius: 9999rpx; font-size: 28rpx; }
 
 .qa__input { display: flex; align-items: flex-end; gap: 16rpx; }
-.qa__img-btn { font-size: 44rpx; padding-bottom: 8rpx; }
 .qa__textarea {
   flex: 1;
   min-height: 72rpx;
@@ -95,16 +92,18 @@
   font-size: 30rpx;
 }
 .qa__send {
+  flex-shrink: 0;
+  width: 72rpx;
   height: 72rpx;
-  line-height: 72rpx;
-  padding: 0 28rpx;
+  padding: 0;
   border-radius: 9999rpx;
   background: var(--ca-border);
-  color: var(--ca-muted);
-  font-size: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .qa__send::after { border: none; }
-.qa__send--on { background: var(--ca-student); color: #fff; }
+.qa__send--on { background: var(--ca-student); }
 
 .pick-row, .hist-row { display: flex; align-items: center; padding: 24rpx 16rpx; border-bottom: 1rpx solid var(--ca-border); font-size: 30rpx; }
 .hist-row { flex-direction: column; align-items: flex-start; }

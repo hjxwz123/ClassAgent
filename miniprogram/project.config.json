@@ -44,8 +44,8 @@
     "ignoreUploadUnusedFiles": true
   },
   "compileType": "miniprogram",
-  "libVersion": "3.5.0",
-  "appid": "touristappid",
+  "libVersion": "3.16.1",
+  "appid": "wx30b19f2e6f595841",
   "projectname": "ClassAgent-MiniProgram",
   "condition": {},
   "editorSetting": {

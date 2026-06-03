@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "练习与测验",
-  "usingComponents": {}
+  "usingComponents": {
+    "icon": "/components/icon/index"
+  }
 }

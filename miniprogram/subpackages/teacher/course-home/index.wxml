@@ -16,10 +16,10 @@
 
     <!-- 快捷入口 2x2 -->
     <view class="quick-grid">
-      <view class="quick quick--teacher" bindtap="goStudents"><text class="quick__icon">◔</text><text>学生</text></view>
-      <view class="quick quick--teacher" bindtap="goAnalytics"><text class="quick__icon">◈</text><text>分析</text></view>
-      <view class="quick quick--teacher"><text class="quick__icon">▤</text><text>资料({{home.quick_counts.material_count}})</text></view>
-      <view class="quick quick--teacher"><text class="quick__icon">▶</text><text>课时({{home.quick_counts.lesson_count}})</text></view>
+      <view class="quick quick--teacher" bindtap="goStudents"><icon class="quick__icon" name="user" size="40rpx" color="#D94925" /><text>学生</text></view>
+      <view class="quick quick--teacher" bindtap="goAnalytics"><icon class="quick__icon" name="chart" size="40rpx" color="#D94925" /><text>分析</text></view>
+      <view class="quick quick--teacher"><icon class="quick__icon" name="list" size="40rpx" color="#D94925" /><text>资料({{home.quick_counts.material_count}})</text></view>
+      <view class="quick quick--teacher"><icon class="quick__icon" name="play" size="40rpx" color="#D94925" /><text>课时({{home.quick_counts.lesson_count}})</text></view>
     </view>
 
     <!-- 课时概览 -->

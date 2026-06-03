@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "题目辅导",
-  "usingComponents": {}
+  "usingComponents": {
+    "icon": "/components/icon/index"
+  }
 }

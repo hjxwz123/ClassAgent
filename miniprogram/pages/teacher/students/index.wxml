@@ -1,7 +1,7 @@
 <view class="page page--tab">
   <view class="course-sel course-sel--teacher" bindtap="toggleCoursePicker">
     <text class="ellipsis">{{courseName}}</text>
-    <text class="course-sel__arrow">▾</text>
+    <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#D94925" />
   </view>
 
   <!-- 统计 -->
@@ -13,7 +13,7 @@
   </view>
 
   <view class="search mt-16">
-    <text class="search__icon">🔍</text>
+    <icon class="search__icon" name="search" size="28rpx" color="#999990" />
     <input class="search__input" placeholder="搜索学生姓名" value="{{keyword}}" bindinput="onSearch" />
   </view>
   <view class="chips mt-16">
@@ -50,7 +50,7 @@
     </view>
   </block>
 
-  <view wx:else class="empty"><view class="empty__icon">👥</view><view class="empty__text">暂无学生数据</view></view>
+  <view wx:else class="empty"><icon class="empty__icon" name="users" size="64rpx" color="#D94925" /><view class="empty__text">暂无学生数据</view></view>
 </view>
 
 <!-- 课程选择 -->
@@ -61,7 +61,7 @@
   <scroll-view scroll-y style="max-height:50vh">
     <view wx:for="{{courses}}" wx:key="id" class="pick-row" data-id="{{item.id}}" bindtap="pickCourse">
       <text class="flex-1 ellipsis">{{item.name}}</text>
-      <text wx:if="{{item.id === courseId}}" class="text-teacher">✓</text>
+      <icon wx:if="{{item.id === courseId}}" name="check" size="30rpx" color="#D94925" />
     </view>
   </scroll-view>
 </view>

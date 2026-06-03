@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "结果解析",
-  "usingComponents": {}
+  "usingComponents": {
+    "icon": "/components/icon/index"
+  }
 }
