@@ -1,5 +1,5 @@
 <template>
-  <div ref="containerRef" class="document-preview-surface" :class="{ compact, bare }">
+  <div ref="containerRef" class="document-preview-surface" :class="{ compact, bare, 'single-page-preview': singlePagePreview }">
     <div v-if="state === 'loading'" class="document-preview-state loading" role="status" aria-label="课件加载中">
       <LoadingMark :label="false" class="document-preview-loading-mark" />
     </div>
@@ -10,42 +10,44 @@
       <span>暂无可预览的原课件</span>
     </div>
     <div v-else ref="stageRef" class="document-preview-stage" :class="stageClass">
-      <VuePdfEmbed
-        v-if="normalizedType === 'pdf' && pdfSource"
-        :key="pdfRenderKey"
-        class="document-preview-view document-preview-pdf"
-        :source="pdfSource"
-        :page="pdfPageProp"
-        :width="pdfRenderWidth"
-        :scale="pdfScale"
-        text-layer
-        @loaded="handlePdfLoaded"
-        @rendered="handleRendered"
-        @loading-failed="handleError"
-        @rendering-failed="handlePdfRenderError"
-      />
-      <VueOfficeDocx
-        v-else-if="isDocx && binarySource"
-        ref="docxRoot"
-        class="document-preview-view docx-view"
-        :src="binarySource"
-        :options="docxOptions"
-        @rendered="handleRendered"
-        @error="handleError"
-      />
-      <VueOfficePptx
-        v-else-if="isPptx && pptxSource"
-        :key="pptxRenderKey"
-        ref="pptxRoot"
-        class="document-preview-view pptx-view"
-        :src="pptxSource"
-        :options="pptxOptions"
-        @rendered="handleRendered"
-        @error="handleError"
-      />
-      <div v-else-if="isTextLike" class="document-preview-view text-view lesson-markdown markdown-body" v-html="textHtml"></div>
-      <div v-else class="document-preview-state">
-        <span>当前文件类型暂不支持原件预览</span>
+      <div class="document-preview-fit-frame" :style="previewFrameStyle">
+        <VuePdfEmbed
+          v-if="normalizedType === 'pdf' && pdfSource"
+          :key="pdfRenderKey"
+          class="document-preview-view document-preview-pdf"
+          :source="pdfSource"
+          :page="pdfPageProp"
+          :width="pdfRenderWidth"
+          :scale="pdfScale"
+          text-layer
+          @loaded="handlePdfLoaded"
+          @rendered="handleRendered"
+          @loading-failed="handleError"
+          @rendering-failed="handlePdfRenderError"
+        />
+        <VueOfficeDocx
+          v-else-if="isDocx && binarySource"
+          ref="docxRoot"
+          class="document-preview-view docx-view"
+          :src="binarySource"
+          :options="docxOptions"
+          @rendered="handleRendered"
+          @error="handleError"
+        />
+        <VueOfficePptx
+          v-else-if="isPptx && pptxSource"
+          :key="pptxRenderKey"
+          ref="pptxRoot"
+          class="document-preview-view pptx-view"
+          :src="pptxSource"
+          :options="pptxOptions"
+          @rendered="handleRendered"
+          @error="handleError"
+        />
+        <div v-else-if="isTextLike" class="document-preview-view text-view lesson-markdown markdown-body" v-html="textHtml"></div>
+        <div v-else class="document-preview-state">
+          <span>当前文件类型暂不支持原件预览</span>
+        </div>
       </div>
     </div>
   </div>
@@ -97,6 +99,8 @@ const pdfScale = ref(1);
 const pdfFitsHeight = ref(false);
 const pdfRenderTick = ref(0);
 const previewSize = ref({ width: 0, height: 0 });
+const pdfPageAspect = ref(16 / 9);
+const pptxPageAspect = ref(16 / 9);
 let resizeObserver: ResizeObserver | null = null;
 let pdfResizeTimer: number | undefined;
 let pdfLastRenderSize = { width: 0, height: 0 };
@@ -135,6 +139,13 @@ function elementBoxSize(element: HTMLElement | null | undefined) {
 function previewMeasureCandidates() {
   const container = containerRef.value;
   const stage = stageRef.value;
+  if (singlePagePreview.value) {
+    return [
+      container,
+      container?.closest(".lesson-original-preview") as HTMLElement | null | undefined,
+      stage,
+    ];
+  }
   return [
     stage,
     container,
@@ -152,13 +163,18 @@ function readPreviewSize() {
   const paddingX = Number.parseFloat(styles.paddingLeft || "0") + Number.parseFloat(styles.paddingRight || "0");
   const paddingY = Number.parseFloat(styles.paddingTop || "0") + Number.parseFloat(styles.paddingBottom || "0");
   const candidateSizes = previewMeasureCandidates().map(elementBoxSize);
-  const measuredWidth = Math.max(...candidateSizes.map((size) => size.width), 0);
-  const measuredHeight = Math.max(...candidateSizes.map((size) => size.height), 0);
+  const usableSizes = candidateSizes.filter((size) => size.width > 0 && size.height > 0);
+  const measuredWidth = singlePagePreview.value
+    ? Math.min(...usableSizes.map((size) => size.width))
+    : Math.max(...candidateSizes.map((size) => size.width), 0);
+  const measuredHeight = singlePagePreview.value
+    ? Math.min(...usableSizes.map((size) => size.height))
+    : Math.max(...candidateSizes.map((size) => size.height), 0);
   const width = Math.floor(measuredWidth - paddingX);
   const height = Math.floor(measuredHeight - paddingY);
   return {
-    width: Number.isFinite(width) && width >= 480 ? width : fallback.width,
-    height: Number.isFinite(height) && height >= 240 ? height : fallback.height,
+    width: Number.isFinite(width) && width >= (singlePagePreview.value ? 1 : 480) ? width : fallback.width,
+    height: Number.isFinite(height) && height >= (singlePagePreview.value ? 1 : 240) ? height : fallback.height,
   };
 }
 
@@ -174,6 +190,7 @@ const isDocx = computed(() => ["doc", "docx"].includes(normalizedType.value));
 const isPptx = computed(() => ["ppt", "pptx"].includes(normalizedType.value));
 const isTextLike = computed(() => ["txt", "md", "markdown"].includes(normalizedType.value));
 const isSinglePdfPage = computed(() => normalizedType.value === "pdf" && Number(props.pageNumber || 0) > 0);
+const singlePagePreview = computed(() => props.bare && Number(props.pageNumber || 0) > 0);
 const textHtml = computed(() => renderRichText(textSource.value || " "));
 const pdfPageProp = computed(() => {
   const pageNumber = Number(props.pageNumber || 0);
@@ -183,7 +200,7 @@ const stageClass = computed(() => [
   `type-${normalizedType.value}`,
   {
     "fit-height": pdfFitsHeight.value,
-    "single-page": isSinglePdfPage.value,
+    "single-page": singlePagePreview.value,
   },
 ]);
 const docxOptions = computed(() => ({
@@ -193,17 +210,48 @@ const docxOptions = computed(() => ({
   ignoreHeight: false,
 }));
 const pptxOptions = computed(() => ({
-  width: previewContentWidth.value,
-  height: previewSize.value.height || fallbackPreviewSize().height,
+  width: previewFrameSize.value.width,
+  height: previewFrameSize.value.height,
 }));
 const pptxRenderKey = computed(() => {
-  const width = Math.max(1, Math.round(previewContentWidth.value / 16) * 16);
-  const height = Math.max(1, Math.round((previewSize.value.height || fallbackPreviewSize().height) / 16) * 16);
+  const width = Math.max(1, Math.round(previewFrameSize.value.width / 16) * 16);
+  const height = Math.max(1, Math.round(previewFrameSize.value.height / 16) * 16);
   return `${props.material?.id || "material"}-${normalizedType.value}-${width}x${height}`;
 });
 const pdfRenderKey = computed(() => `${props.material?.id || "material"}-${pdfPageProp.value || "all"}-${pdfRenderTick.value}`);
-const previewContentWidth = computed(() => Math.max(640, Math.floor(previewSize.value.width || fallbackPreviewSize().width)));
+const pageAspectRatio = computed(() => {
+  if (normalizedType.value === "pdf") return pdfPageAspect.value;
+  if (isPptx.value) return pptxPageAspect.value;
+  return 16 / 9;
+});
+const previewContentWidth = computed(() => {
+  const fallback = fallbackPreviewSize();
+  const width = Math.max(1, Math.floor(previewSize.value.width || fallback.width));
+  if (singlePagePreview.value && (normalizedType.value === "pdf" || isPptx.value)) return previewFrameSize.value.width;
+  return Math.max(props.bare ? 1 : 640, width);
+});
 const pdfRenderWidth = computed(() => previewContentWidth.value);
+const previewFrameSize = computed(() => {
+  const fallback = fallbackPreviewSize();
+  const availableWidth = Math.max(1, Math.floor(previewSize.value.width || fallback.width));
+  const availableHeight = Math.max(1, Math.floor(previewSize.value.height || fallback.height));
+  if (!singlePagePreview.value || !(normalizedType.value === "pdf" || isPptx.value)) {
+    return { width: availableWidth, height: availableHeight };
+  }
+  const aspect = Math.max(0.1, pageAspectRatio.value);
+  const width = Math.min(availableWidth, availableHeight * aspect);
+  return {
+    width: Math.max(1, Math.floor(width)),
+    height: Math.max(1, Math.floor(width / aspect)),
+  };
+});
+const previewFrameStyle = computed(() => {
+  const size = previewFrameSize.value;
+  return {
+    width: `${size.width}px`,
+    height: `${size.height}px`,
+  };
+});
 
 function cloneBytesAsArrayBuffer(bytes: Uint8Array | null) {
   if (!bytes) return null;
@@ -353,22 +401,37 @@ async function updatePdfLayout() {
     const page = await doc.getPage(pageNumber);
     if (disposed || doc !== pdfDoc.value || stage !== stageRef.value) return;
     const viewport = page.getViewport({ scale: 1 });
-    const container = containerRef.value;
-    const widthSource = widestElement(stage, container, container?.parentElement as HTMLElement | null) || stage;
+    pdfPageAspect.value = Math.max(0.1, viewport.width / Math.max(viewport.height, 1));
     const styles = window.getComputedStyle(stage);
     const paddingX = Number.parseFloat(styles.paddingLeft || "0") + Number.parseFloat(styles.paddingRight || "0");
     const paddingY = Number.parseFloat(styles.paddingTop || "0") + Number.parseFloat(styles.paddingBottom || "0");
-    const availableWidth = Math.max(1, widthSource.clientWidth - paddingX);
-    const heightSource = widestElement(stage, container) || stage;
-    const availableHeight = Math.max(1, heightSource.clientHeight - paddingY);
-    const widthScale = availableWidth / viewport.width;
-    const renderedHeight = viewport.height * widthScale;
+    const measuredSize = readPreviewSize();
+    const availableWidth = Math.max(1, measuredSize.width - paddingX);
+    const availableHeight = Math.max(1, measuredSize.height - paddingY);
+    const fitWidth = Math.min(availableWidth, availableHeight * pdfPageAspect.value);
+    const renderedHeight = fitWidth / pdfPageAspect.value;
     pdfFitsHeight.value = isSinglePdfPage.value && renderedHeight <= availableHeight + 1;
     pdfScale.value = basePdfRenderScale();
   } catch (error) {
     if (isPdfRenderRaceError(error)) return;
     handleError(error);
   }
+}
+
+function updatePptxPageVisibility() {
+  if (!isPptx.value || !stageRef.value) return;
+  const pageNumber = Number(props.pageNumber || 0);
+  const slides = Array.from(stageRef.value.querySelectorAll<HTMLElement>(".pptx-preview-slide-wrapper"));
+  slides.forEach((slide, index) => {
+    const active = !pageNumber || index === pageNumber - 1;
+    slide.style.display = active ? "" : "none";
+    slide.style.marginBottom = active ? "0" : "";
+  });
+  if (pageNumber) stageRef.value.scrollTo({ top: 0, left: 0, behavior: "auto" });
+}
+
+function updatePagedPreviewVisibility() {
+  updatePptxPageVisibility();
 }
 
 function scrollToPage() {
@@ -385,6 +448,8 @@ function scrollToPage() {
   }
 
   if (isPptx.value) {
+    updatePptxPageVisibility();
+    if (singlePagePreview.value) return;
     const slides = scroller.querySelectorAll<HTMLElement>(".pptx-preview-slide-wrapper");
     const target = slides[Math.max(0, pageNumber - 1)];
     target?.scrollIntoView({ block: "start", behavior: "smooth" });
@@ -401,13 +466,22 @@ function scrollToPage() {
   }
 }
 
-function handleRendered() {
+function handleRendered(payload?: any) {
   if (disposed) return;
+  if (isPptx.value) {
+    const width = Number(payload?.width || 0);
+    const height = Number(payload?.height || 0);
+    if (width > 0 && height > 0) {
+      const nextAspect = Math.max(0.1, width / height);
+      if (Math.abs(nextAspect - pptxPageAspect.value) > 0.01) pptxPageAspect.value = nextAspect;
+    }
+  }
   if (state.value === "loading") state.value = "ready";
   void nextTick(async () => {
     if (disposed) return;
     if (normalizedType.value === "pdf") recordPdfRenderSize();
     await updatePdfLayout();
+    updatePagedPreviewVisibility();
     scrollToPage();
   });
 }
@@ -442,6 +516,7 @@ watch(
   () => props.pageNumber,
   () => {
     void nextTick(() => updatePdfLayout());
+    void nextTick(() => updatePagedPreviewVisibility());
     void nextTick(() => scrollToPage());
   }
 );
@@ -520,6 +595,13 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow: auto;
   padding: 12px;
+}
+
+.document-preview-fit-frame {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .document-preview-stage.type-pdf.single-page.fit-height {
@@ -626,6 +708,18 @@ onBeforeUnmount(() => {
   padding: 0;
 }
 
+.document-preview-surface.single-page-preview .document-preview-stage {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.document-preview-surface.single-page-preview .document-preview-fit-frame {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
 .document-preview-surface.bare .document-preview-stage.type-pdf.single-page.fit-height {
   padding: 0;
 }
@@ -633,6 +727,14 @@ onBeforeUnmount(() => {
 .document-preview-surface.bare .document-preview-stage.type-pdf:not(.fit-height),
 .document-preview-surface.bare .document-preview-stage:not(.single-page) {
   display: block;
+}
+
+.document-preview-surface.bare.single-page-preview .document-preview-stage.type-pdf,
+.document-preview-surface.bare.single-page-preview .document-preview-stage.type-ppt,
+.document-preview-surface.bare.single-page-preview .document-preview-stage.type-pptx {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
 }
 
 .document-preview-surface.bare .document-preview-view.text-view {
@@ -685,8 +787,17 @@ onBeforeUnmount(() => {
   align-content: start;
 }
 
+.document-preview-surface.single-page-preview :deep(.vue-pdf-embed) {
+  align-content: center;
+  gap: 0;
+}
+
 :deep(.vue-pdf-embed > div) {
   width: 100%;
+}
+
+.document-preview-surface.single-page-preview :deep(.vue-pdf-embed > div) {
+  height: 100%;
 }
 
 :deep(.vue-pdf-embed__page-layer) {
@@ -706,6 +817,10 @@ onBeforeUnmount(() => {
 
 .document-preview-surface.bare :deep(.vue-pdf-embed__page) {
   box-shadow: none;
+}
+
+.document-preview-surface.single-page-preview :deep(.vue-pdf-embed__page) {
+  margin: 0 auto !important;
 }
 
 :deep(.vue-pdf-embed__page canvas) {
@@ -742,13 +857,55 @@ onBeforeUnmount(() => {
   min-height: 100%;
 }
 
+.document-preview-surface.single-page-preview :deep(.vue-office-pptx),
+.document-preview-surface.single-page-preview :deep(.vue-office-pptx .vue-office-pptx-main) {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
 :deep(.pptx-preview-wrapper) {
   width: 100% !important;
   max-width: none;
 }
 
+.document-preview-surface.single-page-preview :deep(.pptx-preview-wrapper) {
+  height: 100% !important;
+  min-height: 0;
+  overflow: hidden !important;
+  background: transparent !important;
+}
+
 :deep(.pptx-preview-slide-wrapper) {
   width: 100% !important;
   margin-bottom: 16px;
+}
+
+.document-preview-surface.single-page-preview :deep(.pptx-preview-slide-wrapper) {
+  height: 100% !important;
+  margin: 0 auto !important;
+}
+
+.document-preview-surface.bare.single-page-preview .document-preview-stage {
+  display: grid !important;
+  place-items: center !important;
+  overflow: hidden !important;
+}
+
+.document-preview-surface.bare.single-page-preview .document-preview-fit-frame {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.document-preview-surface.bare.single-page-preview :deep(.vue-pdf-embed),
+.document-preview-surface.bare.single-page-preview :deep(.vue-office-pptx),
+.document-preview-surface.bare.single-page-preview :deep(.vue-office-pptx .vue-office-pptx-main),
+.document-preview-surface.bare.single-page-preview :deep(.pptx-preview-wrapper),
+.document-preview-surface.bare.single-page-preview :deep(.pptx-preview-slide-wrapper) {
+  width: 100% !important;
+  height: 100% !important;
 }
 </style>
