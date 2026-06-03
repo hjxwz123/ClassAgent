@@ -1,6 +1,6 @@
 <view class="page">
   <view class="search">
-    <text class="search__icon">🔍</text>
+    <icon class="search__icon" name="search" size="28rpx" color="#999990" />
     <input class="search__input" placeholder="搜索资料名称" value="{{keyword}}" bindinput="onSearch" bindconfirm="doSearch" />
   </view>
 
@@ -14,7 +14,7 @@
 
   <block wx:elif="{{materials.length}}">
     <view wx:for="{{materials}}" wx:key="id" class="card mat-card fade-in" data-id="{{item.id}}" bindtap="openMaterial">
-      <view class="mat-card__icon">📄</view>
+      <icon class="mat-card__icon" name="file" size="44rpx" color="#0277BD" />
       <view class="flex-1">
         <view class="ellipsis" style="font-weight:600">{{item.title}}</view>
         <view class="text-muted mt-8" style="font-size:24rpx">{{item.category}} · {{item.sizeText}}</view>
@@ -26,7 +26,7 @@
   </block>
 
   <view wx:else class="empty">
-    <view class="empty__icon">🗂</view>
+    <icon class="empty__icon" name="folder" size="64rpx" color="#00B8D4" />
     <view class="empty__text">暂无课程资料</view>
   </view>
 </view>

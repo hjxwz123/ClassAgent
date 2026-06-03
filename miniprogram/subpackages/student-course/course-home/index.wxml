@@ -16,10 +16,10 @@
 
     <!-- 快捷入口 2x2 -->
     <view class="quick-grid">
-      <view class="quick" bindtap="goLessons"><text class="quick__icon">▶</text><text>课时学习</text></view>
-      <view class="quick" bindtap="goQa"><text class="quick__icon">✦</text><text>AI 问答</text></view>
-      <view class="quick" bindtap="goMaterials"><text class="quick__icon">▤</text><text>课程资料</text></view>
-      <view class="quick" bindtap="goQuizzes"><text class="quick__icon">✎</text><text>章节练习</text></view>
+      <view class="quick" bindtap="goLessons"><icon class="quick__icon" name="play" size="40rpx" color="#00B8D4" /><text>课时学习</text></view>
+      <view class="quick" bindtap="goQa"><icon class="quick__icon" name="spark" size="40rpx" color="#00B8D4" /><text>AI 问答</text></view>
+      <view class="quick" bindtap="goMaterials"><icon class="quick__icon" name="list" size="40rpx" color="#00B8D4" /><text>课程资料</text></view>
+      <view class="quick" bindtap="goQuizzes"><icon class="quick__icon" name="edit" size="40rpx" color="#00B8D4" /><text>章节练习</text></view>
     </view>
 
     <!-- 课时列表 -->
@@ -55,7 +55,7 @@
       </view>
       <view class="card">
         <view wx:for="{{home.materials}}" wx:key="id" wx:if="{{index < 3}}" class="mat-row">
-          <text class="mat-row__icon">📄</text>
+          <icon class="mat-row__icon" name="file" size="32rpx" color="#0277BD" />
           <text class="flex-1 ellipsis">{{item.title}}</text>
           <text class="text-muted" style="font-size:24rpx">{{item.category}}</text>
         </view>

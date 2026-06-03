@@ -1,6 +1,8 @@
 {
   "navigationBarTitleText": "教学分析",
-  "usingComponents": {},
+  "usingComponents": {
+    "icon": "/components/icon/index"
+  },
   "enablePullDownRefresh": true,
   "backgroundTextStyle": "dark"
 }

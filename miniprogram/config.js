@@ -3,9 +3,9 @@
 // 生产：替换为已在小程序后台配置 request 合法域名的 https 地址
 const ENV = {
   // 本地开发后端
-  dev: 'http://127.0.0.1:8000/api/v1',
+  dev: 'http://1.95.218.52/api/v1',
   // 生产环境（部署后替换为真实 https 域名）
-  prod: 'https://your-domain.example.com/api/v1'
+  prod: 'http://1.95.218.52/api/v1'
 };
 
 module.exports = {

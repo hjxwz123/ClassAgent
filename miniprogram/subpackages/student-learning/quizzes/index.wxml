@@ -33,7 +33,7 @@
         </view>
       </view>
     </block>
-    <view wx:else class="empty"><view class="empty__icon">📝</view><view class="empty__text">本课程暂无测验</view></view>
+    <view wx:else class="empty"><icon class="empty__icon" name="note" size="64rpx" color="#00B8D4" /><view class="empty__text">本课程暂无测验</view></view>
   </block>
 
   <!-- 章节练习 -->
@@ -55,7 +55,7 @@
         <switch checked="{{preferWeak}}" color="#00B8D4" bindchange="toggleWeak" />
       </view>
 
-      <button class="btn btn--primary btn--block mt-16" loading="{{generating}}" bindtap="generate">✦ 智能生成练习</button>
+      <button class="btn btn--primary btn--block mt-16" loading="{{generating}}" bindtap="generate"><icon name="spark" size="28rpx" color="#ffffff" /> 智能生成练习</button>
     </view>
   </block>
 </view>

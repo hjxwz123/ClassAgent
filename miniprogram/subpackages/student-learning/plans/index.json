@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "学习计划",
-  "usingComponents": {}
+  "usingComponents": {
+    "icon": "/components/icon/index"
+  }
 }

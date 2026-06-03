@@ -3,7 +3,7 @@
   <view class="qa__top">
     <view class="course-sel" bindtap="toggleCoursePicker">
       <text class="ellipsis">{{courseName}}</text>
-      <text class="course-sel__arrow">▾</text>
+      <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#0097A7" />
     </view>
     <view class="qa__actions">
       <text class="qa__action" bindtap="goTutoring">题目辅导</text>
@@ -16,7 +16,7 @@
   <scroll-view scroll-y class="qa__scroll" scroll-into-view="{{scrollTo}}" scroll-with-animation>
     <!-- 空状态 -->
     <view wx:if="{{!messages.length}}" class="qa__empty">
-      <view class="qa__welcome-icon">✦</view>
+      <icon class="qa__welcome-icon" name="spark" size="72rpx" color="#00E5FF" />
       <view class="qa__welcome">课程专属 AI 问答</view>
       <view class="text-sub">回答基于本课程的课件与学习记录</view>
       <view class="prompt-grid">
@@ -36,13 +36,14 @@
       </block>
       <!-- AI 消息 -->
       <block wx:else>
-        <view class="msg__ai-head"><text class="msg__ai-spark">✦</text> AI 助教</view>
+        <view class="msg__ai-head"><icon class="msg__ai-spark" name="spark" size="26rpx" color="#00E5FF" /> AI 助教</view>
         <view class="bubble bubble--ai {{item.error ? 'bubble--error' : ''}}">
           <view wx:if="{{item.pending}}" class="typing"><text></text><text></text><text></text></view>
           <block wx:else>
             <view wx:if="{{item.outOfScope}}" class="scope-hint">问题可能超出本课程范围，以下回答仅供参考</view>
             <view wx:if="{{item.thinking}}" class="thinking-toggle" data-index="{{index}}" bindtap="toggleThinking">
-              {{item.showThinking ? '收起思考过程 ▴' : '查看思考过程 ▾'}}
+              <text>{{item.showThinking ? '收起思考过程' : '查看思考过程'}}</text>
+              <icon name="{{item.showThinking ? 'chevron-up' : 'chevron-down'}}" size="22rpx" color="#0097A7" />
             </view>
             <view wx:if="{{item.thinking && item.showThinking}}" class="thinking-box">{{item.thinking}}</view>
             <text class="bubble__text" user-select>{{item.text}}</text>
@@ -53,8 +54,8 @@
             <view wx:if="{{!item.error}}" class="msg__tools">
               <text class="msg__tool" data-text="{{item.text}}" bindtap="copyAnswer">复制</text>
               <text class="msg__tool {{item.favorite ? 'msg__tool--on' : ''}}" data-index="{{index}}" bindtap="favorite">{{item.favorite ? '已收藏' : '收藏'}}</text>
-              <text class="msg__tool" data-index="{{index}}" data-value="positive" bindtap="feedback">👍</text>
-              <text class="msg__tool" data-index="{{index}}" data-value="negative" bindtap="feedback">👎</text>
+              <view class="msg__tool" data-index="{{index}}" data-value="positive" bindtap="feedback"><icon name="thumb-up" size="30rpx" color="#666560" /></view>
+              <view class="msg__tool" data-index="{{index}}" data-value="negative" bindtap="feedback"><icon name="thumb-down" size="30rpx" color="#666560" /></view>
             </view>
           </block>
         </view>
@@ -65,16 +66,11 @@
 
   <!-- 输入区 -->
   <view class="qa__input-wrap">
-    <view wx:if="{{attachments.length}}" class="att-row">
-      <view wx:for="{{attachments}}" wx:key="url" class="att-thumb">
-        <image src="{{item.displayUrl || item.url}}" mode="aspectFill" class="att-thumb__img" />
-        <text class="att-thumb__del" data-index="{{index}}" bindtap="removeAttachment">×</text>
-      </view>
-    </view>
     <view class="qa__input">
-      <text class="qa__img-btn" bindtap="chooseImage">📷</text>
       <textarea class="qa__textarea" placeholder="向 AI 提问…" value="{{input}}" bindinput="onInput" auto-height maxlength="2000" cursor-spacing="20" show-confirm-bar="{{false}}" />
-      <button class="qa__send {{(input && !sending) ? 'qa__send--on' : ''}}" disabled="{{!input || sending}}" bindtap="send">发送</button>
+      <button class="qa__send {{(input && !sending) ? 'qa__send--on' : ''}}" disabled="{{!input || sending}}" bindtap="send">
+        <icon name="send" size="40rpx" color="{{(input && !sending) ? '#ffffff' : '#999990'}}" />
+      </button>
     </view>
   </view>
 </view>
@@ -87,7 +83,7 @@
   <scroll-view scroll-y style="max-height:50vh">
     <view wx:for="{{courses}}" wx:key="id" class="pick-row {{item.id === courseId ? 'pick-row--on' : ''}}" data-id="{{item.id}}" bindtap="pickCourse">
       <text class="flex-1 ellipsis">{{item.name}}</text>
-      <text wx:if="{{item.id === courseId}}" class="text-student">✓</text>
+      <icon wx:if="{{item.id === courseId}}" name="check" size="30rpx" color="#00B8D4" />
     </view>
     <view wx:if="{{!courses.length}}" class="empty"><view class="empty__text">还没有加入课程</view></view>
   </scroll-view>
