@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "课程资料",
-  "usingComponents": {}
+  "usingComponents": {
+    "icon": "/components/icon/index"
+  }
 }

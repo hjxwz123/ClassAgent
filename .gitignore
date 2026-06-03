@@ -27,3 +27,9 @@ frontend/node_modules/
 frontend/dist/
 frontend/*.tsbuildinfo
 readmedocs/
+
+# 忽略所有以 . 开头的文件和文件夹（保留 .gitignore 和示例配置文件）
+.*
+!.gitignore
+!.env.example
+!.env.production.example

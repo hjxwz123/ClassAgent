@@ -1,7 +1,7 @@
 <view class="page">
   <view class="course-sel" bindtap="toggleCoursePicker">
     <text class="ellipsis">{{courseName}}</text>
-    <text class="course-sel__arrow">▾</text>
+    <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#0097A7" />
   </view>
 
   <!-- 输入模式 -->
@@ -17,7 +17,7 @@
     </block>
     <block wx:else>
       <view class="upload-zone" bindtap="chooseImage">
-        <view class="upload-zone__icon">📷</view>
+        <icon class="upload-zone__icon" name="camera" size="72rpx" color="#00B8D4" />
         <view class="text-sub">拍照或从相册选择题目图片</view>
         <view class="text-muted" style="font-size:24rpx;margin-top:8rpx">支持拍照识别题干（OCR）</view>
       </view>
@@ -41,7 +41,8 @@
           <view style="font-weight:600">{{item.name}}</view>
           <view class="text-muted" style="font-size:24rpx">{{item.hint}}</view>
         </view>
-        <text class="text-muted">{{loadingLevel === item.level ? '…' : (openLevel[item.level] ? '▴' : '▾')}}</text>
+        <text wx:if="{{loadingLevel === item.level}}" class="text-muted">…</text>
+        <icon wx:else name="{{openLevel[item.level] ? 'chevron-up' : 'chevron-down'}}" size="24rpx" color="#999990" />
       </view>
       <view wx:if="{{openLevel[item.level]}}" class="step-card__content">{{guidance[item.level]}}</view>
     </view>
@@ -65,7 +66,7 @@
   <scroll-view scroll-y style="max-height:50vh">
     <view wx:for="{{courses}}" wx:key="id" class="pick-row {{item.id === courseId ? 'pick-row--on' : ''}}" data-id="{{item.id}}" bindtap="pickCourse">
       <text class="flex-1 ellipsis">{{item.name}}</text>
-      <text wx:if="{{item.id === courseId}}" class="text-student">✓</text>
+      <icon wx:if="{{item.id === courseId}}" name="check" size="30rpx" color="#00B8D4" />
     </view>
   </scroll-view>
 </view>

@@ -13,7 +13,7 @@
 
     <!-- 无计划状态 -->
     <view wx:if="{{!plan}}" class="card empty fade-in">
-      <view class="empty__icon">🗓</view>
+      <icon class="empty__icon" name="calendar" size="64rpx" color="#00B8D4" />
       <view class="empty__text">今天还没有学习安排</view>
       <button class="btn btn--primary btn--sm" bindtap="openGen">制定计划</button>
     </view>
@@ -70,5 +70,5 @@
     <view class="field__label">计划周期（天）</view>
     <input class="input" type="number" value="{{form.available_days}}" bindinput="onDays" />
   </view>
-  <button class="btn btn--primary btn--block mt-8" loading="{{generating}}" bindtap="generate">✦ 生成计划</button>
+  <button class="btn btn--primary btn--block mt-8" loading="{{generating}}" bindtap="generate"><icon name="spark" size="28rpx" color="#ffffff" /> 生成计划</button>
 </view>

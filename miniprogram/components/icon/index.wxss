@@ -1,0 +1,11 @@
+/* 宿主节点(<icon>)的尺寸/背景/外边距等布局类来自使用方页面 wxss
+   （如 .quick__icon 的 64rpx 方块底色、.empty__icon 的下边距）。
+   这里给宿主一个通用的「行内居中盒子」默认：既能在文字旁内联排列，
+   也能作为固定尺寸方块容器内居中显示内部图标。*/
+:host {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+.ca-icon { display: block; }

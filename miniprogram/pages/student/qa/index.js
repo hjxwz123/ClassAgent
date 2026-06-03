@@ -70,33 +70,7 @@ Page({
   onInput(e) { this.setData({ input: e.detail.value }); },
   usePrompt(e) { this.setData({ input: e.currentTarget.dataset.text }); },
 
-  // 图片附件
-  async chooseImage() {
-    if (this.data.attachments.length >= 3) return toast.info('最多 3 张图片');
-    if (!this.data.courseId) return toast.info('请先选择课程');
-    try {
-      const res = await wx.chooseMedia({ count: 3 - this.data.attachments.length, mediaType: ['image'], sizeType: ['compressed'] });
-      for (const file of res.tempFiles) {
-        toast.loading('上传中');
-        try {
-          const att = await api.upload('/qa/attachments/image', file.tempFilePath, { formData: { course_id: this.data.courseId } });
-          // displayUrl 用于 <image> 显示（绝对地址），url 保留原值回传后端
-          att.displayUrl = api.mediaUrl(att.url);
-          this.setData({ attachments: this.data.attachments.concat([att]) });
-        } catch (err) {
-          toast.error(err.message);
-        } finally {
-          toast.hideLoading();
-        }
-      }
-    } catch (e) { /* 用户取消 */ }
-  },
-  removeAttachment(e) {
-    const idx = e.currentTarget.dataset.index;
-    const attachments = this.data.attachments.slice();
-    attachments.splice(idx, 1);
-    this.setData({ attachments });
-  },
+  // 历史对话中的图片预览（已取消底部图片上传）
   previewAttachment(e) {
     const url = e.currentTarget.dataset.url;
     const urls = (e.currentTarget.dataset.list || this.data.attachments).map((a) => a.displayUrl || api.mediaUrl(a.url));

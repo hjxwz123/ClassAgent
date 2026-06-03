@@ -2,7 +2,7 @@
   <view class="h1">我的课程</view>
 
   <view class="search mt-16">
-    <text class="search__icon">🔍</text>
+    <icon class="search__icon" name="search" size="28rpx" color="#999990" />
     <input class="search__input" placeholder="搜索课程名称" value="{{keyword}}" bindinput="onSearch" />
   </view>
 
@@ -41,7 +41,7 @@
   </block>
 
   <view wx:else class="empty">
-    <view class="empty__icon">📗</view>
+    <icon class="empty__icon" name="book" size="64rpx" color="#D94925" />
     <view class="empty__text">暂无课程，复杂课程创建请前往桌面端</view>
   </view>
 </view>

@@ -36,7 +36,7 @@
       <view class="controls__btn" bindtap="prevPage">‹ 上一页</view>
       <view class="controls__center">
         <view class="controls__icon" data-tab="script" bindtap="openDrawer">AI</view>
-        <view class="controls__icon" bindtap="toggleThumb">▦</view>
+        <view class="controls__icon" bindtap="toggleThumb"><icon name="grid" size="36rpx" color="#00E5FF" /></view>
       </view>
       <view class="controls__btn controls__btn--primary" bindtap="nextPage">{{current === pages.length - 1 ? '完成' : '下一页 ›'}}</view>
     </view>
@@ -127,7 +127,7 @@
 <!-- 完成卡 -->
 <view wx:if="{{completeOpen}}" class="sheet-mask"></view>
 <view wx:if="{{completeOpen}}" class="complete">
-  <view class="complete__icon">🎉</view>
+  <icon class="complete__icon" name="celebrate" size="80rpx" color="#00B8D4" />
   <view class="complete__title">课时完成！</view>
   <view class="complete__stats">
     <view class="complete__stat"><view class="num">{{studyMinutes}}</view><text>学习分钟</text></view>

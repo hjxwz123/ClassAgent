@@ -16,7 +16,7 @@
 
     <!-- AI 建议 -->
     <view wx:if="{{attempt.ai_feedback}}" class="card ai-card">
-      <view class="row gap-8"><text class="ai-card__spark">✦</text><text class="tag tag--ai">AI 学习建议</text></view>
+      <view class="row gap-8"><icon class="ai-card__spark" name="spark" size="36rpx" color="#00E5FF" /><text class="tag tag--ai">AI 学习建议</text></view>
       <view class="text-body mt-16">{{attempt.ai_feedback}}</view>
     </view>
 
@@ -28,7 +28,7 @@
           <text class="tag {{item.is_correct ? 'tag--success' : 'tag--error'}}">{{item.is_correct ? '正确' : '错误'}}</text>
           <text class="flex-1 ellipsis">{{index + 1}}. {{item.question.stem}}</text>
         </view>
-        <text class="text-muted">{{item.expanded ? '▴' : '▾'}}</text>
+        <icon name="{{item.expanded ? 'chevron-up' : 'chevron-down'}}" size="24rpx" color="#999990" />
       </view>
       <block wx:if="{{item.expanded}}">
         <view class="ana-card__stem">{{item.question.stem}}</view>
