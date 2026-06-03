@@ -10,7 +10,7 @@
     </div>
   </section>
 
-  <section v-else-if="classroomOpen" ref="studyRoomRef" class="study-room" :class="{ panelClosed: !aiPanelOpen, compactLesson: compactLessonLayout, fullscreen: lessonFullscreen }" @mousemove="revealChrome">
+  <section v-else-if="classroomOpen" ref="studyRoomRef" class="study-room" :class="{ panelClosed: !aiPanelOpen, compactLesson: compactLessonLayout, fullscreen: lessonFullscreen, 'slide-fitted': slideViewportFitScale < 0.999 }" :style="slideViewportStyle" @mousemove="revealChrome">
     <transition name="study-top">
       <header v-show="chromeVisible || !audioPlaying" class="study-head">
         <div>
@@ -57,12 +57,14 @@
             :page-number="currentPage"
             bare
           />
-          <article v-else :key="activePage?.id || currentPage" class="slide-card">
-            <span class="page-badge">P{{ currentPage }}</span>
-            <span class="knowledge-dot" aria-label="AI知识点"><Sparkles :size="14" /></span>
-            <h1>{{ activePage?.page_title || `第${currentPage}页` }}</h1>
-            <div class="slide-content lesson-markdown" v-html="activePageHtml"></div>
-          </article>
+          <div v-else :key="activePage?.id || currentPage" class="slide-card-shell" :style="slideCardShellStyle">
+            <article class="slide-card" :class="{ 'slide-card--scaled': slideViewportFitScale < 0.999 }">
+              <span class="page-badge">P{{ currentPage }}</span>
+              <span class="knowledge-dot" aria-label="AI知识点"><Sparkles :size="14" /></span>
+              <h1>{{ activePage?.page_title || `第${currentPage}页` }}</h1>
+              <div class="slide-content lesson-markdown" v-html="activePageHtml"></div>
+            </article>
+          </div>
         </transition>
         <transition name="subtitle">
           <div v-if="subtitleMode !== 'hide' && activeSubtitleText" class="subtitle-line">
@@ -1351,12 +1353,14 @@ const openingLessonId = ref<number | null>(null);
 const studyRoomRef = ref<HTMLElement | null>(null);
 const studyMainRef = ref<HTMLElement | null>(null);
 const slideStageRef = ref<HTMLElement | null>(null);
+const slideCardMeasureRef = ref({ width: 0, height: 0 });
 const lessonPanelRatio = ref(savedLessonPanelRatio());
 const lessonPanelRatioCustomized = ref(false);
 const lessonResizeActive = ref(false);
 const compactLessonLayout = ref(false);
 const lessonFullscreen = ref(false);
 const lessonLayoutWidth = ref(typeof window === "undefined" ? 0 : window.innerWidth || 0);
+const slideViewportFitScale = ref(1);
 const currentPage = ref(1);
 const pageDirection = ref<"next" | "prev">("next");
 const classroomTab = ref<"script" | "activity" | "qa" | "note">("script");
@@ -1400,6 +1404,7 @@ let qaScrollFrame = 0;
 let lessonSelectionTimer: number | undefined;
 let qaConversationLoadSeq = 0;
 let classConversationLoadSeq = 0;
+let slideStageResizeObserver: ResizeObserver | undefined;
 
 const globalMessages = ref<ChatMessage[]>([]);
 const globalQuestion = ref("");
@@ -1696,6 +1701,20 @@ const activeSubtitleText = computed(() => {
 const activePageHtml = computed(() => renderRichText(activePageText.value || "暂无页面内容"));
 const activeScriptHtml = computed(() => renderRichText(activeScriptText.value || "暂无文稿"));
 const activeSubtitleHtml = computed(() => renderRichText(activeSubtitleText.value));
+const slideViewportStyle = computed(() => ({
+  "--lesson-slide-fit-scale": String(slideViewportFitScale.value),
+}));
+const slideCardShellStyle = computed(() => {
+  const scale = slideViewportFitScale.value;
+  const baseWidth = Math.max(slideCardMeasureRef.value.width, 1160);
+  const baseHeight = Math.max(slideCardMeasureRef.value.height, 620);
+  return {
+    "--lesson-slide-base-width": `${baseWidth}px`,
+    "--lesson-slide-base-height": `${baseHeight}px`,
+    "--lesson-slide-shell-width": `${Math.max(1, Math.round(baseWidth * scale))}px`,
+    "--lesson-slide-shell-height": `${Math.max(1, Math.round(baseHeight * scale))}px`,
+  };
+});
 const promptContext = computed(() => {
   const home = courseHome.value || {};
   const courseName = home.course?.name || activeCourse.value?.name || "";
@@ -2749,6 +2768,61 @@ function selectionPreviewText(text: string) {
   return hasLineBreak ? `${oneLine}...` : oneLine;
 }
 
+function readSlideViewportFitScale() {
+  const stage = slideStageRef.value;
+  if (!stage || classroomOriginalMaterial.value || compactLessonLayout.value) {
+    slideViewportFitScale.value = 1;
+    return;
+  }
+  const stageRect = stage.getBoundingClientRect();
+  const style = window.getComputedStyle(stage);
+  const paddingX = Number.parseFloat(style.paddingLeft || "0") + Number.parseFloat(style.paddingRight || "0");
+  const paddingY = Number.parseFloat(style.paddingTop || "0") + Number.parseFloat(style.paddingBottom || "0");
+  const gap = Number.parseFloat(style.rowGap || style.gap || "0") * 2;
+  const availableWidth = Math.max(stageRect.width - paddingX, 1);
+  const availableHeight = Math.max(stageRect.height - paddingY - gap, 1);
+
+  const baseWidth = Math.max(slideCardMeasureRef.value.width, 1160);
+  const baseHeight = Math.max(slideCardMeasureRef.value.height, 620);
+  const widthScale = availableWidth / baseWidth;
+  const heightScale = availableHeight / baseHeight;
+  slideViewportFitScale.value = Math.min(1, widthScale, heightScale);
+}
+
+function measureSlideCardSize() {
+  if (classroomOriginalMaterial.value) {
+    slideViewportFitScale.value = 1;
+    return;
+  }
+  const card = slideStageRef.value?.querySelector<HTMLElement>(".slide-card");
+  if (card) {
+    const cardStyle = window.getComputedStyle(card);
+    const paddingY = Number.parseFloat(cardStyle.paddingTop || "0") + Number.parseFloat(cardStyle.paddingBottom || "0");
+    const paddingX = Number.parseFloat(cardStyle.paddingLeft || "0") + Number.parseFloat(cardStyle.paddingRight || "0");
+    const rowGap = Number.parseFloat(cardStyle.rowGap || cardStyle.gap || "0");
+    const title = card.querySelector<HTMLElement>("h1");
+    const content = card.querySelector<HTMLElement>(".slide-content");
+    const fullContentHeight = content
+      ? paddingY + (title?.scrollHeight || title?.offsetHeight || 0) + rowGap + content.scrollHeight
+      : card.scrollHeight;
+    const fullContentWidth = content ? paddingX + Math.max(content.scrollWidth, title?.scrollWidth || 0) : card.scrollWidth;
+    slideCardMeasureRef.value = {
+      width: Math.max(fullContentWidth, card.scrollWidth, card.offsetWidth, card.clientWidth),
+      height: Math.max(fullContentHeight, card.scrollHeight, card.offsetHeight, card.clientHeight),
+    };
+  }
+  readSlideViewportFitScale();
+}
+
+function syncSlideStageResizeObserver() {
+  slideStageResizeObserver?.disconnect();
+  slideStageResizeObserver = undefined;
+  const stage = slideStageRef.value;
+  if (!stage || typeof ResizeObserver === "undefined") return;
+  slideStageResizeObserver = new ResizeObserver(() => measureSlideCardSize());
+  slideStageResizeObserver.observe(stage);
+}
+
 function hideLessonSelectionMenu() {
   lessonSelectionMenu.open = false;
 }
@@ -2904,6 +2978,7 @@ function updateCompactLessonLayout() {
   } else if (wasCompact) {
     aiPanelOpen.value = true;
   }
+  requestAnimationFrame(() => measureSlideCardSize());
 }
 async function toggleLessonFullscreen() {
   const element = studyRoomRef.value;
@@ -2932,7 +3007,30 @@ watch(
   () => {
     lessonPanelRatio.value = savedLessonPanelRatio();
     lessonPanelRatioCustomized.value = false;
+    slideViewportFitScale.value = 1;
+    slideCardMeasureRef.value = { width: 0, height: 0 };
   }
+);
+watch(
+  () => [aiPanelOpen.value, lessonFullscreen.value],
+  () => {
+    void nextTick(() => {
+      syncSlideStageResizeObserver();
+      measureSlideCardSize();
+      requestAnimationFrame(() => measureSlideCardSize());
+    });
+  }
+);
+watch(
+  () => [currentPage.value, classroomOriginalMaterial.value?.id, activePageHtml.value, activeSubtitleHtml.value],
+  () => {
+    void nextTick(() => {
+      syncSlideStageResizeObserver();
+      measureSlideCardSize();
+      requestAnimationFrame(() => measureSlideCardSize());
+    });
+  },
+  { immediate: true }
 );
 async function jumpPage(page: number) { pageDirection.value = page >= currentPage.value ? "next" : "prev"; currentPage.value = page; thumbOpen.value = false; await saveProgress(false, true); }
 async function prevPage() { await jumpPage(Math.max(1, currentPage.value - 1)); }
@@ -4154,6 +4252,7 @@ onMounted(async () => {
   window.addEventListener("resize", updateCompactLessonLayout);
   window.addEventListener("scroll", scheduleQaLatestButtonCheck, { passive: true });
   updateCompactLessonLayout();
+  syncSlideStageResizeObserver();
   if (active.value === "studentLessonStudy") {
     await loadActive();
     await loadCourses();
@@ -4178,6 +4277,8 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", scheduleQaLatestButtonCheck);
   window.removeEventListener("resize", updateCompactLessonLayout);
   window.removeEventListener("scroll", scheduleQaLatestButtonCheck);
+  slideStageResizeObserver?.disconnect();
+  slideStageResizeObserver = undefined;
   if (topNavIndicatorFrame) window.cancelAnimationFrame(topNavIndicatorFrame);
   if (qaScrollFrame) window.cancelAnimationFrame(qaScrollFrame);
   if (lessonSelectionTimer) window.clearTimeout(lessonSelectionTimer);
