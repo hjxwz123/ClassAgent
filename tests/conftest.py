@@ -67,5 +67,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(ai_service, "rewrite_retrieval_query", lambda question, history=None, db=None: question)
         monkeypatch.setattr(email_service, "send_password_reset_link", lambda db, to_email, link: None)
         monkeypatch.setattr(email_service, "send_registration_link", lambda db, to_email, link: None)
+        monkeypatch.setattr(email_service, "send_password_reset_link_background", lambda to_email, link: None)
+        monkeypatch.setattr(email_service, "send_registration_link_background", lambda to_email, link: None)
         yield test_client
     drop_db()
