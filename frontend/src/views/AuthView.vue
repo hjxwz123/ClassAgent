@@ -1,6 +1,6 @@
 <template>
   <PageLoader v-if="loginRedirecting" />
-  <main v-else class="auth" :class="authThemeClass">
+  <main v-else class="auth" :class="[authThemeClass, { 'auth-link-invalid': linkValidationStatus === 'invalid' }]">
     <div class="auth-toolbar">
       <RouterLink to="/" class="auth-home-link"><ArrowLeft :size="17" />返回首页</RouterLink>
       <ThemeToggle class="auth-theme-toggle" />
@@ -21,56 +21,69 @@
 
       <section class="auth-card">
         <div class="auth-card-body">
-          <div class="brand">
-            <span><BookOpen :size="20" /></span>
-            <div>
-              <strong>{{ modeTitle }}</strong>
+          <template v-if="linkValidationStatus === 'invalid'">
+            <div class="link-result link-result--error">
+              <AlertCircle :size="22" />
+              <strong>{{ invalidLinkMessage }}</strong>
             </div>
-          </div>
-          <div class="tabs" role="tablist">
-            <button type="button" role="tab" :aria-selected="mode === 'login'" :class="{ active: mode === 'login' }" @click="setMode('login')">登录</button>
-            <button type="button" role="tab" :aria-selected="mode === 'register'" :class="{ active: mode === 'register' }" @click="setMode('register')">注册</button>
-            <button type="button" role="tab" :aria-selected="mode === 'reset'" :class="{ active: mode === 'reset' }" @click="setMode('reset')">找回</button>
-          </div>
-          <Transition name="fade-slide">
-            <p v-if="formError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ formError }}</p>
-          </Transition>
+          </template>
+          <template v-else>
+            <div class="brand">
+              <span><BookOpen :size="20" /></span>
+              <div>
+                <strong>{{ modeTitle }}</strong>
+              </div>
+            </div>
+            <div v-if="linkValidationStatus === 'checking'" class="link-result">
+              <strong>正在验证链接...</strong>
+            </div>
+            <template v-else>
+              <div class="tabs" role="tablist">
+                <button type="button" role="tab" :aria-selected="mode === 'login'" :class="{ active: mode === 'login' }" @click="setMode('login')">登录</button>
+                <button type="button" role="tab" :aria-selected="mode === 'register'" :class="{ active: mode === 'register' }" @click="setMode('register')">注册</button>
+                <button type="button" role="tab" :aria-selected="mode === 'reset'" :class="{ active: mode === 'reset' }" @click="setMode('reset')">找回</button>
+              </div>
+              <Transition name="fade-slide">
+                <p v-if="formError" class="form-error input-error-shake"><AlertCircle :size="15" />{{ formError }}</p>
+              </Transition>
 
-          <Transition name="page-switch" mode="out-in">
-            <form v-if="mode === 'login'" key="login" @submit.prevent="login">
-              <label class="label">邮箱</label>
-              <input v-model="loginForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
-              <label class="label">密码</label>
-              <PasswordField v-model="loginForm.password" required :aria-invalid="formError.includes('密码')" />
-              <button class="auth-submit" :data-loading="loading" :disabled="loading"><LogIn :size="17" />{{ loading ? '正在进入...' : '登录' }}</button>
-            </form>
+              <Transition name="page-switch" mode="out-in">
+                <form v-if="mode === 'login'" key="login" @submit.prevent="login">
+                  <label class="label">邮箱</label>
+                  <input v-model="loginForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
+                  <label class="label">密码</label>
+                  <PasswordField v-model="loginForm.password" required :aria-invalid="formError.includes('密码')" />
+                  <button class="auth-submit" :data-loading="loading" :disabled="loading"><LogIn :size="17" />{{ loading ? '正在进入...' : '登录' }}</button>
+                </form>
 
-            <form v-else-if="mode === 'register'" key="register" @submit.prevent="registerForm.token ? register() : sendRegistrationLink()">
-              <label class="label">邮箱</label>
-              <input v-model="registerForm.email" class="input" type="email" required :readonly="Boolean(registerForm.token)" :aria-invalid="formError.includes('邮箱')" />
-              <template v-if="registerForm.token">
-                <label class="label">昵称</label>
-                <input v-model="registerForm.nickname" class="input" required :aria-invalid="formError.includes('昵称')" />
-                <label class="label">学号</label>
-                <input v-model="studentNo" class="input" required :aria-invalid="formError.includes('学号')" />
-                <label class="label">密码</label>
-                <PasswordField v-model="registerForm.password" required :aria-invalid="formError.includes('密码')" />
-                <button class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />注册学生账号</button>
-              </template>
-              <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />发送注册链接</button>
-            </form>
+                <form v-else-if="mode === 'register'" key="register" @submit.prevent="registerForm.token ? register() : sendRegistrationLink()">
+                  <label class="label">邮箱</label>
+                  <input v-model="registerForm.email" class="input" type="email" required :readonly="Boolean(registerForm.token)" :aria-invalid="formError.includes('邮箱')" />
+                  <template v-if="registerForm.token">
+                    <label class="label">昵称</label>
+                    <input v-model="registerForm.nickname" class="input" required :aria-invalid="formError.includes('昵称')" />
+                    <label class="label">学号</label>
+                    <input v-model="studentNo" class="input" required :aria-invalid="formError.includes('学号')" />
+                    <label class="label">密码</label>
+                    <PasswordField v-model="registerForm.password" required :aria-invalid="formError.includes('密码')" />
+                    <button class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />注册学生账号</button>
+                  </template>
+                  <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />发送注册链接</button>
+                </form>
 
-            <form v-else key="reset" @submit.prevent="resetForm.token ? resetPassword() : sendResetLink()">
-              <label class="label">邮箱</label>
-              <input v-model="resetForm.email" class="input" type="email" required :readonly="Boolean(resetForm.token)" :aria-invalid="formError.includes('邮箱')" />
-              <template v-if="resetForm.token">
-                <label class="label">新密码</label>
-                <PasswordField v-model="resetForm.new_password" required :aria-invalid="formError.includes('密码')" />
-                <button class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />重置密码</button>
-              </template>
-              <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />发送找回链接</button>
-            </form>
-          </Transition>
+                <form v-else key="reset" @submit.prevent="resetForm.token ? resetPassword() : sendResetLink()">
+                  <label class="label">邮箱</label>
+                  <input v-model="resetForm.email" class="input" type="email" required :readonly="Boolean(resetForm.token)" :aria-invalid="formError.includes('邮箱')" />
+                  <template v-if="resetForm.token">
+                    <label class="label">新密码</label>
+                    <PasswordField v-model="resetForm.new_password" required :aria-invalid="formError.includes('密码')" />
+                    <button class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />重置密码</button>
+                  </template>
+                  <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />发送找回链接</button>
+                </form>
+              </Transition>
+            </template>
+          </template>
         </div>
       </section>
     </section>
@@ -105,6 +118,8 @@ const session = useSessionStore();
 const route = useRoute();
 const router = useRouter();
 const loginFailedMessage = "登录失败，请检查用户名或者密码";
+const invalidLinkMessage = "链接无效或已过期";
+const linkValidationStatus = ref<"idle" | "checking" | "valid" | "invalid">("idle");
 const modeTitle = computed(() => {
   if (mode.value === "register") return registerForm.token ? "完成注册" : "邮件注册";
   if (mode.value === "reset") return resetForm.token ? "设置新密码" : "找回密码";
@@ -112,6 +127,7 @@ const modeTitle = computed(() => {
 });
 const authThemeClass = computed(() => `auth-${authTheme.value}`);
 let unsubscribeTheme: (() => void) | null = null;
+let linkValidationRun = 0;
 
 watch(() => route.query, applyAuthQuery, { immediate: true });
 
@@ -128,27 +144,45 @@ onBeforeUnmount(() => {
 function setMode(value: "login" | "register" | "reset") {
   mode.value = value;
   formError.value = "";
+  registerForm.token = "";
+  resetForm.token = "";
+  resetLinkValidation();
 }
 
 function queryString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function resetLinkValidation() {
+  linkValidationRun += 1;
+  linkValidationStatus.value = "idle";
+}
+
 function applyAuthQuery() {
   const queryMode = queryString(route.query.mode);
+  const email = queryString(route.query.email);
+  const token = queryString(route.query.token);
+  formError.value = "";
   if (queryMode === "login" || queryMode === "register" || queryMode === "reset") {
     mode.value = queryMode;
   }
-  const email = queryString(route.query.email);
-  const token = queryString(route.query.token);
   if (queryMode === "register") {
-    if (email) registerForm.email = email;
-    if (token) registerForm.token = token;
+    registerForm.email = email || registerForm.email;
+    registerForm.token = token;
+    resetForm.token = "";
+    if (token) void validateLinkedToken("register", email, token);
+    else resetLinkValidation();
+    return;
   }
   if (queryMode === "reset") {
-    if (email) resetForm.email = email;
-    if (token) resetForm.token = token;
+    resetForm.email = email || resetForm.email;
+    resetForm.token = token;
+    registerForm.token = "";
+    if (token) void validateLinkedToken("reset", email, token);
+    else resetLinkValidation();
+    return;
   }
+  resetLinkValidation();
 }
 
 function fail(text: string) {
@@ -157,6 +191,21 @@ function fail(text: string) {
 }
 function validatePassword(value: string) {
   return value.length >= 8 || fail("密码至少8位");
+}
+
+async function validateLinkedToken(modeValue: "register" | "reset", email: string, token: string) {
+  const run = ++linkValidationRun;
+  linkValidationStatus.value = "checking";
+  try {
+    if (!email || !token) throw new Error(invalidLinkMessage);
+    await api.post("/auth/link/validate", { mode: modeValue, email, token });
+    if (run === linkValidationRun) linkValidationStatus.value = "valid";
+  } catch {
+    if (run === linkValidationRun) {
+      formError.value = "";
+      linkValidationStatus.value = "invalid";
+    }
+  }
 }
 
 async function login() {
@@ -184,7 +233,7 @@ async function sendRegistrationLink() {
   loading.value = true;
   try {
     await api.post("/auth/register/request", { email: registerForm.email });
-    emit("notice", "success", "注册链接已发送，请查收邮件");
+    emit("notice", "success", "注册链接已发送，请查收邮箱；找不到请查看垃圾邮件或垃圾箱");
   } catch (error) {
     formError.value = (error as Error).message;
     emit("notice", "error", (error as Error).message);
@@ -195,7 +244,10 @@ async function sendRegistrationLink() {
 
 async function register() {
   formError.value = "";
-  if (!registerForm.token) return fail("请通过邮件注册链接完成注册");
+  if (!registerForm.token || linkValidationStatus.value !== "valid") {
+    linkValidationStatus.value = "invalid";
+    return;
+  }
   if (!registerForm.nickname.trim()) return fail("昵称不能为空");
   if (!studentNo.value.trim()) return fail("学号不能为空");
   if (!validatePassword(registerForm.password)) return;
@@ -219,7 +271,7 @@ async function sendResetLink() {
   loading.value = true;
   try {
     await api.post("/auth/password/reset/request", { email: resetForm.email });
-    emit("notice", "success", "找回链接已发送，请查收邮件");
+    emit("notice", "success", "找回链接已发送，请查收邮箱；找不到请查看垃圾邮件或垃圾箱");
   } catch (error) {
     formError.value = (error as Error).message;
     emit("notice", "error", (error as Error).message);
@@ -230,7 +282,10 @@ async function sendResetLink() {
 
 async function resetPassword() {
   formError.value = "";
-  if (!resetForm.token) return fail("请通过邮件找回链接重置密码");
+  if (!resetForm.token || linkValidationStatus.value !== "valid") {
+    linkValidationStatus.value = "invalid";
+    return;
+  }
   if (!validatePassword(resetForm.new_password)) return;
   loading.value = true;
   try {
@@ -415,6 +470,19 @@ async function resetPassword() {
   align-items: center;
   gap: 48px;
 }
+.auth-link-invalid .auth-toolbar,
+.auth-link-invalid .auth-formulas,
+.auth-link-invalid .auth-copy {
+  display: none;
+}
+.auth-link-invalid .auth-board {
+  width: min(420px, 100%);
+  grid-template-columns: 1fr;
+}
+.auth-link-invalid .auth-card {
+  grid-column: auto;
+  justify-self: stretch;
+}
 .auth-copy {
   position: fixed;
   top: var(--shared-title-top);
@@ -538,6 +606,25 @@ async function resetPassword() {
   box-shadow: 0 4px 12px rgba(0,0,0,.16);
 }
 .form-error { display: flex; align-items: center; gap: 6px; min-height: 38px; border: 1px solid var(--color-danger-100); border-radius: 8px; background: var(--color-danger-50); color: var(--color-danger-700); padding: 0 10px; font-size: var(--text-body-sm); }
+.link-result {
+  display: grid;
+  min-height: 168px;
+  place-items: center;
+  gap: 12px;
+  color: var(--ca-color-paper-sub);
+  text-align: center;
+}
+.link-result strong {
+  color: var(--ca-color-paper-ink);
+  font-size: 17px;
+  line-height: 1.45;
+}
+.link-result--error {
+  color: var(--color-danger-600);
+}
+.link-result--error strong {
+  color: var(--color-danger-700);
+}
 .label { display: block; margin-top: 16px; color: var(--ca-color-paper-sub); font-size: 13px; font-weight: 800; }
 .inline { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; }
 .inline .input {

@@ -1,7 +1,7 @@
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -10,6 +10,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.schemas.auth import (
     LoginRequest,
+    AuthLinkValidateRequest,
     PasswordChangeRequest,
     PasswordResetConfirmRequest,
     PasswordResetRequest,
@@ -17,6 +18,7 @@ from app.schemas.auth import (
     RegisterLinkRequest,
     RegisterRequest,
 )
+from app.services.email import email_service
 from app.services.auth import (
     authenticate_user,
     change_password,
@@ -26,6 +28,7 @@ from app.services.auth import (
     register_user,
     reset_password,
     update_profile,
+    validate_auth_link,
 )
 
 
@@ -46,8 +49,20 @@ def _request_frontend_base_url(request: Request) -> str | None:
 
 
 @router.post("/register/request")
-def register_request(payload: RegisterLinkRequest, request: Request, db: Annotated[Session, Depends(get_db)]):
+def register_request(
+    payload: RegisterLinkRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Annotated[Session, Depends(get_db)],
+):
     result = create_registration_link(db, payload.email, base_url=_request_frontend_base_url(request))
+    background_tasks.add_task(email_service.send_registration_link_background, to_email=result.email, link=result.link)
+    return success_response(data=result.response.model_dump(), request_id=request.state.request_id)
+
+
+@router.post("/link/validate")
+def link_validate(payload: AuthLinkValidateRequest, request: Request, db: Annotated[Session, Depends(get_db)]):
+    result = validate_auth_link(db, email=payload.email, mode=payload.mode, token=payload.token)
     return success_response(data=result.model_dump(), request_id=request.state.request_id)
 
 
@@ -69,9 +84,15 @@ def login(payload: LoginRequest, request: Request, db: Annotated[Session, Depend
 
 
 @router.post("/password/reset/request")
-def password_reset_request(payload: PasswordResetRequest, request: Request, db: Annotated[Session, Depends(get_db)]):
+def password_reset_request(
+    payload: PasswordResetRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Annotated[Session, Depends(get_db)],
+):
     result = create_password_reset_link(db, payload.email, base_url=_request_frontend_base_url(request))
-    return success_response(data=result.model_dump(), request_id=request.state.request_id)
+    background_tasks.add_task(email_service.send_password_reset_link_background, to_email=result.email, link=result.link)
+    return success_response(data=result.response.model_dump(), request_id=request.state.request_id)
 
 
 @router.post("/password/reset/confirm")
