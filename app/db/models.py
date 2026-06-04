@@ -66,7 +66,7 @@ class EmailCode(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), index=True)
     purpose: Mapped[str] = mapped_column(String(50), index=True)
-    code: Mapped[str] = mapped_column(String(16), index=True)
+    code: Mapped[str] = mapped_column(String(128), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

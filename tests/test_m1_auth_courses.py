@@ -1,3 +1,6 @@
+from tests.auth_helpers import latest_email_token, request_registration_token
+
+
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
     payload = {
         "email": email,
@@ -11,6 +14,7 @@ def register_user(client, *, email, password, nickname, role, student_no=None, e
         admin_login = login_user(client, email="admin@classagent.com", password="Admin123456")
         response = client.post("/api/v1/admin/users/admin", json=payload, headers=auth_headers(admin_login["access_token"]))
     else:
+        payload["token"] = request_registration_token(client, email)
         response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 200, response.text
     return response.json()["data"]
@@ -105,12 +109,12 @@ def test_auth_and_course_management_flow(client):
         json={"email": "student@example.com"},
     )
     assert reset_request_response.status_code == 200
-    code = reset_request_response.json()["data"]["debug_code"]
-    assert code
+    token = latest_email_token("student@example.com", "password_reset")
+    assert token
 
     reset_confirm_response = client.post(
         "/api/v1/auth/password/reset/confirm",
-        json={"email": "student@example.com", "code": code, "new_password": "Student789"},
+        json={"email": "student@example.com", "token": token, "new_password": "Student789"},
     )
     assert reset_confirm_response.status_code == 200
 
@@ -127,6 +131,7 @@ def test_public_register_rejects_teacher_role(client):
         "/api/v1/auth/register",
         json={
             "email": "blocked-teacher@example.com",
+            "token": "blocked-token-for-teacher-role",
             "password": "Teacher123",
             "nickname": "自助教师",
             "role": "teacher",

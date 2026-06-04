@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.db.session import drop_db, init_db, reset_engine
 from app.main import create_app
 from app.services.ai import ai_service
+from app.services.email import email_service
 from app.services import materials as material_services
 
 
@@ -64,5 +65,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(ai_service, "answer_question", lambda question, contexts, history=None, db=None: ("测试回答。", False, None))
         monkeypatch.setattr(ai_service, "answer_general_question", lambda question, history=None, db=None: ("测试通用回答。", None))
         monkeypatch.setattr(ai_service, "rewrite_retrieval_query", lambda question, history=None, db=None: question)
+        monkeypatch.setattr(email_service, "send_password_reset_link", lambda db, to_email, link: None)
+        monkeypatch.setattr(email_service, "send_registration_link", lambda db, to_email, link: None)
         yield test_client
     drop_db()
