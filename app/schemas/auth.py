@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 from app.core.enums import UserRole
@@ -36,6 +38,12 @@ class PasswordResetRequest(BaseModel):
 
 class RegisterLinkRequest(BaseModel):
     email: EmailStr
+
+
+class AuthLinkValidateRequest(BaseModel):
+    email: EmailStr
+    token: str = Field(max_length=128)
+    mode: Literal["register", "reset"]
 
 
 class PasswordResetConfirmRequest(BaseModel):
