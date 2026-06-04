@@ -41,14 +41,21 @@ class EmailService:
         finally:
             server.quit()
 
-    def send_password_reset_code(self, db: Session | None, *, to_email: str, code: str) -> None:
+    def _send_link_email(self, db: Session | None, *, to_email: str, subject: str, body: str) -> None:
         service = get_enabled_service_config(db, "email")
         if service is None:
             raise bad_request("邮件服务未配置，请先在管理员服务配置中启用 email")
         if service.provider != "smtp":
             raise bad_request(f"暂不支持的邮件服务提供方: {service.provider}")
-        body = f"你的课程学习助手验证码是：{code}，10 分钟内有效。若非本人操作，请忽略本邮件。"
-        self._send_smtp(to_email=to_email, subject="课程学习助手密码重置验证码", body=body, config=service.config)
+        self._send_smtp(to_email=to_email, subject=subject, body=body, config=service.config)
+
+    def send_password_reset_link(self, db: Session | None, *, to_email: str, link: str) -> None:
+        body = f"请打开以下链接重置你的课程学习助手密码，10 分钟内有效：\n\n{link}\n\n若非本人操作，请忽略本邮件。"
+        self._send_link_email(db, to_email=to_email, subject="课程学习助手密码重置链接", body=body)
+
+    def send_registration_link(self, db: Session | None, *, to_email: str, link: str) -> None:
+        body = f"请打开以下链接完成课程学习助手学生账号注册，10 分钟内有效：\n\n{link}\n\n若非本人操作，请忽略本邮件。"
+        self._send_link_email(db, to_email=to_email, subject="课程学习助手注册链接", body=body)
 
     def test_config(self, config: dict) -> dict:
         required = ["host", "port", "sender"]

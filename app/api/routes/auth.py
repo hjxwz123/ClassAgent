@@ -1,4 +1,5 @@
 from typing import Annotated
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
@@ -13,12 +14,14 @@ from app.schemas.auth import (
     PasswordResetConfirmRequest,
     PasswordResetRequest,
     ProfileUpdateRequest,
+    RegisterLinkRequest,
     RegisterRequest,
 )
 from app.services.auth import (
     authenticate_user,
     change_password,
-    create_password_reset_code,
+    create_password_reset_link,
+    create_registration_link,
     get_user_profile,
     register_user,
     reset_password,
@@ -27,6 +30,25 @@ from app.services.auth import (
 
 
 router = APIRouter()
+
+
+def _request_frontend_base_url(request: Request) -> str | None:
+    origin = request.headers.get("origin")
+    if origin:
+        return origin
+    referer = request.headers.get("referer")
+    if not referer:
+        return None
+    parsed = urlsplit(referer)
+    if parsed.scheme and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return None
+
+
+@router.post("/register/request")
+def register_request(payload: RegisterLinkRequest, request: Request, db: Annotated[Session, Depends(get_db)]):
+    result = create_registration_link(db, payload.email, base_url=_request_frontend_base_url(request))
+    return success_response(data=result.model_dump(), request_id=request.state.request_id)
 
 
 @router.post("/register")
@@ -48,7 +70,7 @@ def login(payload: LoginRequest, request: Request, db: Annotated[Session, Depend
 
 @router.post("/password/reset/request")
 def password_reset_request(payload: PasswordResetRequest, request: Request, db: Annotated[Session, Depends(get_db)]):
-    result = create_password_reset_code(db, payload.email)
+    result = create_password_reset_link(db, payload.email, base_url=_request_frontend_base_url(request))
     return success_response(data=result.model_dump(), request_id=request.state.request_id)
 
 

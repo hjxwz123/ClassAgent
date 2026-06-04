@@ -6,6 +6,7 @@ from sqlalchemy import select
 from app.db import session as db_session
 from app.db.models import AsyncTaskLog, CourseMaterial
 from app.services.materials import recover_interrupted_material_processing
+from tests.auth_helpers import request_registration_token
 
 
 def register_user(client, *, email, password, nickname, role, employee_no=None):
@@ -24,6 +25,7 @@ def register_user(client, *, email, password, nickname, role, employee_no=None):
             headers=auth_headers(admin_login["access_token"]),
         )
     else:
+        payload["token"] = request_registration_token(client, email)
         response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 200, response.text
     return response.json()["data"]

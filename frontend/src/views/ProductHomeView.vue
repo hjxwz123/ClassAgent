@@ -44,7 +44,7 @@
           </template>
           <template v-else>
             <RouterLink to="/auth" class="login-link">登录账号</RouterLink>
-            <RouterLink to="/auth" class="register-link">免费注册学生端</RouterLink>
+            <RouterLink to="/auth?mode=register" class="register-link">免费注册学生端</RouterLink>
           </template>
         </div>
       </div>
