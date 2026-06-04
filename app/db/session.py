@@ -63,6 +63,11 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
             statements.append("ALTER TABLE courses ADD COLUMN cover_color VARCHAR(32)")
         if "allow_general_ai_answer" not in course_columns:
             statements.append("ALTER TABLE courses ADD COLUMN allow_general_ai_answer BOOLEAN NOT NULL DEFAULT 0")
+    if "email_codes" in table_names and target_engine.dialect.name == "mysql":
+        email_code_columns = {column["name"]: str(column["type"]).upper() for column in inspector.get_columns("email_codes")}
+        code_type = email_code_columns.get("code", "")
+        if code_type.startswith("VARCHAR") and "128" not in code_type:
+            statements.append("ALTER TABLE email_codes MODIFY COLUMN code VARCHAR(128) NOT NULL")
     if "wrong_questions" in table_names:
         wrong_columns = {column["name"] for column in inspector.get_columns("wrong_questions")}
         if "is_resolved" not in wrong_columns:

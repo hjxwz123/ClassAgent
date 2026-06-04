@@ -6,6 +6,7 @@ from app.schemas.common import UserSummary
 
 class RegisterRequest(BaseModel):
     email: EmailStr
+    token: str = Field(min_length=16, max_length=128)
     password: str = Field(min_length=8, max_length=64)
     nickname: str = Field(min_length=2, max_length=50)
     role: UserRole
@@ -33,9 +34,13 @@ class PasswordResetRequest(BaseModel):
     email: EmailStr
 
 
+class RegisterLinkRequest(BaseModel):
+    email: EmailStr
+
+
 class PasswordResetConfirmRequest(BaseModel):
     email: EmailStr
-    code: str = Field(min_length=4, max_length=16)
+    token: str = Field(min_length=16, max_length=128)
     new_password: str = Field(min_length=8, max_length=64)
 
 
@@ -45,7 +50,6 @@ class LoginResponse(BaseModel):
     user: UserSummary
 
 
-class PasswordResetCodeResponse(BaseModel):
+class AuthLinkResponse(BaseModel):
     email: EmailStr
     expires_in_seconds: int
-    debug_code: str | None = None

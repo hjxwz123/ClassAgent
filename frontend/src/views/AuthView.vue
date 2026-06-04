@@ -45,29 +45,30 @@
               <button class="auth-submit" :data-loading="loading" :disabled="loading"><LogIn :size="17" />{{ loading ? '正在进入...' : '登录' }}</button>
             </form>
 
-            <form v-else-if="mode === 'register'" key="register" @submit.prevent="register">
+            <form v-else-if="mode === 'register'" key="register" @submit.prevent="registerForm.token ? register() : sendRegistrationLink()">
               <label class="label">邮箱</label>
-              <input v-model="registerForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
-              <label class="label">昵称</label>
-              <input v-model="registerForm.nickname" class="input" required :aria-invalid="formError.includes('昵称')" />
-              <label class="label">学号</label>
-              <input v-model="studentNo" class="input" required :aria-invalid="formError.includes('学号')" />
-              <label class="label">密码</label>
-              <PasswordField v-model="registerForm.password" required :aria-invalid="formError.includes('密码')" />
-              <button class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />注册学生账号</button>
+              <input v-model="registerForm.email" class="input" type="email" required :readonly="Boolean(registerForm.token)" :aria-invalid="formError.includes('邮箱')" />
+              <template v-if="registerForm.token">
+                <label class="label">昵称</label>
+                <input v-model="registerForm.nickname" class="input" required :aria-invalid="formError.includes('昵称')" />
+                <label class="label">学号</label>
+                <input v-model="studentNo" class="input" required :aria-invalid="formError.includes('学号')" />
+                <label class="label">密码</label>
+                <PasswordField v-model="registerForm.password" required :aria-invalid="formError.includes('密码')" />
+                <button class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />注册学生账号</button>
+              </template>
+              <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />发送注册链接</button>
             </form>
 
-            <form v-else key="reset" @submit.prevent="resetPassword">
+            <form v-else key="reset" @submit.prevent="resetForm.token ? resetPassword() : sendResetLink()">
               <label class="label">邮箱</label>
-              <input v-model="resetForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
-              <label class="label">验证码</label>
-              <div class="inline">
-                <input v-model="resetForm.code" class="input" placeholder="输入验证码" :aria-invalid="formError.includes('验证码')" />
-                <button type="button" class="send-code-btn" :data-loading="loading" :disabled="loading" @click="sendCode">发送</button>
-              </div>
-              <label class="label">新密码</label>
-              <PasswordField v-model="resetForm.new_password" required :aria-invalid="formError.includes('密码')" />
-              <button class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />重置密码</button>
+              <input v-model="resetForm.email" class="input" type="email" required :readonly="Boolean(resetForm.token)" :aria-invalid="formError.includes('邮箱')" />
+              <template v-if="resetForm.token">
+                <label class="label">新密码</label>
+                <PasswordField v-model="resetForm.new_password" required :aria-invalid="formError.includes('密码')" />
+                <button class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />重置密码</button>
+              </template>
+              <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />发送找回链接</button>
             </form>
           </Transition>
         </div>
@@ -77,8 +78,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { AlertCircle, ArrowLeft, BookOpen, KeyRound, LogIn, UserPlus } from "../icons";
 import { api } from "../api/client";
 import { defaultRouteForRole } from "../router";
@@ -97,15 +98,22 @@ const loginRedirecting = ref(false);
 const formError = ref("");
 const authTheme = ref<AppTheme>(readStoredTheme());
 const loginForm = reactive({ email: "", password: "" });
-const registerForm = reactive({ email: "", password: "", nickname: "" });
+const registerForm = reactive({ email: "", token: "", password: "", nickname: "" });
 const studentNo = ref("");
-const resetForm = reactive({ email: "", code: "", new_password: "" });
+const resetForm = reactive({ email: "", token: "", new_password: "" });
 const session = useSessionStore();
+const route = useRoute();
 const router = useRouter();
 const loginFailedMessage = "登录失败，请检查用户名或者密码";
-const modeTitle = computed(() => (mode.value === "login" ? "欢迎回来" : mode.value === "register" ? "加入学习空间" : "找回密码"));
+const modeTitle = computed(() => {
+  if (mode.value === "register") return registerForm.token ? "完成注册" : "邮件注册";
+  if (mode.value === "reset") return resetForm.token ? "设置新密码" : "找回密码";
+  return "欢迎回来";
+});
 const authThemeClass = computed(() => `auth-${authTheme.value}`);
 let unsubscribeTheme: (() => void) | null = null;
+
+watch(() => route.query, applyAuthQuery, { immediate: true });
 
 onMounted(() => {
   unsubscribeTheme = subscribeAppTheme((theme) => {
@@ -121,6 +129,28 @@ function setMode(value: "login" | "register" | "reset") {
   mode.value = value;
   formError.value = "";
 }
+
+function queryString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function applyAuthQuery() {
+  const queryMode = queryString(route.query.mode);
+  if (queryMode === "login" || queryMode === "register" || queryMode === "reset") {
+    mode.value = queryMode;
+  }
+  const email = queryString(route.query.email);
+  const token = queryString(route.query.token);
+  if (queryMode === "register") {
+    if (email) registerForm.email = email;
+    if (token) registerForm.token = token;
+  }
+  if (queryMode === "reset") {
+    if (email) resetForm.email = email;
+    if (token) resetForm.token = token;
+  }
+}
+
 function fail(text: string) {
   formError.value = text;
   return false;
@@ -148,8 +178,24 @@ async function login() {
   }
 }
 
+async function sendRegistrationLink() {
+  formError.value = "";
+  if (!registerForm.email.trim()) return fail("邮箱不能为空");
+  loading.value = true;
+  try {
+    await api.post("/auth/register/request", { email: registerForm.email });
+    emit("notice", "success", "注册链接已发送，请查收邮件");
+  } catch (error) {
+    formError.value = (error as Error).message;
+    emit("notice", "error", (error as Error).message);
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function register() {
   formError.value = "";
+  if (!registerForm.token) return fail("请通过邮件注册链接完成注册");
   if (!registerForm.nickname.trim()) return fail("昵称不能为空");
   if (!studentNo.value.trim()) return fail("学号不能为空");
   if (!validatePassword(registerForm.password)) return;
@@ -167,14 +213,13 @@ async function register() {
   }
 }
 
-async function sendCode() {
+async function sendResetLink() {
   formError.value = "";
   if (!resetForm.email.trim()) return fail("邮箱不能为空");
   loading.value = true;
   try {
-    const data = await api.post<{ debug_code?: string | null }>("/auth/password/reset/request", { email: resetForm.email });
-    if (data.debug_code) resetForm.code = data.debug_code;
-    emit("notice", "success", "已发送");
+    await api.post("/auth/password/reset/request", { email: resetForm.email });
+    emit("notice", "success", "找回链接已发送，请查收邮件");
   } catch (error) {
     formError.value = (error as Error).message;
     emit("notice", "error", (error as Error).message);
@@ -185,7 +230,7 @@ async function sendCode() {
 
 async function resetPassword() {
   formError.value = "";
-  if (!resetForm.code.trim()) return fail("验证码不能为空");
+  if (!resetForm.token) return fail("请通过邮件找回链接重置密码");
   if (!validatePassword(resetForm.new_password)) return;
   loading.value = true;
   try {
@@ -526,6 +571,10 @@ form {
   outline: none;
   border-color: var(--ca-color-slate);
   box-shadow: 0 0 0 3px rgba(18,22,20,.14);
+}
+.input[readonly] {
+  color: var(--ca-color-paper-sub);
+  background: rgba(238,230,210,.72);
 }
 :deep(.password-field) {
   margin-top: 8px;

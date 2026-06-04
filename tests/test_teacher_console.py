@@ -3,6 +3,7 @@ from app.db import session as db_session
 from app.db.models import AsyncTaskLog, CourseMaterial, Lesson, LessonPage, User
 from app.services.notifications import push_user_notification
 from sqlalchemy import select
+from tests.auth_helpers import request_registration_token
 
 
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
@@ -18,6 +19,7 @@ def register_user(client, *, email, password, nickname, role, student_no=None, e
         admin_login = login_user(client, email="admin@classagent.com", password="Admin123456")
         response = client.post("/api/v1/admin/users/admin", json=payload, headers=auth_headers(admin_login["access_token"]))
     else:
+        payload["token"] = request_registration_token(client, email)
         response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 200, response.text
     return response.json()["data"]
