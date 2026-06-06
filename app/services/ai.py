@@ -594,17 +594,21 @@ def _invalid_quiz_stem(stem: str) -> bool:
 
 
 RAG_ANSWER_SYSTEM_PROMPT = (
-    "你是课程知识问答助手。必须优先依据给定课程资料回答。"
+    "你是智慧课堂 Agent，不是普通聊天机器人。学生问的是教师上传课件形成的课程知识库。"
+    "必须优先依据给定课程资料回答，并把回答组织成教学化讲解。"
     "如果资料中包含“结构化教学对象”或“题型模板”，可以把模板中的条件、步骤、变量槽位迁移到学生的新题干，"
     "但要说明这是同题型迁移，不要声称课件出现过完全相同题目。"
     "如果学生要求解释、举例或类比，可以围绕资料中的概念、公式和条件生成教学示例，"
     "并明确这是用于说明资料内容的例子；不要因为资料里没有现成示例就直接说资料不足。"
     "只有当给定资料与问题完全无关或缺少关键定义时，才说明资料不足，不能编造与资料矛盾的内容。"
+    "如果学生要求大范围章节内容，先给总览、小节摘要、重点难点和展开建议，不要一次性逐页复述整份课件。"
 )
 RAG_ANSWER_USER_INSTRUCTIONS = (
     "请用中文回答。若问题提到某一页，优先使用资料中标注的当前页内容；"
     "若要求“用例子解释”，请基于资料里的公式、条件或概念构造一个简短例子，并给出关键依据。"
     "若问题明确要求多个章节或页码范围，请按范围逐章或逐页组织，不能只回答资料中排在前面的部分。"
+    "回答时先直接回答问题，再补必要原理、步骤或例子，最后用一句话总结。"
+    "不要在没有课件依据时伪造来源；来源和继续提问选项由系统后处理补充。"
 )
 
 
@@ -1030,7 +1034,7 @@ class AIService:
         try:
             payload = self._call_json(
                 db,
-                purpose="qa",
+                purpose="task",
                 system_prompt=(
                     "你是课程问答检索改写器。你的任务是把学生问题改写成更适合检索课程资料的查询。"
                     "不要回答问题。要去掉具体数字、人名、变量名、样例细节，保留知识点、题型、方法、步骤、条件和目标。"
@@ -1055,6 +1059,96 @@ class AIService:
                 return rewritten[:320]
         return self._heuristic_retrieval_query(question=question, history=history)
 
+    def plan_courseware_retrieval(
+        self,
+        *,
+        question: str,
+        question_type: str,
+        course_name: str,
+        chapter_titles: Sequence[str] | None = None,
+        history: Sequence[Any] | None = None,
+        db: Session | None = None,
+    ) -> dict[str, Any]:
+        history_lines = "\n".join(
+            f"- {item['role']}: {item['content']}"
+            for item in self._normalize_history_messages(history)[-4:]
+        )
+        try:
+            payload = self._call_json(
+                db,
+                purpose="task",
+                system_prompt=(
+                    "你是智慧课堂检索任务规划器。你的任务不是回答学生问题，而是把学生问题拆成适合检索教师课件的关键词和短语。"
+                    "必须去掉客套词、命令词和泛化动词，例如“帮我、讲解、解释、介绍、一下、请问”。"
+                    "保留课程知识点、别名、英文名、算法名、章节线索、题型意图、表格/页码/小节线索。"
+                    "不要编造课件中不一定存在的结论；可以给常见同义词。必须只返回 JSON。"
+                ),
+                user_prompt=(
+                    f"课程名称：{course_name or '未知课程'}\n"
+                    f"问题类型：{question_type or 'specific'}\n"
+                    f"章节候选：{list(chapter_titles or [])[:20]}\n"
+                    f"前序对话：\n{history_lines or '无'}\n"
+                    f"学生问题：{question}\n"
+                    "返回格式："
+                    "{\"keywords\":[\"核心词1\",\"核心词2\"],"
+                    "\"search_phrases\":[\"检索短语1\",\"检索短语2\"],"
+                    "\"expanded_terms\":[\"同义词或英文名\"],"
+                    "\"exclude_terms\":[\"应忽略的泛词\"],"
+                    "\"reason\":\"一句话说明\"}"
+                ),
+                allow_fallback=True,
+            )
+        except Exception:
+            payload = None
+        if not isinstance(payload, dict):
+            return self._heuristic_courseware_retrieval_plan(question=question, question_type=question_type)
+        keywords = self._clean_retrieval_terms(payload.get("keywords"), limit=10)
+        phrases = self._clean_retrieval_terms(payload.get("search_phrases"), limit=6)
+        expanded = self._clean_retrieval_terms(payload.get("expanded_terms"), limit=8)
+        if not keywords and not phrases:
+            return self._heuristic_courseware_retrieval_plan(question=question, question_type=question_type)
+        return {
+            "keywords": keywords,
+            "search_phrases": phrases or keywords[:4],
+            "expanded_terms": expanded,
+            "exclude_terms": self._clean_retrieval_terms(payload.get("exclude_terms"), limit=8, drop_blocked=False),
+            "reason": str(payload.get("reason") or "")[:200],
+        }
+
+    def _clean_retrieval_terms(self, value: Any, *, limit: int, drop_blocked: bool = True) -> list[str]:
+        if isinstance(value, str):
+            candidates = re.split(r"[\s,，、;；\n]+", value)
+        elif isinstance(value, Sequence):
+            candidates = [str(item) for item in value]
+        else:
+            candidates = []
+        blocked = {"帮我", "讲解", "解释", "介绍", "一下", "请问", "为我", "这个", "那个", "什么", "怎么", "如何"}
+        terms: list[str] = []
+        for item in candidates:
+            term = " ".join(str(item or "").strip().split())
+            if not term or len(term) > 40 or (drop_blocked and term in blocked):
+                continue
+            if term not in terms:
+                terms.append(term)
+            if len(terms) >= limit:
+                break
+        return terms
+
+    def _heuristic_courseware_retrieval_plan(self, *, question: str, question_type: str) -> dict[str, Any]:
+        blocked = {"帮我", "讲解", "解释", "介绍", "一下", "请问", "为我", "这个", "那个", "什么", "怎么", "如何"}
+        keywords = [item for item in self.extract_keywords(question, limit=10) if item not in blocked]
+        phrases = []
+        for item in re.findall(r"[A-Za-z][A-Za-z0-9_+-]{1,30}|[\u4e00-\u9fffA-Za-z0-9]{2,24}", question):
+            if item not in blocked and item not in phrases:
+                phrases.append(item)
+        return {
+            "keywords": keywords[:10] or ["课程内容"],
+            "search_phrases": phrases[:6] or keywords[:4] or ["课程内容"],
+            "expanded_terms": [],
+            "exclude_terms": list(blocked),
+            "reason": f"heuristic:{question_type}",
+        }
+
     def classify_qa_question_scope(
         self,
         *,
@@ -1070,7 +1164,7 @@ class AIService:
         try:
             payload = self._call_json(
                 db,
-                purpose="qa",
+                purpose="task",
                 system_prompt=(
                     "你是课程问答检索意图分类器。只判断问题应该检索的范围，不回答问题。"
                     "必须只返回 JSON。scope 只能是 specific、chapter_overview、course_overview。"
