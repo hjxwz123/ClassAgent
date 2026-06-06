@@ -1,14 +1,17 @@
 from collections.abc import Iterator
+from dataclasses import dataclass
+import html
 from pathlib import Path
 import re
 from time import sleep
+from typing import Any
 
 from fastapi import UploadFile
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.enums import QAFeedback, UserRole
+from app.core.enums import MaterialType, QAFeedback, QuestionType, UserRole
 from app.core.errors import bad_request, forbidden, not_found
 from app.db.models import Chapter, Course, CourseMaterial, CourseMembership, KnowledgeChunk, Lesson, LessonPage, QAConversation, QARecord, User
 from app.schemas.qa import QAAskRequest
@@ -36,6 +39,7 @@ _QA_DETAIL_VECTOR_CONTEXT_LIMIT = 10
 _QA_RELATED_PAGE_CONTEXT_LIMIT = 6
 _QA_CHAPTER_RANGE_MAX = 8
 _CHAPTER_NUM_TOKEN = r"\d{1,3}|[零〇一二两三四五六七八九十百]{1,8}"
+_PAGE_NUM_TOKEN = r"\d{1,4}|[零〇一二两三四五六七八九十百]{1,8}"
 _CHAPTER_RANGE_PATTERN = re.compile(
     rf"(?:第\s*)?(?P<start>{_CHAPTER_NUM_TOKEN})\s*(?:章\s*)?(?:[-~—–至到])\s*(?:第\s*)?(?P<end>{_CHAPTER_NUM_TOKEN})\s*章"
 )
@@ -43,6 +47,52 @@ _CHAPTER_SINGLE_PATTERN = re.compile(rf"(?:第\s*)?(?P<num>{_CHAPTER_NUM_TOKEN})
 _CHAPTER_LIST_PATTERN = re.compile(
     rf"(?P<body>(?:第\s*)?(?:{_CHAPTER_NUM_TOKEN})\s*(?:章)?(?:\s*(?:[、,，/]|和|与|及)\s*(?:第\s*)?(?:{_CHAPTER_NUM_TOKEN})\s*(?:章)?)+)"
 )
+_SLIDE_PAGE_PATTERN = re.compile(
+    rf"(?:第\s*)?(?P<num>{_PAGE_NUM_TOKEN})\s*(?:页|頁|张|張|张幻灯片|張幻燈片|页ppt|页PPT|slide|Slide|幻灯片|幻燈片)"
+)
+_SECTION_PATTERN = re.compile(r"(?<!\d)(?P<chapter>\d{1,2})\s*[.．]\s*(?P<section>\d{1,2})(?!\d)")
+_SPECIFIC_PAGE_HINT_PATTERN = re.compile(r"(第\s*\d+\s*(?:页|張|张|幻灯片|slide)|这页|这一页|当前页|本页|这张|这一张)")
+_QUIZ_REQUEST_PATTERN = re.compile(r"(出|生成|来|做).{0,8}(题|练习|测验|测试|选择题|判断题|简答题)|考考我|刷题|练几道")
+_LARGE_REQUEST_PATTERN = re.compile(
+    r"(全部内容|所有内容|完整内容|从头到尾|逐页|一页一页|一张一张|每一页|每张|每页|"
+    r"完整讲(?:一遍|完|一下)?|详细讲(?:完整|完|一遍)?|系统讲(?:一遍|完)|整体学一遍)"
+)
+_CHAPTER_WIDE_CONTENT_PATTERN = re.compile(
+    r"(第\s*.+章|本章|这一章|当前章).{0,12}(全部|所有|完整).{0,8}(内容|知识点|课件|ppt|PPT|幻灯片|页面)"
+)
+_CHAPTER_SUMMARY_PATTERN = re.compile(r"(第\s*.+章|章节|本章|这一章|当前章).{0,12}(讲了什么|总结|概括|梳理|重点|框架|提纲|复习)")
+_COURSE_SUMMARY_PATTERN = re.compile(r"(这门课|本课程|整门课|全部课程|课程整体).{0,12}(讲了什么|总结|概括|梳理|重点|框架|提纲|复习)")
+_TABLE_QUESTION_PATTERN = re.compile(r"(表格|表中|表里|表内|对比表|列表|表\s*\d*)")
+_FIGURE_QUESTION_PATTERN = re.compile(r"(图片|图表|图中|图里|这张图|这幅图|流程图|示意图|结构图|曲线图|柱状图|折线图)")
+_COMPARE_QUESTION_PATTERN = re.compile(r"(区别|不同|对比|比较|异同|联系|差异|VS|vs)")
+_PRINCIPLE_QUESTION_PATTERN = re.compile(r"(为什么|原理|机制|流程|步骤|如何|怎么实现|怎样实现|推导|证明)")
+_CONCEPT_QUESTION_PATTERN = re.compile(r"(什么是|是什么|定义|概念|是什么意思|是啥)")
+_NOTE_REQUEST_PATTERN = re.compile(r"(整理|生成|帮我).{0,8}(笔记|复习资料|知识清单|知识点清单)")
+_HTML_TABLE_PATTERN = re.compile(r"<table[\s\S]*?</table>", re.IGNORECASE)
+_HTML_ROW_PATTERN = re.compile(r"<tr[\s\S]*?</tr>", re.IGNORECASE)
+_HTML_CELL_PATTERN = re.compile(r"<t[dh][^>]*>([\s\S]*?)</t[dh]>", re.IGNORECASE)
+_HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
+_QUIZ_COUNT_PATTERN = re.compile(r"(?P<count>\d{1,2}|[一二两三四五六七八九十])\s*道")
+_QUIZ_TYPE_COUNT_PATTERN = re.compile(
+    r"(?P<count>\d{1,2}|[一二两三四五六七八九十])\s*道\s*(?P<label>单选题|多选题|选择题|判断题|填空题|简答题|问答题)"
+)
+_QUIZ_SHOW_ANSWER_PATTERN = re.compile(r"(显示|给出|附上|带上|包含|要).{0,6}(答案|解析)|答案和解析|带答案|附答案")
+_QUIZ_TYPE_LABELS = {
+    QuestionType.SINGLE_CHOICE.value: "选择题",
+    QuestionType.MULTIPLE_CHOICE.value: "多选题",
+    QuestionType.JUDGE.value: "判断题",
+    QuestionType.BLANK.value: "填空题",
+    QuestionType.SHORT_ANSWER.value: "简答题",
+}
+_QUIZ_LABEL_TO_TYPE = {
+    "单选题": QuestionType.SINGLE_CHOICE.value,
+    "选择题": QuestionType.SINGLE_CHOICE.value,
+    "多选题": QuestionType.MULTIPLE_CHOICE.value,
+    "判断题": QuestionType.JUDGE.value,
+    "填空题": QuestionType.BLANK.value,
+    "简答题": QuestionType.SHORT_ANSWER.value,
+    "问答题": QuestionType.SHORT_ANSWER.value,
+}
 _QA_QUERY_STOPWORDS = {
     "前序对话",
     "当前问题",
@@ -65,6 +115,30 @@ _QA_QUERY_STOPWORDS = {
 }
 _GENERAL_AI_NOTICE = "提示：以下回答未在当前课程资料中检索到直接依据，属于通用知识说明，请结合老师要求和课程内容自行核对。"
 _GENERAL_AI_DISABLED_NOTICE = "当前课程资料中没有检索到可直接支撑该问题的内容，且本课程未开启“资料外也可回答”。请换一种问法，或联系老师开启该开关。"
+
+
+@dataclass
+class ClassroomAgentPlan:
+    question_type: str
+    scope: str
+    keywords: list[str]
+    search_phrases: list[str]
+    expanded_terms: list[str]
+    chapter_ids: list[int]
+    chapter_id: int | None
+    page_numbers: list[int]
+    section_numbers: list[str]
+    tools: list[str]
+    retrieval_query: str
+    large_request: bool = False
+
+
+@dataclass
+class ExtractedTable:
+    columns: list[str]
+    rows: list[list[str]]
+    raw: str
+    source_format: str
 
 
 def _assert_student_course_access(db: Session, *, course_id: int, user: User) -> None:
@@ -198,35 +272,304 @@ def _lesson_page_context(db: Session, *, course_id: int, lesson_page_id: int | N
     if lesson_page_id is None:
         return [], []
     row = db.execute(
-        select(LessonPage, Lesson)
+        select(LessonPage, Lesson, CourseMaterial)
         .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .outerjoin(CourseMaterial, CourseMaterial.id == Lesson.material_id)
         .where(LessonPage.id == lesson_page_id, Lesson.course_id == course_id)
     ).first()
     if row is None:
         return [], []
-    page, lesson = row
+    page, lesson, material = row
     page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
     script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
     parts = [
         f"当前课时：{lesson.title}",
+        f"资料类型：{_material_kind_label(material)}",
         f"当前页：第{page.page_number}页 {page.page_title or ''}".strip(),
     ]
+    if material is not None:
+        parts.insert(1, f"资料文件：{material.title}")
     if page_text:
         parts.append(f"页面内容：\n{page_text}")
     if script_text and script_text != page_text:
         parts.append(f"讲解文稿：\n{script_text}")
-    source = {
-        "title": f"{lesson.title} · 第{page.page_number}页",
-        "lesson_id": lesson.id,
-        "lesson_page_id": page.id,
-        "page_number": page.page_number,
-    }
+    source = _page_source(page, lesson, material)
     return ["\n\n".join(parts)], [source]
 
 
 def _trim_context(value: str, limit: int = 1200) -> str:
     clean = str(value or "").strip()
     return clean[:limit]
+
+
+def _compact_excerpt(value: str, *, limit: int = 120) -> str:
+    clean = " ".join(str(value or "").split())
+    if len(clean) <= limit:
+        return clean
+    return clean[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _page_excerpt(page: LessonPage, *, limit: int = 140) -> str:
+    page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
+    script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
+    return _compact_excerpt(" ".join(part for part in [page.page_title or "", page_text, script_text if script_text != page_text else ""] if part), limit=limit)
+
+
+def _material_read_tool(material: CourseMaterial | None) -> str:
+    material_type = str(getattr(material, "material_type", "") or "").lower()
+    filename = str(getattr(material, "original_filename", "") or "").lower()
+    if material_type == MaterialType.PPTX.value or filename.endswith((".ppt", ".pptx")):
+        return "read_slide"
+    if material_type == MaterialType.PDF.value or filename.endswith(".pdf"):
+        return "read_page"
+    return "read_page"
+
+
+def _material_kind_label(material: CourseMaterial | None) -> str:
+    tool = _material_read_tool(material)
+    if tool == "read_slide":
+        return "PPT 幻灯片"
+    if str(getattr(material, "material_type", "") or "").lower() == MaterialType.PDF.value:
+        return "PDF 页面"
+    return "课件页面"
+
+
+def _clean_table_cell(value: str) -> str:
+    text = _HTML_TAG_PATTERN.sub("", html.unescape(str(value or "")))
+    return " ".join(text.replace("\\|", "|").split())
+
+
+def _split_markdown_table_row(line: str) -> list[str]:
+    clean = str(line or "").strip()
+    if not clean or "|" not in clean:
+        return []
+    if clean.startswith("|"):
+        clean = clean[1:]
+    if clean.endswith("|"):
+        clean = clean[:-1]
+    cells = [_clean_table_cell(cell.strip()) for cell in clean.split("|")]
+    return cells if len(cells) >= 2 else []
+
+
+def _is_markdown_separator_row(cells: list[str]) -> bool:
+    return bool(cells) and all(re.fullmatch(r":?-{2,}:?", str(cell or "").strip()) for cell in cells)
+
+
+def _normalize_table(columns: list[str], rows: list[list[str]], *, raw: str, source_format: str) -> ExtractedTable | None:
+    clean_columns = [_clean_table_cell(column) or f"列{index}" for index, column in enumerate(columns, start=1)]
+    width = len(clean_columns)
+    clean_rows: list[list[str]] = []
+    for row in rows:
+        cells = [_clean_table_cell(cell) for cell in row]
+        if len(cells) < width:
+            cells.extend("" for _ in range(width - len(cells)))
+        if len(cells) > width:
+            cells = cells[:width]
+        if any(cells):
+            clean_rows.append(cells)
+    if width < 2 or not clean_rows:
+        return None
+    return ExtractedTable(columns=clean_columns, rows=clean_rows[:12], raw=_trim_context(raw, limit=1600), source_format=source_format)
+
+
+def _extract_markdown_tables(text: str) -> list[ExtractedTable]:
+    lines = str(text or "").splitlines()
+    tables: list[ExtractedTable] = []
+    index = 0
+    while index < len(lines):
+        first = _split_markdown_table_row(lines[index])
+        second = _split_markdown_table_row(lines[index + 1]) if index + 1 < len(lines) else []
+        if first and second and _is_markdown_separator_row(second):
+            raw_lines = [lines[index], lines[index + 1]]
+            rows: list[list[str]] = []
+            index += 2
+            while index < len(lines):
+                cells = _split_markdown_table_row(lines[index])
+                if not cells:
+                    break
+                rows.append(cells)
+                raw_lines.append(lines[index])
+                index += 1
+            table = _normalize_table(first, rows, raw="\n".join(raw_lines), source_format="markdown")
+            if table:
+                tables.append(table)
+            continue
+        index += 1
+    return tables
+
+
+def _extract_html_tables(text: str) -> list[ExtractedTable]:
+    tables: list[ExtractedTable] = []
+    for match in _HTML_TABLE_PATTERN.finditer(str(text or "")):
+        rows = []
+        for row_match in _HTML_ROW_PATTERN.finditer(match.group()):
+            cells = [_clean_table_cell(cell) for cell in _HTML_CELL_PATTERN.findall(row_match.group())]
+            if cells:
+                rows.append(cells)
+        if len(rows) < 2:
+            continue
+        table = _normalize_table(rows[0], rows[1:], raw=match.group(), source_format="html")
+        if table:
+            tables.append(table)
+    return tables
+
+
+def _extract_tsv_tables(text: str) -> list[ExtractedTable]:
+    tables: list[ExtractedTable] = []
+    block: list[str] = []
+
+    def flush() -> None:
+        nonlocal block
+        if len(block) < 2:
+            block = []
+            return
+        rows = [[_clean_table_cell(cell) for cell in line.split("\t")] for line in block]
+        width = len(rows[0])
+        if width >= 2 and all(len(row) == width for row in rows[: min(len(rows), 5)]):
+            table = _normalize_table(rows[0], rows[1:], raw="\n".join(block), source_format="tsv")
+            if table:
+                tables.append(table)
+        block = []
+
+    for line in str(text or "").splitlines():
+        if "\t" in line and len([cell for cell in line.split("\t") if cell.strip()]) >= 2:
+            block.append(line)
+        else:
+            flush()
+    flush()
+    return tables
+
+
+def _extract_tables_from_text(text: str, *, limit: int = 4) -> list[ExtractedTable]:
+    tables: list[ExtractedTable] = []
+    for table in [*_extract_html_tables(text), *_extract_markdown_tables(text), *_extract_tsv_tables(text)]:
+        identity = (tuple(table.columns), tuple(tuple(row) for row in table.rows))
+        if any(identity == (tuple(item.columns), tuple(tuple(row) for row in item.rows)) for item in tables):
+            continue
+        tables.append(table)
+        if len(tables) >= limit:
+            break
+    return tables
+
+
+def _format_table_for_context(table: ExtractedTable, *, index: int) -> str:
+    lines = [
+        f"表格{index}（{table.source_format}）：",
+        "列：" + " | ".join(table.columns),
+    ]
+    for row_index, row in enumerate(table.rows, start=1):
+        pairs = [f"{column}={value}" for column, value in zip(table.columns, row, strict=False) if value]
+        lines.append(f"- 第{row_index}行：" + "；".join(pairs))
+    if table.raw:
+        lines.append(f"原表片段：{_compact_excerpt(table.raw, limit=260)}")
+    return "\n".join(lines)
+
+
+def _quiz_count_from_question(question: str) -> int:
+    text = str(question or "")
+    typed_total = 0
+    for match in _QUIZ_TYPE_COUNT_PATTERN.finditer(text):
+        count = _chapter_number_token(match.group("count"))
+        if count:
+            typed_total += int(count)
+    if typed_total:
+        return max(1, min(typed_total, 10))
+    match = _QUIZ_COUNT_PATTERN.search(text)
+    if not match:
+        return 5
+    count = _chapter_number_token(match.group("count"))
+    return max(1, min(int(count or 5), 10))
+
+
+def _quiz_type_counts_from_question(question: str, *, total_count: int) -> dict[str, int] | None:
+    text = str(question or "")
+    counts: dict[str, int] = {}
+    for match in _QUIZ_TYPE_COUNT_PATTERN.finditer(text):
+        question_type = _QUIZ_LABEL_TO_TYPE.get(match.group("label"))
+        count = _chapter_number_token(match.group("count"))
+        if question_type and count:
+            counts[question_type] = counts.get(question_type, 0) + int(count)
+    if counts:
+        return counts if sum(counts.values()) == total_count else None
+    for label, question_type in _QUIZ_LABEL_TO_TYPE.items():
+        if label in text:
+            return {question_type: total_count}
+    return None
+
+
+def _quiz_show_answers(question: str) -> bool:
+    return bool(_QUIZ_SHOW_ANSWER_PATTERN.search(str(question or "")))
+
+
+def _format_reference_answer(item: dict) -> str:
+    reference = item.get("reference_answer")
+    options = item.get("options") if isinstance(item.get("options"), list) else []
+    if isinstance(reference, dict):
+        value = reference.get("value")
+        if isinstance(value, list):
+            answers = [options[index] if isinstance(index, int) and 0 <= index < len(options) else str(index) for index in value]
+            return "、".join(str(answer) for answer in answers)
+        if isinstance(value, int):
+            return str(options[value]) if 0 <= value < len(options) else str(value)
+        keywords = reference.get("keywords")
+        if isinstance(keywords, list):
+            return "、".join(str(item) for item in keywords)
+    return str(reference or "").strip()
+
+
+def _format_generated_quiz(questions: list[dict], *, show_answers: bool) -> str:
+    lines = ["工具 generate_quiz 结果："]
+    for index, item in enumerate(questions, start=1):
+        question_type = str(item.get("question_type") or "")
+        label = _QUIZ_TYPE_LABELS.get(question_type, question_type or "题目")
+        lines.append(f"{index}. 【{label}】{item.get('stem') or ''}")
+        options = item.get("options")
+        if isinstance(options, list) and options:
+            for option_index, option in enumerate(options):
+                marker = chr(ord("A") + option_index)
+                lines.append(f"   {marker}. {option}")
+        if show_answers:
+            answer = _format_reference_answer(item)
+            if answer:
+                lines.append(f"   答案：{answer}")
+            explanation = str(item.get("explanation") or "").strip()
+            if explanation:
+                lines.append(f"   解析：{explanation}")
+    if not show_answers:
+        lines.append("答案策略：学生未要求答案，本次只展示题目；如果学生继续要求，再显示答案和解析。")
+    return "\n".join(lines)
+
+
+def _generate_quiz_context(
+    db: Session,
+    *,
+    plan: ClassroomAgentPlan,
+    question: str,
+    source_contexts: list[str],
+    chunks: list[KnowledgeChunk],
+) -> str:
+    source_pieces = [str(item).strip() for item in source_contexts if str(item or "").strip()]
+    source_pieces.extend(_chunk_context(chunk) for chunk in chunks if _chunk_context(chunk))
+    source_text = "\n\n".join(dict.fromkeys(source_pieces))[:18000]
+    if not source_text.strip():
+        return "工具 generate_quiz 结果：当前课件中没有找到足够内容生成练习题。"
+    count = _quiz_count_from_question(question)
+    type_counts = _quiz_type_counts_from_question(question, total_count=count)
+    show_answers = _quiz_show_answers(question)
+    topic = "、".join(plan.keywords[:4]) or "课程知识点"
+    try:
+        kwargs: dict[str, Any] = {
+            "topic": topic,
+            "source_text": source_text,
+            "count": count,
+            "db": db,
+        }
+        if type_counts:
+            kwargs["type_counts"] = type_counts
+        questions = ai_service.generate_quiz_questions(**kwargs)
+    except Exception as exc:
+        return f"工具 generate_quiz 结果：出题工具暂时失败，错误信息：{_compact_excerpt(str(exc), limit=160)}。"
+    return _format_generated_quiz(questions, show_answers=show_answers)
 
 
 def _qa_history_limit() -> int:
@@ -245,11 +588,22 @@ def _conversation_history(db: Session, *, conversation_id: int) -> list[QARecord
     return list(reversed(rows))
 
 
+def _strip_agent_answer_suffix(answer: str) -> str:
+    text = str(answer or "").strip()
+    if not text:
+        return ""
+    markers = ("\n\n来源：", "\n来源：", "\n\n你还可以继续问：", "\n你还可以继续问：")
+    cut_points = [index for marker in markers if (index := text.find(marker)) >= 0]
+    if cut_points:
+        text = text[: min(cut_points)].strip()
+    return text
+
+
 def _history_messages(records: list[QARecord]) -> list[dict[str, str]]:
     messages: list[dict[str, str]] = []
     for record in records:
         question = _trim_context(record.question, limit=500)
-        answer = _trim_context(record.answer, limit=_QA_HISTORY_MESSAGE_LIMIT)
+        answer = _trim_context(_strip_agent_answer_suffix(record.answer), limit=_QA_HISTORY_MESSAGE_LIMIT)
         if question:
             messages.append({"role": "user", "content": question})
         if answer:
@@ -368,13 +722,208 @@ def _chapters_from_query(query: str, chapters: list[Chapter]) -> list[Chapter]:
     return [chapter for chapter in chapters if chapter.id in selected_ids]
 
 
-def _page_context_text(page: LessonPage, lesson: Lesson) -> str:
+def _slide_page_numbers_from_query(query: str) -> list[int]:
+    numbers = set(_page_numbers_from_query(query))
+    for match in _SLIDE_PAGE_PATTERN.finditer(str(query or "")):
+        number = _chapter_number_token(match.group("num"))
+        if number is not None:
+            numbers.add(number)
+    return sorted(number for number in numbers if number > 0)
+
+
+def _section_numbers_from_query(query: str) -> list[str]:
+    values: list[str] = []
+    for match in _SECTION_PATTERN.finditer(str(query or "")):
+        value = f"{int(match.group('chapter'))}.{int(match.group('section'))}"
+        if value not in values:
+            values.append(value)
+    return values[:4]
+
+
+def _infer_question_type(
+    *,
+    question: str,
+    scope: str,
+    has_chapter_target: bool,
+    page_numbers: list[int],
+    lesson_page_id: int | None,
+) -> str:
+    text = str(question or "")
+    if _QUIZ_REQUEST_PATTERN.search(text):
+        return "quiz_request"
+    if _NOTE_REQUEST_PATTERN.search(text):
+        return "note_request"
+    if _TABLE_QUESTION_PATTERN.search(text):
+        return "table_question"
+    if _FIGURE_QUESTION_PATTERN.search(text):
+        return "figure_question"
+    if page_numbers or (lesson_page_id is not None and _SPECIFIC_PAGE_HINT_PATTERN.search(text)):
+        return "specific_slide"
+    if scope == "course_overview" or _COURSE_SUMMARY_PATTERN.search(text):
+        return "course_overview"
+    if has_chapter_target and _is_large_content_request(text):
+        return "large_chapter_request"
+    if scope == "chapter_overview" or _CHAPTER_SUMMARY_PATTERN.search(text):
+        return "chapter_overview"
+    if _COMPARE_QUESTION_PATTERN.search(text):
+        return "compare"
+    if _PRINCIPLE_QUESTION_PATTERN.search(text):
+        return "principle"
+    if _CONCEPT_QUESTION_PATTERN.search(text):
+        return "concept"
+    return "specific"
+
+
+def _is_large_content_request(question: str) -> bool:
+    text = str(question or "")
+    return bool(_LARGE_REQUEST_PATTERN.search(text) or _CHAPTER_WIDE_CONTENT_PATTERN.search(text))
+
+
+def _agent_tools_for_type(question_type: str) -> list[str]:
+    mapping = {
+        "specific_slide": ["read_slide", "read_page", "quote_source"],
+        "table_question": ["search_courseware", "extract_table", "quote_source"],
+        "figure_question": ["search_courseware", "analyze_figure", "quote_source"],
+        "large_chapter_request": ["get_chapter_summary", "get_section_summary", "quote_source"],
+        "chapter_overview": ["get_chapter_summary", "quote_source"],
+        "course_overview": ["get_chapter_summary", "get_section_summary", "quote_source"],
+        "quiz_request": ["search_courseware", "get_chapter_summary", "generate_quiz", "quote_source"],
+        "note_request": ["search_courseware", "get_section_summary", "quote_source"],
+        "compare": ["search_courseware", "quote_source"],
+        "principle": ["search_courseware", "quote_source"],
+        "concept": ["search_courseware", "quote_source"],
+    }
+    return mapping.get(question_type, ["search_courseware", "quote_source"])
+
+
+def _build_agent_retrieval_query(
+    *,
+    question_for_ai: str,
+    question_type: str,
+    keywords: list[str],
+    search_phrases: list[str] | None = None,
+    expanded_terms: list[str] | None = None,
+    chapter_ids: list[int],
+    page_numbers: list[int],
+    section_numbers: list[str],
+) -> str:
+    parts: list[str] = []
+    if search_phrases:
+        parts.append("\n".join(search_phrases[:6]))
+    if keywords:
+        parts.append(" ".join(keywords[:10]))
+    if expanded_terms:
+        parts.append(" ".join(expanded_terms[:8]))
+    if section_numbers:
+        parts.append(" ".join(section_numbers[:4]))
+    if page_numbers:
+        parts.append(" ".join(f"第{item}页" for item in page_numbers[:8]))
+    if not parts:
+        parts.append(question_for_ai)
+    return "\n".join(part for part in parts if part).strip()[:3600]
+
+
+def _classroom_agent_plan(
+    db: Session,
+    *,
+    course_id: int,
+    payload: QAAskRequest,
+    question_for_ai: str,
+) -> ClassroomAgentPlan:
+    course = db.get(Course, course_id)
+    chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
+    chapter_rows = [{"id": chapter.id, "title": chapter.title, "order_index": chapter.order_index} for chapter in chapters]
+    explicit_chapters = _chapters_from_query(payload.question, chapters)
+    explicit_chapter_ids = [chapter.id for chapter in explicit_chapters]
+    try:
+        classification = ai_service.classify_qa_question_scope(
+            question=payload.question,
+            course_name=course.name if course else "",
+            chapters=chapter_rows,
+            db=db,
+        )
+    except Exception:
+        classification = {"scope": "specific", "chapter_id": None, "confidence": 0, "reason": "classifier_unavailable"}
+    scope = str(classification.get("scope") or "specific")
+    if scope not in {"specific", "chapter_overview", "course_overview"}:
+        scope = "specific"
+    classified_chapter_id = classification.get("chapter_id")
+    try:
+        classified_chapter_id = int(classified_chapter_id) if classified_chapter_id is not None else None
+    except (TypeError, ValueError):
+        classified_chapter_id = None
+    valid_chapter_ids = {chapter.id for chapter in chapters}
+    if classified_chapter_id not in valid_chapter_ids:
+        classified_chapter_id = None
+    if payload.chapter_id is not None and payload.chapter_id in valid_chapter_ids and not explicit_chapter_ids:
+        explicit_chapter_ids = [payload.chapter_id]
+    page_numbers = _slide_page_numbers_from_query(payload.question)
+    section_numbers = _section_numbers_from_query(payload.question)
+    has_chapter_target = bool(explicit_chapter_ids or classified_chapter_id or payload.chapter_id)
+    if explicit_chapter_ids and (_CHAPTER_SUMMARY_PATTERN.search(payload.question) or _is_large_content_request(payload.question)):
+        scope = "chapter_overview"
+    question_type = _infer_question_type(
+        question=payload.question,
+        scope=scope,
+        has_chapter_target=has_chapter_target,
+        page_numbers=page_numbers,
+        lesson_page_id=payload.lesson_page_id,
+    )
+    if question_type == "large_chapter_request":
+        scope = "chapter_overview"
+    heuristic_keywords = _query_terms(payload.question) or [item for item in ai_service.extract_keywords(payload.question, limit=8) if item]
+    retrieval_plan = ai_service.plan_courseware_retrieval(
+        question=payload.question,
+        question_type=question_type,
+        course_name=course.name if course else "",
+        chapter_titles=[chapter.title for chapter in explicit_chapters] or [chapter.title for chapter in chapters],
+        history=[{"role": "user", "content": question_for_ai}] if question_for_ai != payload.question else None,
+        db=db,
+    )
+    planned_keywords = [str(item).strip() for item in retrieval_plan.get("keywords", []) if str(item).strip()]
+    search_phrases = [str(item).strip() for item in retrieval_plan.get("search_phrases", []) if str(item).strip()]
+    expanded_terms = [str(item).strip() for item in retrieval_plan.get("expanded_terms", []) if str(item).strip()]
+    keywords = list(dict.fromkeys([*planned_keywords, *heuristic_keywords]))[:12]
+    if not search_phrases:
+        search_phrases = keywords[:4]
+    chapter_id = explicit_chapter_ids[0] if len(explicit_chapter_ids) == 1 else classified_chapter_id
+    retrieval_query = _build_agent_retrieval_query(
+        question_for_ai=question_for_ai,
+        question_type=question_type,
+        keywords=keywords,
+        search_phrases=search_phrases,
+        expanded_terms=expanded_terms,
+        chapter_ids=explicit_chapter_ids,
+        page_numbers=page_numbers,
+        section_numbers=section_numbers,
+    )
+    return ClassroomAgentPlan(
+        question_type=question_type,
+        scope=scope,
+        keywords=keywords[:12],
+        search_phrases=search_phrases[:8],
+        expanded_terms=expanded_terms[:8],
+        chapter_ids=explicit_chapter_ids,
+        chapter_id=chapter_id,
+        page_numbers=page_numbers[:8],
+        section_numbers=section_numbers,
+        tools=_agent_tools_for_type(question_type),
+        retrieval_query=retrieval_query,
+        large_request=question_type == "large_chapter_request",
+    )
+
+
+def _page_context_text(page: LessonPage, lesson: Lesson, material: CourseMaterial | None = None) -> str:
     page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
     script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
+    material_label = _material_kind_label(material)
     pieces = [
         f"相关课件：{lesson.title}",
+        f"资料类型：{material_label}",
         f"页面：第{page.page_number}页 {page.page_title or ''}".strip(),
     ]
+    if material is not None:
+        pieces.insert(1, f"资料文件：{material.title}")
     if page_text:
         pieces.append(f"页面内容：{_trim_context(page_text, limit=1800)}")
     if script_text and script_text != page_text:
@@ -382,14 +931,237 @@ def _page_context_text(page: LessonPage, lesson: Lesson) -> str:
     return "\n".join(pieces)
 
 
-def _page_source(page: LessonPage, lesson: Lesson) -> dict:
+def _page_source(page: LessonPage, lesson: Lesson, material: CourseMaterial | None = None) -> dict:
+    tool = _material_read_tool(material)
+    title = f"{lesson.title} · 第{page.page_number}页"
+    if material is not None and material.title and material.title != lesson.title:
+        title = f"{material.title} · {title}"
     return {
-        "title": f"{lesson.title} · 第{page.page_number}页",
+        "title": title,
         "lesson_id": lesson.id,
         "lesson_page_id": page.id,
         "page_number": page.page_number,
+        "material_id": material.id if material is not None else lesson.material_id,
+        "material_title": material.title if material is not None else None,
+        "material_type": material.material_type if material is not None else None,
         "type": "lesson_page",
+        "tool": tool,
+        "excerpt": _page_excerpt(page),
     }
+
+
+def _specified_page_context(
+    db: Session,
+    *,
+    course_id: int,
+    page_numbers: list[int],
+    lesson_id: int | None = None,
+    chapter_id: int | None = None,
+    limit: int = 6,
+) -> tuple[list[str], list[dict]]:
+    if not page_numbers:
+        return [], []
+    statement = (
+        select(LessonPage, Lesson, CourseMaterial)
+        .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .outerjoin(CourseMaterial, CourseMaterial.id == Lesson.material_id)
+        .where(
+            Lesson.course_id == course_id,
+            LessonPage.page_number.in_(page_numbers),
+        )
+    )
+    if lesson_id is not None:
+        statement = statement.where(Lesson.id == lesson_id)
+    elif chapter_id is not None:
+        statement = statement.where(Lesson.chapter_id == chapter_id)
+    rows = list(db.execute(statement.order_by(Lesson.id, LessonPage.page_number).limit(limit)))
+    contexts: list[str] = []
+    sources: list[dict] = []
+    for page, lesson, material in rows:
+        tool = _material_read_tool(material)
+        contexts.append(f"工具 {tool} 结果：\n" + _page_context_text(page, lesson, material))
+        sources.append(_page_source(page, lesson, material))
+    return contexts, sources
+
+
+def _chapter_layered_context(
+    db: Session,
+    *,
+    course_id: int,
+    chapter_ids: list[int],
+    page_sample_limit: int = 4,
+    lesson_limit: int = 20,
+) -> tuple[list[str], list[dict]]:
+    if not chapter_ids:
+        return [], []
+    contexts: list[str] = []
+    sources: list[dict] = []
+    chapters = list(
+        db.scalars(
+            select(Chapter)
+            .where(Chapter.course_id == course_id, Chapter.id.in_(chapter_ids))
+            .order_by(Chapter.order_index, Chapter.id)
+        )
+    )
+    for chapter in chapters:
+        lessons = list(
+            db.scalars(
+                select(Lesson)
+                .where(Lesson.course_id == course_id, Lesson.chapter_id == chapter.id)
+                .order_by(Lesson.id)
+                .limit(lesson_limit)
+            )
+        )
+        lines = [f"工具 get_chapter_summary 结果：章节：{chapter.title}"]
+        if chapter.description:
+            lines.append(f"章节说明：{chapter.description}")
+        if not lessons:
+            lines.append("该章节暂未关联已解析课件页。")
+        for lesson in lessons:
+            lines.append(f"小节/课件：{lesson.title}（共{lesson.page_count or 0}页）")
+            if lesson.summary:
+                lines.append(f"小节摘要：{_trim_context(lesson.summary, limit=260)}")
+            pages = list(
+                db.scalars(
+                    select(LessonPage)
+                    .where(LessonPage.lesson_id == lesson.id)
+                    .order_by(LessonPage.page_number)
+                    .limit(page_sample_limit)
+                )
+            )
+            for page in pages:
+                page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
+                title = page.page_title or "本页内容"
+                lines.append(f"- 第{page.page_number}页 {title}：{_trim_context(page_text, limit=160)}")
+        contexts.append("\n".join(lines))
+        sources.append({"chapter_id": chapter.id, "chapter_title": chapter.title, "type": "chapter_summary", "tool": "get_chapter_summary"})
+    return contexts, sources
+
+
+def _table_or_figure_context(
+    db: Session,
+    *,
+    course_id: int,
+    query: str,
+    chapter_id: int | None,
+    lesson_id: int | None,
+    kind: str,
+    limit: int = 4,
+) -> tuple[list[str], list[dict]]:
+    if kind == "table":
+        return _extract_table_context(
+            db,
+            course_id=course_id,
+            query=query,
+            chapter_id=chapter_id,
+            lesson_id=lesson_id,
+            limit=limit,
+        )
+    page_contexts, page_sources = _page_keyword_context(
+        db,
+        course_id=course_id,
+        query=query,
+        lesson_id=lesson_id,
+        chapter_id=chapter_id,
+        limit=limit,
+    )
+    if not page_contexts:
+        return [], []
+    tool = "analyze_figure"
+    label = "图片/流程图/图表文本线索候选"
+    contexts = [f"工具 {tool} 结果（{label}）：\n{context}" for context in page_contexts]
+    sources: list[dict] = []
+    for source in page_sources:
+        item = dict(source)
+        item["tool"] = tool
+        sources.append(item)
+    return contexts, sources
+
+
+def _extract_table_context(
+    db: Session,
+    *,
+    course_id: int,
+    query: str,
+    chapter_id: int | None,
+    lesson_id: int | None,
+    limit: int = 4,
+) -> tuple[list[str], list[dict]]:
+    statement = (
+        select(LessonPage, Lesson, CourseMaterial)
+        .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .outerjoin(CourseMaterial, CourseMaterial.id == Lesson.material_id)
+        .where(Lesson.course_id == course_id)
+    )
+    if lesson_id is not None:
+        statement = statement.where(Lesson.id == lesson_id)
+    elif chapter_id is not None:
+        statement = statement.where(Lesson.chapter_id == chapter_id)
+    rows = list(db.execute(statement.order_by(Lesson.id, LessonPage.page_number).limit(_QA_FALLBACK_PAGE_SCAN_LIMIT)))
+    scored_tables: list[tuple[int, LessonPage, Lesson, CourseMaterial | None, list[ExtractedTable]]] = []
+    scored_pages: list[tuple[int, LessonPage, Lesson, CourseMaterial | None]] = []
+    for page, lesson, material in rows:
+        text = "\n".join(
+            part
+            for part in [
+                page.page_title or "",
+                _extract_text_payload(page.page_text) or str(page.page_text or ""),
+                _extract_text_payload(page.script_text) or str(page.script_text or ""),
+            ]
+            if part
+        )
+        score = _score_text_for_query(title=f"{lesson.title} {page.page_title or ''}", text=text, page_number=page.page_number, query=query)
+        tables = _extract_tables_from_text(text, limit=3)
+        if tables:
+            table_text = "\n".join(" ".join([*table.columns, *[cell for row in table.rows for cell in row]]) for table in tables)
+            table_score = score + _score_text_for_query(title=lesson.title, text=table_text, page_number=page.page_number, query=query) + 60
+            scored_tables.append((table_score, page, lesson, material, tables))
+        elif score > 0:
+            scored_pages.append((score, page, lesson, material))
+    scored_tables.sort(key=lambda item: (item[0], -item[1].page_number), reverse=True)
+    contexts: list[str] = []
+    sources: list[dict] = []
+    for _score, page, lesson, material, tables in scored_tables[:limit]:
+        table_blocks = "\n\n".join(_format_table_for_context(table, index=index) for index, table in enumerate(tables, start=1))
+        contexts.append(
+            "工具 extract_table 结果：\n"
+            + f"来源页面：{lesson.title} 第{page.page_number}页 {page.page_title or ''}\n"
+            + table_blocks
+        )
+        source = _page_source(page, lesson, material)
+        source["tool"] = "extract_table"
+        source["table_count"] = len(tables)
+        sources.append(source)
+    if contexts:
+        return contexts, sources
+
+    scored_pages.sort(key=lambda item: (item[0], -item[1].page_number), reverse=True)
+    for _score, page, lesson, material in scored_pages[:limit]:
+        contexts.append(
+            "工具 extract_table 结果：未在候选页解析到 Markdown/HTML/TSV 结构化表格；以下为相关页面文字，回答时必须说明未找到明确表格结构。\n"
+            + _page_context_text(page, lesson, material)
+        )
+        source = _page_source(page, lesson, material)
+        source["tool"] = "extract_table"
+        source["table_count"] = 0
+        sources.append(source)
+    return contexts, sources
+
+
+def _chunk_source(chunk: KnowledgeChunk) -> dict:
+    source = dict(chunk.source_meta or {})
+    source.update(
+        {
+            "type": source.get("type") or "knowledge_chunk",
+            "chunk_id": chunk.id,
+            "title": chunk.title,
+            "material_id": source.get("material_id") or chunk.material_id,
+            "lesson_page_id": source.get("lesson_page_id") or chunk.lesson_page_id,
+            "chapter_id": source.get("chapter_id") or chunk.chapter_id,
+            "excerpt": source.get("excerpt") or _compact_excerpt(chunk.content, limit=140),
+        }
+    )
+    return source
 
 
 def _lesson_id_for_page(db: Session, *, course_id: int, lesson_page_id: int | None) -> int | None:
@@ -446,14 +1218,19 @@ def _page_keyword_context(
     exclude_page_id: int | None = None,
     limit: int = 4,
 ) -> tuple[list[str], list[dict]]:
-    statement = select(LessonPage, Lesson).join(Lesson, Lesson.id == LessonPage.lesson_id).where(Lesson.course_id == course_id)
+    statement = (
+        select(LessonPage, Lesson, CourseMaterial)
+        .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .outerjoin(CourseMaterial, CourseMaterial.id == Lesson.material_id)
+        .where(Lesson.course_id == course_id)
+    )
     if lesson_id is not None:
         statement = statement.where(Lesson.id == lesson_id)
     elif chapter_id is not None:
         statement = statement.where(Lesson.chapter_id == chapter_id)
     rows = list(db.execute(statement.order_by(Lesson.id, LessonPage.page_number).limit(_QA_FALLBACK_PAGE_SCAN_LIMIT)))
-    scored: list[tuple[int, LessonPage, Lesson]] = []
-    for page, lesson in rows:
+    scored: list[tuple[int, LessonPage, Lesson, CourseMaterial | None]] = []
+    for page, lesson, material in rows:
         if exclude_page_id is not None and page.id == exclude_page_id:
             continue
         text = " ".join(
@@ -467,10 +1244,10 @@ def _page_keyword_context(
         )
         score = _score_text_for_query(title=f"{lesson.title} {page.page_title or ''}", text=text, page_number=page.page_number, query=query)
         if score > 0:
-            scored.append((score, page, lesson))
+            scored.append((score, page, lesson, material))
     scored.sort(key=lambda item: (item[0], -item[1].page_number), reverse=True)
-    contexts = [_page_context_text(page, lesson) for _score, page, lesson in scored[:limit]]
-    sources = [_page_source(page, lesson) for _score, page, lesson in scored[:limit]]
+    contexts = [_page_context_text(page, lesson, material) for _score, page, lesson, material in scored[:limit]]
+    sources = [_page_source(page, lesson, material) for _score, page, lesson, material in scored[:limit]]
     return contexts, sources
 
 
@@ -497,7 +1274,17 @@ def _material_keyword_context(
         f"相关资料：{material.title}\n{_trim_context(_extract_text_payload(material.extracted_text) or str(material.extracted_text or ''), limit=2200)}"
         for _score, material in scored[:limit]
     ]
-    sources = [{"material_id": material.id, "material_title": material.title, "type": "material"} for _score, material in scored[:limit]]
+    sources = [
+        {
+            "material_id": material.id,
+            "material_title": material.title,
+            "material_type": material.material_type,
+            "type": "material",
+            "tool": "search_courseware",
+            "excerpt": _compact_excerpt(_extract_text_payload(material.extracted_text) or str(material.extracted_text or ""), limit=140),
+        }
+        for _score, material in scored[:limit]
+    ]
     return contexts, sources
 
 
@@ -537,37 +1324,33 @@ def _chapter_context(
             continue
         contexts.append(f"{heading}\n资料片段：{chunk.title}\n{content}")
         source = dict(chunk.source_meta or {})
-        source.update({"chapter_id": chapter.id, "chapter_title": chapter.title, "chunk_id": chunk.id, "title": chunk.title})
+        source.update({"chapter_id": chapter.id, "chapter_title": chapter.title, "chunk_id": chunk.id, "title": chunk.title, "excerpt": _compact_excerpt(chunk.content, limit=140)})
         sources.append(source)
 
     page_rows = db.execute(
-        select(LessonPage, Lesson)
+        select(LessonPage, Lesson, CourseMaterial)
         .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .outerjoin(CourseMaterial, CourseMaterial.id == Lesson.material_id)
         .where(Lesson.course_id == course_id, Lesson.chapter_id == chapter_id)
         .order_by(Lesson.id, LessonPage.page_number)
         .limit(page_limit)
     )
-    for page, lesson in page_rows:
+    for page, lesson, material in page_rows:
         page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
         script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
-        pieces = [f"{heading}", f"课时：{lesson.title}", f"页面：第{page.page_number}页 {page.page_title or ''}".strip()]
+        pieces = [f"{heading}", f"课时：{lesson.title}", f"资料类型：{_material_kind_label(material)}", f"页面：第{page.page_number}页 {page.page_title or ''}".strip()]
+        if material is not None:
+            pieces.insert(2, f"资料文件：{material.title}")
         if page_text:
             pieces.append(f"页面内容：{_trim_context(page_text, limit=1000)}")
         if script_text and script_text != page_text:
             pieces.append(f"讲解文稿：{_trim_context(script_text, limit=800)}")
-        if len(pieces) <= 3:
+        if not page_text and not script_text:
             continue
         contexts.append("\n".join(pieces))
-        sources.append(
-            {
-                "chapter_id": chapter.id,
-                "chapter_title": chapter.title,
-                "lesson_id": lesson.id,
-                "lesson_page_id": page.id,
-                "page_number": page.page_number,
-                "title": f"{lesson.title} · 第{page.page_number}页",
-            }
-        )
+        source = _page_source(page, lesson, material)
+        source.update({"chapter_id": chapter.id, "chapter_title": chapter.title})
+        sources.append(source)
     if contexts:
         return contexts, sources
 
@@ -584,7 +1367,16 @@ def _chapter_context(
         if not text:
             continue
         contexts.append(f"{heading}\n资料：{material.title}\n{_trim_context(text, limit=1800)}")
-        sources.append({"chapter_id": chapter.id, "chapter_title": chapter.title, "material_id": material.id, "material_title": material.title})
+        sources.append(
+            {
+                "chapter_id": chapter.id,
+                "chapter_title": chapter.title,
+                "material_id": material.id,
+                "material_title": material.title,
+                "material_type": material.material_type,
+                "excerpt": _compact_excerpt(text, limit=140),
+            }
+        )
     return contexts, sources
 
 
@@ -620,39 +1412,35 @@ def _course_context(db: Session, *, course_id: int, limit: int = 12) -> tuple[li
         title = chunk.title or "资料片段"
         contexts.append(f"{course_heading}\n资料片段：{title}\n{content}")
         source = dict(chunk.source_meta or {})
-        source.update({"course_id": course.id, "course_name": course.name, "chunk_id": chunk.id, "title": title})
+        source.update({"course_id": course.id, "course_name": course.name, "chunk_id": chunk.id, "title": title, "excerpt": _compact_excerpt(chunk.content, limit=140)})
         sources.append(source)
     if len(contexts) > (2 if chapters else 1):
         return contexts, sources
 
     page_rows = db.execute(
-        select(LessonPage, Lesson)
+        select(LessonPage, Lesson, CourseMaterial)
         .join(Lesson, Lesson.id == LessonPage.lesson_id)
+        .outerjoin(CourseMaterial, CourseMaterial.id == Lesson.material_id)
         .where(Lesson.course_id == course_id)
         .order_by(Lesson.chapter_id.is_(None), Lesson.chapter_id, Lesson.id, LessonPage.page_number)
         .limit(limit)
     )
-    for page, lesson in page_rows:
+    for page, lesson, material in page_rows:
         page_text = _extract_text_payload(page.page_text) or str(page.page_text or "").strip()
         script_text = _extract_text_payload(page.script_text) or str(page.script_text or "").strip()
-        pieces = [course_heading, f"课时：{lesson.title}", f"页面：第{page.page_number}页 {page.page_title or ''}".strip()]
+        pieces = [course_heading, f"课时：{lesson.title}", f"资料类型：{_material_kind_label(material)}", f"页面：第{page.page_number}页 {page.page_title or ''}".strip()]
+        if material is not None:
+            pieces.insert(2, f"资料文件：{material.title}")
         if page_text:
             pieces.append(f"页面内容：{_trim_context(page_text, limit=1000)}")
         if script_text and script_text != page_text:
             pieces.append(f"讲解文稿：{_trim_context(script_text, limit=1000)}")
-        if len(pieces) <= 3:
+        if not page_text and not script_text:
             continue
         contexts.append("\n".join(pieces))
-        sources.append(
-            {
-                "course_id": course.id,
-                "course_name": course.name,
-                "lesson_id": lesson.id,
-                "lesson_page_id": page.id,
-                "page_number": page.page_number,
-                "title": f"{lesson.title} · 第{page.page_number}页",
-            }
-        )
+        source = _page_source(page, lesson, material)
+        source.update({"course_id": course.id, "course_name": course.name})
+        sources.append(source)
     if len(contexts) > (2 if chapters else 1):
         return contexts, sources
 
@@ -669,7 +1457,16 @@ def _course_context(db: Session, *, course_id: int, limit: int = 12) -> tuple[li
         if not text:
             continue
         contexts.append(f"{course_heading}\n资料：{material.title}\n{_trim_context(text, limit=1600)}")
-        sources.append({"course_id": course.id, "course_name": course.name, "material_id": material.id, "material_title": material.title})
+        sources.append(
+            {
+                "course_id": course.id,
+                "course_name": course.name,
+                "material_id": material.id,
+                "material_title": material.title,
+                "material_type": material.material_type,
+                "excerpt": _compact_excerpt(text, limit=140),
+            }
+        )
     return contexts, sources
 
 
@@ -691,6 +1488,154 @@ def _merge_contexts(primary: list[str], chunks: list[KnowledgeChunk], trailing: 
     return contexts
 
 
+def _agent_instruction_context(plan: ClassroomAgentPlan) -> str:
+    label = {
+        "concept": "概念解释",
+        "principle": "原理说明",
+        "compare": "对比问题",
+        "chapter_overview": "章节总结",
+        "large_chapter_request": "大范围学习请求",
+        "specific_slide": "指定页/幻灯片讲解",
+        "table_question": "表格问题",
+        "figure_question": "图表问题",
+        "quiz_request": "练习生成",
+        "note_request": "复习整理",
+        "course_overview": "课程总览",
+    }.get(plan.question_type, "普通知识点问题")
+    lines = [
+        "智慧课堂 Agent 决策：",
+        f"- 问题类型：{label}",
+        f"- 调用工具：{', '.join(plan.tools)}",
+        "- 回答原则：优先基于教师上传课件；先解释概念，再说明原理或步骤，再给例子或对比，最后简短总结。",
+    ]
+    if plan.large_request:
+        lines.append("- 大范围内容策略：只能先给章节总览、小节摘要和重点难点，不要一次性逐页展开；结尾提示可按小节或每 10 页继续展开。")
+    if plan.question_type == "quiz_request":
+        lines.append("- 练习生成策略：根据课件知识点直接给题目；默认先不展示答案，除非学生明确要求答案。")
+    if plan.question_type == "table_question":
+        lines.append("- 表格策略：优先依据表格或结构化页面内容回答；如果课件没有明确表格内容，要说明未找到明确表格。")
+    if plan.question_type == "figure_question":
+        lines.append("- 图表策略：优先解释课件页面中的图片、流程图或图表文字线索；不要编造不可见图片细节。")
+    return "\n".join(lines)
+
+
+def _source_identity(source: dict[str, Any]) -> tuple[str, ...]:
+    keys = ("type", "artifact_id", "chunk_id", "material_id", "lesson_id", "lesson_page_id", "page_number", "chapter_id", "title")
+    return tuple(str(source.get(key) or "") for key in keys)
+
+
+def _source_citation(source: dict[str, Any]) -> str:
+    title = (
+        source.get("material_title")
+        or source.get("chapter_title")
+        or source.get("course_name")
+        or source.get("title")
+        or source.get("filename")
+        or "课件资料"
+    )
+    parts = [str(title)]
+    chapter_title = source.get("chapter_title")
+    if chapter_title and str(chapter_title) not in str(title):
+        parts.append(str(chapter_title))
+    page_number = source.get("page_number")
+    if page_number:
+        page_label = f"第{page_number}"
+        if page_label not in str(title):
+            parts.append(f"第{page_number}页/幻灯片")
+    elif source.get("lesson_page_id"):
+        parts.append("课件页")
+    artifact_type = source.get("artifact_type")
+    if artifact_type and source.get("type") == "pedagogy_artifact":
+        parts.append("结构化教学对象")
+    return "，".join(part for part in parts if part)
+
+
+def _normalize_sources(sources: list[dict]) -> list[dict]:
+    normalized: list[dict] = []
+    seen: set[tuple[str, ...]] = set()
+    for source in sources:
+        if not isinstance(source, dict) or not source:
+            continue
+        item = dict(source)
+        if not item.get("title"):
+            title_parts = [
+                item.get("material_title") or item.get("chapter_title") or item.get("course_name") or "课件资料",
+                f"第{item.get('page_number')}页" if item.get("page_number") else "",
+            ]
+            item["title"] = " · ".join(str(part) for part in title_parts if part)
+        if item.get("excerpt"):
+            item["excerpt"] = _compact_excerpt(str(item.get("excerpt") or ""), limit=140)
+        item["citation"] = _source_citation(item)
+        identity = _source_identity(item)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        normalized.append(item)
+        if len(normalized) >= 12:
+            break
+    return normalized
+
+
+def _format_sources_for_answer(sources: list[dict], *, limit: int = 3) -> str:
+    citations: list[str] = []
+    for source in sources:
+        citation = str(source.get("citation") or _source_citation(source)).strip()
+        excerpt = _compact_excerpt(str(source.get("excerpt") or ""), limit=70)
+        if citation and excerpt and excerpt not in citation:
+            citation = f"{citation}：{excerpt}"
+        if citation and citation not in citations:
+            citations.append(citation)
+        if len(citations) >= limit:
+            break
+    return "；".join(citations)
+
+
+def _follow_up_suggestions(plan: ClassroomAgentPlan, *, has_sources: bool) -> list[str]:
+    topic = next((item for item in plan.keywords if item not in _QA_QUERY_STOPWORDS), "这个知识点")
+    if plan.question_type == "large_chapter_request":
+        return ["按小节继续展开", "按每 10 页继续讲", "基于本章出 5 道复习题"]
+    if plan.question_type == "chapter_overview":
+        return ["展开本章重点难点", "按小节整理笔记", "基于本章出几道练习题"]
+    if plan.question_type == "course_overview":
+        return ["展开某一章", "整理课程复习提纲", "生成课程重点练习题"]
+    if plan.question_type == "quiz_request":
+        return ["显示答案和解析", "只出选择题", "按薄弱知识点再出几题"]
+    if plan.question_type == "specific_slide":
+        return ["总结这一页重点", "继续讲下一页", "基于这一页出练习题"]
+    if plan.question_type == "table_question":
+        return ["把表格整理成对比要点", "按表格内容出题", "解释表格里的某一项"]
+    if plan.question_type == "figure_question":
+        return ["按步骤解释流程图", "总结图表核心结论", "用例子说明这张图"]
+    if plan.question_type == "compare":
+        return [f"把{topic}做成表格对比", f"分别举例说明{topic}", f"出几道{topic}对比题"]
+    if not has_sources:
+        return ["换一种问法重新检索课件", "指定章节或页码再问", "让老师补充相关课件资料"]
+    return [f"{topic}的原理是什么？", f"给我举一个{topic}例子", f"出几道{topic}练习题"]
+
+
+def _answer_suffix(answer: str, *, sources: list[dict], plan: ClassroomAgentPlan, out_of_scope: bool) -> str:
+    pieces: list[str] = []
+    if sources and "来源" not in answer[-500:]:
+        source_text = _format_sources_for_answer(sources)
+        if source_text:
+            pieces.append(f"来源：{source_text}")
+    suggestions = _follow_up_suggestions(plan, has_sources=bool(sources))
+    if suggestions and "你还可以继续问" not in answer and "可继续" not in answer:
+        suggestion_lines = "\n".join(f"{index}. {item}" for index, item in enumerate(suggestions[:3], start=1))
+        pieces.append(f"你还可以继续问：\n{suggestion_lines}")
+    if out_of_scope and not sources and "课程资料" not in answer:
+        pieces.insert(0, "当前课件中没有找到这个问题的明确说明。")
+    return "\n\n".join(pieces)
+
+
+def _finalize_classroom_answer(answer: str, *, sources: list[dict], plan: ClassroomAgentPlan, out_of_scope: bool) -> str:
+    clean = str(answer or "").strip()
+    suffix = _answer_suffix(clean, sources=sources, plan=plan, out_of_scope=out_of_scope)
+    if suffix:
+        clean = f"{clean}\n\n{suffix}".strip()
+    return clean
+
+
 def _qa_contexts_and_sources(
     db: Session,
     *,
@@ -698,38 +1643,36 @@ def _qa_contexts_and_sources(
     payload: QAAskRequest,
     question_for_ai: str,
     history: list[dict[str, str]] | None = None,
+    agent_plan: ClassroomAgentPlan | None = None,
 ) -> tuple[list[str], list[dict], list]:
-    course = db.get(Course, course_id)
-    chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
-    chapter_rows = [{"id": chapter.id, "title": chapter.title, "order_index": chapter.order_index} for chapter in chapters]
-    explicit_chapters = _chapters_from_query(payload.question, chapters)
-    explicit_chapter_ids = [chapter.id for chapter in explicit_chapters]
-    classification = ai_service.classify_qa_question_scope(
-        question=payload.question,
-        course_name=course.name if course else "",
-        chapters=chapter_rows,
-        db=db,
-    )
-    scope = classification.get("scope")
-    classified_chapter_id = classification.get("chapter_id")
-    if explicit_chapter_ids:
-        scope = "chapter_overview"
-        if len(explicit_chapter_ids) == 1:
-            classified_chapter_id = explicit_chapter_ids[0]
-    explicit_chapter_scope = bool(explicit_chapter_ids)
-    retrieval_chapter_id = payload.chapter_id if payload.chapter_id is not None else (classified_chapter_id if scope == "chapter_overview" else None)
+    agent_plan = agent_plan or _classroom_agent_plan(db, course_id=course_id, payload=payload, question_for_ai=question_for_ai)
+    retrieval_query = agent_plan.retrieval_query or question_for_ai
+    scope = agent_plan.scope
+    chapter_target_ids = list(dict.fromkeys(agent_plan.chapter_ids))
+    retrieval_chapter_id = payload.chapter_id if payload.chapter_id is not None else (agent_plan.chapter_id if scope != "course_overview" else None)
     lesson_id = _lesson_id_for_page(db, course_id=course_id, lesson_page_id=payload.lesson_page_id)
+
+    if agent_plan.large_request:
+        target_ids = chapter_target_ids or ([retrieval_chapter_id] if retrieval_chapter_id is not None else [])
+        if target_ids:
+            contexts, sources = _chapter_layered_context(db, course_id=course_id, chapter_ids=target_ids)
+        else:
+            contexts, sources = _course_context(db, course_id=course_id)
+        if contexts:
+            contexts = _merge_contexts([_agent_instruction_context(agent_plan), *contexts], [], [])
+        return contexts, _normalize_sources(sources), []
+
     artifact_hits = []
     chunks = []
-    if explicit_chapter_scope:
-        artifact_limit = max(2, 8 // max(len(explicit_chapter_ids), 1))
-        chunk_limit = max(2, _QA_VECTOR_CONTEXT_LIMIT // max(len(explicit_chapter_ids), 1))
-        for chapter_id in explicit_chapter_ids:
+    if chapter_target_ids:
+        artifact_limit = max(2, 8 // max(len(chapter_target_ids), 1))
+        chunk_limit = max(2, _QA_VECTOR_CONTEXT_LIMIT // max(len(chapter_target_ids), 1))
+        for chapter_id in chapter_target_ids:
             artifact_hits.extend(
                 search_pedagogy_artifacts(
                     db,
                     course_id=course_id,
-                    query=question_for_ai,
+                    query=retrieval_query,
                     chapter_id=chapter_id,
                     lesson_id=None,
                     lesson_page_id=None,
@@ -741,7 +1684,7 @@ def _qa_contexts_and_sources(
                 search_course_knowledge(
                     db,
                     course_id=course_id,
-                    query=question_for_ai,
+                    query=retrieval_query,
                     chapter_id=chapter_id,
                     lesson_id=None,
                     lesson_page_id=None,
@@ -752,7 +1695,7 @@ def _qa_contexts_and_sources(
         artifact_hits = search_pedagogy_artifacts(
             db,
             course_id=course_id,
-            query=question_for_ai,
+            query=retrieval_query,
             chapter_id=None if lesson_id is not None else retrieval_chapter_id,
             lesson_id=lesson_id,
             lesson_page_id=None,
@@ -762,23 +1705,55 @@ def _qa_contexts_and_sources(
         chunks = search_course_knowledge(
             db,
             course_id=course_id,
-            query=question_for_ai,
+            query=retrieval_query,
             chapter_id=None if lesson_id is not None else retrieval_chapter_id,
             lesson_id=lesson_id,
             lesson_page_id=None,
             limit=_QA_DETAIL_VECTOR_CONTEXT_LIMIT if lesson_id is not None else _QA_VECTOR_CONTEXT_LIMIT,
         )
     page_contexts, page_sources = _lesson_page_context(db, course_id=course_id, lesson_page_id=payload.lesson_page_id)
-    fallback_chapter_id = payload.chapter_id if payload.chapter_id is not None else (retrieval_chapter_id if scope == "chapter_overview" else None)
+    if agent_plan.page_numbers:
+        specified_contexts, specified_sources = _specified_page_context(
+            db,
+            course_id=course_id,
+            page_numbers=agent_plan.page_numbers,
+            lesson_id=lesson_id,
+            chapter_id=retrieval_chapter_id,
+        )
+        page_contexts.extend(specified_contexts)
+        page_sources.extend(specified_sources)
+
+    fallback_chapter_id = payload.chapter_id if payload.chapter_id is not None else retrieval_chapter_id
+    tool_contexts: list[str] = []
+    tool_sources: list[dict] = []
+    if agent_plan.question_type == "table_question":
+        tool_contexts, tool_sources = _table_or_figure_context(
+            db,
+            course_id=course_id,
+            query=retrieval_query,
+            chapter_id=fallback_chapter_id,
+            lesson_id=lesson_id,
+            kind="table",
+        )
+    elif agent_plan.question_type == "figure_question":
+        tool_contexts, tool_sources = _table_or_figure_context(
+            db,
+            course_id=course_id,
+            query=retrieval_query,
+            chapter_id=fallback_chapter_id,
+            lesson_id=lesson_id,
+            kind="figure",
+        )
+
     related_page_contexts: list[str] = []
     related_page_sources: list[dict] = []
-    if explicit_chapter_scope:
-        page_limit = max(2, _QA_RELATED_PAGE_CONTEXT_LIMIT // max(len(explicit_chapter_ids), 1))
-        for chapter_id in explicit_chapter_ids:
+    if chapter_target_ids:
+        page_limit = max(2, _QA_RELATED_PAGE_CONTEXT_LIMIT // max(len(chapter_target_ids), 1))
+        for chapter_id in chapter_target_ids:
             chapter_page_contexts, chapter_page_sources = _page_keyword_context(
                 db,
                 course_id=course_id,
-                query=question_for_ai,
+                query=retrieval_query,
                 lesson_id=None,
                 chapter_id=chapter_id,
                 exclude_page_id=payload.lesson_page_id,
@@ -790,16 +1765,16 @@ def _qa_contexts_and_sources(
         related_page_contexts, related_page_sources = _page_keyword_context(
             db,
             course_id=course_id,
-            query=question_for_ai,
+            query=retrieval_query,
             lesson_id=lesson_id,
             chapter_id=fallback_chapter_id,
             exclude_page_id=payload.lesson_page_id,
             limit=_QA_RELATED_PAGE_CONTEXT_LIMIT,
         )
     rewritten_query = ""
-    if not explicit_chapter_ids and not artifact_hits and not chunks and not related_page_contexts:
+    if not chapter_target_ids and not artifact_hits and not chunks and not related_page_contexts and not page_contexts and not tool_contexts:
         rewritten_query = ai_service.rewrite_retrieval_query(question=payload.question, history=history, db=db)
-        if rewritten_query and rewritten_query.strip() not in {payload.question.strip(), question_for_ai.strip()}:
+        if rewritten_query and rewritten_query.strip() not in {payload.question.strip(), question_for_ai.strip(), retrieval_query.strip()}:
             artifact_hits = search_pedagogy_artifacts(
                 db,
                 course_id=course_id,
@@ -835,14 +1810,14 @@ def _qa_contexts_and_sources(
     course_sources: list[dict] = []
     material_contexts: list[str] = []
     material_sources: list[dict] = []
-    if explicit_chapter_scope:
-        for chapter_id in explicit_chapter_ids:
+    if agent_plan.question_type in {"chapter_overview", "quiz_request", "note_request"} and (chapter_target_ids or retrieval_chapter_id):
+        for chapter_id in chapter_target_ids or ([retrieval_chapter_id] if retrieval_chapter_id is not None else []):
             current_contexts, current_sources = _chapter_context(
                 db,
                 course_id=course_id,
                 chapter_id=chapter_id,
                 limit=8,
-                page_limit=28,
+                page_limit=32 if agent_plan.question_type == "chapter_overview" else 20,
             )
             chapter_contexts.extend(current_contexts)
             chapter_sources.extend(current_sources)
@@ -851,9 +1826,9 @@ def _qa_contexts_and_sources(
     if scope == "course_overview" and not page_contexts and not chapter_contexts:
         course_contexts, course_sources = _course_context(db, course_id=course_id)
     if not related_page_contexts and not chunks:
-        material_query = rewritten_query or question_for_ai
-        if explicit_chapter_scope:
-            for chapter_id in explicit_chapter_ids:
+        material_query = rewritten_query or retrieval_query
+        if chapter_target_ids:
+            for chapter_id in chapter_target_ids:
                 current_contexts, current_sources = _material_keyword_context(
                     db,
                     course_id=course_id,
@@ -871,8 +1846,29 @@ def _qa_contexts_and_sources(
                 chapter_id=fallback_chapter_id,
             )
     structured_contexts = artifact_contexts(artifact_hits)
+    primary_contexts = [
+        *page_contexts,
+        *chapter_contexts,
+        *course_contexts,
+        *structured_contexts,
+        *tool_contexts,
+        *related_page_contexts,
+        *material_contexts,
+    ]
+    if agent_plan.question_type == "quiz_request":
+        quiz_context = _generate_quiz_context(
+            db,
+            plan=agent_plan,
+            question=payload.question,
+            source_contexts=primary_contexts,
+            chunks=chunks,
+        )
+        if quiz_context:
+            primary_contexts = [quiz_context, *primary_contexts]
+    if primary_contexts or chunks:
+        primary_contexts = [_agent_instruction_context(agent_plan), *primary_contexts]
     contexts = _merge_contexts(
-        [*page_contexts, *chapter_contexts, *course_contexts, *structured_contexts, *related_page_contexts, *material_contexts],
+        primary_contexts,
         chunks,
         trailing=lesson_outline_contexts,
     )
@@ -881,12 +1877,13 @@ def _qa_contexts_and_sources(
         *chapter_sources,
         *course_sources,
         *artifact_sources(artifact_hits),
+        *tool_sources,
         *related_page_sources,
         *material_sources,
-        *(chunk.source_meta or {} for chunk in chunks),
+        *(_chunk_source(chunk) for chunk in chunks),
         *lesson_outline_sources,
     ]
-    return contexts, sources, chunks
+    return contexts, _normalize_sources(sources), chunks
 
 
 def upload_qa_image(db: Session, *, user: User, course_id: int, upload: UploadFile) -> dict:
@@ -918,12 +1915,14 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
     attachments = _attachment_dicts(payload)
     question_for_ai = _question_with_attachments(payload.question, attachments)
     retrieval_question = _question_with_history_for_retrieval(question_for_ai, history_for_prompt)
+    agent_plan = _classroom_agent_plan(db, course_id=payload.course_id, payload=payload, question_for_ai=retrieval_question)
     contexts, sources, _chunks = _qa_contexts_and_sources(
         db,
         course_id=payload.course_id,
         payload=payload,
-        question_for_ai=retrieval_question,
+        question_for_ai=agent_plan.retrieval_query,
         history=history_for_prompt,
+        agent_plan=agent_plan,
     )
     allow_general_ai_answer = _course_allows_general_ai_answer(db, course_id=payload.course_id)
     if contexts:
@@ -945,6 +1944,7 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
         answer = _GENERAL_AI_DISABLED_NOTICE
         out_of_scope = True
         thinking_process = None
+    answer = _finalize_classroom_answer(answer, sources=sources, plan=agent_plan, out_of_scope=out_of_scope)
     record = QARecord(
         conversation_id=conversation.id,
         course_id=payload.course_id,
@@ -956,7 +1956,7 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
         is_out_of_scope=out_of_scope,
         sources=sources,
         attachments=attachments,
-        keywords=ai_service.extract_keywords(payload.question),
+        keywords=agent_plan.keywords or ai_service.extract_keywords(payload.question),
     )
     db.add(record)
     log_ai_usage(
@@ -983,12 +1983,14 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
     attachments = _attachment_dicts(payload)
     question_for_ai = _question_with_attachments(payload.question, attachments)
     retrieval_question = _question_with_history_for_retrieval(question_for_ai, history_for_prompt)
+    agent_plan = _classroom_agent_plan(db, course_id=payload.course_id, payload=payload, question_for_ai=retrieval_question)
     contexts, sources, _chunks = _qa_contexts_and_sources(
         db,
         course_id=payload.course_id,
         payload=payload,
-        question_for_ai=retrieval_question,
+        question_for_ai=agent_plan.retrieval_query,
         history=history_for_prompt,
+        agent_plan=agent_plan,
     )
     allow_general_ai_answer = _course_allows_general_ai_answer(db, course_id=payload.course_id)
     out_of_scope = not contexts
@@ -1053,7 +2055,12 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
     thinking_process = "".join(thought_parts).strip() or None
     if not answer:
         answer = "当前没有生成有效回答，请换一种问法或稍后重试。"
+        answer_parts.append(answer)
         yield {"event": "delta", "data": {"type": "answer", "text": answer}}
+    suffix = _answer_suffix(answer, sources=sources, plan=agent_plan, out_of_scope=out_of_scope)
+    if suffix:
+        yield from _stream_text_delta("answer", f"\n\n{suffix}", answer_parts, thought_parts)
+        answer = "".join(answer_parts).strip()
     record = QARecord(
         conversation_id=conversation.id,
         course_id=payload.course_id,
@@ -1065,7 +2072,7 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
         is_out_of_scope=out_of_scope,
         sources=sources,
         attachments=attachments,
-        keywords=ai_service.extract_keywords(payload.question),
+        keywords=agent_plan.keywords or ai_service.extract_keywords(payload.question),
     )
     db.add(record)
     log_ai_usage(

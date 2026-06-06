@@ -100,8 +100,48 @@ def search_course_knowledge(
         statement = statement.where(KnowledgeChunk.lesson_page_id.in_(select(LessonPage.id).where(LessonPage.lesson_id == lesson_id)))
     if lesson_page_id is not None:
         statement = statement.where(KnowledgeChunk.lesson_page_id == lesson_page_id)
-    chunks = {chunk.id: chunk for chunk in db.scalars(statement)}
-    return [chunks[chunk_id] for chunk_id in chunk_ids if chunk_id in chunks][:limit]
+    chunks_by_id = {chunk.id: chunk for chunk in db.scalars(statement)}
+    ordered_chunks = [chunks_by_id[chunk_id] for chunk_id in chunk_ids if chunk_id in chunks_by_id]
+    distances = {chunk_id: distance for chunk_id, distance in rows}
+    return _rank_chunks_for_query(query=query, chunks=ordered_chunks, distances=distances, limit=limit)
+
+
+def _chunk_page_number(chunk: KnowledgeChunk) -> int | None:
+    source_meta = dict(chunk.source_meta or {})
+    try:
+        page_number = int(source_meta.get("page_number") or 0)
+    except (TypeError, ValueError):
+        page_number = 0
+    return page_number or None
+
+
+def _rank_chunks_for_query(
+    *,
+    query: str,
+    chunks: list[KnowledgeChunk],
+    distances: dict[int, float | None],
+    limit: int,
+) -> list[KnowledgeChunk]:
+    if not chunks:
+        return []
+    keywords = query_terms(query, limit=24)
+    page_numbers = page_numbers_from_query(query)
+
+    def score(index: int, chunk: KnowledgeChunk) -> tuple[float, int, float, int]:
+        page_number = _chunk_page_number(chunk)
+        lexical_score = score_text_for_query(title=chunk.title, text=chunk.content, page_number=page_number, query=query, term_limit=24)
+        token_score = sum(3 for token in chunk.tokens or [] if str(token).lower() in keywords)
+        title = str(chunk.title or "").lower()
+        title_score = sum(6 for keyword in keywords if keyword in title)
+        page_score = 80 if page_number is not None and page_number in page_numbers else 0
+        distance = distances.get(chunk.id)
+        vector_score = 30.0 if distance is None else max(0.0, 90.0 - min(float(distance), 2.0) * 60.0)
+        total = float(lexical_score + token_score + title_score + page_score) + vector_score
+        distance_sort = -float(distance) if distance is not None else -9_999.0
+        return total, lexical_score + token_score + title_score + page_score, distance_sort, -index
+
+    ranked = sorted(enumerate(chunks), key=lambda item: score(item[0], item[1]), reverse=True)
+    return [chunk for _index, chunk in ranked[:limit]]
 
 
 def _relational_chunk_fallback(
@@ -155,7 +195,8 @@ def _query_course_variants(
     limit: int,
 ) -> list[tuple[int, float | None]]:
     merged: dict[int, tuple[float, int, int, float | None]] = {}
-    per_query_limit = max(limit, 4)
+    candidate_limit = max(limit * 3, 12)
+    per_query_limit = candidate_limit
     for query_index, variant in enumerate(queries):
         rows = vector_store.query_course(
             db,
@@ -173,7 +214,7 @@ def _query_course_variants(
             if current is None or candidate < current:
                 merged[chunk_id] = candidate
     ranked = sorted(merged.items(), key=lambda item: item[1])
-    return [(chunk_id, meta[3]) for chunk_id, meta in ranked[:limit]]
+    return [(chunk_id, meta[3]) for chunk_id, meta in ranked[:candidate_limit]]
 
 
 def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None = None) -> list[KnowledgePoint]:
