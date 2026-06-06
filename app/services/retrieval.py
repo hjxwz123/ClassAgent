@@ -102,6 +102,10 @@ def build_retrieval_query_variants(query: str, *, limit: int = 6) -> list[str]:
     if abstracted != base:
         add(abstracted)
 
+    keyword_query = " ".join(query_terms(base, limit=12))
+    if keyword_query and keyword_query != base:
+        add(keyword_query)
+
     return variants[:limit]
 
 
