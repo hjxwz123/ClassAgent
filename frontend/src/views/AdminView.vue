@@ -763,6 +763,7 @@ const navGroups = [
 const cloudServiceKeys: ServiceKey[] = ["oss", "ocr", "doc_parser", "tts"];
 const llmPurposes = [
   { key: "qa", label: "课程问答", icon: FileText },
+  { key: "task", label: "任务模型", icon: Search },
   { key: "script", label: "讲解脚本", icon: Sparkles },
   { key: "quiz", label: "测验题目", icon: CheckSquare },
   { key: "tutoring", label: "题目辅导", icon: Layers },
