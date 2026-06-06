@@ -44,8 +44,13 @@ class VectorStoreService:
             raise RuntimeError("启用 Qdrant 向量库需要安装 qdrant-client 依赖") from exc
 
         self._qdrant_models = models
+        qdrant_url = str(self.settings.qdrant_url or "").strip()
+        if qdrant_url.startswith("local:"):
+            path = qdrant_url.removeprefix("local:").strip() or "storage/vectors/qdrant"
+            self._client = QdrantClient(path=path, timeout=self.settings.qdrant_timeout_seconds)
+            return
         self._client = QdrantClient(
-            url=self.settings.qdrant_url,
+            url=qdrant_url,
             api_key=self.settings.qdrant_api_key or None,
             timeout=self.settings.qdrant_timeout_seconds,
         )
