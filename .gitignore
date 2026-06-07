@@ -31,5 +31,9 @@ readmedocs/
 # 忽略所有以 . 开头的文件和文件夹（保留 .gitignore 和示例配置文件）
 .*
 !.gitignore
+!.dockerignore
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 !.env.example
 !.env.production.example
