@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
@@ -150,6 +151,21 @@ def create_app() -> FastAPI:
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
     app.mount("/static", StaticFiles(directory=STORAGE_DIR), name="static")
+    frontend_dist = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+    frontend_assets = frontend_dist / "assets"
+    if frontend_dist.exists():
+        if frontend_assets.exists():
+            app.mount("/assets", StaticFiles(directory=frontend_assets), name="frontend-assets")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_frontend(full_path: str):
+            if full_path.startswith(("api/", "static/", "assets/")):
+                raise HTTPException(status_code=404, detail="Not Found")
+            index_file = frontend_dist / "index.html"
+            if not index_file.exists():
+                raise HTTPException(status_code=404, detail="Frontend not built")
+            return FileResponse(index_file)
+
     return app
 
 
