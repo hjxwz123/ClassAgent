@@ -85,19 +85,68 @@ def test_task_model_plans_courseware_retrieval(monkeypatch):
     assert "帮我" in plan["exclude_terms"]
 
 
-def test_task_model_handles_retrieval_rewrite_and_scope_classification(monkeypatch):
+def test_task_model_plans_full_qa_task(monkeypatch):
+    calls: list[dict] = []
+
+    def fake_call_json(db, *, purpose, system_prompt, user_prompt, allow_fallback=True):
+        calls.append({"purpose": purpose, "system": system_prompt, "prompt": user_prompt})
+        return {
+            "scope": "course_overview",
+            "question_type": "course_overview",
+            "chapter_ids": [],
+            "chapter_id": None,
+            "page_numbers": [],
+            "section_numbers": [],
+            "keywords": ["编译原理", "复习"],
+            "search_phrases": ["编译原理 复习提纲"],
+            "expanded_terms": ["compiler principles"],
+            "tools": ["get_chapter_summary", "get_section_summary", "quote_source"],
+            "retrieval_query": "编译原理 复习提纲",
+            "large_request": False,
+            "quiz": {"count": None, "type_counts": {}, "show_answers": False},
+            "reason": "课程复习请求",
+        }
+
+    monkeypatch.setattr(ai_service, "_call_json", fake_call_json)
+
+    plan = ai_service.plan_qa_task(
+        question="我该如何复习《编译原理》？",
+        course_name="编译原理",
+        chapters=[{"id": 1, "order_index": 1, "title": "词法分析"}],
+        db=None,
+    )
+
+    assert calls[0]["purpose"] == "task"
+    assert "问答任务规划器" in calls[0]["system"]
+    assert plan["scope"] == "course_overview"
+    assert plan["question_type"] == "course_overview"
+    assert plan["retrieval_query"] == "编译原理 复习提纲"
+
+
+def test_task_model_handles_retrieval_rewrite_and_full_qa_plan(monkeypatch):
     calls: list[dict] = []
 
     def fake_call_json(db, *, purpose, system_prompt, user_prompt, allow_fallback=True):
         calls.append({"purpose": purpose, "prompt": user_prompt})
-        if "检索意图分类器" in system_prompt:
-            return {"scope": "specific", "chapter_id": None, "confidence": 0.9, "reason": "具体算法问题"}
+        if "问答任务规划器" in system_prompt:
+            return {
+                "scope": "specific",
+                "question_type": "concept",
+                "chapter_ids": [],
+                "chapter_id": None,
+                "keywords": ["霍夫曼算法", "前缀编码"],
+                "search_phrases": ["霍夫曼算法 前缀编码"],
+                "expanded_terms": [],
+                "tools": ["search_courseware", "quote_source"],
+                "retrieval_query": "霍夫曼算法 前缀编码",
+                "large_request": False,
+            }
         return {"retrieval_query": "霍夫曼算法 前缀编码", "keywords": ["霍夫曼算法", "前缀编码"]}
 
     monkeypatch.setattr(ai_service, "_call_json", fake_call_json)
 
     rewritten = ai_service.rewrite_retrieval_query(question="帮我讲解霍夫曼算法", db=None)
-    scope = ai_service.classify_qa_question_scope(
+    plan = ai_service.plan_qa_task(
         question="帮我讲解霍夫曼算法",
         course_name="多媒体技术",
         chapters=[],
@@ -105,5 +154,5 @@ def test_task_model_handles_retrieval_rewrite_and_scope_classification(monkeypat
     )
 
     assert rewritten.startswith("霍夫曼算法 前缀编码")
-    assert scope["scope"] == "specific"
+    assert plan["question_type"] == "concept"
     assert [call["purpose"] for call in calls] == ["task", "task"]

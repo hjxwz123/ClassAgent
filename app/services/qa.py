@@ -38,60 +38,16 @@ _QA_VECTOR_CONTEXT_LIMIT = 8
 _QA_DETAIL_VECTOR_CONTEXT_LIMIT = 10
 _QA_RELATED_PAGE_CONTEXT_LIMIT = 6
 _QA_CHAPTER_RANGE_MAX = 8
-_CHAPTER_NUM_TOKEN = r"\d{1,3}|[零〇一二两三四五六七八九十百]{1,8}"
-_PAGE_NUM_TOKEN = r"\d{1,4}|[零〇一二两三四五六七八九十百]{1,8}"
-_CHAPTER_RANGE_PATTERN = re.compile(
-    rf"(?:第\s*)?(?P<start>{_CHAPTER_NUM_TOKEN})\s*(?:章\s*)?(?:[-~—–至到])\s*(?:第\s*)?(?P<end>{_CHAPTER_NUM_TOKEN})\s*章"
-)
-_CHAPTER_SINGLE_PATTERN = re.compile(rf"(?:第\s*)?(?P<num>{_CHAPTER_NUM_TOKEN})\s*章")
-_CHAPTER_LIST_PATTERN = re.compile(
-    rf"(?P<body>(?:第\s*)?(?:{_CHAPTER_NUM_TOKEN})\s*(?:章)?(?:\s*(?:[、,，/]|和|与|及)\s*(?:第\s*)?(?:{_CHAPTER_NUM_TOKEN})\s*(?:章)?)+)"
-)
-_SLIDE_PAGE_PATTERN = re.compile(
-    rf"(?:第\s*)?(?P<num>{_PAGE_NUM_TOKEN})\s*(?:页|頁|张|張|张幻灯片|張幻燈片|页ppt|页PPT|slide|Slide|幻灯片|幻燈片)"
-)
-_SECTION_PATTERN = re.compile(r"(?<!\d)(?P<chapter>\d{1,2})\s*[.．]\s*(?P<section>\d{1,2})(?!\d)")
-_SPECIFIC_PAGE_HINT_PATTERN = re.compile(r"(第\s*\d+\s*(?:页|張|张|幻灯片|slide)|这页|这一页|当前页|本页|这张|这一张)")
-_QUIZ_REQUEST_PATTERN = re.compile(r"(出|生成|来|做).{0,8}(题|练习|测验|测试|选择题|判断题|简答题)|考考我|刷题|练几道")
-_LARGE_REQUEST_PATTERN = re.compile(
-    r"(全部内容|所有内容|完整内容|从头到尾|逐页|一页一页|一张一张|每一页|每张|每页|"
-    r"完整讲(?:一遍|完|一下)?|详细讲(?:完整|完|一遍)?|系统讲(?:一遍|完)|整体学一遍)"
-)
-_CHAPTER_WIDE_CONTENT_PATTERN = re.compile(
-    r"(第\s*.+章|本章|这一章|当前章).{0,12}(全部|所有|完整).{0,8}(内容|知识点|课件|ppt|PPT|幻灯片|页面)"
-)
-_CHAPTER_SUMMARY_PATTERN = re.compile(r"(第\s*.+章|章节|本章|这一章|当前章).{0,12}(讲了什么|总结|概括|梳理|重点|框架|提纲|复习)")
-_COURSE_SUMMARY_PATTERN = re.compile(r"(这门课|本课程|整门课|全部课程|课程整体).{0,12}(讲了什么|总结|概括|梳理|重点|框架|提纲|复习)")
-_TABLE_QUESTION_PATTERN = re.compile(r"(表格|表中|表里|表内|对比表|列表|表\s*\d*)")
-_FIGURE_QUESTION_PATTERN = re.compile(r"(图片|图表|图中|图里|这张图|这幅图|流程图|示意图|结构图|曲线图|柱状图|折线图)")
-_COMPARE_QUESTION_PATTERN = re.compile(r"(区别|不同|对比|比较|异同|联系|差异|VS|vs)")
-_PRINCIPLE_QUESTION_PATTERN = re.compile(r"(为什么|原理|机制|流程|步骤|如何|怎么实现|怎样实现|推导|证明)")
-_CONCEPT_QUESTION_PATTERN = re.compile(r"(什么是|是什么|定义|概念|是什么意思|是啥)")
-_NOTE_REQUEST_PATTERN = re.compile(r"(整理|生成|帮我).{0,8}(笔记|复习资料|知识清单|知识点清单)")
 _HTML_TABLE_PATTERN = re.compile(r"<table[\s\S]*?</table>", re.IGNORECASE)
 _HTML_ROW_PATTERN = re.compile(r"<tr[\s\S]*?</tr>", re.IGNORECASE)
 _HTML_CELL_PATTERN = re.compile(r"<t[dh][^>]*>([\s\S]*?)</t[dh]>", re.IGNORECASE)
 _HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
-_QUIZ_COUNT_PATTERN = re.compile(r"(?P<count>\d{1,2}|[一二两三四五六七八九十])\s*道")
-_QUIZ_TYPE_COUNT_PATTERN = re.compile(
-    r"(?P<count>\d{1,2}|[一二两三四五六七八九十])\s*道\s*(?P<label>单选题|多选题|选择题|判断题|填空题|简答题|问答题)"
-)
-_QUIZ_SHOW_ANSWER_PATTERN = re.compile(r"(显示|给出|附上|带上|包含|要).{0,6}(答案|解析)|答案和解析|带答案|附答案")
 _QUIZ_TYPE_LABELS = {
     QuestionType.SINGLE_CHOICE.value: "选择题",
     QuestionType.MULTIPLE_CHOICE.value: "多选题",
     QuestionType.JUDGE.value: "判断题",
     QuestionType.BLANK.value: "填空题",
     QuestionType.SHORT_ANSWER.value: "简答题",
-}
-_QUIZ_LABEL_TO_TYPE = {
-    "单选题": QuestionType.SINGLE_CHOICE.value,
-    "选择题": QuestionType.SINGLE_CHOICE.value,
-    "多选题": QuestionType.MULTIPLE_CHOICE.value,
-    "判断题": QuestionType.JUDGE.value,
-    "填空题": QuestionType.BLANK.value,
-    "简答题": QuestionType.SHORT_ANSWER.value,
-    "问答题": QuestionType.SHORT_ANSWER.value,
 }
 _QA_QUERY_STOPWORDS = {
     "前序对话",
@@ -115,6 +71,32 @@ _QA_QUERY_STOPWORDS = {
 }
 _GENERAL_AI_NOTICE = "提示：以下回答未在当前课程资料中检索到直接依据，属于通用知识说明，请结合老师要求和课程内容自行核对。"
 _GENERAL_AI_DISABLED_NOTICE = "当前课程资料中没有检索到可直接支撑该问题的内容，且本课程未开启“资料外也可回答”。请换一种问法，或联系老师开启该开关。"
+_QA_VALID_SCOPES = {"specific", "chapter_overview", "course_overview"}
+_QA_VALID_QUESTION_TYPES = {
+    "specific",
+    "concept",
+    "principle",
+    "compare",
+    "specific_slide",
+    "table_question",
+    "figure_question",
+    "large_chapter_request",
+    "chapter_overview",
+    "course_overview",
+    "quiz_request",
+    "note_request",
+}
+_QA_VALID_TOOLS = {
+    "search_courseware",
+    "read_slide",
+    "read_page",
+    "quote_source",
+    "extract_table",
+    "analyze_figure",
+    "get_chapter_summary",
+    "get_section_summary",
+    "generate_quiz",
+}
 
 
 @dataclass
@@ -131,6 +113,9 @@ class ClassroomAgentPlan:
     tools: list[str]
     retrieval_query: str
     large_request: bool = False
+    quiz_count: int | None = None
+    quiz_type_counts: dict[str, int] | None = None
+    quiz_show_answers: bool | None = None
 
 
 @dataclass
@@ -465,40 +450,87 @@ def _format_table_for_context(table: ExtractedTable, *, index: int) -> str:
     return "\n".join(lines)
 
 
-def _quiz_count_from_question(question: str) -> int:
-    text = str(question or "")
-    typed_total = 0
-    for match in _QUIZ_TYPE_COUNT_PATTERN.finditer(text):
-        count = _chapter_number_token(match.group("count"))
-        if count:
-            typed_total += int(count)
-    if typed_total:
-        return max(1, min(typed_total, 10))
-    match = _QUIZ_COUNT_PATTERN.search(text)
-    if not match:
-        return 5
-    count = _chapter_number_token(match.group("count"))
-    return max(1, min(int(count or 5), 10))
+def _sanitize_positive_ints(values: Any, *, limit: int, max_value: int = 1000) -> list[int]:
+    if values is None:
+        return []
+    if not isinstance(values, list | tuple | set):
+        values = [values]
+    result: list[int] = []
+    for value in values:
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if 0 < number <= max_value and number not in result:
+            result.append(number)
+        if len(result) >= limit:
+            break
+    return result
 
 
-def _quiz_type_counts_from_question(question: str, *, total_count: int) -> dict[str, int] | None:
-    text = str(question or "")
+def _sanitize_strings(values: Any, *, limit: int, max_length: int = 80) -> list[str]:
+    if values is None:
+        return []
+    if isinstance(values, str):
+        values = re.split(r"[\n,，、;；]+", values)
+    elif not isinstance(values, list | tuple | set):
+        values = [values]
+    result: list[str] = []
+    for value in values:
+        text = " ".join(str(value or "").strip().split())
+        if not text:
+            continue
+        text = text[:max_length]
+        if text not in result:
+            result.append(text)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def _sanitize_quiz_type_counts(value: Any, *, total_count: int | None) -> dict[str, int] | None:
+    if not isinstance(value, dict):
+        return None
     counts: dict[str, int] = {}
-    for match in _QUIZ_TYPE_COUNT_PATTERN.finditer(text):
-        question_type = _QUIZ_LABEL_TO_TYPE.get(match.group("label"))
-        count = _chapter_number_token(match.group("count"))
-        if question_type and count:
-            counts[question_type] = counts.get(question_type, 0) + int(count)
-    if counts:
-        return counts if sum(counts.values()) == total_count else None
-    for label, question_type in _QUIZ_LABEL_TO_TYPE.items():
-        if label in text:
-            return {question_type: total_count}
-    return None
+    for question_type, raw_count in value.items():
+        key = str(question_type or "").strip()
+        if key not in _QUIZ_TYPE_LABELS:
+            continue
+        try:
+            count = int(raw_count)
+        except (TypeError, ValueError):
+            continue
+        if count > 0:
+            counts[key] = min(count, 10)
+    if not counts:
+        return None
+    total = sum(counts.values())
+    if total_count is not None and total != total_count:
+        return None
+    return counts
 
 
-def _quiz_show_answers(question: str) -> bool:
-    return bool(_QUIZ_SHOW_ANSWER_PATTERN.search(str(question or "")))
+def _valid_plan_question_type(value: Any) -> str:
+    question_type = str(value or "specific").strip()
+    return question_type if question_type in _QA_VALID_QUESTION_TYPES else "specific"
+
+
+def _valid_plan_scope(value: Any) -> str:
+    scope = str(value or "specific").strip()
+    return scope if scope in _QA_VALID_SCOPES else "specific"
+
+
+def _valid_plan_tools(values: Any, question_type: str) -> list[str]:
+    tools = [tool for tool in _sanitize_strings(values, limit=8, max_length=40) if tool in _QA_VALID_TOOLS]
+    if not tools:
+        tools = ["search_courseware", "quote_source"]
+    if "quote_source" not in tools:
+        tools.append("quote_source")
+    return tools[:8]
+
+
+def _valid_plan_chapter_ids(values: Any, valid_chapter_ids: set[int], *, limit: int = _QA_CHAPTER_RANGE_MAX) -> list[int]:
+    return [chapter_id for chapter_id in _sanitize_positive_ints(values, limit=limit) if chapter_id in valid_chapter_ids]
 
 
 def _format_reference_answer(item: dict) -> str:
@@ -553,9 +585,9 @@ def _generate_quiz_context(
     source_text = "\n\n".join(dict.fromkeys(source_pieces))[:18000]
     if not source_text.strip():
         return "工具 generate_quiz 结果：当前课件中没有找到足够内容生成练习题。"
-    count = _quiz_count_from_question(question)
-    type_counts = _quiz_type_counts_from_question(question, total_count=count)
-    show_answers = _quiz_show_answers(question)
+    count = max(1, min(int(plan.quiz_count or 5), 10))
+    type_counts = plan.quiz_type_counts
+    show_answers = bool(plan.quiz_show_answers)
     topic = "、".join(plan.keywords[:4]) or "课程知识点"
     try:
         kwargs: dict[str, Any] = {
@@ -641,161 +673,6 @@ def _score_text_for_query(*, title: str, text: str, page_number: int | None, que
     )
 
 
-def _chapter_number_token(value: str) -> int | None:
-    token = str(value or "").strip().replace("两", "二").replace("〇", "零")
-    if not token:
-        return None
-    if token.isdigit():
-        number = int(token)
-        return number if number > 0 else None
-    digits = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
-    if token in digits and digits[token] > 0:
-        return digits[token]
-    if "百" in token:
-        left, _, right = token.partition("百")
-        hundred = digits.get(left, 1 if not left else 0)
-        tail = _chapter_number_token(right) if right else 0
-        number = hundred * 100 + int(tail or 0)
-        return number if number > 0 else None
-    if "十" in token:
-        left, _, right = token.partition("十")
-        ten = digits.get(left, 1 if not left else 0)
-        one = digits.get(right, 0) if right else 0
-        number = ten * 10 + one
-        return number if number > 0 else None
-    return None
-
-
-def _chapter_display_number(chapter: Chapter) -> int | None:
-    for match in _CHAPTER_SINGLE_PATTERN.finditer(chapter.title or ""):
-        number = _chapter_number_token(match.group("num"))
-        if number is not None:
-            return number
-    try:
-        order_index = int(chapter.order_index or 0)
-    except (TypeError, ValueError):
-        order_index = 0
-    return order_index if order_index > 0 else None
-
-
-def _chapters_from_query(query: str, chapters: list[Chapter]) -> list[Chapter]:
-    if not query or not chapters:
-        return []
-    by_number: dict[int, list[Chapter]] = {}
-    for chapter in chapters:
-        number = _chapter_display_number(chapter)
-        if number is not None:
-            by_number.setdefault(number, []).append(chapter)
-
-    selected_ids: set[int] = set()
-    for match in _CHAPTER_RANGE_PATTERN.finditer(query):
-        start = _chapter_number_token(match.group("start"))
-        end = _chapter_number_token(match.group("end"))
-        if start is None or end is None:
-            continue
-        if start > end:
-            start, end = end, start
-        if end - start + 1 > _QA_CHAPTER_RANGE_MAX:
-            end = start + _QA_CHAPTER_RANGE_MAX - 1
-        for number in range(start, end + 1):
-            selected_ids.update(chapter.id for chapter in by_number.get(number, []))
-
-    range_spans = [match.span() for match in _CHAPTER_RANGE_PATTERN.finditer(query)]
-    for match in _CHAPTER_SINGLE_PATTERN.finditer(query):
-        if any(start <= match.start() and match.end() <= end for start, end in range_spans):
-            continue
-        number = _chapter_number_token(match.group("num"))
-        if number is not None:
-            selected_ids.update(chapter.id for chapter in by_number.get(number, []))
-
-    for match in _CHAPTER_LIST_PATTERN.finditer(query):
-        body = match.group("body")
-        if "章" not in body:
-            continue
-        for value in re.findall(rf"(?:第\s*)?({_CHAPTER_NUM_TOKEN})\s*(?:章)?", body):
-            number = _chapter_number_token(value)
-            if number is not None:
-                selected_ids.update(chapter.id for chapter in by_number.get(number, []))
-
-    if not selected_ids:
-        return []
-    return [chapter for chapter in chapters if chapter.id in selected_ids]
-
-
-def _slide_page_numbers_from_query(query: str) -> list[int]:
-    numbers = set(_page_numbers_from_query(query))
-    for match in _SLIDE_PAGE_PATTERN.finditer(str(query or "")):
-        number = _chapter_number_token(match.group("num"))
-        if number is not None:
-            numbers.add(number)
-    return sorted(number for number in numbers if number > 0)
-
-
-def _section_numbers_from_query(query: str) -> list[str]:
-    values: list[str] = []
-    for match in _SECTION_PATTERN.finditer(str(query or "")):
-        value = f"{int(match.group('chapter'))}.{int(match.group('section'))}"
-        if value not in values:
-            values.append(value)
-    return values[:4]
-
-
-def _infer_question_type(
-    *,
-    question: str,
-    scope: str,
-    has_chapter_target: bool,
-    page_numbers: list[int],
-    lesson_page_id: int | None,
-) -> str:
-    text = str(question or "")
-    if _QUIZ_REQUEST_PATTERN.search(text):
-        return "quiz_request"
-    if _NOTE_REQUEST_PATTERN.search(text):
-        return "note_request"
-    if _TABLE_QUESTION_PATTERN.search(text):
-        return "table_question"
-    if _FIGURE_QUESTION_PATTERN.search(text):
-        return "figure_question"
-    if page_numbers or (lesson_page_id is not None and _SPECIFIC_PAGE_HINT_PATTERN.search(text)):
-        return "specific_slide"
-    if scope == "course_overview" or _COURSE_SUMMARY_PATTERN.search(text):
-        return "course_overview"
-    if has_chapter_target and _is_large_content_request(text):
-        return "large_chapter_request"
-    if scope == "chapter_overview" or _CHAPTER_SUMMARY_PATTERN.search(text):
-        return "chapter_overview"
-    if _COMPARE_QUESTION_PATTERN.search(text):
-        return "compare"
-    if _PRINCIPLE_QUESTION_PATTERN.search(text):
-        return "principle"
-    if _CONCEPT_QUESTION_PATTERN.search(text):
-        return "concept"
-    return "specific"
-
-
-def _is_large_content_request(question: str) -> bool:
-    text = str(question or "")
-    return bool(_LARGE_REQUEST_PATTERN.search(text) or _CHAPTER_WIDE_CONTENT_PATTERN.search(text))
-
-
-def _agent_tools_for_type(question_type: str) -> list[str]:
-    mapping = {
-        "specific_slide": ["read_slide", "read_page", "quote_source"],
-        "table_question": ["search_courseware", "extract_table", "quote_source"],
-        "figure_question": ["search_courseware", "analyze_figure", "quote_source"],
-        "large_chapter_request": ["get_chapter_summary", "get_section_summary", "quote_source"],
-        "chapter_overview": ["get_chapter_summary", "quote_source"],
-        "course_overview": ["get_chapter_summary", "get_section_summary", "quote_source"],
-        "quiz_request": ["search_courseware", "get_chapter_summary", "generate_quiz", "quote_source"],
-        "note_request": ["search_courseware", "get_section_summary", "quote_source"],
-        "compare": ["search_courseware", "quote_source"],
-        "principle": ["search_courseware", "quote_source"],
-        "concept": ["search_courseware", "quote_source"],
-    }
-    return mapping.get(question_type, ["search_courseware", "quote_source"])
-
-
 def _build_agent_retrieval_query(
     *,
     question_for_ai: str,
@@ -833,83 +710,87 @@ def _classroom_agent_plan(
     course = db.get(Course, course_id)
     chapters = list(db.scalars(select(Chapter).where(Chapter.course_id == course_id).order_by(Chapter.order_index, Chapter.id)))
     chapter_rows = [{"id": chapter.id, "title": chapter.title, "order_index": chapter.order_index} for chapter in chapters]
-    explicit_chapters = _chapters_from_query(payload.question, chapters)
-    explicit_chapter_ids = [chapter.id for chapter in explicit_chapters]
+    valid_chapter_ids = {chapter.id for chapter in chapters}
     try:
-        classification = ai_service.classify_qa_question_scope(
+        plan_payload = ai_service.plan_qa_task(
             question=payload.question,
             course_name=course.name if course else "",
             chapters=chapter_rows,
+            history=[{"role": "user", "content": question_for_ai}] if question_for_ai != payload.question else None,
+            lesson_page_id=payload.lesson_page_id,
+            chapter_id=payload.chapter_id,
             db=db,
         )
     except Exception:
-        classification = {"scope": "specific", "chapter_id": None, "confidence": 0, "reason": "classifier_unavailable"}
-    scope = str(classification.get("scope") or "specific")
-    if scope not in {"specific", "chapter_overview", "course_overview"}:
-        scope = "specific"
-    classified_chapter_id = classification.get("chapter_id")
+        plan_payload = {}
+    scope = _valid_plan_scope(plan_payload.get("scope") if isinstance(plan_payload, dict) else None)
+    question_type = _valid_plan_question_type(plan_payload.get("question_type") if isinstance(plan_payload, dict) else None)
+    if question_type == "course_overview":
+        scope = "course_overview"
+    elif question_type in {"chapter_overview", "large_chapter_request"}:
+        scope = "chapter_overview"
+    raw_chapter_ids = plan_payload.get("chapter_ids") if isinstance(plan_payload, dict) else None
+    chapter_ids = _valid_plan_chapter_ids(raw_chapter_ids, valid_chapter_ids)
+    raw_chapter_id = plan_payload.get("chapter_id") if isinstance(plan_payload, dict) else None
     try:
-        classified_chapter_id = int(classified_chapter_id) if classified_chapter_id is not None else None
+        chapter_id = int(raw_chapter_id) if raw_chapter_id is not None else None
     except (TypeError, ValueError):
-        classified_chapter_id = None
-    valid_chapter_ids = {chapter.id for chapter in chapters}
-    if classified_chapter_id not in valid_chapter_ids:
-        classified_chapter_id = None
-    if payload.chapter_id is not None and payload.chapter_id in valid_chapter_ids and not explicit_chapter_ids:
-        explicit_chapter_ids = [payload.chapter_id]
-    page_numbers = _slide_page_numbers_from_query(payload.question)
-    section_numbers = _section_numbers_from_query(payload.question)
-    has_chapter_target = bool(explicit_chapter_ids or classified_chapter_id or payload.chapter_id)
-    if explicit_chapter_ids and (_CHAPTER_SUMMARY_PATTERN.search(payload.question) or _is_large_content_request(payload.question)):
-        scope = "chapter_overview"
-    question_type = _infer_question_type(
-        question=payload.question,
-        scope=scope,
-        has_chapter_target=has_chapter_target,
-        page_numbers=page_numbers,
-        lesson_page_id=payload.lesson_page_id,
-    )
-    if question_type == "large_chapter_request":
-        scope = "chapter_overview"
-    heuristic_keywords = _query_terms(payload.question) or [item for item in ai_service.extract_keywords(payload.question, limit=8) if item]
-    retrieval_plan = ai_service.plan_courseware_retrieval(
-        question=payload.question,
-        question_type=question_type,
-        course_name=course.name if course else "",
-        chapter_titles=[chapter.title for chapter in explicit_chapters] or [chapter.title for chapter in chapters],
-        history=[{"role": "user", "content": question_for_ai}] if question_for_ai != payload.question else None,
-        db=db,
-    )
-    planned_keywords = [str(item).strip() for item in retrieval_plan.get("keywords", []) if str(item).strip()]
-    search_phrases = [str(item).strip() for item in retrieval_plan.get("search_phrases", []) if str(item).strip()]
-    expanded_terms = [str(item).strip() for item in retrieval_plan.get("expanded_terms", []) if str(item).strip()]
-    keywords = list(dict.fromkeys([*planned_keywords, *heuristic_keywords]))[:12]
-    if not search_phrases:
-        search_phrases = keywords[:4]
-    chapter_id = explicit_chapter_ids[0] if len(explicit_chapter_ids) == 1 else classified_chapter_id
+        chapter_id = None
+    if chapter_id not in valid_chapter_ids:
+        chapter_id = None
+    if chapter_id is not None and chapter_id not in chapter_ids:
+        chapter_ids.insert(0, chapter_id)
+    if scope == "course_overview":
+        chapter_ids = []
+        chapter_id = None
+    elif chapter_ids and chapter_id is None:
+        chapter_id = chapter_ids[0] if len(chapter_ids) == 1 else None
+    elif not chapter_ids and payload.chapter_id is not None and payload.chapter_id in valid_chapter_ids:
+        chapter_id = payload.chapter_id
+        chapter_ids = [payload.chapter_id] if scope == "chapter_overview" else []
+    page_numbers = _sanitize_positive_ints(plan_payload.get("page_numbers") if isinstance(plan_payload, dict) else None, limit=8, max_value=9999)
+    section_numbers = _sanitize_strings(plan_payload.get("section_numbers") if isinstance(plan_payload, dict) else None, limit=4, max_length=20)
+    keywords = _sanitize_strings(plan_payload.get("keywords") if isinstance(plan_payload, dict) else None, limit=12)
+    search_phrases = _sanitize_strings(plan_payload.get("search_phrases") if isinstance(plan_payload, dict) else None, limit=8, max_length=120)
+    expanded_terms = _sanitize_strings(plan_payload.get("expanded_terms") if isinstance(plan_payload, dict) else None, limit=8)
+    tools = _valid_plan_tools(plan_payload.get("tools") if isinstance(plan_payload, dict) else None, question_type)
+    retrieval_query = str(plan_payload.get("retrieval_query") or "").strip() if isinstance(plan_payload, dict) else ""
     retrieval_query = _build_agent_retrieval_query(
         question_for_ai=question_for_ai,
         question_type=question_type,
         keywords=keywords,
         search_phrases=search_phrases,
         expanded_terms=expanded_terms,
-        chapter_ids=explicit_chapter_ids,
+        chapter_ids=chapter_ids,
         page_numbers=page_numbers,
         section_numbers=section_numbers,
-    )
+    ) if not retrieval_query else retrieval_query[:3600]
+    quiz_payload = plan_payload.get("quiz") if isinstance(plan_payload, dict) and isinstance(plan_payload.get("quiz"), dict) else {}
+    try:
+        quiz_count = int(quiz_payload.get("count")) if quiz_payload.get("count") is not None else None
+    except (TypeError, ValueError):
+        quiz_count = None
+    if quiz_count is not None:
+        quiz_count = max(1, min(quiz_count, 10))
+    quiz_type_counts = _sanitize_quiz_type_counts(quiz_payload.get("type_counts"), total_count=quiz_count)
+    quiz_show_answers = quiz_payload.get("show_answers")
+    quiz_show_answers = bool(quiz_show_answers) if quiz_show_answers is not None else None
     return ClassroomAgentPlan(
         question_type=question_type,
         scope=scope,
         keywords=keywords[:12],
         search_phrases=search_phrases[:8],
         expanded_terms=expanded_terms[:8],
-        chapter_ids=explicit_chapter_ids,
+        chapter_ids=chapter_ids,
         chapter_id=chapter_id,
         page_numbers=page_numbers[:8],
         section_numbers=section_numbers,
-        tools=_agent_tools_for_type(question_type),
+        tools=tools,
         retrieval_query=retrieval_query,
-        large_request=question_type == "large_chapter_request",
+        large_request=bool(plan_payload.get("large_request")) if isinstance(plan_payload, dict) else question_type == "large_chapter_request",
+        quiz_count=quiz_count,
+        quiz_type_counts=quiz_type_counts,
+        quiz_show_answers=quiz_show_answers,
     )
 
 
@@ -1649,7 +1530,7 @@ def _qa_contexts_and_sources(
     retrieval_query = agent_plan.retrieval_query or question_for_ai
     scope = agent_plan.scope
     chapter_target_ids = list(dict.fromkeys(agent_plan.chapter_ids))
-    retrieval_chapter_id = payload.chapter_id if payload.chapter_id is not None else (agent_plan.chapter_id if scope != "course_overview" else None)
+    retrieval_chapter_id = None if scope == "course_overview" else (payload.chapter_id if payload.chapter_id is not None else agent_plan.chapter_id)
     lesson_id = _lesson_id_for_page(db, course_id=course_id, lesson_page_id=payload.lesson_page_id)
 
     if agent_plan.large_request:
