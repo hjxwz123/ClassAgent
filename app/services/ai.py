@@ -1059,6 +1059,89 @@ class AIService:
                 return rewritten[:320]
         return self._heuristic_retrieval_query(question=question, history=history)
 
+    def plan_qa_task(
+        self,
+        *,
+        question: str,
+        course_name: str,
+        chapters: Sequence[dict],
+        history: Sequence[Any] | None = None,
+        lesson_page_id: int | None = None,
+        chapter_id: int | None = None,
+        db: Session | None = None,
+    ) -> dict[str, Any]:
+        history_lines = "\n".join(
+            f"- {item['role']}: {item['content']}"
+            for item in self._normalize_history_messages(history)[-4:]
+        )
+        chapter_lines = "\n".join(
+            f"- id={item.get('id')}, order={item.get('order_index')}, title={item.get('title')}"
+            for item in chapters[:40]
+        )
+        try:
+            payload = self._call_json(
+                db,
+                purpose="task",
+                system_prompt=(
+                    "你是智慧课堂问答任务规划器。你只做任务规划，不回答学生问题。"
+                    "必须基于学生问题、课程名称、章节列表和前序对话，判断检索范围、问题类型、工具和检索词。"
+                    "scope 只能是 specific、chapter_overview、course_overview。"
+                    "question_type 只能是 specific、concept、principle、compare、specific_slide、table_question、"
+                    "figure_question、large_chapter_request、chapter_overview、course_overview、quiz_request、note_request。"
+                    "如果学生问如何复习、备考、总结、梳理某门课，且问题中出现课程名或指代整门课，应使用 course_overview。"
+                    "如果学生问某一章的复习、总结、重点或完整内容，应使用 chapter_overview 或 large_chapter_request，并返回对应 chapter_ids。"
+                    "如果请求体已有 chapter_id，但学生问题明显指向整门课，不要把范围限制到该 chapter_id。"
+                    "如果请求体已有 lesson_page_id，只有学生问题明确询问当前页/这页/某页时才使用 specific_slide。"
+                    "不要编造不存在的章节 id；只能从给定章节列表中选择。必须只返回 JSON。"
+                ),
+                user_prompt=(
+                    f"课程名称：{course_name or '未知课程'}\n"
+                    f"章节列表：\n{chapter_lines or '无'}\n"
+                    f"请求体 chapter_id：{chapter_id if chapter_id is not None else '无'}\n"
+                    f"请求体 lesson_page_id：{lesson_page_id if lesson_page_id is not None else '无'}\n"
+                    f"前序对话：\n{history_lines or '无'}\n"
+                    f"学生问题：{question}\n"
+                    "返回格式："
+                    "{"
+                    "\"scope\":\"specific|chapter_overview|course_overview\","
+                    "\"question_type\":\"枚举值\","
+                    "\"chapter_ids\":[数字],"
+                    "\"chapter_id\":数字或null,"
+                    "\"page_numbers\":[数字],"
+                    "\"section_numbers\":[\"小节号\"],"
+                    "\"keywords\":[\"核心词\"],"
+                    "\"search_phrases\":[\"检索短语\"],"
+                    "\"expanded_terms\":[\"同义词或英文名\"],"
+                    "\"tools\":[\"search_courseware/read_slide/read_page/quote_source/extract_table/analyze_figure/get_chapter_summary/get_section_summary/generate_quiz\"],"
+                    "\"retrieval_query\":\"适合检索课程资料的查询文本\","
+                    "\"large_request\":true或false,"
+                    "\"quiz\":{\"count\":数字或null,\"type_counts\":{\"single_choice\":数字,\"multiple_choice\":数字,\"judge\":数字,\"blank\":数字,\"short_answer\":数字},\"show_answers\":true或false},"
+                    "\"reason\":\"一句话说明\""
+                    "}"
+                ),
+                allow_fallback=True,
+            )
+        except Exception:
+            payload = None
+        if isinstance(payload, dict):
+            return payload
+        return {
+            "scope": "specific",
+            "question_type": "specific",
+            "chapter_ids": [chapter_id] if chapter_id is not None else [],
+            "chapter_id": chapter_id,
+            "page_numbers": [],
+            "section_numbers": [],
+            "keywords": [],
+            "search_phrases": [],
+            "expanded_terms": [],
+            "tools": ["search_courseware", "quote_source"],
+            "retrieval_query": _clean_text(question)[:360],
+            "large_request": False,
+            "quiz": {},
+            "reason": "task_planner_unavailable",
+        }
+
     def plan_courseware_retrieval(
         self,
         *,

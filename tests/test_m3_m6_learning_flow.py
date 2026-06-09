@@ -1182,8 +1182,17 @@ def test_qa_uses_chapter_context_for_chapter_overview_when_vector_search_misses(
     monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         qa_service.ai_service,
-        "classify_qa_question_scope",
-        lambda **kwargs: {"scope": "chapter_overview", "chapter_id": chapter["id"], "confidence": 0.95, "reason": "test"},
+        "plan_qa_task",
+        lambda **kwargs: {
+            "scope": "chapter_overview",
+            "question_type": "chapter_overview",
+            "chapter_ids": [chapter["id"]],
+            "chapter_id": chapter["id"],
+            "keywords": ["矩阵基础"],
+            "search_phrases": ["矩阵基础 重点"],
+            "retrieval_query": "矩阵基础 重点",
+            "tools": ["get_chapter_summary", "quote_source"],
+        },
     )
 
     def answer_question(**kwargs):
@@ -1281,8 +1290,17 @@ def test_qa_chapter_range_uses_all_requested_chapters_when_vector_search_misses(
     monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         qa_service.ai_service,
-        "classify_qa_question_scope",
-        lambda **kwargs: {"scope": "specific", "chapter_id": None, "confidence": 0.1, "reason": "test"},
+        "plan_qa_task",
+        lambda **kwargs: {
+            "scope": "chapter_overview",
+            "question_type": "large_chapter_request",
+            "chapter_ids": [chapter["id"] for chapter in kwargs["chapters"] if chapter["order_index"] in {5, 6, 7}],
+            "keywords": ["范围章节"],
+            "search_phrases": ["第5章 第6章 第7章"],
+            "retrieval_query": "第5章 第6章 第7章",
+            "tools": ["get_chapter_summary", "get_section_summary", "quote_source"],
+            "large_request": True,
+        },
     )
 
     def answer_question(**kwargs):
@@ -1301,16 +1319,6 @@ def test_qa_chapter_range_uses_all_requested_chapters_when_vector_search_misses(
     assert "第5章核心概念完整页面内容" in joined_context
     assert "第6章核心概念完整页面内容" in joined_context
     assert "第7章核心概念完整页面内容" in joined_context
-
-
-def test_qa_chapters_from_query_supports_chapter_ranges_and_lists():
-    from app.services.qa import _chapters_from_query
-
-    chapters = [Chapter(id=number, title=f"第{number}章 测试章节", order_index=number) for number in range(1, 9)]
-
-    assert [chapter.id for chapter in _chapters_from_query("请讲解第五到第七章", chapters)] == [5, 6, 7]
-    assert [chapter.id for chapter in _chapters_from_query("复习第5、6、7章", chapters)] == [5, 6, 7]
-
 
 def test_rag_context_packing_keeps_later_chapters_when_context_is_long():
     contexts = [f"第{number}章 " + (f"核心内容{number}" * 1200) for number in range(5, 8)]
@@ -1332,8 +1340,17 @@ def test_qa_uses_course_context_for_course_overview_when_vector_search_misses(cl
     monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         qa_service.ai_service,
-        "classify_qa_question_scope",
-        lambda **kwargs: {"scope": "course_overview", "chapter_id": None, "confidence": 0.95, "reason": "test"},
+        "plan_qa_task",
+        lambda **kwargs: {
+            "scope": "course_overview",
+            "question_type": "course_overview",
+            "chapter_ids": [],
+            "chapter_id": None,
+            "keywords": ["课程重点"],
+            "search_phrases": ["课程重点 复习"],
+            "retrieval_query": "课程重点 复习",
+            "tools": ["get_chapter_summary", "get_section_summary", "quote_source"],
+        },
     )
 
     def answer_question(**kwargs):
@@ -1353,6 +1370,60 @@ def test_qa_uses_course_context_for_course_overview_when_vector_search_misses(cl
     assert captured["contexts"]
     assert any(item.startswith("课程：") for item in captured["contexts"])
     assert any("章节结构：" in item or "资料片段：" in item or "页面内容：" in item or "资料：" in item for item in captured["contexts"])
+
+
+def test_qa_course_review_question_uses_task_plan_and_reaches_final_answer(client, monkeypatch):
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+
+    with db_session.SessionLocal() as db:
+        db_course = db.get(Course, course["id"])
+        assert db_course is not None
+        db_course.name = "编译原理"
+        db_course.description = "词法分析、语法分析、语义分析与代码生成"
+        db.add(db_course)
+        db.commit()
+
+    calls = {"plan": 0, "answer": 0}
+    captured: dict[str, list[str]] = {}
+    monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
+
+    def plan_qa_task(**kwargs):
+        calls["plan"] += 1
+        assert kwargs["question"] == "我该如何复习《编译原理》？"
+        return {
+            "scope": "course_overview",
+            "question_type": "course_overview",
+            "chapter_ids": [],
+            "chapter_id": None,
+            "keywords": ["编译原理", "复习"],
+            "search_phrases": ["编译原理 复习"],
+            "retrieval_query": "编译原理 复习提纲",
+            "tools": ["get_chapter_summary", "get_section_summary", "quote_source"],
+        }
+
+    def answer_question(**kwargs):
+        calls["answer"] += 1
+        captured["contexts"] = list(kwargs["contexts"])
+        return "建议按词法分析、语法分析、语义分析和代码生成建立复习框架。", False, None
+
+    monkeypatch.setattr(qa_service.ai_service, "plan_qa_task", plan_qa_task)
+    monkeypatch.setattr(qa_service.ai_service, "answer_question", answer_question)
+
+    response = client.post(
+        "/api/v1/qa/ask",
+        json={"course_id": course["id"], "question": "我该如何复习《编译原理》？"},
+        headers=student_headers,
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert calls == {"plan": 1, "answer": 1}
+    assert data["is_out_of_scope"] is False
+    assert "复习框架" in data["answer"]
+    assert any(item.startswith("课程：编译原理") for item in captured["contexts"])
+    assert any("章节结构：" in item or "页面内容：" in item or "资料：" in item for item in captured["contexts"])
 
 
 def test_lesson_activity_skips_non_teaching_pages(client):
@@ -1430,8 +1501,15 @@ def test_qa_falls_back_to_database_chunks_when_vector_store_is_readonly(client, 
     monkeypatch.setattr(knowledge_service.vector_store, "upsert_chunks", lambda *args, **kwargs: (_ for _ in ()).throw(readonly_error))
     monkeypatch.setattr(
         qa_service.ai_service,
-        "classify_qa_question_scope",
-        lambda **kwargs: {"scope": "specific", "chapter_id": None, "confidence": 0.9, "reason": "test"},
+        "plan_qa_task",
+        lambda **kwargs: {
+            "scope": "specific",
+            "question_type": "concept",
+            "keywords": ["矩阵", "线性变换"],
+            "search_phrases": ["矩阵 线性变换"],
+            "retrieval_query": "矩阵 线性变换",
+            "tools": ["search_courseware", "quote_source"],
+        },
     )
 
     def answer_question(**kwargs):
@@ -1696,6 +1774,18 @@ def test_qa_can_answer_out_of_scope_with_notice_when_course_setting_enabled(clie
         db.commit()
 
     monkeypatch.setattr(qa_service, "search_course_knowledge", lambda *args, **kwargs: [])
+    monkeypatch.setattr(
+        qa_service.ai_service,
+        "plan_qa_task",
+        lambda **kwargs: {
+            "scope": "specific",
+            "question_type": "specific",
+            "keywords": ["背景知识"],
+            "search_phrases": ["背景知识"],
+            "retrieval_query": "背景知识",
+            "tools": ["search_courseware", "quote_source"],
+        },
+    )
     monkeypatch.setattr(qa_service.ai_service, "rewrite_retrieval_query", lambda **kwargs: kwargs["question"])
     monkeypatch.setattr(
         qa_service.ai_service,
