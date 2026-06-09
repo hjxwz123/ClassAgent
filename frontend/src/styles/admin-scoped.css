@@ -640,6 +640,70 @@ pre { max-height: 420px; overflow: auto; border-radius: var(--radius-md); backgr
   max-width: 260px;
 }
 
+.admin-materials-table-card {
+  max-width: 100%;
+}
+
+.admin-materials-table {
+  width: 100%;
+  min-width: 980px;
+  table-layout: fixed;
+}
+
+.admin-materials-check-col { width: 44px; }
+.admin-materials-name-col { width: 28%; }
+.admin-materials-course-col { width: 16%; }
+.admin-materials-teacher-col { width: 12%; }
+.admin-materials-type-col { width: 82px; }
+.admin-materials-date-col { width: 118px; }
+.admin-materials-status-col { width: 92px; }
+.admin-materials-actions-col { width: 218px; }
+
+.admin-materials-table th,
+.admin-materials-table td {
+  white-space: nowrap;
+}
+
+.admin-materials-table td {
+  max-width: none;
+}
+
+.admin-materials-table td.row-actions {
+  display: flex;
+  min-width: 0;
+  max-width: none;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow: visible;
+}
+
+.admin-materials-table td.row-actions .icon-action {
+  flex: 0 0 auto;
+}
+
+.material-name-cell,
+.material-file-identity,
+.material-file-identity > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.material-file-identity {
+  overflow: hidden;
+}
+
+.material-file-identity > svg {
+  flex: 0 0 auto;
+}
+
+.material-file-identity strong,
+.material-file-identity span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .course-chip {
   max-width: 150px;
 }
