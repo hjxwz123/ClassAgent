@@ -1,11 +1,11 @@
 from sqlalchemy import desc, select
 
+from app.db import session as db_session
 from app.db.models import EmailCode
-from app.db.session import SessionLocal
 
 
 def latest_email_token(email: str, purpose: str) -> str:
-    with SessionLocal() as db:
+    with db_session.SessionLocal() as db:
         record = db.scalars(
             select(EmailCode)
             .where(
