@@ -1704,3 +1704,159 @@ html.theme-dark .teacher-shell .course-switch > button span {
   text-overflow: clip;
   white-space: nowrap;
 }
+
+/* Teacher list layout guard: long titles must shrink, while status/action groups stay horizontal. */
+.teacher-shell,
+.teacher-shell .teacher-main,
+.teacher-shell .teacher-content,
+.teacher-shell .course-home-grid,
+.teacher-shell .course-bottom-grid,
+.teacher-shell .materials-layout,
+.teacher-shell .materials-panel,
+.teacher-shell .material-list,
+.teacher-shell .lesson-card-list,
+.teacher-shell .course-grid,
+.teacher-shell .course-card,
+.teacher-shell .lesson-card,
+.teacher-shell .material-row,
+.teacher-shell .lesson-row {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.teacher-shell,
+.teacher-shell .teacher-main,
+.teacher-shell .teacher-content {
+  overflow-x: clip;
+}
+
+.teacher-shell .materials-layout {
+  grid-template-columns: 240px minmax(0, 1fr);
+  overflow: clip;
+}
+
+.teacher-shell .course-home-grid {
+  grid-template-columns: minmax(0, 45fr) minmax(0, 32fr) minmax(0, 23fr);
+}
+
+.teacher-shell .course-bottom-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.teacher-shell .course-hero {
+  grid-template-columns: 80px minmax(0, 1fr) auto;
+}
+
+.teacher-shell .course-hero > div,
+.teacher-shell .lesson-card > section,
+.teacher-shell .material-row > div,
+.teacher-shell .lesson-body,
+.teacher-shell .lesson-title-line {
+  min-width: 0;
+}
+
+.teacher-shell .course-hero h1,
+.teacher-shell .course-hero p,
+.teacher-shell .course-hero small,
+.teacher-shell .material-row strong,
+.teacher-shell .material-row small,
+.teacher-shell .material-status,
+.teacher-shell .lesson-card-title,
+.teacher-shell .lesson-card p,
+.teacher-shell .lesson-title-line strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.teacher-shell .tag,
+.teacher-shell .lesson-title-line .tag,
+.teacher-shell .lesson-card h2 .tag,
+.teacher-shell .material-row > .tag,
+.teacher-shell .material-status-tile,
+.teacher-shell .material-status-tile span,
+.teacher-shell .course-hero section,
+.teacher-shell .course-hero section .btn,
+.teacher-shell .lesson-open-label {
+  white-space: nowrap;
+}
+
+.teacher-shell .lesson-card {
+  grid-template-columns: 96px minmax(0, 1fr) minmax(0, auto);
+}
+
+.teacher-shell .lesson-card h2 {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.teacher-shell .lesson-card-title {
+  flex: 1 1 auto;
+}
+
+.teacher-shell .lesson-actions,
+.teacher-shell .material-row section,
+.teacher-shell .course-hero section {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.teacher-shell .lesson-actions {
+  max-width: min(460px, 100%);
+  justify-content: flex-end;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.teacher-shell .lesson-actions .app-checkbox {
+  flex: 0 0 auto;
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.teacher-shell .material-row {
+  grid-template-columns: 42px minmax(0, 1fr) auto minmax(0, auto);
+}
+
+.teacher-shell .material-row section {
+  max-width: min(520px, 100%);
+  justify-content: flex-end;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.teacher-shell .material-row section .icon-action,
+.teacher-shell .material-row section a.icon-action {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1100px) {
+  .teacher-shell .course-home-grid,
+  .teacher-shell .course-bottom-grid,
+  .teacher-shell .materials-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-shell .material-filter {
+    grid-template-columns: minmax(0, 1fr) minmax(130px, auto) minmax(130px, auto);
+  }
+}
+
+@media (max-width: 760px) {
+  .teacher-shell .lesson-card,
+  .teacher-shell .material-row,
+  .teacher-shell .course-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-shell .lesson-actions,
+  .teacher-shell .material-row section,
+  .teacher-shell .course-hero section {
+    justify-content: flex-start;
+    max-width: 100%;
+  }
+}

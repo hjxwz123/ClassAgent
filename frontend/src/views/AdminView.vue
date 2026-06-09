@@ -217,13 +217,23 @@
             <input v-model.number="materialFilter.teacher_id" class="input narrow" type="number" placeholder="教师ID" />
             <button class="btn btn-ghost" @click="clearMaterialFilter"><X :size="16" />清除</button><span class="spacer"></span><button class="btn btn-ghost" @click="exportCurrent"><Download :size="16" />导出</button>
           </article>
-          <article class="table-card">
-            <table class="admin-table">
+          <article class="table-card admin-materials-table-card">
+            <table class="admin-table admin-materials-table">
+              <colgroup>
+                <col class="admin-materials-check-col" />
+                <col class="admin-materials-name-col" />
+                <col class="admin-materials-course-col" />
+                <col class="admin-materials-teacher-col" />
+                <col class="admin-materials-type-col" />
+                <col class="admin-materials-date-col" />
+                <col class="admin-materials-status-col" />
+                <col class="admin-materials-actions-col" />
+              </colgroup>
               <thead><tr><th class="check-col"><AppCheckbox :model-value="selectedMaterials.length === materials.length && materials.length > 0" @update:model-value="toggleAllMaterials" /></th><th>文件名</th><th>所属课程</th><th>上传教师</th><th>类型</th><th>上传时间</th><th>状态</th><th>操作</th></tr></thead>
               <tbody>
                 <tr v-for="item in materials" :key="item.id">
                   <td><AppCheckbox :model-value="selectedMaterials.includes(item.id)" @update:model-value="toggleSelect(selectedMaterials, item.id)" /></td>
-                  <td><div class="identity"><component :is="fileIcon(item.material_type)" :size="18" :class="`file-${item.material_type}`" /><div><strong>{{ item.title }}</strong><span>{{ item.size_label || sizeLabel(item.size_bytes) }}</span></div></div></td>
+                  <td class="material-name-cell"><div class="identity material-file-identity"><component :is="fileIcon(item.material_type)" :size="18" :class="`file-${item.material_type}`" /><div><strong :title="item.title">{{ item.title }}</strong><span>{{ item.size_label || sizeLabel(item.size_bytes) }}</span></div></div></td>
                   <td>{{ item.course_name || item.course_id }}</td><td><span class="avatar mini">{{ firstChar(item.teacher_name) }}</span>{{ item.teacher_name || item.uploader_id }}</td>
                   <td><span class="tag">{{ typeText(item.material_type) }}</span></td><td>{{ shortDate(item.created_at) }}</td>
                   <td><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span></td>
