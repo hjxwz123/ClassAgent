@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import RateLimitRule, limit_request
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -25,6 +26,8 @@ from app.services.student import (
 
 
 router = APIRouter()
+COURSE_CODE_RULE = RateLimitRule(limit=30, window_seconds=300)
+UPLOAD_RULE = RateLimitRule(limit=30, window_seconds=300)
 
 
 class PageNoteRequest(BaseModel):
@@ -81,6 +84,7 @@ def course_preview_endpoint(
     db: Annotated[Session, Depends(get_db)],
     course_code: str = Query(min_length=5, max_length=12),
 ):
+    limit_request(request, "course-code-preview", user.id, course_code, rule=COURSE_CODE_RULE)
     return success_response(data=preview_course_by_code(db, course_code=course_code, user=user), request_id=request.state.request_id)
 
 
@@ -151,6 +155,7 @@ def upload_profile_avatar_endpoint(
     db: Annotated[Session, Depends(get_db)],
     file: UploadFile = File(...),
 ):
+    limit_request(request, "student-avatar-upload", user.id, rule=UPLOAD_RULE)
     return success_response(data=upload_student_avatar(db, user=user, upload=file), request_id=request.state.request_id)
 
 

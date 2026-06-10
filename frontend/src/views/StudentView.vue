@@ -1166,7 +1166,7 @@
         </transition>
       </div>
 
-      <MaterialPreviewModal :open="!!materialPreviewItem" :item="materialPreviewItem" :detail="materialPreviewDetail" :loading="materialPreviewLoading" @close="closeMaterialPreview" />
+      <MaterialPreviewModal :open="!!materialPreviewItem" :item="materialPreviewItem" :detail="materialPreviewDetail" :loading="materialPreviewLoading" @download="downloadMaterial" @close="closeMaterialPreview" />
 
       <transition name="modal-pop">
         <div v-if="joinOpen" class="modal-mask student-modal-scope">
@@ -2627,6 +2627,10 @@ async function previewMaterial(item: any) {
     materialPreviewLoading.value = false;
   }
 }
+async function downloadMaterial(item: any) {
+  if (!item?.id) return;
+  await run(() => api.download(`/materials/${item.id}/content`, item.original_filename || item.title || `material-${item.id}`), "已下载");
+}
 
 function hasCourseRouteParam() {
   return route.params.courseId !== undefined;
@@ -3773,9 +3777,7 @@ const MaterialRow = defineComponent({
       h("div", [h("strong", p.item.title || p.item.original_filename || "课程资料"), h("small", `${p.item.material_type || "file"} · ${p.item.size_label || optionText(p.item.size_bytes || 0)}`)]),
       h("div", { class: "material-row-actions" }, [
         h("button", { type: "button", class: "material-row-action primary", onClick: () => previewMaterial(p.item) }, [h(Eye, { size: 14 }), "预览"]),
-        p.item.preview_url
-          ? h("a", { href: p.item.preview_url, target: "_blank", rel: "noreferrer", class: "material-row-action" }, [h(Download, { size: 14 }), "下载"])
-          : h("span", { class: "tag" }, p.item.parse_status || "待处理")
+        h("button", { type: "button", class: "material-row-action", onClick: () => downloadMaterial(p.item) }, [h(Download, { size: 14 }), "下载"])
       ])
     ]);
   }

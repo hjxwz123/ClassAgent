@@ -1,10 +1,10 @@
 from typing import Annotated
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import RateLimitRule, limit_key, limit_request
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -35,17 +35,10 @@ from app.services.auth import (
 router = APIRouter()
 
 
-def _request_frontend_base_url(request: Request) -> str | None:
-    origin = request.headers.get("origin")
-    if origin:
-        return origin
-    referer = request.headers.get("referer")
-    if not referer:
-        return None
-    parsed = urlsplit(referer)
-    if parsed.scheme and parsed.netloc:
-        return f"{parsed.scheme}://{parsed.netloc}"
-    return None
+LOGIN_IP_RULE = RateLimitRule(limit=30, window_seconds=300)
+LOGIN_ACCOUNT_RULE = RateLimitRule(limit=8, window_seconds=300)
+EMAIL_IP_RULE = RateLimitRule(limit=20, window_seconds=3600)
+EMAIL_ACCOUNT_RULE = RateLimitRule(limit=3, window_seconds=3600)
 
 
 @router.post("/register/request")
@@ -55,9 +48,12 @@ def register_request(
     background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
 ):
-    result = create_registration_link(db, payload.email, base_url=_request_frontend_base_url(request))
-    background_tasks.add_task(email_service.send_registration_link_background, to_email=result.email, link=result.link)
-    return success_response(data=result.response.model_dump(), request_id=request.state.request_id)
+    limit_request(request, "auth-register-request-ip", rule=EMAIL_IP_RULE)
+    limit_key("auth-register-request-email", payload.email, rule=EMAIL_ACCOUNT_RULE)
+    response, link = create_registration_link(db, payload.email)
+    if link:
+        background_tasks.add_task(email_service.send_registration_link_background, to_email=payload.email, link=link)
+    return success_response(data=response.model_dump(), message="如账号存在，将发送邮件", request_id=request.state.request_id)
 
 
 @router.post("/link/validate")
@@ -74,6 +70,8 @@ def register(payload: RegisterRequest, request: Request, db: Annotated[Session, 
 
 @router.post("/login")
 def login(payload: LoginRequest, request: Request, db: Annotated[Session, Depends(get_db)]):
+    limit_request(request, "auth-login-ip", rule=LOGIN_IP_RULE)
+    limit_key("auth-login-account", payload.email, rule=LOGIN_ACCOUNT_RULE)
     result = authenticate_user(
         db,
         payload,
@@ -90,9 +88,12 @@ def password_reset_request(
     background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
 ):
-    result = create_password_reset_link(db, payload.email, base_url=_request_frontend_base_url(request))
-    background_tasks.add_task(email_service.send_password_reset_link_background, to_email=result.email, link=result.link)
-    return success_response(data=result.response.model_dump(), request_id=request.state.request_id)
+    limit_request(request, "auth-reset-request-ip", rule=EMAIL_IP_RULE)
+    limit_key("auth-reset-request-email", payload.email, rule=EMAIL_ACCOUNT_RULE)
+    response, link = create_password_reset_link(db, payload.email)
+    if link:
+        background_tasks.add_task(email_service.send_password_reset_link_background, to_email=payload.email, link=link)
+    return success_response(data=response.model_dump(), message="如账号存在，将发送邮件", request_id=request.state.request_id)
 
 
 @router.post("/password/reset/confirm")

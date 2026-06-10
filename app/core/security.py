@@ -38,6 +38,11 @@ def decode_access_token(token: str) -> dict[str, Any]:
         raise ValueError("invalid_token") from exc
 
 
+def hash_token(value: str) -> str:
+    settings = get_settings()
+    return sha256(f"{settings.secret_key}:{value}".encode("utf-8")).hexdigest()
+
+
 def mask_secret(value: str | None) -> str | None:
     if not value:
         return value

@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -309,6 +310,8 @@ def update_user(db: Session, *, user_id: int, status: str | None, role: str | No
     if status is not None:
         if status not in {item.value for item in UserStatus}:
             raise bad_request("用户状态不合法")
+        if status != user.status:
+            user.token_version = int(user.token_version or 0) + 1
         user.status = status
     if role is not None:
         if role not in {item.value for item in UserRole}:
@@ -326,6 +329,7 @@ def reset_user_password(db: Session, *, user_id: int, new_password: str) -> User
     if user is None or user.deleted_at is not None:
         raise not_found("用户不存在")
     user.password_hash = hash_password(new_password)
+    user.token_version = int(user.token_version or 0) + 1
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -337,6 +341,7 @@ def soft_delete_user(db: Session, *, user_id: int) -> None:
     if user is None or user.deleted_at is not None:
         raise not_found("用户不存在")
     user.deleted_at = datetime.now(UTC)
+    user.token_version = int(user.token_version or 0) + 1
     db.add(user)
     db.commit()
 
@@ -1285,11 +1290,48 @@ def _mysql_command_args(url, command: str) -> list[str]:
         args.extend(["-P", str(url.port)])
     if url.username:
         args.extend(["-u", url.username])
-    if url.password:
-        args.append(f"-p{url.password}")
     if url.database:
         args.append(url.database)
     return args
+
+
+def _mysql_defaults_file(url) -> Path | None:
+    if not url.password:
+        return None
+    temp = tempfile.NamedTemporaryFile("w", prefix="mysql_defaults_", suffix=".cnf", dir=BACKUP_DIR, delete=False)
+    path = Path(temp.name)
+    try:
+        temp.write("[client]\n")
+        if url.username:
+            temp.write(f"user={url.username}\n")
+        temp.write(f"password={url.password}\n")
+        if url.host:
+            temp.write(f"host={url.host}\n")
+        if url.port:
+            temp.write(f"port={url.port}\n")
+        temp.close()
+        os.chmod(path, 0o600)
+        return path
+    except Exception:
+        temp.close()
+        path.unlink(missing_ok=True)
+        raise
+
+
+def _mysql_command(url, command: str) -> tuple[list[str], Path | None]:
+    defaults_file = _mysql_defaults_file(url)
+    args = [command]
+    if defaults_file is not None:
+        args.append(f"--defaults-extra-file={defaults_file.as_posix()}")
+    if url.host and defaults_file is None:
+        args.extend(["-h", url.host])
+    if url.port and defaults_file is None:
+        args.extend(["-P", str(url.port)])
+    if url.username and defaults_file is None:
+        args.extend(["-u", url.username])
+    if url.database:
+        args.append(url.database)
+    return args, defaults_file
 
 
 def create_backup(db: Session, *, trigger_user_id: int | None) -> BackupRecord:
@@ -1309,7 +1351,12 @@ def create_backup(db: Session, *, trigger_user_id: int | None) -> BackupRecord:
         else:
             dump_target = temp_root / "database.sql"
             with dump_target.open("wb") as output:
-                subprocess.run(_mysql_command_args(bind_url, "mysqldump"), stdout=output, check=True, timeout=300)
+                command, defaults_file = _mysql_command(bind_url, "mysqldump")
+                try:
+                    subprocess.run(command, stdout=output, check=True, timeout=300)
+                finally:
+                    if defaults_file is not None:
+                        defaults_file.unlink(missing_ok=True)
         (temp_root / "metadata.json").write_text(
             json.dumps(
                 {
@@ -1421,7 +1468,12 @@ def restore_backup(db: Session, *, backup_id: int) -> dict:
                 shutil.copy2(sqlite_backup, _database_path_from_sqlite_url(database_url))
             elif mysql_backup.exists():
                 with mysql_backup.open("rb") as input_file:
-                    subprocess.run(_mysql_command_args(bind_url, "mysql"), stdin=input_file, check=True, timeout=300)
+                    command, defaults_file = _mysql_command(bind_url, "mysql")
+                    try:
+                        subprocess.run(command, stdin=input_file, check=True, timeout=300)
+                    finally:
+                        if defaults_file is not None:
+                            defaults_file.unlink(missing_ok=True)
             else:
                 raise bad_request("备份文件与当前数据库类型不匹配")
             if vector_store.provider == "chroma" and vector_backup.exists():

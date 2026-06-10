@@ -2,16 +2,17 @@ import type { ApiResponse } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
-let token = localStorage.getItem("class_agent_token") || "";
+localStorage.removeItem("class_agent_token");
+let token = sessionStorage.getItem("class_agent_token") || "";
 
 export function setToken(value: string) {
   token = value;
-  localStorage.setItem("class_agent_token", value);
+  sessionStorage.setItem("class_agent_token", value);
 }
 
 export function clearToken() {
   token = "";
-  localStorage.removeItem("class_agent_token");
+  sessionStorage.removeItem("class_agent_token");
 }
 
 function buildUrl(path: string, query?: Record<string, unknown>) {

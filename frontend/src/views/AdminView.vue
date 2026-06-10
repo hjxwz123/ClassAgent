@@ -237,7 +237,7 @@
                   <td>{{ item.course_name || item.course_id }}</td><td><span class="avatar mini">{{ firstChar(item.teacher_name) }}</span>{{ item.teacher_name || item.uploader_id }}</td>
                   <td><span class="tag">{{ typeText(item.material_type) }}</span></td><td>{{ shortDate(item.created_at) }}</td>
                   <td><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span></td>
-                  <td class="row-actions"><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><a v-if="item.preview_url" class="icon-action" :href="item.preview_url" target="_blank"><Download :size="15" />下载</a><button class="icon-action danger" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></td>
+                  <td class="row-actions"><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" @click="downloadMaterial(item)"><Download :size="15" />下载</button><button class="icon-action danger" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></td>
                 </tr>
               </tbody>
             </table>
@@ -618,7 +618,7 @@
       </div>
     </Transition>
 
-    <MaterialPreviewModal :open="!!previewItem" :item="previewItem" :detail="previewDetail" :loading="previewLoading" @close="closeMaterialPreview" />
+    <MaterialPreviewModal :open="!!previewItem" :item="previewItem" :detail="previewDetail" :loading="previewLoading" @download="downloadMaterial" @close="closeMaterialPreview" />
 
     <Transition name="modal-pop">
       <div v-if="logDetail" class="modal-mask">
@@ -1249,6 +1249,10 @@ async function previewMaterial(item: any) {
   } finally {
     previewLoading.value = false;
   }
+}
+async function downloadMaterial(item: any) {
+  if (!item?.id) return;
+  await run(() => api.download(`/materials/${item.id}/content`, item.original_filename || item.title || `material-${item.id}`));
 }
 async function deleteMaterial(id: number) { await run(() => api.delete(`/admin/materials/${id}`), "已删除"); await loadMaterials(); }
 async function batchDeleteMaterials() { for (const id of selectedMaterials.value) await run(() => api.delete(`/admin/materials/${id}`)); selectedMaterials.value = []; await loadMaterials(); }

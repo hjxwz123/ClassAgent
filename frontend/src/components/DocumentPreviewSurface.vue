@@ -335,7 +335,7 @@ async function loadFile() {
 }
 
 function tokenHeaders() {
-  const token = localStorage.getItem("class_agent_token") || "";
+  const token = sessionStorage.getItem("class_agent_token") || "";
   return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 

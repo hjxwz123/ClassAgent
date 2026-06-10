@@ -29,6 +29,9 @@ def get_current_user(
     user = db.get(User, int(payload["sub"]))
     if user is None or user.deleted_at is not None:
         raise unauthorized()
+    token_version = int(payload.get("token_version") or payload.get("ver") or 0)
+    if token_version != int(getattr(user, "token_version", 0) or 0):
+        raise unauthorized()
     if user.status != UserStatus.ACTIVE.value:
         raise unauthorized("账号已被禁用")
     user.last_seen_at = datetime.now(UTC)

@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import katex from "katex";
+import DOMPurify, { type Config } from "dompurify";
 import "katex/dist/katex.min.css";
 
 const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
@@ -14,6 +15,17 @@ const textPayloadKeys = [
   "content",
   "text"
 ] as const;
+
+const sanitizerConfig: Config = {
+  USE_PROFILES: { html: true },
+  ADD_TAGS: ["math", "semantics", "annotation", "mrow", "mi", "mn", "mo", "msup", "msub", "mfrac", "msqrt", "mtable", "mtr", "mtd"],
+  ADD_ATTR: ["class", "target", "rel", "aria-label", "data-markdown-copy-code", "xmlns", "encoding"],
+  ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))/i,
+};
+
+function sanitizeHtml(value: string) {
+  return DOMPurify.sanitize(value, sanitizerConfig);
+}
 
 function codeLanguageLabel(info: string) {
   const language = info.trim().split(/\s+/)[0]?.replace(codeLanguagePattern, "").slice(0, 32);
@@ -184,5 +196,5 @@ export function renderRichText(value?: unknown) {
   const delimitedRendered = renderDelimitedMath(extracted);
   const inferredMath = wrapInlineBareLatex(wrapBareLatexBlocks(delimitedRendered));
   const textWithDelimitedMath = renderDelimitedMath(inferredMath);
-  return markdownRenderer.render(textWithDelimitedMath).replace(/@@MATH_(\d+)@@/g, (_match, index: string) => mathParts[Number(index)] || "");
+  return sanitizeHtml(markdownRenderer.render(textWithDelimitedMath).replace(/@@MATH_(\d+)@@/g, (_match, index: string) => mathParts[Number(index)] || ""));
 }

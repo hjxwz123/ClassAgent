@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.core.errors import not_found
+from app.core.rate_limit import RateLimitRule, limit_request
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -29,6 +30,8 @@ from app.services.storage import storage_service
 
 
 router = APIRouter()
+MATERIAL_UPLOAD_RULE = RateLimitRule(limit=20, window_seconds=300)
+MATERIAL_PROCESS_RULE = RateLimitRule(limit=20, window_seconds=300)
 
 
 def serialize_material(material) -> dict:
@@ -78,6 +81,7 @@ def upload_material_endpoint(
     user: Annotated[User, Depends(get_current_user)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
+    limit_request(request, "material-upload", user.id, course_id, rule=MATERIAL_UPLOAD_RULE)
     material = create_material(
         db,
         user=user,
@@ -169,6 +173,7 @@ def reprocess_material_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "material-reprocess", user.id, material_id, rule=MATERIAL_PROCESS_RULE)
     material = reprocess_material(db, material_id=material_id, user=user)
     return success_response(data=serialize_material(material), request_id=request.state.request_id)
 

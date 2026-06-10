@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 
 from app.api.router import api_router
-from app.core.config import GENERATED_DIR, STORAGE_DIR, UPLOAD_DIR, VECTOR_DIR, get_settings, validate_production_settings
+from app.core.config import GENERATED_DIR, PUBLIC_DIR, STORAGE_DIR, UPLOAD_DIR, VECTOR_DIR, get_settings, validate_production_settings
 from app.core.security import decode_access_token
 from app.db.models import SystemErrorLog
 from app.db import session as db_session
@@ -22,7 +22,7 @@ from app.services.request_logging import request_log_writer
 async def lifespan(_: FastAPI):
     validate_production_settings()
     db_session.init_db()
-    for directory in (STORAGE_DIR, UPLOAD_DIR, GENERATED_DIR, VECTOR_DIR):
+    for directory in (STORAGE_DIR, UPLOAD_DIR, PUBLIC_DIR, GENERATED_DIR, VECTOR_DIR):
         directory.mkdir(parents=True, exist_ok=True)
     settings = get_settings()
     requeue_material_ids: list[int] = []
@@ -50,11 +50,22 @@ async def lifespan(_: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+    PUBLIC_DIR.mkdir(parents=True, exist_ok=True)
+    app = FastAPI(
+        title=settings.app_name,
+        version="0.1.0",
+        lifespan=lifespan,
+        docs_url="/docs" if settings.openapi_enabled else None,
+        redoc_url="/redoc" if settings.openapi_enabled else None,
+        openapi_url="/openapi.json" if settings.openapi_enabled else None,
+    )
+    allow_origins = settings.cors_origin_list
+    if settings.app_env != "production" and not allow_origins:
+        allow_origins = ["*"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=allow_origins,
+        allow_credentials=settings.cors_allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -68,6 +79,25 @@ def create_app() -> FastAPI:
         duration = perf_counter() - start
         response.headers["X-Request-Id"] = request_id
         response.headers["X-Process-Time"] = f"{duration:.4f}"
+        if settings.security_headers_enabled:
+            response.headers.setdefault("X-Content-Type-Options", "nosniff")
+            response.headers.setdefault("X-Frame-Options", "DENY")
+            response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+            response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+            response.headers.setdefault(
+                "Content-Security-Policy",
+                "default-src 'self'; "
+                "base-uri 'self'; "
+                "frame-ancestors 'none'; "
+                "object-src 'none'; "
+                "img-src 'self' data: blob: https:; "
+                "media-src 'self' blob: https:; "
+                "connect-src 'self' https:; "
+                "style-src 'self' 'unsafe-inline'; "
+                "script-src 'self'",
+            )
+            if settings.app_env == "production":
+                response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         if request.url.path.startswith(settings.api_v1_prefix):
             user_id = None
             auth_header = request.headers.get("Authorization")
@@ -150,7 +180,7 @@ def create_app() -> FastAPI:
         )
 
     app.include_router(api_router, prefix=settings.api_v1_prefix)
-    app.mount("/static", StaticFiles(directory=STORAGE_DIR), name="static")
+    app.mount("/static", StaticFiles(directory=PUBLIC_DIR), name="static")
     frontend_dist = Path(__file__).resolve().parents[1] / "frontend" / "dist"
     frontend_assets = frontend_dist / "assets"
     if frontend_dist.exists():

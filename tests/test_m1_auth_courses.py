@@ -1,3 +1,6 @@
+from app.db import session as db_session
+from app.db.models import EmailCode
+from app.services.email import email_service
 from tests.auth_helpers import latest_email_token, request_registration_token
 
 
@@ -103,6 +106,8 @@ def test_auth_and_course_management_flow(client):
         headers=student_headers,
     )
     assert change_password_response.status_code == 200
+    old_token_response = client.get("/api/v1/auth/me", headers=student_headers)
+    assert old_token_response.status_code == 401
 
     reset_request_response = client.post(
         "/api/v1/auth/password/reset/request",
@@ -140,6 +145,66 @@ def test_public_register_rejects_teacher_role(client):
     )
     assert response.status_code == 400
     assert response.json()["message"] == "当前角色不允许自助注册"
+
+
+def test_auth_link_requests_are_generic_and_do_not_trust_origin(client, monkeypatch):
+    sent_links: list[str] = []
+    monkeypatch.setattr(email_service, "send_registration_link_background", lambda to_email, link: sent_links.append(link))
+
+    response = client.post(
+        "/api/v1/auth/register/request",
+        json={"email": "new-link@example.com"},
+        headers={"Origin": "https://evil.example"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["message"] == "如账号存在，将发送邮件"
+    assert sent_links
+    assert sent_links[0].startswith("http://127.0.0.1:8000/auth?")
+    assert "evil.example" not in sent_links[0]
+
+    token = sent_links[0].split("token=", 1)[1].split("&", 1)[0]
+    with db_session.SessionLocal() as db:
+        stored = db.query(EmailCode).filter(EmailCode.email == "new-link@example.com").order_by(EmailCode.id.desc()).first()
+        assert stored is not None
+        assert stored.code != token
+        assert len(stored.code) == 64
+
+    registered_user = register_user(
+        client,
+        email="already-registered@example.com",
+        password="Student123",
+        nickname="已注册学生",
+        role="student",
+        student_no="S-REGISTERED",
+    )
+    assert registered_user["email"] == "already-registered@example.com"
+    sent_links.clear()
+    existing_response = client.post("/api/v1/auth/register/request", json={"email": "already-registered@example.com"})
+    missing_reset_response = client.post("/api/v1/auth/password/reset/request", json={"email": "missing-user@example.com"})
+    assert existing_response.status_code == 200, existing_response.text
+    assert missing_reset_response.status_code == 200, missing_reset_response.text
+    assert existing_response.json()["message"] == "如账号存在，将发送邮件"
+    assert missing_reset_response.json()["message"] == "如账号存在，将发送邮件"
+    assert sent_links == []
+
+
+def test_auth_account_rate_limit_is_independent_of_client_ip(client):
+    for index in range(8):
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": "limited@example.com", "password": "WrongPass123"},
+            headers={"X-Forwarded-For": f"203.0.113.{index}"},
+        )
+        assert response.status_code == 401, response.text
+
+    limited_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "limited@example.com", "password": "WrongPass123"},
+        headers={"X-Forwarded-For": "198.51.100.10"},
+    )
+    assert limited_response.status_code == 429, limited_response.text
 
 
 def test_teacher_can_toggle_course_and_inactive_course_rules(client):
@@ -217,6 +282,34 @@ def test_teacher_can_toggle_course_and_inactive_course_rules(client):
 
     joined_after_activate = client.post("/api/v1/courses/join", json={"course_code": course["course_code"]}, headers=new_student_headers)
     assert joined_after_activate.status_code == 200, joined_after_activate.text
+
+
+def test_course_cover_upload_rejects_fake_image_content(client):
+    register_user(
+        client,
+        email="cover-teacher@example.com",
+        password="Teacher123",
+        nickname="封面教师",
+        role="teacher",
+        employee_no="T-COVER",
+    )
+    teacher_headers = auth_headers(login_user(client, email="cover-teacher@example.com", password="Teacher123")["access_token"])
+    course_response = client.post(
+        "/api/v1/courses",
+        json={"name": "上传校验", "description": "封面校验", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_response.status_code == 200, course_response.text
+    course = course_response.json()["data"]
+
+    response = client.post(
+        f"/api/v1/courses/{course['id']}/cover",
+        files={"file": ("cover.png", b"<svg><script>alert(1)</script></svg>", "image/png")},
+        headers=teacher_headers,
+    )
+
+    assert response.status_code == 400
+    assert "内容与扩展名不匹配" in response.json()["message"]
 
 
 def test_login_error_messages_are_generic(client):

@@ -47,6 +47,7 @@ class User(TimestampMixin, SoftDeleteMixin, Base):
     bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    token_version: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class UserPreference(TimestampMixin, Base):
@@ -69,6 +70,7 @@ class EmailCode(TimestampMixin, Base):
     code: Mapped[str] = mapped_column(String(128), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Course(TimestampMixin, SoftDeleteMixin, Base):

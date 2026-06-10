@@ -18,7 +18,7 @@
               <button v-if="hasFilePreview" type="button" :class="{ active: mode === 'file' }" @click="mode = 'file'">原文件</button>
             </div>
             <div class="material-preview-actions">
-              <a v-if="material.preview_url" class="material-preview-action secondary" :href="material.preview_url" target="_blank" rel="noreferrer"><Download :size="16" />下载</a>
+              <button v-if="material.id" type="button" class="material-preview-action secondary" @click="$emit('download', material)"><Download :size="16" />下载</button>
               <button type="button" class="material-preview-action primary" @click="$emit('close')"><X :size="16" />关闭</button>
             </div>
           </div>
@@ -64,7 +64,7 @@ const props = defineProps<{
   loading?: boolean;
 }>();
 
-defineEmits<{ close: [] }>();
+defineEmits<{ close: []; download: [material: PreviewMaterialLike] }>();
 
 const mode = ref<"parsed" | "file">("parsed");
 const material = computed<PreviewMaterialLike | null>(() => props.detail?.material || props.item || null);

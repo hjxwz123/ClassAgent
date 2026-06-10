@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import RateLimitRule, limit_request
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -15,6 +16,8 @@ from app.services.qa import ask_question, ask_question_stream, list_conversation
 
 
 router = APIRouter()
+QA_ASK_RULE = RateLimitRule(limit=60, window_seconds=300)
+QA_UPLOAD_RULE = RateLimitRule(limit=30, window_seconds=300)
 
 
 def _sse(event: str, data) -> str:
@@ -28,6 +31,7 @@ def ask_question_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "qa-ask", user.id, payload.course_id, rule=QA_ASK_RULE)
     record = ask_question(db, user=user, payload=payload)
     response = QAResponse(
         conversation_id=record.conversation_id,
@@ -49,6 +53,7 @@ def ask_question_stream_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "qa-ask-stream", user.id, payload.course_id, rule=QA_ASK_RULE)
     def event_stream():
         yield _sse("ready", {"request_id": request.state.request_id})
         try:
@@ -72,6 +77,7 @@ def upload_qa_image_endpoint(
     user: Annotated[User, Depends(get_current_user)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
+    limit_request(request, "qa-image-upload", user.id, course_id, rule=QA_UPLOAD_RULE)
     attachment = upload_qa_image(db, user=user, course_id=course_id, upload=file)
     return success_response(data=attachment, request_id=request.state.request_id)
 
