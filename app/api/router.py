@@ -4,6 +4,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.classroom import router as classroom_router
 from app.api.routes.learning import router as learning_router
+from app.api.routes.media import router as media_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.courses import router as courses_router
 from app.api.routes.health import router as health_router
@@ -23,6 +24,7 @@ api_router.include_router(classroom_router, prefix="/lessons", tags=["classroom"
 api_router.include_router(qa_router, prefix="/qa", tags=["qa"])
 api_router.include_router(tutoring_router, prefix="/tutoring", tags=["tutoring"])
 api_router.include_router(learning_router, prefix="/learning", tags=["learning"])
+api_router.include_router(media_router, prefix="/media", tags=["media"])
 api_router.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(admin_router, prefix="/admin", tags=["admin"])
 api_router.include_router(teacher_router, prefix="/teacher", tags=["teacher"])

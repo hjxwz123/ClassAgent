@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import ProblemSourceType, UserRole
 from app.core.errors import forbidden, not_found
+from app.core.media import signed_media_url
+from app.core.upload_validation import validate_image_upload
 from app.db.models import Course, CourseMembership, KnowledgeChunk, ProblemGuidance, ProblemRecord, User
 from app.schemas.tutoring import ProblemTextRequest
 from app.services.ai import ai_service
@@ -130,13 +132,19 @@ def create_text_problem(db: Session, *, user: User, payload: ProblemTextRequest)
 
 def create_image_problem(db: Session, *, user: User, course_id: int, upload: UploadFile) -> ProblemRecord:
     _assert_student_course_access(db, course_id=course_id, user=user)
-    relative_path, _ = storage_service.save_upload(upload, folder=f"problem_images/course_{course_id}", db=db)
+    validated = validate_image_upload(upload, max_bytes=10 * 1024 * 1024, label="题目图片")
+    relative_path, _ = storage_service.save_upload_bytes(
+        validated.content,
+        folder=f"problem_images/course_{course_id}/user_{user.id}",
+        suffix=validated.suffix,
+        db=db,
+    )
     ocr_text = ocr_service.recognize(upload, db=db)
     problem = ProblemRecord(
         course_id=course_id,
         user_id=user.id,
         source_type=ProblemSourceType.IMAGE.value,
-        image_path=storage_service.public_url(relative_path, db=db),
+        image_path=signed_media_url(relative_path),
         ocr_text=ocr_text,
     )
     db.add(problem)

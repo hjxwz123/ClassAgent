@@ -22,6 +22,7 @@ from app.core.enums import (
     UserRole,
 )
 from app.core.errors import bad_request, forbidden, not_found
+from app.core.upload_validation import validate_material_upload
 from app.db.models import AsyncTaskLog, Chapter, CourseMaterial, KnowledgeChunk, Lesson, LessonPage, PageNote, PedagogyArtifact, QARecord, User
 from app.services.ai import ai_service
 from app.services.audit import log_operation
@@ -390,11 +391,13 @@ def create_material(
     settings = get_settings()
     _validate_material_payload(course_id, category, chapter_id, user, db)
     material_type = _detect_material_type(upload.filename or "")
-    storage_path, size_bytes = storage_service.save_upload(upload, folder=f"course_{course_id}", db=db)
-    if size_bytes > settings.default_upload_limit_mb * 1024 * 1024:
-        absolute_path = storage_service.absolute_path(storage_path)
-        absolute_path.unlink(missing_ok=True)
-        raise bad_request(f"文件大小不能超过 {settings.default_upload_limit_mb}MB")
+    validated = validate_material_upload(upload, max_bytes=settings.default_upload_limit_mb * 1024 * 1024)
+    storage_path, size_bytes = storage_service.save_upload_bytes(
+        validated.content,
+        folder=f"course_{course_id}",
+        suffix=validated.suffix,
+        db=db,
+    )
     material = CourseMaterial(
         course_id=course_id,
         chapter_id=chapter_id,
@@ -405,7 +408,7 @@ def create_material(
         size_bytes=size_bytes,
         original_filename=upload.filename or "unknown",
         storage_path=storage_path,
-        preview_url=storage_service.public_url(storage_path, db=db),
+        preview_url=None,
         parse_status=ProcessStatus.PENDING.value,
         vector_status=ProcessStatus.PENDING.value,
     )
@@ -517,7 +520,10 @@ def update_material(
             source_meta["chapter_id"] = material.chapter_id
             chunk.source_meta = source_meta
             db.add(chunk)
-        vector_store.upsert_chunks(db, chunks=chunks)
+        try:
+            vector_store.upsert_chunks(db, chunks=chunks)
+        except Exception:
+            material.vector_status = ProcessStatus.FAILED.value
     if metadata_changed and artifacts:
         for artifact in artifacts:
             artifact.chapter_id = material.chapter_id

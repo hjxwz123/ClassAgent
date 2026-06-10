@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import CourseStatus, UserRole
 from app.core.errors import bad_request, forbidden, not_found
+from app.core.upload_validation import validate_image_upload
 from app.db.models import Chapter, Course, CourseMembership, User
 from app.schemas.course import ChapterCreateRequest, CourseCreateRequest, CourseUpdateRequest
 from app.services.audit import log_operation
@@ -120,13 +121,14 @@ def update_course(db: Session, user: User, course_id: int, payload: CourseUpdate
 def upload_course_cover(db: Session, user: User, course_id: int, upload: UploadFile) -> Course:
     course = _get_course_or_404(db, course_id)
     _assert_course_owner(course, user, require_active=True)
-    suffix = (upload.filename or "").rsplit(".", 1)[-1].lower() if "." in (upload.filename or "") else ""
-    content_type = (upload.content_type or "").lower()
-    if not content_type.startswith("image/") and suffix not in {"jpg", "jpeg", "png", "webp", "gif"}:
-        raise bad_request("课程封面仅支持图片文件")
-    storage_path, size_bytes = storage_service.save_upload(upload, folder=f"course_covers/course_{course_id}", db=db)
-    if size_bytes > 8 * 1024 * 1024:
-        raise bad_request("课程封面不能超过 8MB")
+    validated = validate_image_upload(upload, max_bytes=8 * 1024 * 1024, label="课程封面")
+    storage_path, size_bytes = storage_service.save_upload_bytes(
+        validated.content,
+        folder=f"course_covers/course_{course_id}",
+        suffix=validated.suffix,
+        db=db,
+        public=True,
+    )
     course.cover_url = storage_service.public_url(storage_path, db=db)
     db.add(course)
     log_operation(

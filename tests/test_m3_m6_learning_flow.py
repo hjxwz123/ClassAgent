@@ -27,6 +27,13 @@ from app.services.pedagogy import ensure_lesson_pedagogy_artifacts, page_activit
 from tests.auth_helpers import request_registration_token
 
 
+PNG_BYTES = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\rIDATx\x9cc\xf8\xcf\xc0"
+    b"\xf0\x1f\x00\x05\x05\x02\x00\x1e^\x99\xed\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
 def fake_quiz_questions(*, topic, source_text, count, db=None):
     items = [
         {
@@ -265,7 +272,7 @@ def test_lesson_detail_includes_material_for_original_preview(client):
     assert detail["lesson"]["id"] == lesson_id
     assert detail["material"]["id"] == detail["lesson"]["material_id"]
     assert detail["material"]["material_type"] == "pptx"
-    assert detail["material"]["preview_url"].startswith("/static/")
+    assert detail["material"]["preview_url"] is None
     assert len(detail["pages"]) >= 1
 
 
@@ -1859,7 +1866,7 @@ def test_qa_image_attachment_uploads_and_participates_in_stream_answer(client, m
     upload_resp = client.post(
         "/api/v1/qa/attachments/image",
         data={"course_id": str(course["id"])},
-        files={"file": ("matrix.png", b"fake-image", "image/png")},
+        files={"file": ("matrix.png", PNG_BYTES, "image/png")},
         headers=student_headers,
     )
     assert upload_resp.status_code == 200, upload_resp.text

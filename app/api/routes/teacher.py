@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import RateLimitRule, limit_request
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -38,6 +39,7 @@ from app.services.teacher import (
 
 
 router = APIRouter()
+UPLOAD_RULE = RateLimitRule(limit=30, window_seconds=300)
 
 
 class ChapterUpdateRequest(BaseModel):
@@ -131,6 +133,7 @@ def upload_profile_avatar_endpoint(
     db: Annotated[Session, Depends(get_db)],
     file: UploadFile = File(...),
 ):
+    limit_request(request, "teacher-avatar-upload", user.id, rule=UPLOAD_RULE)
     data = upload_teacher_avatar(db, user=user, upload=file)
     return success_response(data=data, request_id=request.state.request_id)
 

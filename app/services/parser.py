@@ -5,9 +5,11 @@ import base64
 import binascii
 import hashlib
 import html
+import ipaddress
 import json
 import mimetypes
 import re
+import socket
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -20,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.enums import MaterialType
 from app.core.errors import bad_request
+from app.core.media import signed_media_url
 from app.services.runtime_config import get_enabled_service_config
 from app.services.storage import storage_service
 
@@ -38,8 +41,10 @@ MARKDOWN_IMAGE_URL_PATTERN = re.compile(
 HTML_IMAGE_URL_PATTERN = re.compile(r"""<img\b[^>]*\bsrc=["'](?P<src>[^"']+)["'][^>]*>""", re.IGNORECASE)
 DATA_IMAGE_PATTERN = re.compile(r"^data:(?P<mime>image/[a-z0-9.+-]+);base64,(?P<data>.+)$", re.IGNORECASE | re.DOTALL)
 MAX_MARKDOWN_IMAGE_BYTES = 15 * 1024 * 1024
+MAX_MARKDOWN_RESULT_BYTES = 20 * 1024 * 1024
 SIGNED_IMAGE_QUERY_KEYS = {"Expires", "OSSAccessKeyId", "Signature", "security-token", "x-oss-security-token"}
 IMAGE_FILENAME_ALT_PATTERN = re.compile(r"^[A-Fa-f0-9_-]{12,}\.(?:png|jpe?g|gif|webp|bmp|svg)$", re.IGNORECASE)
+MAX_MARKDOWN_IMAGE_REDIRECTS = 3
 
 
 def _normalize_page(title: str | None, content: str, page_number: int) -> dict:
@@ -271,6 +276,46 @@ def _pages_from_markdown(content: str) -> list[dict]:
     return pages
 
 
+def _parse_local_fallback(path: Path, material_type: str) -> list[dict]:
+    if material_type == MaterialType.TXT.value:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        chunks = [chunk.strip() for chunk in re.split(r"\n\s*\n+", text) if chunk.strip()]
+        if len(chunks) > 1:
+            return [_normalize_page(_markdown_title(chunk, f"第{index}页"), chunk, index) for index, chunk in enumerate(chunks, start=1)]
+        return _pages_from_markdown(text)
+    if material_type == MaterialType.PPTX.value:
+        try:
+            from pptx import Presentation
+        except ImportError as exc:
+            raise bad_request("缺少 python-pptx 依赖，无法本地解析 PPTX") from exc
+        presentation = Presentation(path)
+        pages: list[dict] = []
+        for index, slide in enumerate(presentation.slides, start=1):
+            pieces = [shape.text.strip() for shape in slide.shapes if hasattr(shape, "text") and shape.text.strip()]
+            pages.append(_normalize_page(pieces[0] if pieces else f"第{index}页", "\n\n".join(pieces), index))
+        return pages
+    if material_type == MaterialType.DOCX.value:
+        try:
+            from docx import Document
+        except ImportError as exc:
+            raise bad_request("缺少 python-docx 依赖，无法本地解析 DOCX") from exc
+        document = Document(path)
+        text = "\n\n".join(paragraph.text for paragraph in document.paragraphs if paragraph.text.strip())
+        return _pages_from_markdown(text)
+    if material_type == MaterialType.PDF.value:
+        try:
+            import fitz
+        except ImportError as exc:
+            raise bad_request("缺少 pymupdf 依赖，无法本地解析 PDF") from exc
+        pages = []
+        with fitz.open(path) as document:
+            for index, page in enumerate(document, start=1):
+                text = page.get_text("text").strip()
+                pages.append(_normalize_page(f"第{index}页", text, index))
+        return pages
+    return []
+
+
 def _markdown_image_urls(content: str) -> list[str]:
     urls: list[str] = []
     seen: set[str] = set()
@@ -291,7 +336,48 @@ def _is_remote_url(value: str) -> bool:
         parsed = urlsplit(html.unescape(value))
     except ValueError:
         return False
-    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc) and _url_host_allowed(value)
+
+
+def _ip_allowed(ip: ipaddress._BaseAddress) -> bool:
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _url_host_allowed(value: str) -> bool:
+    try:
+        parsed = urlsplit(html.unescape(value))
+    except ValueError:
+        return False
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+    try:
+        direct_ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        direct_ip = None
+    if direct_ip is not None:
+        return _ip_allowed(direct_ip)
+    try:
+        infos = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        return False
+    addresses = {item[4][0] for item in infos}
+    if not addresses:
+        return False
+    for address in addresses:
+        try:
+            if not _ip_allowed(ipaddress.ip_address(address)):
+                return False
+        except ValueError:
+            return False
+    return True
 
 
 def _is_temporary_docmind_url(value: str) -> bool:
@@ -319,20 +405,32 @@ def _local_docmind_image_url(value: str) -> str | None:
     relative_path = path[path.index(marker) :]
     if not relative_path:
         return None
-    if not storage_service.absolute_path(relative_path).is_file():
+    if not storage_service.absolute_path(relative_path).is_file() and not storage_service.absolute_path(f"public/{relative_path}").is_file():
         return None
-    return storage_service.normalize_public_url(storage_service.local_public_url(relative_path))
+    return signed_media_url(relative_path)
 
 
 def _image_suffix(url: str, content_type: str | None) -> str:
     suffix = Path(urlsplit(url).path).suffix.lower()
-    if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}:
+    if suffix in {".png", ".jpg", ".jpeg", ".webp"}:
         return suffix
     mime = str(content_type or "").split(";", 1)[0].strip().lower()
     guessed = mimetypes.guess_extension(mime) if mime else None
     if guessed == ".jpe":
         return ".jpg"
-    return guessed if guessed in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"} else ".png"
+    return guessed if guessed in {".png", ".jpg", ".jpeg", ".webp"} else ".png"
+
+
+def _image_content_matches(content: bytes, suffix: str, mime: str | None = None) -> bool:
+    normalized_suffix = ".jpg" if suffix == ".jpeg" else suffix
+    normalized_mime = (mime or "").split(";", 1)[0].strip().lower()
+    if normalized_suffix == ".png" or normalized_mime == "image/png":
+        return content.startswith(b"\x89PNG\r\n\x1a\n")
+    if normalized_suffix == ".jpg" or normalized_mime == "image/jpeg":
+        return content.startswith(b"\xff\xd8\xff")
+    if normalized_suffix == ".webp" or normalized_mime == "image/webp":
+        return len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP"
+    return False
 
 
 def _persist_data_image(url: str, *, db: Session | None, cache: dict[str, str | None]) -> str | None:
@@ -351,15 +449,17 @@ def _persist_data_image(url: str, *, db: Session | None, cache: dict[str, str | 
         return None
     digest = hashlib.sha256(content).hexdigest()
     suffix = _image_suffix(f"image.{match.group('mime').split('/', 1)[1]}", match.group("mime"))
+    if not _image_content_matches(content, suffix, match.group("mime")):
+        return None
     relative_path = storage_service.save_bytes(
         content,
         folder=f"docmind_images/{digest[:2]}",
         filename=f"{digest}{suffix}",
         db=db,
     )
-    public_url = storage_service.public_url(relative_path, db=db)
-    cache[data_url] = public_url
-    return public_url
+    media_url = signed_media_url(relative_path)
+    cache[data_url] = media_url
+    return media_url
 
 
 def _persist_markdown_image(
@@ -377,33 +477,61 @@ def _persist_markdown_image(
     cache[download_url] = None
     if not _is_remote_url(download_url):
         return None
+    current_url = download_url
+    response: httpx.Response | None = None
     try:
-        response = client.get(download_url)
-        response.raise_for_status()
+        for _ in range(MAX_MARKDOWN_IMAGE_REDIRECTS + 1):
+            if not _is_remote_url(current_url):
+                return None
+            response = client.get(current_url)
+            if bool(getattr(response, "is_redirect", False)):
+                location = response.headers.get("location")
+                if not location:
+                    return None
+                response_url = getattr(response, "url", current_url)
+                current_url = str(httpx.URL(str(response_url)).join(location))
+                continue
+            response.raise_for_status()
+            break
+        else:
+            return None
     except httpx.HTTPError:
         return None
+    if response is None:
+        return None
     content_type = response.headers.get("content-type", "")
-    content = response.content
+    content = b""
+    if hasattr(response, "iter_bytes"):
+        for chunk in response.iter_bytes(chunk_size=64 * 1024):
+            content += chunk
+            if len(content) > MAX_MARKDOWN_IMAGE_BYTES:
+                return None
+    else:
+        content = getattr(response, "content", b"")
     if not content or len(content) > MAX_MARKDOWN_IMAGE_BYTES:
         return None
     mime = content_type.split(";", 1)[0].strip().lower()
     if not mime.startswith("image/"):
-        suffix = Path(urlsplit(download_url).path).suffix.lower()
+        suffix = Path(urlsplit(current_url).path).suffix.lower()
         if mime and mime not in {"application/octet-stream", "binary/octet-stream"}:
             return None
-        if suffix not in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}:
+        if suffix not in {".png", ".jpg", ".jpeg", ".webp"}:
             return None
+    elif mime not in {"image/png", "image/jpeg", "image/webp"}:
+        return None
     digest = hashlib.sha256(download_url.encode("utf-8")).hexdigest()
-    suffix = _image_suffix(download_url, content_type)
+    suffix = _image_suffix(current_url, content_type)
+    if not _image_content_matches(content, suffix, content_type):
+        return None
     relative_path = storage_service.save_bytes(
         content,
         folder=f"docmind_images/{digest[:2]}",
         filename=f"{digest}{suffix}",
         db=db,
     )
-    public_url = storage_service.public_url(relative_path, db=db)
-    cache[download_url] = public_url
-    return public_url
+    media_url = signed_media_url(relative_path)
+    cache[download_url] = media_url
+    return media_url
 
 
 def _same_image_url(left: str | None, right: str) -> bool:
@@ -469,7 +597,7 @@ def _localize_markdown_images(content: str, db: Session | None, cache: dict[str,
     rewritten = content
     with httpx.Client(
         timeout=httpx.Timeout(20.0, connect=8.0),
-        follow_redirects=True,
+        follow_redirects=False,
         headers={"User-Agent": "class-agent-doc-parser/1.0"},
     ) as client:
         for raw_url in urls:
@@ -708,19 +836,46 @@ class DocParserService:
 
     def _download_markdown_result(self, status: dict) -> str:
         url = self._markdown_result_url(status)
-        if not url:
+        if not url or not _is_remote_url(url):
             return ""
+        current_url = url
+        response: httpx.Response | None = None
         try:
             with httpx.Client(
                 timeout=httpx.Timeout(60.0, connect=10.0),
-                follow_redirects=True,
+                follow_redirects=False,
                 headers={"User-Agent": "class-agent-doc-parser/1.0"},
             ) as client:
-                response = client.get(url)
-                response.raise_for_status()
+                for _ in range(MAX_MARKDOWN_IMAGE_REDIRECTS + 1):
+                    if not _is_remote_url(current_url):
+                        return ""
+                    response = client.get(current_url)
+                    if bool(getattr(response, "is_redirect", False)):
+                        location = response.headers.get("location")
+                        if not location:
+                            return ""
+                        response_url = getattr(response, "url", current_url)
+                        current_url = str(httpx.URL(str(response_url)).join(location))
+                        continue
+                    response.raise_for_status()
+                    break
+                else:
+                    return ""
         except httpx.HTTPError:
             return ""
-        return response.text.strip()
+        if response is None:
+            return ""
+        content = b""
+        if hasattr(response, "iter_bytes"):
+            for chunk in response.iter_bytes(chunk_size=64 * 1024):
+                content += chunk
+                if len(content) > MAX_MARKDOWN_RESULT_BYTES:
+                    return ""
+        else:
+            content = getattr(response, "content", b"")
+        if not content or len(content) > MAX_MARKDOWN_RESULT_BYTES:
+            return ""
+        return content.decode(response.encoding or "utf-8", errors="ignore").strip()
 
     def _pages_from_successful_task(self, task_id: str, config: dict, status: dict, db: Session | None) -> list[dict]:
         pages = self._pages_from_layouts(self._collect_layouts(task_id, config))
@@ -772,6 +927,8 @@ class DocParserService:
             raise bad_request("暂不支持该资料类型解析")
         service = get_enabled_service_config(db, SERVICE_TYPE)
         if service is None:
+            if self.settings.app_env != "production":
+                return _parse_local_fallback(path, material_type)
             raise bad_request("文档解析服务未配置，请先在管理员后台配置阿里云文档解析服务")
         if service.provider != "aliyun":
             raise bad_request(f"暂不支持的文档解析服务提供方: {service.provider}")

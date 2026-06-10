@@ -13,7 +13,7 @@ export const useSessionStore = defineStore("session", {
   actions: {
     async bootstrap() {
       if (this.initialized) return;
-      if (!localStorage.getItem("class_agent_token")) {
+      if (!sessionStorage.getItem("class_agent_token")) {
         this.initialized = true;
         return;
       }
