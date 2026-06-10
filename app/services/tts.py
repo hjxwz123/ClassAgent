@@ -241,6 +241,7 @@ class TTSService:
             folder="generated/audio",
             filename=f"{uuid4().hex}.{audio_format}",
             db=db,
+            public=True,
         )
         duration = self._duration_from_wav(content, text) if audio_format == "wav" else self._estimate_duration(text)
         return storage_service.public_url(relative_path, db=db), duration

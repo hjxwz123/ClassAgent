@@ -273,7 +273,9 @@ def test_teacher_analytics_and_admin_operations(client, monkeypatch):
         headers=admin_headers,
     )
     assert reset_teacher_pwd_resp.status_code == 200, reset_teacher_pwd_resp.text
-    assert login_user(client, email="teacher4@example.com", password="Teacher999")["user"]["id"] == target_teacher["id"]
+    refreshed_teacher_login = login_user(client, email="teacher4@example.com", password="Teacher999")
+    assert refreshed_teacher_login["user"]["id"] == target_teacher["id"]
+    teacher_headers = auth_headers(refreshed_teacher_login["access_token"])
 
     courses_resp = client.get("/api/v1/admin/courses", headers=admin_headers)
     assert courses_resp.status_code == 200, courses_resp.text

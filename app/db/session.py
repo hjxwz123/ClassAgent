@@ -5,11 +5,11 @@ from sqlalchemy.engine import Engine
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import BACKUP_DIR, GENERATED_DIR, RUNTIME_DIR, STORAGE_DIR, UPLOAD_DIR, VECTOR_DIR, get_settings
+from app.core.config import BACKUP_DIR, GENERATED_DIR, PUBLIC_DIR, RUNTIME_DIR, STORAGE_DIR, UPLOAD_DIR, VECTOR_DIR, get_settings
 from app.db.base import Base
 
 
-for path in (STORAGE_DIR, RUNTIME_DIR, BACKUP_DIR, UPLOAD_DIR, GENERATED_DIR, VECTOR_DIR):
+for path in (STORAGE_DIR, RUNTIME_DIR, BACKUP_DIR, UPLOAD_DIR, PUBLIC_DIR, GENERATED_DIR, VECTOR_DIR):
     path.mkdir(parents=True, exist_ok=True)
 
 
@@ -49,6 +49,10 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
         inspector = inspect(target_engine)
         table_names = inspector.get_table_names()
     statements: list[str] = []
+    if "users" in table_names:
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "token_version" not in user_columns:
+            statements.append("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0")
     if "qa_records" in table_names:
         columns = {column["name"] for column in inspector.get_columns("qa_records")}
         if "thinking_process" not in columns:
@@ -68,6 +72,10 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
         code_type = email_code_columns.get("code", "")
         if code_type.startswith("VARCHAR") and "128" not in code_type:
             statements.append("ALTER TABLE email_codes MODIFY COLUMN code VARCHAR(128) NOT NULL")
+    if "email_codes" in table_names:
+        email_columns = {column["name"] for column in inspector.get_columns("email_codes")}
+        if "attempt_count" not in email_columns:
+            statements.append("ALTER TABLE email_codes ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0")
     if "wrong_questions" in table_names:
         wrong_columns = {column["name"] for column in inspector.get_columns("wrong_questions")}
         if "is_resolved" not in wrong_columns:

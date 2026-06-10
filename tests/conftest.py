@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.db.session import drop_db, init_db, reset_engine
 from app.main import create_app
+from app.core.rate_limit import reset_rate_limits
 from app.services.ai import ai_service
 from app.services.email import email_service
 from app.services import materials as material_services
@@ -44,6 +45,7 @@ def _generate_test_study_plan(*, goal, available_days, daily_minutes, course_nam
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     db_path = tmp_path / "test.db"
     reset_engine(f"sqlite:///{db_path}")
+    reset_rate_limits()
     drop_db()
     init_db()
     app = create_app()

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import RateLimitRule, limit_request
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -35,6 +36,8 @@ from app.services.courses import (
 
 
 router = APIRouter()
+COURSE_CODE_RULE = RateLimitRule(limit=20, window_seconds=300)
+UPLOAD_RULE = RateLimitRule(limit=30, window_seconds=300)
 
 
 @router.get("/teaching")
@@ -88,6 +91,7 @@ def upload_course_cover_endpoint(
     db: Annotated[Session, Depends(get_db)],
     file: UploadFile = File(...),
 ):
+    limit_request(request, "course-cover-upload", user.id, course_id, rule=UPLOAD_RULE)
     course = upload_course_cover(db, user, course_id, file)
     return success_response(data=CourseResponse.model_validate(course).model_dump(mode="json"), request_id=request.state.request_id)
 
@@ -99,6 +103,7 @@ def join_course_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "course-code-join", user.id, payload.course_code, rule=COURSE_CODE_RULE)
     course = join_course(db, user, payload.course_code)
     return success_response(data=CourseResponse.model_validate(course).model_dump(), request_id=request.state.request_id)
 

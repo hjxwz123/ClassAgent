@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.rate_limit import RateLimitRule, limit_request
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -12,6 +13,8 @@ from app.services.tutoring import confirm_problem_text, create_image_problem, cr
 
 
 router = APIRouter()
+TUTORING_RULE = RateLimitRule(limit=60, window_seconds=300)
+TUTORING_UPLOAD_RULE = RateLimitRule(limit=30, window_seconds=300)
 
 
 @router.post("/problems/text")
@@ -21,6 +24,7 @@ def create_text_problem_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "tutoring-text", user.id, payload.course_id, rule=TUTORING_RULE)
     problem = create_text_problem(db, user=user, payload=payload)
     return success_response(data=ProblemResponse.model_validate(problem).model_dump(mode="json"), request_id=request.state.request_id)
 
@@ -33,6 +37,7 @@ def create_image_problem_endpoint(
     user: Annotated[User, Depends(get_current_user)] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ):
+    limit_request(request, "tutoring-image", user.id, course_id, rule=TUTORING_UPLOAD_RULE)
     problem = create_image_problem(db, user=user, course_id=course_id, upload=file)
     return success_response(data=ProblemResponse.model_validate(problem).model_dump(mode="json"), request_id=request.state.request_id)
 

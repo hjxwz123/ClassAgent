@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 from urllib.parse import urlencode
@@ -9,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.enums import UserRole, UserStatus
 from app.core.errors import bad_request, not_found, unauthorized
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import create_access_token, hash_password, hash_token, verify_password
 from app.db.models import EmailCode, User
 from app.schemas.auth import (
     AuthLinkResponse,
@@ -29,13 +28,6 @@ AUTH_LINK_EXPIRES_IN_SECONDS = 600
 AUTH_LINK_INVALID_MESSAGE = "链接无效或已过期"
 
 
-@dataclass(frozen=True)
-class AuthLinkCreation:
-    response: AuthLinkResponse
-    link: str
-    email: str
-
-
 def _ensure_unique_identity(db: Session, payload: RegisterRequest) -> None:
     conditions = [User.email == payload.email]
     if payload.student_no:
@@ -47,10 +39,10 @@ def _ensure_unique_identity(db: Session, payload: RegisterRequest) -> None:
         raise bad_request("邮箱、学号或工号已存在")
 
 
-def _build_auth_link(*, mode: str, email: str, token: str, base_url: str | None = None) -> str:
+def _build_auth_link(*, mode: str, email: str, token: str) -> str:
     settings = get_settings()
     query = urlencode({"mode": mode, "email": email, "token": token})
-    return f"{(base_url or settings.public_base_url).rstrip('/')}/auth?{query}"
+    return f"{settings.public_base_url.rstrip('/')}/auth?{query}"
 
 
 def _expire_existing_email_tokens(db: Session, *, email: str, purpose: str) -> None:
@@ -74,7 +66,7 @@ def _create_email_token(db: Session, *, email: str, purpose: str) -> str:
         EmailCode(
             email=email,
             purpose=purpose,
-            code=token,
+            code=hash_token(token),
             expires_at=datetime.now(UTC) + timedelta(seconds=AUTH_LINK_EXPIRES_IN_SECONDS),
         )
     )
@@ -82,12 +74,13 @@ def _create_email_token(db: Session, *, email: str, purpose: str) -> str:
 
 
 def _latest_available_email_token(db: Session, *, email: str, purpose: str, token: str) -> EmailCode | None:
+    token_digest = hash_token(token)
     statement: Select[tuple[EmailCode]] = (
         select(EmailCode)
         .where(
             EmailCode.email == email,
             EmailCode.purpose == purpose,
-            EmailCode.code == token,
+            EmailCode.code == token_digest,
             EmailCode.used_at.is_(None),
         )
         .order_by(desc(EmailCode.id))
@@ -95,8 +88,32 @@ def _latest_available_email_token(db: Session, *, email: str, purpose: str, toke
     return db.scalars(statement).first()
 
 
+def _latest_pending_email_token(db: Session, *, email: str, purpose: str) -> EmailCode | None:
+    statement: Select[tuple[EmailCode]] = (
+        select(EmailCode)
+        .where(
+            EmailCode.email == email,
+            EmailCode.purpose == purpose,
+            EmailCode.used_at.is_(None),
+        )
+        .order_by(desc(EmailCode.id))
+    )
+    return db.scalars(statement).first()
+
+
+def _record_email_token_failure(db: Session, *, email: str, purpose: str) -> None:
+    record = _latest_pending_email_token(db, email=email, purpose=purpose)
+    if record is None:
+        return
+    record.attempt_count = int(record.attempt_count or 0) + 1
+    db.add(record)
+    db.commit()
+
+
 def _ensure_email_token_valid(record: EmailCode | None) -> EmailCode:
     if record is None:
+        raise bad_request(AUTH_LINK_INVALID_MESSAGE)
+    if record.attempt_count >= 5:
         raise bad_request(AUTH_LINK_INVALID_MESSAGE)
     expires_at = record.expires_at if record.expires_at.tzinfo else record.expires_at.replace(tzinfo=UTC)
     if expires_at < datetime.now(UTC):
@@ -105,7 +122,10 @@ def _ensure_email_token_valid(record: EmailCode | None) -> EmailCode:
 
 
 def _consume_email_token(db: Session, *, email: str, purpose: str, token: str) -> EmailCode:
-    record = _ensure_email_token_valid(_latest_available_email_token(db, email=email, purpose=purpose, token=token))
+    record = _latest_available_email_token(db, email=email, purpose=purpose, token=token)
+    if record is None:
+        _record_email_token_failure(db, email=email, purpose=purpose)
+    record = _ensure_email_token_valid(record)
     record.used_at = datetime.now(UTC)
     db.add(record)
     return record
@@ -113,7 +133,10 @@ def _consume_email_token(db: Session, *, email: str, purpose: str, token: str) -
 
 def validate_auth_link(db: Session, *, email: str, mode: str, token: str) -> AuthLinkResponse:
     purpose = "register" if mode == "register" else "password_reset"
-    record = _ensure_email_token_valid(_latest_available_email_token(db, email=email, purpose=purpose, token=token))
+    record = _latest_available_email_token(db, email=email, purpose=purpose, token=token)
+    if record is None:
+        _record_email_token_failure(db, email=email, purpose=purpose)
+    record = _ensure_email_token_valid(record)
     if purpose == "register":
         existing = db.scalar(select(User).where(User.email == email, User.deleted_at.is_(None)))
         if existing is not None:
@@ -127,18 +150,19 @@ def validate_auth_link(db: Session, *, email: str, mode: str, token: str) -> Aut
     return AuthLinkResponse(email=email, expires_in_seconds=expires_in)
 
 
-def create_registration_link(db: Session, email: str, *, base_url: str | None = None) -> AuthLinkCreation:
+def _generic_auth_link_response(email: str) -> AuthLinkResponse:
+    return AuthLinkResponse(email=email, expires_in_seconds=AUTH_LINK_EXPIRES_IN_SECONDS)
+
+
+def create_registration_link(db: Session, email: str) -> tuple[AuthLinkResponse, str | None]:
     existing = db.scalar(select(User).where(User.email == email, User.deleted_at.is_(None)))
     if existing is not None:
-        raise bad_request("该邮箱已注册")
+        db.commit()
+        return _generic_auth_link_response(email), None
     token = _create_email_token(db, email=email, purpose="register")
-    link = _build_auth_link(mode="register", email=email, token=token, base_url=base_url)
+    link = _build_auth_link(mode="register", email=email, token=token)
     db.commit()
-    return AuthLinkCreation(
-        response=AuthLinkResponse(email=email, expires_in_seconds=AUTH_LINK_EXPIRES_IN_SECONDS),
-        link=link,
-        email=email,
-    )
+    return _generic_auth_link_response(email), link
 
 
 def register_user(db: Session, payload: RegisterRequest) -> User:
@@ -189,7 +213,7 @@ def authenticate_user(db: Session, payload: LoginRequest, *, login_ip: str | Non
     db.add(user)
     log_login(db, user_id=user.id, login_ip=login_ip, user_agent=user_agent, success=True)
     db.commit()
-    token = create_access_token(str(user.id), extra={"role": user.role})
+    token = create_access_token(str(user.id), extra={"role": user.role, "token_version": user.token_version})
     return LoginResponse(access_token=token, user=UserSummary.model_validate(user))
 
 
@@ -221,6 +245,7 @@ def change_password(db: Session, user: User, old_password: str, new_password: st
     if not verify_password(old_password, user.password_hash):
         raise bad_request("旧密码错误")
     user.password_hash = hash_password(new_password)
+    user.token_version = int(user.token_version or 0) + 1
     db.add(user)
     log_operation(
         db,
@@ -232,12 +257,13 @@ def change_password(db: Session, user: User, old_password: str, new_password: st
     db.commit()
 
 
-def create_password_reset_link(db: Session, email: str, *, base_url: str | None = None) -> AuthLinkCreation:
+def create_password_reset_link(db: Session, email: str) -> tuple[AuthLinkResponse, str | None]:
     user = db.scalar(select(User).where(User.email == email, User.deleted_at.is_(None)))
     if user is None:
-        raise not_found("该邮箱未注册")
+        db.commit()
+        return _generic_auth_link_response(email), None
     token = _create_email_token(db, email=email, purpose="password_reset")
-    link = _build_auth_link(mode="reset", email=email, token=token, base_url=base_url)
+    link = _build_auth_link(mode="reset", email=email, token=token)
     log_operation(
         db,
         user_id=user.id,
@@ -246,11 +272,7 @@ def create_password_reset_link(db: Session, email: str, *, base_url: str | None 
         target_id=user.id,
     )
     db.commit()
-    return AuthLinkCreation(
-        response=AuthLinkResponse(email=email, expires_in_seconds=AUTH_LINK_EXPIRES_IN_SECONDS),
-        link=link,
-        email=email,
-    )
+    return _generic_auth_link_response(email), link
 
 
 def reset_password(db: Session, payload: PasswordResetConfirmRequest) -> None:
@@ -259,6 +281,7 @@ def reset_password(db: Session, payload: PasswordResetConfirmRequest) -> None:
     if user is None:
         raise not_found("用户不存在")
     user.password_hash = hash_password(payload.new_password)
+    user.token_version = int(user.token_version or 0) + 1
     db.add_all([user, record])
     log_operation(
         db,

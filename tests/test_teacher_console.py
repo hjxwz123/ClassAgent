@@ -6,6 +6,13 @@ from sqlalchemy import select
 from tests.auth_helpers import request_registration_token
 
 
+PNG_BYTES = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\rIDATx\x9cc\xf8\xcf\xc0"
+    b"\xf0\x1f\x00\x05\x05\x02\x00\x1e^\x99\xed\x00\x00\x00\x00IEND\xaeB`\x82"
+)
+
+
 def register_user(client, *, email, password, nickname, role, student_no=None, employee_no=None):
     payload = {
         "email": email,
@@ -147,7 +154,7 @@ def test_teacher_console_aggregation_and_actions(client):
 
     cover_response = client.post(
         f"/api/v1/courses/{course['id']}/cover",
-        files={"file": ("cover.png", b"course-cover", "image/png")},
+        files={"file": ("cover.png", PNG_BYTES, "image/png")},
         headers=teacher_headers,
     )
     assert cover_response.status_code == 200, cover_response.text

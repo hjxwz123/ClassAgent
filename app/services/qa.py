@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.enums import MaterialType, QAFeedback, QuestionType, UserRole
 from app.core.errors import bad_request, forbidden, not_found
+from app.core.media import signed_media_url
+from app.core.upload_validation import validate_image_upload
 from app.db.models import Chapter, Course, CourseMaterial, CourseMembership, KnowledgeChunk, Lesson, LessonPage, QAConversation, QARecord, User
 from app.schemas.qa import QAAskRequest
 from app.services.ai import ai_service
@@ -1769,19 +1771,17 @@ def _qa_contexts_and_sources(
 
 def upload_qa_image(db: Session, *, user: User, course_id: int, upload: UploadFile) -> dict:
     _assert_student_course_access(db, course_id=course_id, user=user)
-    suffix = Path(upload.filename or "").suffix.lower()
-    content_type = (upload.content_type or "").lower()
-    if suffix not in _IMAGE_SUFFIXES and not content_type.startswith("image/"):
-        raise bad_request("请上传图片文件")
-    relative_path, size_bytes = storage_service.save_upload(upload, folder=f"qa_images/course_{course_id}/user_{user.id}", db=db)
-    if size_bytes <= 0:
-        raise bad_request("图片文件为空")
-    if size_bytes > _QA_IMAGE_LIMIT_BYTES:
-        raise bad_request("图片大小不能超过 10MB")
+    validated = validate_image_upload(upload, max_bytes=_QA_IMAGE_LIMIT_BYTES, label="图片")
+    relative_path, size_bytes = storage_service.save_upload_bytes(
+        validated.content,
+        folder=f"qa_images/course_{course_id}/user_{user.id}",
+        suffix=validated.suffix,
+        db=db,
+    )
     ocr_text = ocr_service.recognize(upload, db=db)
     return {
         "type": "image",
-        "url": storage_service.public_url(relative_path, db=db),
+        "url": signed_media_url(relative_path),
         "filename": upload.filename or "image",
         "size_bytes": size_bytes,
         "ocr_text": ocr_text,

@@ -7,7 +7,7 @@ from uuid import uuid4
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
-from app.core.config import STORAGE_DIR, get_settings
+from app.core.config import PUBLIC_DIR, STORAGE_DIR, get_settings
 from app.core.errors import bad_request
 from app.services.runtime_config import RuntimeServiceConfig, get_enabled_service_config
 
@@ -24,12 +24,12 @@ OSS_STRING_KEYS = (
 )
 
 OSS_DELETE_LOCAL_AFTER_UPLOAD_PREFIXES = (
-    "uploads/avatars/",
-    "uploads/course_covers/",
-    "uploads/problem_images/",
-    "uploads/qa_images/",
-    "generated/audio/",
-    "docmind_images/",
+    "public/avatars/",
+    "public/course_covers/",
+    "public/qa_images/",
+    "public/problem_images/",
+    "public/generated/audio/",
+    "public/docmind_images/",
 )
 
 LOGGER = logging.getLogger(__name__)
@@ -47,7 +47,21 @@ class StorageService:
         return path.relative_to(STORAGE_DIR).as_posix()
 
     def _static_url(self, relative_path: str) -> str:
-        return f"/static/{relative_path.lstrip('/')}"
+        return f"/static/{relative_path.removeprefix('public/').lstrip('/')}"
+
+    def _sanitize_relative_path(self, value: str) -> str:
+        path = Path(value)
+        if path.is_absolute() or ".." in path.parts:
+            raise bad_request("存储路径不合法")
+        normalized = path.as_posix().strip("/")
+        if not normalized:
+            raise bad_request("存储路径不能为空")
+        return normalized
+
+    def _upload_folder_path(self, folder: str, *, public: bool = False) -> Path:
+        normalized = self._sanitize_relative_path(folder)
+        base = PUBLIC_DIR if public else STORAGE_DIR / "uploads"
+        return base / normalized
 
     def _is_loopback_url(self, value: str) -> bool:
         try:
@@ -60,7 +74,8 @@ class StorageService:
         base_url = str(self.settings.public_base_url or "").rstrip("/")
         if not base_url or self._is_loopback_url(base_url):
             return self._static_url(relative_path)
-        return f"{base_url}/static/{relative_path.lstrip('/')}"
+        public_path = relative_path.removeprefix("public/").lstrip("/")
+        return f"{base_url}/static/{public_path}"
 
     def local_public_url(self, relative_path: str) -> str:
         return self._local_public_url(relative_path)
@@ -68,13 +83,18 @@ class StorageService:
     def normalize_public_url(self, value: str | None) -> str | None:
         if not value:
             return value
+        private_static_prefixes = ("/static/uploads/", "/static/backups/", "/static/vectors/", "/static/runtime/")
         if value.startswith("/static/"):
+            if value.startswith(private_static_prefixes):
+                return None
             return value
         if not self._is_loopback_url(value):
             return value
         parsed = urlsplit(value)
         if not parsed.path.startswith("/static/"):
             return value
+        if parsed.path.startswith(private_static_prefixes):
+            return None
         return urlunsplit(("", "", parsed.path, parsed.query, parsed.fragment))
 
     def _clean_oss_config(self, config: dict) -> dict:
@@ -167,14 +187,42 @@ class StorageService:
                 break
             current = current.parent
 
-    def save_upload(self, upload: UploadFile, *, folder: str, db: Session | None = None) -> tuple[str, int]:
-        target_dir = STORAGE_DIR / "uploads" / folder
+    def save_upload(
+        self,
+        upload: UploadFile,
+        *,
+        folder: str,
+        db: Session | None = None,
+        max_bytes: int | None = None,
+        public: bool = False,
+        suffix: str | None = None,
+    ) -> tuple[str, int]:
+        target_dir = self._upload_folder_path(folder, public=public)
         target_dir.mkdir(parents=True, exist_ok=True)
-        suffix = Path(upload.filename or "").suffix.lower()
-        filename = f"{uuid4().hex}{suffix}"
+        file_suffix = suffix if suffix is not None else Path(upload.filename or "").suffix.lower()
+        filename = f"{uuid4().hex}{file_suffix}"
         target_path = target_dir / filename
-        content = upload.file.read()
+        content = upload.file.read(max_bytes + 1 if max_bytes else -1)
         upload.file.seek(0)
+        if max_bytes is not None and len(content) > max_bytes:
+            raise bad_request(f"文件大小不能超过 {max_bytes // 1024 // 1024}MB")
+        return self._write_content(target_path, content, db=db)
+
+    def save_upload_bytes(
+        self,
+        content: bytes,
+        *,
+        folder: str,
+        suffix: str,
+        db: Session | None = None,
+        public: bool = False,
+    ) -> tuple[str, int]:
+        target_dir = self._upload_folder_path(folder, public=public)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = target_dir / f"{uuid4().hex}{suffix}"
+        return self._write_content(target_path, content, db=db)
+
+    def _write_content(self, target_path: Path, content: bytes, *, db: Session | None = None) -> tuple[str, int]:
         target_path.write_bytes(content)
         relative_path = self._relative_to_storage(target_path)
         oss_config = self._resolve_oss_config(db)
@@ -183,16 +231,14 @@ class StorageService:
             self._delete_local_after_oss_upload(target_path, relative_path)
         return relative_path, len(content)
 
-    def save_bytes(self, content: bytes, *, folder: str, filename: str, db: Session | None = None) -> str:
-        target_dir = STORAGE_DIR / folder
+    def save_bytes(self, content: bytes, *, folder: str, filename: str, db: Session | None = None, public: bool = False) -> str:
+        normalized_folder = self._sanitize_relative_path(folder)
+        target_dir = (PUBLIC_DIR if public else STORAGE_DIR) / normalized_folder
         target_dir.mkdir(parents=True, exist_ok=True)
+        if Path(filename).name != filename:
+            raise bad_request("文件名不合法")
         target_path = target_dir / filename
-        target_path.write_bytes(content)
-        relative_path = self._relative_to_storage(target_path)
-        oss_config = self._resolve_oss_config(db)
-        if oss_config is not None:
-            self._upload_to_oss(relative_path, content, oss_config)
-            self._delete_local_after_oss_upload(target_path, relative_path)
+        relative_path, _ = self._write_content(target_path, content, db=db)
         return relative_path
 
     def absolute_path(self, relative_path: str) -> Path:
@@ -240,6 +286,9 @@ class StorageService:
             raise bad_request("资料文件读取失败，请稍后重试或联系管理员") from exc
 
     def public_url(self, relative_path: str, db: Session | None = None) -> str:
+        normalized = relative_path.lstrip("/")
+        if not normalized.startswith("public/"):
+            return ""
         oss_config = self._resolve_oss_config(db)
         if oss_config is not None:
             return self._oss_public_url(relative_path, oss_config)
