@@ -156,3 +156,95 @@ def test_task_model_handles_retrieval_rewrite_and_full_qa_plan(monkeypatch):
     assert rewritten.startswith("霍夫曼算法 前缀编码")
     assert plan["question_type"] == "concept"
     assert [call["purpose"] for call in calls] == ["task", "task"]
+
+
+def test_build_rerank_request_qwen_defaults_to_dashscope():
+    from app.services.ai import RERANK_DASHSCOPE_ENDPOINT, build_rerank_request
+
+    url, payload = build_rerank_request(
+        provider="qwen",
+        endpoint="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        model_name="gte-rerank-v2",
+        query="极限的定义",
+        documents=["文档一", "文档二"],
+        top_n=2,
+    )
+    assert url == RERANK_DASHSCOPE_ENDPOINT
+    assert payload["model"] == "gte-rerank-v2"
+    assert payload["input"] == {"query": "极限的定义", "documents": ["文档一", "文档二"]}
+    assert payload["parameters"] == {"return_documents": False, "top_n": 2}
+
+
+def test_build_rerank_request_custom_appends_rerank_path():
+    from app.services.ai import build_rerank_request
+
+    url, payload = build_rerank_request(
+        provider="custom",
+        endpoint="https://api.example.com/v1/",
+        model_name="bge-reranker-v2-m3",
+        query="q",
+        documents=["a", "b"],
+        top_n=1,
+    )
+    assert url == "https://api.example.com/v1/rerank"
+    assert payload == {"model": "bge-reranker-v2-m3", "query": "q", "documents": ["a", "b"], "top_n": 1, "return_documents": False}
+
+
+def test_parse_rerank_results_supports_dashscope_and_standard():
+    from app.services.ai import parse_rerank_results
+
+    dashscope_body = {"output": {"results": [{"index": 1, "relevance_score": 0.32}, {"index": 0, "relevance_score": 0.91}]}}
+    assert parse_rerank_results(dashscope_body) == [(0, 0.91), (1, 0.32)]
+
+    standard_body = {"results": [{"index": 2, "score": 0.5}, {"index": 7, "relevance_score": 0.8}, {"index": "bad"}]}
+    assert parse_rerank_results(standard_body) == [(7, 0.8), (2, 0.5)]
+
+    assert parse_rerank_results({"results": []}) == []
+    assert parse_rerank_results(None) == []
+
+
+def test_rerank_documents_orders_and_limits(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"output": {"results": [{"index": 2, "relevance_score": 0.9}, {"index": 0, "relevance_score": 0.7}, {"index": 9, "relevance_score": 0.6}]}}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            assert "rerank" in url
+            assert json["parameters"]["top_n"] == 2
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        "app.services.ai.get_default_model_config",
+        lambda db, purpose, fallback_to_general=True: RuntimeModelConfig(
+            id=1,
+            provider="qwen",
+            model_name="gte-rerank-v2",
+            purpose="rerank",
+            endpoint=None,
+            api_key="sk-test",
+            extra_config={"top_n": 2},
+        ),
+    )
+    monkeypatch.setattr("app.services.ai.httpx.Client", FakeClient)
+
+    results = ai_service.rerank_documents(query="极限", documents=["a", "b", "c"], db=object())
+    # 下标 9 越界被过滤，按分数降序并截到 top_n=2
+    assert results == [(2, 0.9), (0, 0.7)]
+
+
+def test_rerank_documents_returns_none_without_config(monkeypatch):
+    monkeypatch.setattr("app.services.ai.get_default_model_config", lambda db, purpose, fallback_to_general=True: None)
+    assert ai_service.rerank_documents(query="极限", documents=["a", "b", "c"], db=object()) is None

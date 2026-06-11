@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Chapter, KnowledgeChunk, KnowledgePoint, LessonPage
 from app.services.ai import ai_service
 from app.services.retrieval import build_retrieval_query_variants, page_numbers_from_query, query_terms, score_text_for_query
+from app.services.runtime_settings import runtime_setting_float
 from app.services.vector_store import vector_store
 
 
@@ -197,6 +198,10 @@ def _query_course_variants(
     merged: dict[int, tuple[float, int, int, float | None]] = {}
     candidate_limit = max(limit * 3, 12)
     per_query_limit = candidate_limit
+    # 管理端「召回相似度阈值」：余弦相似度低于阈值的召回直接丢弃（distance = 1 - 相似度）。
+    # vector_store 内部的 vector_max_distance(默认 0.9) 只是兜底粗筛，这里才是业务阈值。
+    min_similarity = runtime_setting_float(db, "qa.retrieval.min_similarity", 0.35, minimum=0.0, maximum=0.99)
+    max_distance = 1.0 - min_similarity
     for query_index, variant in enumerate(queries):
         rows = vector_store.query_course(
             db,
@@ -208,6 +213,8 @@ def _query_course_variants(
             limit=per_query_limit,
         )
         for row_index, (chunk_id, distance) in enumerate(rows):
+            if distance is not None and distance > max_distance:
+                continue
             rank = distance if distance is not None else 9_999.0
             candidate = (rank, query_index, row_index, distance)
             current = merged.get(chunk_id)

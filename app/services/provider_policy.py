@@ -3,6 +3,7 @@ from __future__ import annotations
 
 MODEL_PROVIDERS_BY_PURPOSE: dict[str, set[str]] = {
     "embedding": {"qwen", "openai", "custom"},
+    "rerank": {"qwen", "custom"},
 }
 DEFAULT_MODEL_PROVIDERS = {"qwen", "deepseek", "openai", "azure", "custom"}
 

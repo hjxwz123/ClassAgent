@@ -89,3 +89,47 @@ def test_agent_answer_appends_sources_and_followups_but_strips_from_history() ->
     assert "动态字典" in answer
     assert "你还可以继续问" in answer
     assert _strip_agent_answer_suffix(answer) == "LZW 是无损压缩。"
+
+
+def test_rerank_retrieval_pool_filters_below_min_score(monkeypatch):
+    from app.services import qa as qa_module
+
+    pool = ["doc-a", "doc-b", "doc-c", "doc-d", "doc-e"]
+    monkeypatch.setattr(
+        qa_module.ai_service,
+        "rerank_documents",
+        lambda *, query, documents, db, top_n=None: [(4, 0.92), (1, 0.6), (0, 0.1)],
+    )
+    monkeypatch.setattr(qa_module, "runtime_setting_float", lambda db, key, default, **kwargs: 0.25)
+
+    result = qa_module._rerank_retrieval_pool(object(), question="极限", pool=pool)
+    # 0.1 低于下限被丢弃，其余按相关性降序
+    assert result == ["doc-e", "doc-b"]
+
+
+def test_rerank_retrieval_pool_returns_empty_when_all_below_threshold(monkeypatch):
+    from app.services import qa as qa_module
+
+    pool = ["a", "b", "c", "d", "e"]
+    monkeypatch.setattr(
+        qa_module.ai_service,
+        "rerank_documents",
+        lambda *, query, documents, db, top_n=None: [(0, 0.05), (1, 0.02)],
+    )
+    monkeypatch.setattr(qa_module, "runtime_setting_float", lambda db, key, default, **kwargs: 0.25)
+
+    # 全部弱相关 → 空池（资料不足），而不是退回原始顺序
+    assert qa_module._rerank_retrieval_pool(object(), question="q", pool=pool) == []
+
+
+def test_rerank_retrieval_pool_degrades_to_none(monkeypatch):
+    from app.services import qa as qa_module
+
+    monkeypatch.setattr(
+        qa_module.ai_service,
+        "rerank_documents",
+        lambda *, query, documents, db, top_n=None: None,
+    )
+    # 模型未配置/调用失败 → None（保持原有拼接顺序）；池子过小同样 None
+    assert qa_module._rerank_retrieval_pool(object(), question="q", pool=["a"] * 5) is None
+    assert qa_module._rerank_retrieval_pool(object(), question="q", pool=["a", "b"]) is None

@@ -1886,7 +1886,10 @@ def test_qa_image_attachment_uploads_and_participates_in_stream_answer(client, m
     assert "event: error" not in body
     assert "图片中提到矩阵" in body
     assert "matrix.png" in body
-    assert "OCR识别内容" in captured["question"]
+    # OCR 文本以“不可信数据围栏”的形式进入 prompt（防提示注入），内容仍完整可用
+    assert "矩阵可以表示线性变换" in captured["question"]
+    assert "<<<IMAGE_OCR_START>>>" in captured["question"]
+    assert "不可信" in captured["question"]
     assert "矩阵可以表示线性变换" in captured["question"]
 
     history_resp = client.get("/api/v1/qa/history", params={"course_id": course["id"]}, headers=student_headers)
