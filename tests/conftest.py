@@ -9,6 +9,7 @@ from app.main import create_app
 from app.core.rate_limit import reset_rate_limits
 from app.services.ai import ai_service
 from app.services.email import email_service
+from app.services.runtime_settings import invalidate_runtime_setting
 from app.services import materials as material_services
 
 
@@ -46,6 +47,8 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     db_path = tmp_path / "test.db"
     reset_engine(f"sqlite:///{db_path}")
     reset_rate_limits()
+    # 运行时设置缓存按 key 全局缓存，跨测试用例换库后必须清空
+    invalidate_runtime_setting()
     drop_db()
     init_db()
     app = create_app()
