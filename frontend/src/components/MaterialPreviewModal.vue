@@ -133,7 +133,7 @@ watch(
   grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   border: 1px solid var(--color-border-default);
-  border-radius: 28px;
+  border-radius: 16px;
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--color-bg-surface) 96%, var(--color-primary-50) 4%), var(--color-bg-surface));
   box-shadow: var(--shadow-xl);
@@ -150,7 +150,7 @@ watch(
   writing-mode: horizontal-tb;
   text-orientation: mixed;
   border: 1px solid var(--color-border-default);
-  border-radius: 22px;
+  border-radius: 12px;
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--color-bg-surface) 86%, var(--color-primary-50) 14%), var(--color-bg-surface));
   padding: 16px 18px;
@@ -172,7 +172,7 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 14px;
+  border-radius: 12px;
   background: linear-gradient(135deg, var(--color-primary-50), color-mix(in srgb, var(--color-primary-100) 72%, white));
   color: var(--color-primary-700);
   box-shadow: var(--shadow-xs);
@@ -228,7 +228,7 @@ watch(
 .material-preview-action.primary {
   background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-500));
   color: white;
-  box-shadow: 0 12px 24px rgba(14, 116, 144, 0.18);
+  box-shadow: 0 8px 20px rgba(0, 151, 167, 0.18);
 }
 
 .material-preview-action.secondary:hover {
@@ -242,7 +242,7 @@ watch(
 .material-preview-action.primary:hover {
   color: white;
   transform: translateY(-1px);
-  box-shadow: 0 16px 28px rgba(14, 116, 144, 0.24);
+  box-shadow: 0 12px 24px rgba(0, 151, 167, 0.24);
 }
 
 .material-preview-action:active {
@@ -274,14 +274,20 @@ watch(
   color: var(--color-text-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-family-serif);
   font-size: clamp(18px, 2vw, 22px);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
   line-height: 1.2;
 }
 
 .material-preview-title small {
   color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 1.4;
+  letter-spacing: 0.02em;
 }
 
 .material-preview-tabs {
@@ -325,7 +331,7 @@ watch(
   position: relative;
   overflow: hidden;
   border: 1px solid var(--color-border-default);
-  border-radius: 22px;
+  border-radius: 12px;
   background: var(--color-bg-muted);
 }
 
@@ -350,7 +356,7 @@ watch(
 .material-preview-loading .loading-mark {
   width: 80px;
   height: 80px;
-  filter: drop-shadow(0 14px 24px rgba(15, 23, 42, 0.14));
+  filter: drop-shadow(0 14px 24px rgba(18, 22, 20, 0.14));
 }
 
 .material-preview-markdown {
@@ -405,10 +411,10 @@ watch(
 
 .material-preview-markdown :deep(pre) {
   overflow: auto;
-  border: 1px solid var(--color-border-default);
+  border: 1px solid rgba(244, 244, 240, 0.12);
   border-radius: var(--radius-md);
-  background: #0F172A;
-  color: #E2E8F0;
+  background: #121614;
+  color: #E7E9E4;
   padding: 14px 16px;
 }
 
@@ -465,7 +471,7 @@ watch(
   .material-preview-modal {
     width: min(100vw - 20px, 100vw);
     height: min(100dvh - 24px, 92vh);
-    border-radius: 24px;
+    border-radius: 14px;
     padding: 12px;
   }
 

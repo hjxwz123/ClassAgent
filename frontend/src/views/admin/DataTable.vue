@@ -16,8 +16,9 @@ defineProps<{ headers: string[] }>();
   width: 100%;
   overflow-x: auto;
   border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   background: var(--color-bg-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .table {
@@ -31,23 +32,36 @@ defineProps<{ headers: string[] }>();
 th,
 td {
   border-bottom: 1px solid var(--color-border-subtle);
-  padding: 12px 14px;
+  padding: 14px 16px;
   text-align: left;
   vertical-align: middle;
 }
 
 th {
-  background: var(--color-bg-muted);
+  height: 48px;
+  padding-top: 0;
+  padding-bottom: 0;
+  background: var(--admin-paper-faint, #FAF9F6);
   color: var(--color-text-secondary);
-  font-weight: 700;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  letter-spacing: .06em;
   white-space: nowrap;
 }
 
+thead tr {
+  border-bottom: 1px solid var(--color-border-default);
+}
+
+:deep(tbody tr) {
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
 :deep(tbody tr:nth-child(even)) {
-  background: rgba(249,248,246,.72);
+  background: var(--admin-paper-faint, #FAF9F6);
 }
 
 :deep(tbody tr:hover) {
-  background: var(--color-primary-50);
+  background: var(--ca-role-admin-light, #FFF8E1);
 }
 </style>

@@ -11,25 +11,25 @@ body.theme-light,
 :root.theme-dark {
   color-scheme: dark;
 
-  --dark-page: #030712;
-  --dark-surface: #0F172A;
-  --dark-surface-2: #111827;
-  --dark-surface-3: #1E293B;
-  --dark-border: rgba(148, 163, 184, .24);
-  --dark-border-strong: rgba(203, 213, 225, .34);
-  --dark-text: #F8FAFC;
-  --dark-body: #E2E8F0;
-  --dark-sub: #CBD5E1;
-  --dark-muted: #94A3B8;
-  --dark-cyan-soft: rgba(0, 240, 255, .12);
-  --dark-cyan-border: rgba(0, 240, 255, .26);
+  --dark-page: #0A0D0B;
+  --dark-surface: #121614;
+  --dark-surface-2: #161B17;
+  --dark-surface-3: #1D2420;
+  --dark-border: rgba(140, 148, 143, .24);
+  --dark-border-strong: rgba(195, 202, 196, .32);
+  --dark-text: #F4F4F0;
+  --dark-body: #E2E5E1;
+  --dark-sub: #C2C8C3;
+  --dark-muted: #97A09A;
+  --dark-cyan-soft: rgba(0, 229, 255, .12);
+  --dark-cyan-border: rgba(0, 229, 255, .26);
   --dark-cyan-text: #67E8F9;
   --dark-teacher-soft: rgba(249, 115, 22, .14);
   --dark-admin-soft: rgba(217, 160, 91, .16);
 
-  --ca-color-slate: #030712;
-  --ca-color-chalk: #F8FAFC;
-  --ca-color-dust: #94A3B8;
+  --ca-color-slate: #0B0F0D;
+  --ca-color-chalk: #F4F4F0;
+  --ca-color-dust: #8C948F;
   --ca-role-student-light: var(--dark-cyan-soft);
   --ca-role-teacher-light: var(--dark-teacher-soft);
   --ca-role-admin-light: var(--dark-admin-soft);
@@ -71,15 +71,15 @@ body.theme-light,
   --color-bg-page: var(--dark-page);
   --color-bg-surface: var(--dark-surface);
   --color-bg-muted: var(--dark-surface-2);
-  --color-bg-overlay: rgba(2, 6, 23, .78);
+  --color-bg-overlay: rgba(7, 9, 8, .78);
   --color-border-default: var(--dark-border);
   --color-border-strong: var(--dark-border-strong);
-  --color-border-subtle: rgba(148, 163, 184, .16);
+  --color-border-subtle: rgba(140, 148, 143, .16);
   --color-text-primary: var(--dark-text);
   --color-text-body: var(--dark-body);
   --color-text-secondary: var(--dark-sub);
   --color-text-muted: var(--dark-muted);
-  --color-text-inverse: #F8FAFC;
+  --color-text-inverse: #F4F4F0;
   --color-text-link: var(--dark-cyan-text);
   --color-success-50: rgba(16, 185, 129, .14);
   --color-success-100: rgba(52, 211, 153, .34);
@@ -98,7 +98,7 @@ body.theme-light,
   --shadow-md: 0 16px 34px rgba(0, 0, 0, .30);
   --shadow-lg: 0 22px 48px rgba(0, 0, 0, .38);
   --shadow-xl: 0 28px 72px rgba(0, 0, 0, .50);
-  --shadow-focus: 0 0 0 3px rgba(0, 240, 255, .22);
+  --shadow-focus: 0 0 0 3px rgba(0, 229, 255, .22);
   --shadow-focus-danger: 0 0 0 3px rgba(248, 113, 113, .24);
 }
 
@@ -111,7 +111,7 @@ body.theme-dark,
 
 body.theme-dark {
   background:
-    radial-gradient(circle at 14% 8%, rgba(0, 240, 255, .08), transparent 32%),
+    radial-gradient(circle at 14% 8%, rgba(0, 229, 255, .08), transparent 32%),
     radial-gradient(circle at 86% 18%, rgba(217, 160, 91, .08), transparent 30%),
     var(--dark-page) !important;
 }
@@ -154,7 +154,7 @@ html.theme-dark .app-select-pop,
 html.theme-dark .select-pop,
 html.theme-dark .dropdown-pop,
 html.theme-dark .top-menu-panel {
-  background: rgba(15, 23, 42, .96) !important;
+  background: rgba(18, 22, 20, .96) !important;
   color: var(--dark-body) !important;
   border-color: var(--dark-border) !important;
   box-shadow: var(--shadow-lg) !important;
@@ -194,7 +194,7 @@ html.theme-dark .tag-danger {
 html.theme-dark .btn-primary,
 html.theme-dark .btn-ai,
 html.theme-dark .btn-danger {
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
 }
 
 html.theme-dark .table th,
@@ -207,7 +207,7 @@ html.theme-dark .teacher-table th {
 html.theme-dark .table tbody tr:nth-child(even),
 html.theme-dark .admin-table tbody tr:nth-child(even):not(.selected):not(.disabled),
 html.theme-dark .teacher-table tbody tr:nth-child(even):not(.inactive) {
-  background: rgba(15, 23, 42, .62) !important;
+  background: rgba(18, 22, 20, .62) !important;
 }
 
 html.theme-dark .table tbody tr:hover,
@@ -242,7 +242,7 @@ html.theme-dark .app-progress {
 }
 
 html.theme-dark .chart-empty {
-  background: rgba(15, 23, 42, .82) !important;
+  background: rgba(18, 22, 20, .82) !important;
   color: var(--dark-muted) !important;
   border-color: var(--dark-border) !important;
 }
@@ -256,10 +256,10 @@ html.theme-dark .global-search {
   --s-primary-400: #22D3EE !important;
   --s-primary-500: #00B8D4 !important;
   --s-primary-600: #67E8F9 !important;
-  --s-ai-light: linear-gradient(135deg, rgba(0, 240, 255, .12), rgba(59, 130, 246, .16)) !important;
+  --s-ai-light: linear-gradient(135deg, rgba(0, 229, 255, .12), rgba(59, 130, 246, .16)) !important;
   --s-bg: var(--dark-page) !important;
   --s-card: var(--dark-surface) !important;
-  --s-glass: rgba(15, 23, 42, .86) !important;
+  --s-glass: rgba(18, 22, 20, .86) !important;
   --s-text: var(--dark-text) !important;
   --s-muted: var(--dark-sub) !important;
   --s-hint: var(--dark-muted) !important;
@@ -280,7 +280,7 @@ html.theme-dark .class-chat {
   --qa-primary-400: #22D3EE !important;
   --qa-primary-500: #00B8D4 !important;
   --qa-primary-600: #67E8F9 !important;
-  --qa-ai-light: rgba(0, 240, 255, .12) !important;
+  --qa-ai-light: rgba(0, 229, 255, .12) !important;
   --qa-bg: var(--dark-page) !important;
   --qa-surface: var(--dark-surface) !important;
   --qa-muted-bg: var(--dark-surface-2) !important;
@@ -303,7 +303,7 @@ html.theme-dark .exam-modal-scope {
   --quiz-primary-100: rgba(103, 232, 249, .22) !important;
   --quiz-primary-500: #00B8D4 !important;
   --quiz-primary-600: #67E8F9 !important;
-  --quiz-ai-light: rgba(0, 240, 255, .12) !important;
+  --quiz-ai-light: rgba(0, 229, 255, .12) !important;
   --quiz-bg: var(--dark-page) !important;
   --quiz-surface: var(--dark-surface) !important;
   --quiz-muted: var(--dark-surface-2) !important;
@@ -324,7 +324,7 @@ html.theme-dark .exam-modal-scope {
   --exam-warning-700: #FCD34D !important;
   --exam-bg-page: var(--dark-page) !important;
   --exam-bg-card: var(--dark-surface) !important;
-  --exam-border-light: rgba(148, 163, 184, .16) !important;
+  --exam-border-light: rgba(140, 148, 143, .16) !important;
   --exam-border-default: var(--dark-border) !important;
   --exam-border-strong: var(--dark-border-strong) !important;
   --exam-text-main: var(--dark-text) !important;
@@ -339,12 +339,12 @@ html.theme-dark .student-plan-page {
   --plan-primary-100: rgba(103, 232, 249, .22) !important;
   --plan-primary-500: #00B8D4 !important;
   --plan-primary-600: #67E8F9 !important;
-  --plan-ai-light: rgba(0, 240, 255, .12) !important;
+  --plan-ai-light: rgba(0, 229, 255, .12) !important;
   --plan-success-50: rgba(16, 185, 129, .14) !important;
   --plan-bg: var(--dark-page) !important;
   --plan-card: var(--dark-surface) !important;
   --plan-muted-bg: var(--dark-surface-2) !important;
-  --plan-border-light: rgba(148, 163, 184, .16) !important;
+  --plan-border-light: rgba(140, 148, 143, .16) !important;
   --plan-border: var(--dark-border) !important;
   --plan-text: var(--dark-text) !important;
   --plan-secondary: var(--dark-sub) !important;
@@ -358,7 +358,7 @@ html.theme-dark .tutoring-page {
   --tutor-primary-100: rgba(103, 232, 249, .22) !important;
   --tutor-primary-500: #00B8D4 !important;
   --tutor-primary-600: #67E8F9 !important;
-  --tutor-ai-light: rgba(0, 240, 255, .12) !important;
+  --tutor-ai-light: rgba(0, 229, 255, .12) !important;
   --tutor-success-50: rgba(16, 185, 129, .14) !important;
   --tutor-warning-50: rgba(245, 158, 11, .16) !important;
   --tutor-card: var(--dark-surface) !important;
@@ -377,7 +377,7 @@ html.theme-dark .global-search-results,
 html.theme-dark .notice-pop,
 html.theme-dark .user-pop,
 html.theme-dark .settings-pop {
-  background: rgba(15, 23, 42, .88) !important;
+  background: rgba(18, 22, 20, .88) !important;
   border-color: var(--dark-border) !important;
   color: var(--dark-body) !important;
   box-shadow: var(--shadow-lg) !important;
@@ -391,7 +391,7 @@ html.theme-dark .profile-tabs,
 html.theme-dark .segmented,
 html.theme-dark .student-plan-page .tutor-mode-tabs,
 html.theme-dark .tutoring-page .tutor-mode-tabs {
-  background: rgba(15, 23, 42, .78) !important;
+  background: rgba(18, 22, 20, .78) !important;
   border-color: var(--dark-border) !important;
   box-shadow: inset 0 0 0 1px var(--dark-border) !important;
 }
@@ -517,7 +517,7 @@ html.theme-dark .qa-modern-page .action-circle-btn {
 }
 
 html.theme-dark .home-ai-recommend-card::before {
-  background: radial-gradient(circle, rgba(0, 240, 255, .10), transparent 70%) !important;
+  background: radial-gradient(circle, rgba(0, 229, 255, .10), transparent 70%) !important;
 }
 
 html.theme-dark .home-ac-content-wrap:hover,
@@ -636,7 +636,7 @@ html.theme-dark .qa-modern-page .bubble-user,
 html.theme-dark .student-plan-page .btn-ai-gen,
 html.theme-dark .practice-generate-btn,
 html.theme-dark .tutoring-page .tutor-submit-btn {
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
 }
 
 html.theme-dark .lesson-ai,
@@ -707,14 +707,14 @@ html.theme-dark .study-room .qa-attachment-chip button {
 }
 
 html.theme-dark .study-room .lesson-selection-popover {
-  background: rgba(15, 23, 42, .96) !important;
+  background: rgba(18, 22, 20, .96) !important;
   color: var(--dark-body) !important;
   border-color: var(--dark-border-strong) !important;
   box-shadow: 0 18px 38px rgba(0, 0, 0, .42) !important;
 }
 
 html.theme-dark .study-room .lesson-selection-popover::after {
-  background: rgba(15, 23, 42, .96) !important;
+  background: rgba(18, 22, 20, .96) !important;
   border-color: var(--dark-border-strong) !important;
 }
 
@@ -729,7 +729,7 @@ html.theme-dark .study-room .lesson-selection-popover button:hover {
 
 html.theme-dark .study-room .class-chat .chat-msg.user .chat-bubble {
   background: var(--color-primary-600) !important;
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
   border-color: transparent !important;
 }
 
@@ -817,8 +817,8 @@ html.theme-dark .teacher-shell .material-row.processing {
 
 html.theme-dark .teacher-shell .metric-card.danger,
 html.theme-dark .teacher-table tr.inactive {
-  background: rgba(239, 68, 68, .14) !important;
-  border-color: rgba(248, 113, 113, .34) !important;
+  background: var(--dark-surface) !important;
+  border-color: var(--dark-border) !important;
 }
 
 html.theme-dark .teacher-notice-main:hover,
@@ -866,7 +866,7 @@ html.theme-dark .teacher-shell code {
 }
 
 html.theme-dark .preview-loading {
-  background: rgba(15, 23, 42, .82) !important;
+  background: rgba(18, 22, 20, .82) !important;
   color: var(--dark-sub) !important;
 }
 
@@ -918,8 +918,8 @@ html.theme-dark .admin-shell .metric-card.danger,
 html.theme-dark .admin-table tr.disabled,
 html.theme-dark .danger-zone,
 html.theme-dark .monitor-service.tag-danger {
-  background: rgba(239, 68, 68, .14) !important;
-  border-color: rgba(248, 113, 113, .34) !important;
+  background: var(--dark-surface) !important;
+  border-color: var(--dark-border) !important;
 }
 
 html.theme-dark .monitor-service.tag-warning {
@@ -982,62 +982,62 @@ html.theme-dark .admin-shell .info-row span {
 /* Auth */
 html.theme-dark .auth-card {
   background: linear-gradient(180deg, rgba(255, 253, 244, .98), rgba(247, 241, 222, .96)) !important;
-  border-color: rgba(183, 228, 192, .32) !important;
-  color: #18251E !important;
+  border-color: rgba(44, 43, 41, .2) !important;
+  color: #2C2B29 !important;
 }
 
 html.theme-dark .auth-card .brand,
 html.theme-dark .auth-card .brand strong,
 html.theme-dark .auth-card .label {
-  color: #18251E !important;
+  color: #2C2B29 !important;
 }
 
 html.theme-dark .auth-card .brand small {
-  color: #536256 !important;
+  color: #666560 !important;
 }
 
 html.theme-dark .auth-card .tabs {
-  background: #E8DFC4 !important;
-  border-color: rgba(79, 140, 93, .18) !important;
+  background: #EFEAD9 !important;
+  border-color: rgba(44, 43, 41, .18) !important;
 }
 
 html.theme-dark .auth-card .tabs button {
-  color: #536256 !important;
+  color: #666560 !important;
 }
 
 html.theme-dark .auth-card .tabs button.active,
 html.theme-dark .auth-submit,
 html.theme-dark .send-code-btn {
-  background: #103A2D !important;
-  color: #F8FAFC !important;
+  background: #121614 !important;
+  color: #F4F4F0 !important;
 }
 
 html.theme-dark .auth-card .input,
 html.theme-dark .auth-card .password-field {
-  background: #FFFDF4 !important;
-  color: #18251E !important;
-  border-color: rgba(79, 140, 93, .24) !important;
+  background: #FFFEF8 !important;
+  color: #2C2B29 !important;
+  border-color: rgba(44, 43, 41, .2) !important;
 }
 
 html.theme-dark .auth-card .password-field input {
-  background: #FFFDF4 !important;
-  color: #18251E !important;
+  background: #FFFEF8 !important;
+  color: #2C2B29 !important;
 }
 
 /* Product home paper and CTA dark pass */
 html.theme-dark .product-home.product-home-dark .register-link,
 html.theme-dark .product-home.product-home-dark .workbench-link {
-  background: rgba(183, 228, 192, .18) !important;
-  color: #F8FAFC !important;
-  border: 1px solid rgba(183, 228, 192, .34) !important;
+  background: rgba(244, 244, 240, .92) !important;
+  color: #121614 !important;
+  border: 1px solid transparent !important;
 }
 
 html.theme-dark .product-home.product-home-dark .book {
-  --book-paper: #F7F1DE !important;
-  --book-ink: #18251E !important;
-  --book-muted: #536256 !important;
-  --book-accent: #4F8C5D !important;
-  background: #F7F1DE !important;
+  --book-paper: #FCFAF2 !important;
+  --book-ink: #2C2C2C !important;
+  --book-muted: #4A4A4A !important;
+  --book-accent: #A63D2D !important;
+  background: #FCFAF2 !important;
 }
 
 html.theme-dark .product-home.product-home-dark .book-base-left,
@@ -1049,9 +1049,9 @@ html.theme-dark .product-home.product-home-dark .wrong-paper,
 html.theme-dark .product-home.product-home-dark .paper-note,
 html.theme-dark .product-home.product-home-dark .radar-demo,
 html.theme-dark .product-home.product-home-dark .formula-span {
-  background: #FFFDF4 !important;
-  color: #18251E !important;
-  border-color: rgba(79, 140, 93, .18) !important;
+  background: #FCFAF2 !important;
+  color: #2C2C2C !important;
+  border-color: #E6E4DD !important;
 }
 
 html.theme-dark .product-home.product-home-dark .book-page h3,
@@ -1059,7 +1059,7 @@ html.theme-dark .product-home.product-home-dark .book-final-left h2,
 html.theme-dark .product-home.product-home-dark .book-final-right h2,
 html.theme-dark .product-home.product-home-dark .data-network h3,
 html.theme-dark .product-home.product-home-dark .turn-hint strong {
-  color: #18251E !important;
+  color: #2C2C2C !important;
 }
 
 html.theme-dark .product-home.product-home-dark .book-copy,
@@ -1069,7 +1069,7 @@ html.theme-dark .product-home.product-home-dark .data-network p,
 html.theme-dark .product-home.product-home-dark .paper-note,
 html.theme-dark .product-home.product-home-dark .book-final-left p,
 html.theme-dark .product-home.product-home-dark .book-final-right footer p {
-  color: #536256 !important;
+  color: #4A4A4A !important;
 }
 
 /* Additional dark pass for dense scoped chunks and teleported controls. */
@@ -1124,7 +1124,7 @@ html.theme-dark .student-shell .quiz-modern-page .empty {
 }
 
 html.theme-dark .student-shell .qa-modern-page .input-dock-container {
-  background: linear-gradient(to bottom, rgba(3, 7, 18, 0), var(--dark-page) 42%) !important;
+  background: linear-gradient(to bottom, rgba(10, 13, 11, 0), var(--dark-page) 42%) !important;
   box-shadow: none !important;
 }
 
@@ -1150,7 +1150,7 @@ html.theme-dark .student-shell .default-user-avatar circle {
 html.theme-dark .student-shell .continue-cover span,
 html.theme-dark .student-shell .page-badge,
 html.theme-dark .student-shell .knowledge-dot {
-  background: rgba(15, 23, 42, .82) !important;
+  background: rgba(18, 22, 20, .82) !important;
   color: var(--dark-text) !important;
 }
 
@@ -1231,14 +1231,14 @@ html.theme-dark .admin-shell .bulk-bar {
 html.theme-dark .admin-shell .bulk-bar,
 html.theme-dark .admin-shell .view-toggle button.active {
   background: var(--ca-role-admin-primary) !important;
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
 }
 
 html.theme-dark .product-home.product-home-dark .trial-link,
 html.theme-dark .product-home.product-home-dark .docs-link {
-  background: rgba(15, 23, 42, .82) !important;
-  color: #F8FAFC !important;
-  border: 1px solid rgba(148, 163, 184, .28) !important;
+  background: rgba(18, 22, 20, .85) !important;
+  color: #F4F4F0 !important;
+  border: 1px solid rgba(140, 148, 143, .28) !important;
 }
 
 /* Theme audit pass: keep role pages readable without changing layout metrics. */
@@ -1406,7 +1406,7 @@ html.theme-dark .student-shell :where(
   .exam-q-btn.answered,
   .exam-analysis-trigger:hover
 ) {
-  background: rgba(0, 240, 255, .12) !important;
+  background: rgba(0, 229, 255, .12) !important;
   color: var(--dark-cyan-text) !important;
   border-color: var(--dark-cyan-border) !important;
 }
@@ -1437,7 +1437,7 @@ html.theme-dark .student-shell :where(
   .bottom-tabs .ai span
 ) {
   background: linear-gradient(135deg, #0891B2, #2563EB) !important;
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
   border-color: transparent !important;
   box-shadow: 0 12px 24px rgba(0, 184, 212, .22) !important;
 }
@@ -1612,7 +1612,7 @@ html.theme-dark .teacher-shell :where(
   .thumb-card span
 ) {
   background: #C2410C !important;
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
   border-color: #EA580C !important;
 }
 
@@ -1738,7 +1738,7 @@ html.theme-dark .admin-shell :where(
   .bulk-bar button
 ) {
   background: #A16207 !important;
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
   border-color: #B45309 !important;
 }
 
@@ -1805,56 +1805,81 @@ html.theme-dark .app-select-pop button:hover {
   color: var(--dark-text) !important;
 }
 
-/* Light theme audit: role shells should not keep forced blackboard surfaces. */
-html.theme-light .teacher-shell .teacher-sidebar,
-html.theme-light .admin-shell .admin-sidebar {
+/* Light theme audit: teacher keeps a paper sidebar; the admin sidebar stays blackboard
+   (design final: 亮色下管理侧边栏也是黑板材质, values mirror admin-scoped.css guards). */
+html.theme-light .teacher-shell .teacher-sidebar {
   background: var(--color-bg-surface) !important;
   color: var(--color-text-body) !important;
   border-right-color: var(--color-border-default) !important;
   box-shadow: var(--shadow-sm) !important;
 }
 
-html.theme-light .teacher-shell .teacher-sidebar::before,
+html.theme-light .admin-shell .admin-sidebar {
+  --admin-chalk-line: var(--ca-color-paper-border);
+  background: var(--color-bg-surface) !important;
+  color: var(--ca-color-paper-ink) !important;
+  border-right-color: var(--ca-color-paper-border) !important;
+  box-shadow: 4px 0 16px rgba(18, 22, 20, .04) !important;
+}
+
+html.theme-light .teacher-shell .teacher-sidebar::before {
+  opacity: 0 !important;
+}
+
 html.theme-light .admin-shell .admin-sidebar::before {
   opacity: 0 !important;
 }
 
-html.theme-light .teacher-shell :where(.teacher-sidebar-toggle, .nav-group button, .course-title),
-html.theme-light .admin-shell .admin-sidebar :where(.teacher-sidebar-toggle, .nav-group button) {
+html.theme-light .teacher-shell :where(.teacher-sidebar-toggle, .nav-group button, .course-title) {
   background: transparent !important;
   color: var(--color-text-secondary) !important;
   border-color: var(--color-border-default) !important;
 }
 
-html.theme-light .teacher-shell :where(.teacher-sidebar-toggle:hover, .nav-group button:hover, .nav-group button.active, .course-title:hover),
-html.theme-light .admin-shell .admin-sidebar :where(.teacher-sidebar-toggle:hover, .nav-group button:hover, .nav-group button.active) {
+html.theme-light .admin-shell .admin-sidebar :where(.teacher-sidebar-toggle, .nav-group button) {
+  background: transparent !important;
+  color: var(--color-text-secondary) !important;
+  border-color: transparent !important;
+}
+
+html.theme-light .teacher-shell :where(.teacher-sidebar-toggle:hover, .nav-group button:hover, .nav-group button.active, .course-title:hover) {
   background: var(--color-primary-50) !important;
   color: var(--color-primary-700) !important;
 }
 
-html.theme-light .teacher-shell :where(.nav-group > span, .course-title),
+html.theme-light .admin-shell .admin-sidebar :where(.teacher-sidebar-toggle:hover, .nav-group button:hover, .nav-group button.active) {
+  background: var(--admin-copper-soft) !important;
+  color: var(--color-text-primary) !important;
+}
+
+html.theme-light .teacher-shell :where(.nav-group > span, .course-title) {
+  color: var(--color-text-muted) !important;
+}
+
 html.theme-light .admin-shell .admin-sidebar .nav-group > span {
   color: var(--color-text-muted) !important;
 }
 
 html.theme-light .teacher-shell .welcome {
-  background: linear-gradient(135deg, #FFF7ED, #FFEDD5) !important;
-  color: var(--color-text-primary) !important;
-  border: 1px solid rgba(249, 115, 22, .18) !important;
+  background:
+    radial-gradient(640px 220px at 12% 0%, rgba(244, 244, 240, .05), transparent 64%),
+    #121614 !important;
+  color: #F4F4F0 !important;
+  border: 1px solid rgba(18, 22, 20, .9) !important;
 }
 
 html.theme-light .teacher-shell .welcome h1 {
-  color: var(--color-text-primary) !important;
+  color: #F4F4F0 !important;
 }
 
 html.theme-light .teacher-shell .welcome p {
-  color: var(--color-text-secondary) !important;
+  color: #8C948F !important;
 }
 
 html.theme-light .teacher-shell .white-btn {
-  background: rgba(255, 255, 255, .72) !important;
-  color: var(--color-primary-700) !important;
-  border-color: rgba(249, 115, 22, .24) !important;
+  background: rgba(244, 244, 240, .04) !important;
+  color: #F4F4F0 !important;
+  border-color: rgba(244, 244, 240, .26) !important;
 }
 
 html.theme-light .teacher-shell .btn-ai {
@@ -1863,7 +1888,7 @@ html.theme-light .teacher-shell .btn-ai {
 }
 
 html.theme-light .teacher-shell :where(.cover, .mini-cover, .lesson-thumb, .course-cover:not(.has-image)) {
-  background: var(--color-bg-muted) !important;
+  background: linear-gradient(135deg, #FFF7ED, #FBE9E7) !important;
   color: var(--color-primary-700) !important;
 }
 
@@ -1877,12 +1902,12 @@ html.theme-light .admin-shell .admin-sidebar .nav-group button.active::before {
 html.theme-dark .student-shell .quiz-modern-page,
 html.theme-dark .exam-answer-page,
 html.theme-dark .exam-modal-scope {
-  --quiz-primary-50: rgba(0, 240, 255, .12) !important;
+  --quiz-primary-50: rgba(0, 229, 255, .12) !important;
   --quiz-primary-100: rgba(103, 232, 249, .22) !important;
   --quiz-primary-500: #22D3EE !important;
   --quiz-primary-600: var(--dark-cyan-text) !important;
   --quiz-ai-main: linear-gradient(135deg, #0891B2, #2563EB) !important;
-  --quiz-ai-light: rgba(0, 240, 255, .12) !important;
+  --quiz-ai-light: rgba(0, 229, 255, .12) !important;
   --quiz-bg: var(--dark-page) !important;
   --quiz-surface: var(--dark-surface) !important;
   --quiz-muted: var(--dark-surface-2) !important;
@@ -1894,7 +1919,7 @@ html.theme-dark .exam-modal-scope {
   --quiz-shadow-card: var(--shadow-md) !important;
   --quiz-shadow-float: var(--shadow-lg) !important;
   --quiz-shadow-focus: var(--shadow-focus) !important;
-  --exam-primary-50: rgba(0, 240, 255, .12) !important;
+  --exam-primary-50: rgba(0, 229, 255, .12) !important;
   --exam-primary-100: rgba(103, 232, 249, .22) !important;
   --exam-primary-400: #22D3EE !important;
   --exam-primary-500: #00B8D4 !important;
@@ -1905,7 +1930,7 @@ html.theme-dark .exam-modal-scope {
   --exam-warning-700: #FCD34D !important;
   --exam-bg-page: var(--dark-page) !important;
   --exam-bg-card: var(--dark-surface) !important;
-  --exam-border-light: rgba(148, 163, 184, .16) !important;
+  --exam-border-light: rgba(140, 148, 143, .16) !important;
   --exam-border-default: var(--dark-border) !important;
   --exam-border-strong: var(--dark-border-strong) !important;
   --exam-text-main: var(--dark-text) !important;
@@ -1941,7 +1966,7 @@ html.theme-dark .exam-answer-page .exam-empty-shell .empty {
 
 html.theme-dark .student-shell .quiz-hero-card {
   background:
-    linear-gradient(90deg, rgba(0, 240, 255, .08), transparent 38%),
+    linear-gradient(90deg, rgba(0, 229, 255, .08), transparent 38%),
     var(--dark-surface) !important;
 }
 
@@ -1987,7 +2012,7 @@ html.theme-dark .exam-answer-page .exam-mark-btn:hover,
 html.theme-dark .exam-answer-page .exam-mark-btn.is-marked,
 html.theme-dark .exam-answer-page .exam-opt-input:checked + .exam-opt-card,
 html.theme-dark .exam-answer-page .exam-analysis-trigger:hover {
-  background: rgba(0, 240, 255, .12) !important;
+  background: rgba(0, 229, 255, .12) !important;
   color: var(--dark-cyan-text) !important;
   border-color: var(--dark-cyan-border) !important;
 }
@@ -2085,7 +2110,7 @@ html.theme-dark .exam-answer-page .exam-result-main {
 }
 
 html.theme-dark .exam-answer-page .exam-action-footer {
-  background: rgba(3, 7, 18, .84) !important;
+  background: rgba(10, 13, 11, .84) !important;
   border-color: var(--dark-border) !important;
   box-shadow: 0 -16px 34px rgba(0, 0, 0, .26) !important;
 }
@@ -2102,7 +2127,7 @@ html.theme-dark .exam-answer-page .exam-btn-outline:hover:not(:disabled) {
 html.theme-dark .exam-answer-page .exam-opt-input:checked + .exam-opt-card .exam-opt-letter,
 html.theme-dark .exam-answer-page .exam-btn-primary {
   background: linear-gradient(135deg, #0891B2, #2563EB) !important;
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
   border-color: transparent !important;
 }
 
@@ -2113,5 +2138,104 @@ html.theme-dark .exam-answer-page .exam-q-btn.marked::after {
 
 html.theme-dark .exam-answer-page .exam-modal-mask,
 html.theme-dark .exam-modal-scope .exam-modal-mask {
-  background: rgba(3, 7, 18, .72) !important;
+  background: rgba(10, 13, 11, .72) !important;
+}
+
+/* ── 2026-06 设计审计补充 ── */
+
+/* 学生端：个人主页封面改为黑板墨绿→深青的品牌渐变。 */
+html.theme-dark .student-shell .profile-cover {
+  background: linear-gradient(135deg, #0B0E0C, #0F2A28 55%, #00474F) !important;
+}
+
+/* 教师端：危险指标卡回到 surface 底，用左侧红条表达语义。 */
+html.theme-dark .teacher-shell .metric-card.danger {
+  background: var(--dark-surface) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: inset 3px 0 0 #F87171, var(--ca-shadow-card) !important;
+}
+
+html.theme-dark .teacher-shell .metric-card.danger strong {
+  color: #FCA5A5 !important;
+}
+
+html.theme-dark .teacher-shell .course-inactive-banner {
+  background: var(--dark-surface) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: inset 3px 0 0 #F87171 !important;
+}
+
+html.theme-dark .teacher-shell .teacher-table tr.inactive td:first-child {
+  box-shadow: inset 3px 0 0 #F87171;
+}
+
+html.theme-dark .teacher-shell .welcome,
+html.theme-dark .teacher-shell .word-cloud {
+  background-color: #0B0F0D !important;
+}
+
+html.theme-dark .teacher-shell .welcome-tray::before {
+  background: linear-gradient(180deg, #E5E7EB, #9CA3AF) !important;
+}
+
+html.theme-dark .teacher-shell .lesson-index b {
+  background: var(--dark-surface-2) !important;
+  border-color: var(--dark-border) !important;
+}
+
+/* 管理端：危险态统一为 surface 底 + 红色左条；批量条改深面板。 */
+html.theme-dark .admin-shell .welcome-card::after {
+  background: radial-gradient(closest-side, rgba(253, 230, 138, .1), transparent 72%) !important;
+}
+
+html.theme-dark .admin-shell .metric-card.danger {
+  background: var(--dark-surface) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: inset 3px 0 0 0 #F87171, var(--ca-shadow-card) !important;
+}
+
+html.theme-dark .admin-shell .danger-zone,
+html.theme-dark .admin-shell .monitor-service.tag-danger {
+  background: var(--dark-surface) !important;
+  border-color: var(--dark-border) !important;
+  box-shadow: inset 3px 0 0 #F87171 !important;
+}
+
+html.theme-dark .admin-shell .bulk-bar {
+  background: var(--dark-surface-3) !important;
+  color: var(--dark-text) !important;
+}
+
+html.theme-dark .admin-shell .admin-table tbody tr:hover,
+html.theme-dark .admin-shell .admin-table tbody tr.selected {
+  background: rgba(217, 160, 91, .12) !important;
+}
+
+html.theme-dark .admin-shell .admin-table tbody tr.selected td:first-child {
+  box-shadow: inset 3px 0 0 #FDE68A;
+}
+
+/* 全局组件：恢复 toast 左侧语义条；加载墨线与弹窗页脚归入墨绿族。 */
+html.theme-dark .toast.success {
+  border-left-color: #34D399 !important;
+}
+
+html.theme-dark .toast.warning {
+  border-left-color: #FBBF24 !important;
+}
+
+html.theme-dark .toast.error {
+  border-left-color: #F87171 !important;
+}
+
+html.theme-dark .toast.info {
+  border-left-color: #60A5FA !important;
+}
+
+html.theme-dark .loading-mark line {
+  stroke: #475C52;
+}
+
+html.theme-dark .modal footer {
+  background: var(--dark-surface) !important;
 }

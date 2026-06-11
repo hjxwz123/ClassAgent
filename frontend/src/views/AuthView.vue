@@ -1,10 +1,11 @@
 <template>
   <PageLoader v-if="loginRedirecting" />
-  <main v-else class="auth" :class="[authThemeClass, { 'auth-link-invalid': linkValidationStatus === 'invalid' }]">
+  <main v-else class="auth" :class="[authThemeClass, { 'auth-link-invalid': linkValidationStatus === 'invalid', 'entered-from-home': enteredFromHome }]">
     <div class="auth-toolbar">
       <RouterLink to="/" class="auth-home-link"><ArrowLeft :size="17" />返回首页</RouterLink>
       <ThemeToggle class="auth-theme-toggle" />
     </div>
+    <div class="auth-accent" aria-hidden="true"></div>
     <div class="auth-formulas" aria-hidden="true">
       <span class="auth-formula formula-force">F = m · a</span>
       <span class="auth-formula formula-integral">∫ f(x) dx = F(x) + C</span>
@@ -20,6 +21,7 @@
       </div>
 
       <section class="auth-card">
+        <div class="auth-card-edge" aria-hidden="true"></div>
         <div class="auth-card-body">
           <template v-if="linkValidationStatus === 'invalid'">
             <div class="link-result link-result--error">
@@ -107,6 +109,7 @@ const emit = defineEmits<{ authed: [user: User]; notice: [type: "success" | "war
 
 const mode = ref<"login" | "register" | "reset">("login");
 const loading = ref(false);
+const enteredFromHome = ref(false);
 const loginRedirecting = ref(false);
 const formError = ref("");
 const authTheme = ref<AppTheme>(readStoredTheme());
@@ -132,6 +135,8 @@ let linkValidationRun = 0;
 watch(() => route.query, applyAuthQuery, { immediate: true });
 
 onMounted(() => {
+  // 经由首页转场进入时打上持久标记：转场类移除后由它禁止直载入场动画重播（视觉用途）
+  enteredFromHome.value = Boolean(document.querySelector(".auth.route-home-auth-enter-active"));
   unsubscribeTheme = subscribeAppTheme((theme) => {
     authTheme.value = theme;
   });
@@ -343,24 +348,30 @@ async function resetPassword() {
     monospace;
   --shared-title-left: max(24px, calc((100vw - 1040px) / 2));
   --shared-title-top: clamp(190px, calc(50vh - 190px), 290px);
+  --shared-title-size: clamp(64px, 10vw, 128px);
   --home-logo-left: max(24px, calc((100vw - 1280px) / 2 + 24px));
-  --home-logo-top: 16px;
+  /* 首页品牌字静止时的真实视口坐标（nav 上内边距 12px + (44 − 18)/2 = 25px）。
+     与 ProductHomeView.vue 同名变量保持同步 */
+  --home-logo-text-top: 25px;
   --home-logo-text-offset: 68px;
+  --brand-flight-glow: 0 0 2px rgba(244, 244, 240, 0.7), 0 0 18px rgba(244, 244, 240, 0.18);
   --title-to-logo-x: calc(var(--home-logo-left) + var(--home-logo-text-offset) - var(--shared-title-left));
-  --title-to-logo-y: calc(var(--home-logo-top) - var(--shared-title-top));
+  --title-to-logo-y: calc(var(--home-logo-text-top) - var(--shared-title-top));
 
   min-height: 100vh;
   position: relative;
+  isolation: isolate;
   display: grid;
   place-items: center;
   overflow: hidden;
   padding: 56px 24px;
-  background:
-    radial-gradient(circle at 16% 18%, rgba(0, 229, 255, .12), transparent 28%),
-    radial-gradient(circle at 84% 78%, rgba(217, 160, 91, .14), transparent 32%),
-    var(--ca-color-slate);
+  /* 底色与噪点纹理同 ProductHomeView 的黑板逐像素一致，转场穿透/揭幕才无缝；
+     青/铜辉光移入 .auth-accent 单独淡入，不参与底色交接 */
+  background: radial-gradient(ellipse 100% 80% at 50% 38%, #1B211D 0%, #121614 56%, #0A0D0B 100%);
+  background-attachment: fixed;
   color: var(--ca-color-chalk);
 }
+/* 与 ProductHomeView .board-texture 完全同款（同 SVG、同混合、同透明度、拉伸非平铺） */
 .auth::before {
   content: "";
   position: absolute;
@@ -368,10 +379,37 @@ async function resetPassword() {
   z-index: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
-  background-size: 48px 48px;
-  opacity: .35;
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" opacity="0.12"/%3E%3C/svg%3E'),
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="grain"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="2" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23grain)" opacity="0.08"/%3E%3C/svg%3E');
+  background-blend-mode: overlay, soft-light;
+  mix-blend-mode: overlay;
+  opacity: 0.85;
+}
+/* 与 ProductHomeView .board-smudge 完全同款（擦拭高光/粉笔灰痕/暗角/擦痕条纹） */
+.auth::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 45%, rgba(220, 230, 215, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 30% 25% at 22% 28%, rgba(244, 244, 240, 0.05) 0%, transparent 65%),
+    radial-gradient(ellipse 35% 30% at 78% 72%, rgba(244, 244, 240, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.22) 100%),
+    repeating-linear-gradient(90deg, rgba(244, 244, 240, 0.012) 0px, rgba(244, 244, 240, 0.012) 1px, transparent 1px, transparent 3px),
+    repeating-linear-gradient(88deg, transparent 0px, transparent 60px, rgba(244, 244, 240, 0.018) 60px, rgba(244, 244, 240, 0.018) 62px, transparent 62px, transparent 140px);
+}
+/* 登录页专属的青/铜环境光：垫在纹理之下，入场时单独淡入 */
+.auth-accent {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 16% 18%, rgba(0, 229, 255, .1), transparent 30%),
+    radial-gradient(circle at 84% 78%, rgba(217, 160, 91, .1), transparent 32%);
+  animation: auth-formula-mount 1100ms ease-out 120ms both;
 }
 .auth-formulas {
   position: absolute;
@@ -391,6 +429,24 @@ async function resetPassword() {
   text-shadow: 0 0 1px rgba(244,244,240,.12);
   transform: rotate(var(--r));
   white-space: nowrap;
+  animation: auth-formula-mount 1100ms ease-out both;
+}
+.formula-force { animation-delay: 160ms; }
+.formula-integral { animation-delay: 280ms; }
+.formula-limit { animation-delay: 400ms; }
+.formula-energy { animation-delay: 520ms; }
+.formula-gas { animation-delay: 640ms; }
+@keyframes auth-formula-mount {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes auth-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes auth-card-pop {
+  from { opacity: 0; transform: translateY(20px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .formula-force {
   top: 18%;
@@ -419,6 +475,8 @@ async function resetPassword() {
   --o: .04;
   --r: 5deg;
   font-size: clamp(18px, 2.6vw, 32px);
+  color: rgba(0, 229, 255, calc(var(--o) * 1.7));
+  text-shadow: 0 0 10px rgba(0, 229, 255, .1);
 }
 .formula-gas {
   top: 46%;
@@ -444,18 +502,25 @@ async function resetPassword() {
   min-height: 38px;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(255,255,255,.14);
+  border: 1px solid rgba(244,244,240,.14);
   border-radius: var(--ca-radius-full);
-  background: rgba(255,255,255,.08);
+  background: rgba(244,244,240,.08);
   color: var(--ca-color-chalk);
-  padding: 0 14px;
+  padding: 0 16px;
+  font-size: 13px;
   text-decoration: none;
   backdrop-filter: blur(10px);
   pointer-events: auto;
+  transition: border-color 200ms var(--ease-out), background-color 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
 }
 .auth-home-link:hover {
-  border-color: rgba(255,255,255,.28);
-  background: rgba(255,255,255,.12);
+  border-color: rgba(244,244,240,.3);
+  background: rgba(244,244,240,.13);
+  transform: translateY(-1px);
+}
+.auth-home-link:active {
+  transform: translateY(0) scale(.97);
 }
 .auth-theme-toggle {
   color: var(--ca-color-chalk);
@@ -492,37 +557,43 @@ async function resetPassword() {
   min-width: 0;
 }
 .auth-copy h1 {
-  margin: 0 0 18px;
+  margin: 0 0 20px;
   color: var(--ca-color-chalk);
   font-family: var(--ca-font-chalk);
-  font-size: clamp(64px, 10vw, 128px);
+  font-size: var(--shared-title-size);
   font-weight: 500;
   font-synthesis: none;
   letter-spacing: 0;
   line-height: .9;
-  text-shadow: 0 0 16px rgba(244,244,240,.2);
+  text-shadow: 0 0 2px rgba(244,244,240,.7), 0 0 18px rgba(244,244,240,.18);
+  animation: auth-rise 640ms var(--ease-out) both;
 }
 .auth-copy p {
-  max-width: 560px;
+  max-width: 30em;
   margin: 0;
-  color: rgba(244,244,240,.78);
-  font-size: 18px;
+  color: rgba(244,244,240,.82);
+  font-size: 17px;
   line-height: 1.9;
+  letter-spacing: 0.02em;
+  animation: auth-rise 640ms var(--ease-out) 90ms both;
 }
 .chalk-line {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-top: 34px;
-  color: rgba(244,244,240,.52);
+  margin-top: 36px;
+  color: rgba(244,244,240,.55);
   font-family: var(--ca-font-mono);
   font-size: 12px;
+  letter-spacing: .08em;
+  animation: auth-rise 640ms var(--ease-out) 170ms both;
 }
 .chalk-line i {
-  width: 130px;
+  width: 120px;
   height: 2px;
   border-radius: 2px;
-  background: rgba(244,244,240,.48);
+  background: linear-gradient(90deg, rgba(0,229,255,.75), rgba(244,244,240,.4) 55%, rgba(244,244,240,.06));
+  box-shadow: 0 0 8px rgba(0,229,255,.25);
 }
 .auth-card {
   grid-column: 2;
@@ -531,39 +602,58 @@ async function resetPassword() {
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  border: 1px solid rgba(255,255,255,.22);
-  border-radius: 8px;
+  border: 1px solid rgba(244,244,240,.22);
+  border-radius: 14px;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,244,232,.94)),
+    linear-gradient(180deg, rgba(255,255,255,.97), rgba(248,244,232,.95)),
     var(--ca-color-paper-card);
-  box-shadow: 0 30px 80px rgba(0,0,0,.36);
+  box-shadow:
+    0 30px 80px rgba(0,0,0,.4),
+    0 8px 24px rgba(0,0,0,.24),
+    inset 0 1px 0 rgba(255,255,255,.6);
   padding: 0;
   overflow: hidden;
+  animation: auth-card-pop 680ms var(--ease-out) 120ms both;
+}
+.auth-card-edge {
+  position: relative;
+  height: 10px;
+  background: linear-gradient(90deg, #121614, #1d231f 50%, #121614);
+}
+.auth-card-edge::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 4%, rgba(0,229,255,.65) 32%, rgba(0,229,255,.65) 68%, transparent 96%);
+  box-shadow: 0 0 12px rgba(0,229,255,.4);
 }
 .auth-card-body {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 28px;
+  padding: 32px;
 }
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 22px;
+  gap: 14px;
+  margin-bottom: 24px;
   color: var(--ca-color-paper-ink);
 }
 .brand span {
   display: inline-flex;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   align-items: center;
   justify-content: center;
-  color: #0891B2;
-  border-radius: 8px;
-  background: transparent;
-  box-shadow: none;
+  color: #00E5FF;
+  border-radius: 10px;
+  background: var(--ca-color-slate);
+  box-shadow: 0 4px 10px rgba(18,22,20,.24), 0 0 14px rgba(0,229,255,.16);
 }
 .brand div {
   display: grid;
@@ -571,11 +661,11 @@ async function resetPassword() {
 }
 .brand strong {
   color: var(--ca-color-paper-ink);
-  font-family: var(--ca-font-sans);
-  font-size: 22px;
-  font-weight: 900;
+  font-family: var(--ca-font-serif);
+  font-size: 23px;
+  font-weight: 800;
   font-synthesis: none;
-  letter-spacing: 0;
+  letter-spacing: -0.01em;
   line-height: 1.18;
 }
 .brand small {
@@ -585,11 +675,11 @@ async function resetPassword() {
 .tabs {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-bottom: 18px;
+  gap: 4px;
+  margin-bottom: 20px;
   border: 1px solid var(--ca-color-paper-border);
   border-radius: 8px;
-  background: #EEE6D2;
+  background: #F4F1EA;
   padding: 4px;
 }
 .tabs button {
@@ -598,14 +688,38 @@ async function resetPassword() {
   border-radius: 6px;
   background: transparent;
   color: var(--ca-color-paper-sub);
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: color 180ms var(--ease-out), background-color 180ms var(--ease-out),
+    box-shadow 180ms var(--ease-out);
+}
+.tabs button:hover:not(.active) {
+  color: var(--ca-color-paper-ink);
 }
 .tabs button.active {
   background: var(--ca-color-slate);
   color: var(--ca-color-chalk);
-  box-shadow: 0 4px 12px rgba(0,0,0,.16);
+  box-shadow: 0 4px 12px rgba(18,22,20,.2);
 }
-.form-error { display: flex; align-items: center; gap: 6px; min-height: 38px; border: 1px solid var(--color-danger-100); border-radius: 8px; background: var(--color-danger-50); color: var(--color-danger-700); padding: 0 10px; font-size: var(--text-body-sm); }
+.form-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  border: 1px solid var(--color-danger-100);
+  border-left: 3px solid var(--color-danger-500);
+  border-radius: 6px;
+  background: var(--color-danger-50);
+  color: var(--color-danger-700);
+  padding: 8px 12px;
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+}
+.form-error svg {
+  flex: 0 0 auto;
+}
 .link-result {
   display: grid;
   min-height: 168px;
@@ -625,7 +739,14 @@ async function resetPassword() {
 .link-result--error strong {
   color: var(--color-danger-700);
 }
-.label { display: block; margin-top: 16px; color: var(--ca-color-paper-sub); font-size: 13px; font-weight: 800; }
+.label {
+  display: block;
+  margin-top: 18px;
+  color: var(--ca-color-paper-sub);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
 .inline { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; }
 .inline .input {
   margin-top: 0;
@@ -646,22 +767,33 @@ form {
   margin-top: 8px;
   box-sizing: border-box;
   border: 1px solid var(--ca-color-paper-border);
-  border-radius: 8px;
-  background: rgba(255,255,255,.9);
+  border-radius: 6px;
+  background: rgba(255,255,255,.92);
   color: var(--ca-color-paper-ink);
   padding: 0 12px;
+  font-size: 14px;
   -webkit-appearance: none;
   appearance: none;
+  transition: border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
 }
-
+.input:hover {
+  border-color: var(--ca-color-paper-border-strong);
+}
 .input:focus {
   outline: none;
-  border-color: var(--ca-color-slate);
-  box-shadow: 0 0 0 3px rgba(18,22,20,.14);
+  border-color: #00B8D4;
+  box-shadow: 0 0 0 3px rgba(0,184,212,.16), 0 0 14px rgba(0,229,255,.12);
+}
+.input[aria-invalid="true"] {
+  border-color: var(--color-danger-500);
+}
+.input[aria-invalid="true"]:focus {
+  box-shadow: var(--shadow-focus-danger);
 }
 .input[readonly] {
   color: var(--ca-color-paper-sub);
-  background: rgba(238,230,210,.72);
+  background: rgba(244,241,234,.85);
 }
 :deep(.password-field) {
   margin-top: 8px;
@@ -671,16 +803,17 @@ form {
   min-width: 0;
   min-height: 44px;
   border-color: var(--ca-color-paper-border);
-  border-radius: 8px;
-  background: rgba(255,255,255,.9);
+  border-radius: 6px;
+  background: rgba(255,255,255,.92);
   color: var(--ca-color-paper-ink);
+  transition: border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
 }
 :deep(.password-field:hover) {
   border-color: var(--ca-color-paper-border-strong);
 }
 :deep(.password-field:focus-within) {
-  border-color: var(--ca-color-slate);
-  box-shadow: 0 0 0 3px rgba(18,22,20,.14);
+  border-color: #00B8D4;
+  box-shadow: 0 0 0 3px rgba(0,184,212,.16), 0 0 14px rgba(0,229,255,.12);
 }
 :deep(.password-field.invalid) {
   border-color: var(--color-danger-500);
@@ -717,24 +850,50 @@ form {
   justify-content: center;
   gap: 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--ca-color-slate);
   color: var(--ca-color-chalk);
   padding: 0 16px;
-  font-weight: 900;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  cursor: pointer;
+  transition: background-color 200ms var(--ease-out), transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
 }
 .auth-submit {
   width: 100%;
-  margin-top: 24px;
+  margin-top: 26px;
 }
-.auth-submit:hover,
-.send-code-btn:hover {
-  background: #222925;
+.auth-submit:hover:not(:disabled),
+.send-code-btn:hover:not(:disabled) {
+  background: #1d231f;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(18,22,20,.22), 0 0 16px rgba(0,229,255,.14);
+}
+.auth-submit:active:not(:disabled),
+.send-code-btn:active:not(:disabled) {
+  transform: translateY(0) scale(.98);
 }
 .auth-submit:disabled,
 .send-code-btn:disabled {
   opacity: .72;
   cursor: wait;
+}
+.auth-submit[data-loading="true"] :deep(svg) {
+  display: none;
+}
+.auth-submit[data-loading="true"]::before {
+  content: "";
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid rgba(244,244,240,.32);
+  border-top-color: var(--ca-color-chalk);
+  animation: auth-spin 720ms linear infinite;
+}
+@keyframes auth-spin {
+  to { transform: rotate(360deg); }
 }
 
 @media (max-width: 860px) {
@@ -776,248 +935,330 @@ form {
 }
 
 .auth.auth-light {
-  background: #FFFFFF !important;
-  color: #0F172A !important;
+  /* 浅色 h1 无粉笔辉光（下方有 text-shadow:none!important），飞行字同步关掉 */
+  --brand-flight-glow: 0 0 2px rgba(44, 43, 41, 0), 0 0 18px rgba(44, 43, 41, 0);
+  /* 与 ProductHomeView 浅色世界同底：纯暖纸 + 同款纹理/顶部柔光 */
+  background: #F9F8F6 !important;
+  color: #2C2B29 !important;
 }
 
 .auth.auth-light::before {
-  background-image: none !important;
-  opacity: 0 !important;
+  mix-blend-mode: multiply !important;
+  background-blend-mode: normal !important;
+  opacity: .4 !important;
+}
+
+.auth.auth-light::after {
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(255, 255, 255, 0.85) 0%, transparent 55%),
+    radial-gradient(ellipse 130% 110% at 50% 50%, transparent 64%, rgba(44, 43, 41, 0.05) 100%) !important;
+}
+
+.auth.auth-light .auth-accent {
+  background:
+    radial-gradient(circle at 14% 16%, rgba(0, 184, 212, .06), transparent 30%),
+    radial-gradient(circle at 86% 80%, rgba(217, 160, 91, .08), transparent 34%);
 }
 
 .auth.auth-light .auth-formula {
-  color: rgba(15,23,42, calc(var(--o) * 1.2)) !important;
+  color: rgba(44,43,41, calc(var(--o) * 1.6)) !important;
   text-shadow: none !important;
 }
 
+.auth.auth-light .formula-energy {
+  color: rgba(0,151,167, calc(var(--o) * 2)) !important;
+}
+
 .auth.auth-light .auth-home-link {
-  border-color: #CBD5E1 !important;
+  border-color: #E6E4DD !important;
   background: #FFFFFF !important;
-  color: #334155 !important;
+  color: #444440 !important;
   backdrop-filter: none !important;
-  box-shadow: 0 8px 20px rgba(15,23,42,.06) !important;
+  box-shadow: 0 8px 20px rgba(18,22,20,.05) !important;
 }
 
 .auth.auth-light .auth-home-link:hover {
-  border-color: rgba(8,145,178,.38) !important;
-  background: #F8FAFC !important;
+  border-color: #D1CBB5 !important;
+  background: #FDFCFA !important;
 }
 
 .auth.auth-light .auth-theme-toggle {
-  color: #334155 !important;
+  color: #444440 !important;
 }
 
-.auth.auth-light .auth-copy h1,
-.auth.auth-light .brand strong,
-.auth.auth-light .tabs button.active {
-  color: #0F172A !important;
+.auth.auth-light .auth-copy h1 {
+  color: #2C2B29 !important;
+  text-shadow: none !important;
+}
+
+.auth.auth-light .brand strong {
+  color: #2C2B29 !important;
   text-shadow: none !important;
 }
 
 .auth.auth-light .auth-copy p,
-.auth.auth-light .chalk-line,
 .auth.auth-light .label,
 .auth.auth-light .brand small,
 .auth.auth-light .tabs button,
 .auth.auth-light :deep(.password-tool) {
-  color: #334155 !important;
+  color: #666560 !important;
+}
+
+.auth.auth-light .auth-copy p {
+  color: #444440 !important;
+}
+
+.auth.auth-light .chalk-line {
+  color: #999990 !important;
 }
 
 .auth.auth-light .chalk-line i {
-  background: #94A3B8 !important;
+  background: linear-gradient(90deg, rgba(0,151,167,.6), #D1CBB5 60%, rgba(209,203,181,.2)) !important;
+  box-shadow: none !important;
 }
 
 .auth.auth-light .auth-card {
-  border-color: #CBD5E1 !important;
+  border-color: #E6E4DD !important;
   background: #FFFFFF !important;
-  box-shadow: 0 24px 58px rgba(15,23,42,.1) !important;
+  box-shadow: 0 24px 58px rgba(18,22,20,.09), 0 2px 8px rgba(18,22,20,.04) !important;
+}
+
+.auth.auth-light .auth-card-edge {
+  background: linear-gradient(90deg, #121614, #1d231f 50%, #121614) !important;
 }
 
 .auth.auth-light .brand,
 .auth.auth-light .brand span {
-  color: #0891B2 !important;
+  color: #00E5FF !important;
 }
 
 .auth.auth-light .brand span {
-  background: transparent !important;
+  background: #121614 !important;
 }
 
 .auth.auth-light .tabs {
-  border-color: #CBD5E1 !important;
-  background: #E2E8F0 !important;
+  border-color: #E6E4DD !important;
+  background: #F4F1EA !important;
+}
+
+.auth.auth-light .tabs button:hover:not(.active) {
+  color: #2C2B29 !important;
 }
 
 .auth.auth-light .tabs button.active {
-  background: #FFFFFF !important;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, .06) !important;
+  background: #2C2B29 !important;
+  color: #F9F8F6 !important;
+  box-shadow: 0 4px 12px rgba(18,22,20,.16) !important;
+  text-shadow: none !important;
 }
 
 .auth.auth-light .input,
 .auth.auth-light :deep(.password-field) {
-  border-color: #94A3B8 !important;
+  border-color: #D1CBB5 !important;
   background: #FFFFFF !important;
-  color: #0F172A !important;
+  color: #2C2B29 !important;
 }
 
 .auth.auth-light .input::placeholder,
 .auth.auth-light :deep(.password-field input)::placeholder {
-  color: #64748B !important;
+  color: #999990 !important;
 }
 
 .auth.auth-light :deep(.password-field input) {
-  color: #0F172A !important;
+  color: #2C2B29 !important;
 }
 
 .auth.auth-light .input:hover,
 .auth.auth-light :deep(.password-field:hover) {
-  border-color: #64748B !important;
+  border-color: #999990 !important;
 }
 
 .auth.auth-light .input:focus,
 .auth.auth-light :deep(.password-field:focus-within) {
-  border-color: #0891B2 !important;
-  box-shadow: 0 0 0 3px rgba(8,145,178,.16) !important;
+  border-color: #0097A7 !important;
+  box-shadow: 0 0 0 3px rgba(0,151,167,.15) !important;
 }
 
 .auth.auth-light :deep(.password-tool:hover) {
   background: transparent !important;
-  color: #0F172A !important;
+  color: #2C2B29 !important;
 }
 
 .auth.auth-light .form-error {
-  border-color: #FCA5A5 !important;
-  background: #FEF2F2 !important;
-  color: #991B1B !important;
+  border-color: var(--color-danger-100) !important;
+  background: var(--color-danger-50) !important;
+  color: var(--color-danger-700) !important;
 }
 
 .auth.auth-light .auth-submit,
 .auth.auth-light .send-code-btn {
-  background: #0891B2 !important;
-  color: #FFFFFF !important;
+  background: #121614 !important;
+  color: #F4F4F0 !important;
 }
 
-.auth.auth-light .auth-submit:hover,
-.auth.auth-light .send-code-btn:hover {
-  background: #0E7490 !important;
+.auth.auth-light .auth-submit:hover:not(:disabled),
+.auth.auth-light .send-code-btn:hover:not(:disabled) {
+  background: #2C2B29 !important;
+  box-shadow: 0 10px 24px rgba(18,22,20,.18), 0 0 16px rgba(0,184,212,.14) !important;
 }
 
 .auth.auth-dark {
+  background: radial-gradient(ellipse 100% 80% at 50% 38%, #1B211D 0%, #121614 56%, #0A0D0B 100%);
+  background-attachment: fixed;
+  color: #F4F4F0;
+}
+
+.auth.auth-dark .auth-accent {
   background:
-    radial-gradient(circle at 16% 18%, rgba(0, 240, 255, .08), transparent 32%),
-    radial-gradient(circle at 84% 78%, rgba(244, 244, 240, .05), transparent 36%),
-    radial-gradient(ellipse 100% 80% at 50% 40%, #15392F 0%, #0E3329 55%, #082018 100%);
-  color: #F8FAFC;
+    radial-gradient(circle at 16% 18%, rgba(0, 229, 255, .09), transparent 32%),
+    radial-gradient(circle at 84% 78%, rgba(217, 160, 91, .07), transparent 36%);
 }
 
 .auth.auth-dark .auth-card {
-  border-color: rgba(183, 228, 192, .32) !important;
-  background: linear-gradient(180deg, rgba(255,253,244,.98), rgba(247,241,222,.96)) !important;
-  color: #18251E !important;
-  box-shadow: 0 30px 80px rgba(0,0,0,.36);
+  border-color: rgba(244, 244, 240, .24) !important;
+  background: linear-gradient(180deg, rgba(255,254,248,.98), rgba(247,242,228,.96)) !important;
+  color: #2C2B29 !important;
+  box-shadow:
+    0 30px 80px rgba(0,0,0,.46),
+    0 8px 24px rgba(0,0,0,.3),
+    0 0 28px rgba(0,229,255,.05);
 }
 
 .auth.auth-dark .auth-home-link {
-  border-color: rgba(148,163,184,.24);
-  background: rgba(15,23,42,.62);
-  color: #E2E8F0;
+  border-color: rgba(244,244,240,.16);
+  background: rgba(18,22,20,.6);
+  color: #E9EBE7;
+}
+
+.auth.auth-dark .auth-home-link:hover {
+  border-color: rgba(244,244,240,.3);
+  background: rgba(244,244,240,.1);
 }
 
 .auth.auth-dark .auth-theme-toggle {
-  color: #CBD5E1;
+  color: #C6CCC7;
 }
 
 .auth.auth-dark .auth-copy h1 {
-  color: #F8FAFC;
+  color: #F4F4F0;
 }
 
-.auth.auth-dark .auth-copy p,
+.auth.auth-dark .auth-copy p {
+  color: rgba(244,244,240,.82);
+}
+
 .auth.auth-dark .chalk-line {
-  color: #CBD5E1;
+  color: rgba(244,244,240,.55);
 }
 
 .auth.auth-dark .brand strong,
 .auth.auth-dark .label {
-  color: #18251E !important;
+  color: #2C2B29 !important;
+}
+
+.auth.auth-dark .label {
+  color: #666560 !important;
 }
 
 .auth.auth-dark .brand small {
-  color: #536256 !important;
+  color: #666560 !important;
 }
 
 .auth.auth-dark .brand,
 .auth.auth-dark .brand span {
-  color: #4F8C5D !important;
+  color: #00E5FF !important;
 }
 
 .auth.auth-dark .brand span {
-  background: transparent;
+  background: #121614 !important;
 }
 
 .auth.auth-dark .tabs {
-  border-color: rgba(79,140,93,.18) !important;
-  background: #E8DFC4 !important;
+  border-color: rgba(44,43,41,.14) !important;
+  background: #EFEAD9 !important;
 }
 
 .auth.auth-dark .tabs button {
-  color: #536256 !important;
+  color: #666560 !important;
+}
+
+.auth.auth-dark .tabs button:hover:not(.active) {
+  color: #2C2B29 !important;
 }
 
 .auth.auth-dark .tabs button.active {
-  background: #FFFDF4 !important;
-  color: #18251E !important;
-  box-shadow: none;
+  background: #121614 !important;
+  color: #F4F4F0 !important;
+  box-shadow: 0 4px 12px rgba(18,22,20,.24);
 }
 
 .auth.auth-dark .input,
 .auth.auth-dark :deep(.password-field) {
-  border-color: rgba(79,140,93,.24) !important;
-  background: #FFFDF4 !important;
-  color: #18251E !important;
+  border-color: rgba(44,43,41,.2) !important;
+  background: #FFFEF8 !important;
+  color: #2C2B29 !important;
 }
 
 .auth.auth-dark :deep(.password-field input) {
-  background: #FFFDF4 !important;
-  color: #18251E !important;
+  background: #FFFEF8 !important;
+  color: #2C2B29 !important;
 }
 
 .auth.auth-dark .input::placeholder,
 .auth.auth-dark :deep(.password-field input)::placeholder {
-  color: #6B7A6F !important;
+  color: #999990 !important;
+}
+
+.auth.auth-dark .input:hover,
+.auth.auth-dark :deep(.password-field:hover) {
+  border-color: rgba(44,43,41,.38) !important;
 }
 
 .auth.auth-dark .input:focus,
 .auth.auth-dark :deep(.password-field:focus-within) {
-  border-color: #4F8C5D !important;
-  box-shadow: 0 0 0 3px rgba(79,140,93,.16) !important;
+  border-color: #00B8D4 !important;
+  box-shadow: 0 0 0 3px rgba(0,184,212,.18), 0 0 14px rgba(0,229,255,.14) !important;
 }
 
 .auth.auth-dark :deep(.password-tool) {
-  color: #536256 !important;
+  color: #666560 !important;
 }
 
 .auth.auth-dark :deep(.password-tool:hover) {
-  background: rgba(79,140,93,.08) !important;
-  color: #18251E !important;
+  background: rgba(44,43,41,.06) !important;
+  color: #2C2B29 !important;
 }
 
 .auth.auth-dark .form-error {
-  border-color: rgba(248,113,113,.36);
-  background: rgba(127,29,29,.28);
-  color: #FECACA;
+  border-color: var(--color-danger-100);
+  background: var(--color-danger-50);
+  color: var(--color-danger-700);
 }
 
 .auth.auth-dark .auth-submit,
 .auth.auth-dark .send-code-btn {
-  background: #103A2D !important;
-  color: #F8FAFC !important;
+  background: #121614 !important;
+  color: #F4F4F0 !important;
 }
 
-.auth.auth-dark .auth-submit:hover,
-.auth.auth-dark .send-code-btn:hover {
-  background: #1B5A43 !important;
+.auth.auth-dark .auth-submit:hover:not(:disabled),
+.auth.auth-dark .send-code-btn:hover:not(:disabled) {
+  background: #1d231f !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.32), 0 0 16px rgba(0,229,255,.16) !important;
 }
 
 /* ====== 页面进入：黑板底色常驻，标题从左上承接，登录卡右侧滑入 ====== */
+/* 转场类移除瞬间禁止直载入场动画重播（动画名切换会从第 0 帧重来 = 全员闪烁消失再淡入），
+   entered-from-home 由脚本在挂载时打上并永久保留。
+   注意必须同时排除离场类：本规则特异性高于离场规则，不排除会禁掉返程的离场动画 */
+.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-formula,
+.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-copy h1,
+.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-copy p,
+.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .chalk-line,
+.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-card,
+.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-accent {
+  animation: none;
+}
 .auth.route-home-auth-enter-active {
   transition: opacity 980ms linear;
 }
@@ -1026,11 +1267,15 @@ form {
   filter: none;
   transform: none;
 }
-.auth.route-home-auth-enter-active .auth-home-link {
+.auth.route-home-auth-enter-active .auth-toolbar {
   animation: auth-link-in 620ms cubic-bezier(.22, .61, .36, 1) 260ms both;
 }
+.auth.route-home-auth-enter-active .auth-accent {
+  animation: auth-formula-mount 560ms cubic-bezier(.22, .61, .36, 1) 380ms both;
+}
 .auth.route-home-auth-enter-active .auth-formula {
-  animation: auth-formula-in 820ms cubic-bezier(.22, .61, .36, 1) both;
+  /* 所有入场动画必须在 980ms 转场窗口内收尾，否则类移除时被截断产生跳变 */
+  animation: auth-formula-in 700ms cubic-bezier(.22, .61, .36, 1) both;
 }
 .auth.route-home-auth-enter-active .formula-force {
   animation-delay: 60ms;
@@ -1049,21 +1294,33 @@ form {
 }
 .auth.route-home-auth-enter-active .auth-copy h1 {
   transform-origin: left top;
+  will-change: opacity;
   animation: auth-h1-takeover 980ms linear both;
 }
 .auth.route-home-auth-enter-active .auth-copy p {
-  animation: auth-copy-in 900ms cubic-bezier(.22, .61, .36, 1) 220ms both;
+  animation: auth-copy-in 620ms cubic-bezier(.22, .61, .36, 1) 240ms both;
 }
 .auth.route-home-auth-enter-active .chalk-line {
-  animation: auth-copy-in 900ms cubic-bezier(.22, .61, .36, 1) 300ms both;
+  animation: auth-copy-in 620ms cubic-bezier(.22, .61, .36, 1) 320ms both;
 }
 .auth.route-home-auth-enter-active .auth-card {
-  animation: auth-card-in 960ms cubic-bezier(.22, .61, .36, 1) 200ms both;
+  animation: auth-card-in 740ms cubic-bezier(.22, .61, .36, 1) 200ms both;
 }
+/* 返程离场层转透明：下方首页同款黑板从第一帧接管底色，主页内容随转场逐步显形，
+   不再在 980ms 揭幕时整页突现（!important 用于压过 .auth-light 的 !important 底色） */
 .auth.route-auth-home-leave-active {
+  background: transparent !important;
   transition: opacity 980ms linear;
 }
-.auth.route-auth-home-leave-active .auth-home-link {
+/* 透明底上的噪点层失去可混合底色会泛白成磨砂——立即隐藏，由下层首页同款纹理接管 */
+.auth.route-auth-home-leave-active::before,
+.auth.route-auth-home-leave-active::after {
+  opacity: 0 !important;
+}
+.auth.route-auth-home-leave-active .auth-accent {
+  animation: auth-accent-out 420ms cubic-bezier(.55, .06, .68, .19) forwards;
+}
+.auth.route-auth-home-leave-active .auth-toolbar {
   animation: auth-link-out 620ms cubic-bezier(.55, .06, .68, .19) both;
 }
 .auth.route-auth-home-leave-active .auth-formula {
@@ -1071,7 +1328,8 @@ form {
 }
 .auth.route-auth-home-leave-active .auth-copy h1 {
   transform-origin: left top;
-  animation: auth-h1-to-home-logo 940ms cubic-bezier(.55, .06, .68, .19) both;
+  will-change: transform, opacity;
+  animation: auth-h1-to-home-logo 940ms cubic-bezier(.45, .05, .22, 1) both;
 }
 .auth.route-auth-home-leave-active .auth-copy p,
 .auth.route-auth-home-leave-active .chalk-line {
@@ -1088,6 +1346,9 @@ form {
 @keyframes auth-link-out {
   to { opacity: 0; transform: translateY(-10px); }
 }
+@keyframes auth-accent-out {
+  to { opacity: 0; }
+}
 @keyframes auth-formula-in {
   from { opacity: 0; transform: rotate(var(--r)); }
   to { opacity: 1; transform: translateX(0) rotate(var(--r)); }
@@ -1095,15 +1356,33 @@ form {
 @keyframes auth-formula-out {
   to { opacity: 0; transform: rotate(var(--r)); }
 }
+/* 去程承接：上层飞行字 76% 抵达后，本体在 80→93% 同位淡入，与其 84→96% 的淡出交叉，
+   字体/字号/行高/辉光完全一致，交接不可见 */
 @keyframes auth-h1-takeover {
-  0%,
-  96% { opacity: 0; transform: translate3d(0, 0, 0); }
-  100% { opacity: 1; transform: translate3d(0, 0, 0); }
+  0%, 80% { opacity: 0; transform: translate3d(0, 0, 0); }
+  93%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
+/* 返程：减速飞抵 nav 角落、停笔落定，再与下层首页品牌字（72→90% 同位淡入）交叉淡出；
+   辉光在途中归零，与 nav 文字的无光状态对齐 */
 @keyframes auth-h1-to-home-logo {
-  0% { opacity: 1; transform: translate3d(0, 0, 0); font-size: clamp(64px, 10vw, 128px); }
-  78% { opacity: 1; transform: translate3d(var(--title-to-logo-x), var(--title-to-logo-y), 0); font-size: 20px; }
-  100% { opacity: 1; transform: translate3d(var(--title-to-logo-x), var(--title-to-logo-y), 0); font-size: 20px; }
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    font-size: var(--shared-title-size);
+    text-shadow: var(--brand-flight-glow);
+  }
+  76%, 84% {
+    opacity: 1;
+    transform: translate3d(var(--title-to-logo-x), var(--title-to-logo-y), 0);
+    font-size: 20px;
+    text-shadow: 0 0 2px rgba(244, 244, 240, 0), 0 0 18px rgba(244, 244, 240, 0);
+  }
+  96%, 100% {
+    opacity: 0;
+    transform: translate3d(var(--title-to-logo-x), var(--title-to-logo-y), 0);
+    font-size: 20px;
+    text-shadow: 0 0 2px rgba(244, 244, 240, 0), 0 0 18px rgba(244, 244, 240, 0);
+  }
 }
 @keyframes auth-copy-in {
   from { opacity: 0; transform: translateX(-26px); }
@@ -1124,19 +1403,29 @@ form {
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, .36);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .24);
   }
 }
 @keyframes auth-card-out {
   from {
     opacity: 1;
     transform: translate3d(0, 0, 0);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, .36);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .24);
   }
   to {
     opacity: 0;
     transform: translate3d(min(32vw, 360px), 0, 0);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0);
+  }
+}
+
+/* 窄屏下 .auth-copy 回到流式布局，共享坐标失效——标题退化为柔和淡入/淡出 */
+@media (max-width: 860px) {
+  .auth.route-home-auth-enter-active .auth-copy h1 {
+    animation: auth-copy-in 620ms cubic-bezier(.22, .61, .36, 1) 200ms both;
+  }
+  .auth.route-auth-home-leave-active .auth-copy h1 {
+    animation: auth-copy-out 620ms cubic-bezier(.55, .06, .68, .19) both;
   }
 }
 </style>

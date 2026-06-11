@@ -193,7 +193,7 @@
   border: 1px solid rgba(255,255,255,.56);
   border-radius: var(--ca-radius-full);
   background: rgba(255,255,255,.42);
-  box-shadow: inset 0 1px 2px rgba(255,255,255,.42), 0 8px 26px rgba(15,23,42,.05);
+  box-shadow: inset 0 1px 2px rgba(255,255,255,.42), 0 8px 26px rgba(18, 22, 20,.05);
   backdrop-filter: blur(18px) saturate(1.18);
   -webkit-backdrop-filter: blur(18px) saturate(1.18);
   padding: 4px;
@@ -214,7 +214,7 @@
   border: 1px solid rgba(255,255,255,.74);
   border-radius: var(--ca-radius-full);
   background: rgba(255,255,255,.68);
-  box-shadow: 0 12px 28px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.8);
+  box-shadow: 0 12px 28px rgba(18, 22, 20,.08), inset 0 1px 0 rgba(255,255,255,.8);
   opacity: 0;
   pointer-events: none;
   transition: transform .36s cubic-bezier(.16,1,.3,1), width .36s cubic-bezier(.16,1,.3,1), opacity .18s ease;
@@ -333,8 +333,8 @@
 }
 
 .student-page {
-  width: min(1100px, 100%);
-  max-width: 1100px;
+  width: min(1200px, 100%);
+  max-width: 1200px;
   animation: none;
   display: grid;
   gap: 24px;
@@ -348,7 +348,7 @@
   max-width: none;
   display: block;
   min-height: calc(100vh - 72px);
-  background: var(--s-bg, #F4F6F9);
+  background: var(--s-bg, #F9F8F6);
   padding: 0;
 }
 
@@ -360,8 +360,8 @@
   top: 0;
   left: 0;
   right: 0;
-  width: min(1100px, 100%);
-  max-width: 1100px;
+  width: min(1200px, 100%);
+  max-width: 1200px;
   margin-inline: auto;
   transition: transform .92s cubic-bezier(.22,1,.36,1);
   will-change: transform;
@@ -1020,9 +1020,16 @@
   background: linear-gradient(to bottom, rgba(249, 248, 246, 0), var(--ca-color-paper-bg) 42%) !important;
 }
 
+/* 用户消息气泡：保留输入时的换行，长串自动断行 */
+.student-shell .qa-modern-page .bubble-user p,
+.student-shell .class-chat .chat-msg.user .chat-bubble p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .student-shell .qa-modern-page .input-box {
   border-color: var(--ca-color-paper-border) !important;
-  background: rgba(15,23,42,.96) !important;
+  background: rgba(18, 22, 20,.96) !important;
 }
 
 .student-shell .bottom-tabs .ai span {
@@ -1525,9 +1532,9 @@ html.theme-dark .student-shell .pretty-input,
 html.theme-dark .student-shell .select-menu > button,
 html.theme-dark .student-shell .dropdown-trigger,
 html.theme-dark .student-shell .problem-text {
-  background: #0F172A !important;
-  color: #E2E8F0 !important;
-  border-color: rgba(148, 163, 184, .24) !important;
+  background: #121614 !important;
+  color: #E6E4DD !important;
+  border-color: rgba(140, 148, 143, .24) !important;
 }
 
 html.theme-dark .student-shell .btn-primary,
@@ -1545,7 +1552,7 @@ html.theme-dark .student-shell .exam-btn-primary,
 html.theme-dark .student-shell .exam-opt-input:checked + .exam-opt-card .exam-opt-letter,
 html.theme-dark .student-shell .practice-switch-wrapper.active .practice-switch {
   background: linear-gradient(135deg, #0891B2, #2563EB) !important;
-  color: #F8FAFC !important;
+  color: #F9F8F6 !important;
   border-color: transparent !important;
 }
 
@@ -1558,7 +1565,7 @@ html.theme-dark .student-shell .tutor-submit-btn:hover:not(:disabled),
 html.theme-dark .student-shell .qa-modern-page .input-box > .send-btn:hover:not(:disabled),
 html.theme-dark .student-shell .exam-btn-primary:hover:not(:disabled) {
   background: linear-gradient(135deg, #0E7490, #1D4ED8) !important;
-  color: #F8FAFC !important;
+  color: #F9F8F6 !important;
 }
 
 html.theme-dark .student-shell .home-ai-icon-wrap,
@@ -1569,7 +1576,7 @@ html.theme-dark .student-shell .practice-feature-icon,
 html.theme-dark .student-shell .qa-title-icon,
 html.theme-dark .student-shell .tutoring-page .empty-guide svg,
 html.theme-dark .student-shell .bottom-tabs .ai span {
-  background: #0F172A !important;
+  background: #121614 !important;
   color: #67E8F9 !important;
   border-color: rgba(0, 240, 255, .26) !important;
 }
@@ -1581,7 +1588,7 @@ html.theme-dark .student-shell .qa-modern-page .input-dock-container {
 html.theme-light .student-shell .student-nav-links {
   border-color: rgba(255, 255, 255, .58) !important;
   background: rgba(255, 255, 255, .42) !important;
-  box-shadow: inset 0 1px 2px rgba(255,255,255,.42), 0 8px 26px rgba(15,23,42,.05) !important;
+  box-shadow: inset 0 1px 2px rgba(255,255,255,.42), 0 8px 26px rgba(18, 22, 20,.05) !important;
 }
 
 html.theme-light .student-shell .student-nav-link,
@@ -1598,14 +1605,14 @@ html.theme-light .student-shell .student-nav-link.ai.active {
 }
 
 html.theme-dark .student-shell .student-nav-links {
-  border-color: rgba(148, 163, 184, .24) !important;
-  background: rgba(15, 23, 42, .54) !important;
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, .14), 0 12px 30px rgba(0, 0, 0, .22) !important;
+  border-color: rgba(140, 148, 143, .24) !important;
+  background: rgba(18, 22, 20, .54) !important;
+  box-shadow: inset 0 0 0 1px rgba(140, 148, 143, .14), 0 12px 30px rgba(0, 0, 0, .22) !important;
 }
 
 html.theme-dark .student-shell .student-nav-indicator {
-  border-color: rgba(148, 163, 184, .28);
-  background: rgba(30, 41, 59, .76);
+  border-color: rgba(140, 148, 143, .28);
+  background: rgba(18, 22, 20, .76);
   box-shadow: 0 14px 30px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
 }
 
@@ -1647,7 +1654,7 @@ html.theme-dark .student-shell .student-course-card .course-art .dropdown-trigge
 }
 
 html.theme-dark .student-shell .top-theme-toggle {
-  color: #CBD5E1;
+  color: #D1CBB5;
 }
 
 /* Icon audit: icons keep their layout box, but never carry a filled tile behind them. */
@@ -1754,7 +1761,7 @@ html.theme-dark .study-room :where(.icon-glass, .knowledge-dot) {
   border-radius: 22px !important;
   background: var(--ca-color-paper-card) !important;
   color: var(--ca-color-paper-ink) !important;
-  box-shadow: 0 16px 36px rgba(15, 23, 42, .07) !important;
+  box-shadow: 0 16px 36px rgba(18, 22, 20, .07) !important;
 }
 
 .student-shell .profile-identity-card {
@@ -1767,7 +1774,9 @@ html.theme-dark .study-room :where(.icon-glass, .knowledge-dot) {
   margin: 0 0 64px;
   overflow: visible;
   border-radius: 22px 22px 0 0;
-  background: linear-gradient(135deg, #0F172A 0%, #0E7490 52%, #2563EB 100%) !important;
+  background:
+    radial-gradient(circle at 82% 18%, rgba(0, 229, 255, .18), transparent 46%),
+    linear-gradient(135deg, #121614 0%, #1C2E2A 56%, #00606C 100%) !important;
 }
 
 .student-shell .profile-cover::after {
@@ -1799,7 +1808,7 @@ html.theme-dark .study-room :where(.icon-glass, .knowledge-dot) {
   transform: none;
   border: 5px solid var(--ca-color-paper-card);
   background: var(--ca-color-paper-card);
-  box-shadow: 0 18px 34px rgba(15, 23, 42, .18);
+  box-shadow: 0 18px 34px rgba(18, 22, 20, .18);
 }
 
 .student-shell .big-avatar .camera-badge {
@@ -1946,8 +1955,8 @@ html.theme-dark .study-room :where(.icon-glass, .knowledge-dot) {
   gap: 10px;
   border: 1px solid rgba(245, 158, 11, .24);
   border-radius: 15px;
-  background: #FFFBEB;
-  color: #92400E;
+  background: #FFF8E1;
+  color: #A43B00;
   padding: 10px 12px;
   text-align: left;
 }
@@ -2053,7 +2062,7 @@ html.theme-dark .study-room :where(.icon-glass, .knowledge-dot) {
 
 .student-shell .profile-main-card .mini-metric.warning .mini-metric-icon {
   background: transparent !important;
-  color: #B45309;
+  color: #A43B00;
 }
 
 .student-shell .profile-tabs {
@@ -2082,7 +2091,7 @@ html.theme-dark .study-room :where(.icon-glass, .knowledge-dot) {
 .student-shell .profile-tabs button.active {
   background: var(--ca-color-paper-card);
   color: var(--ca-role-student-primary-hover);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, .07);
+  box-shadow: 0 8px 18px rgba(18, 22, 20, .07);
 }
 
 .student-shell .profile-form,
@@ -2265,9 +2274,9 @@ html.theme-dark .student-shell .profile-main-card,
 html.theme-dark .student-shell .profile-achievement-card,
 html.theme-dark .student-shell .profile-form,
 html.theme-dark .student-shell .profile-records {
-  border-color: rgba(148, 163, 184, .18) !important;
+  border-color: rgba(140, 148, 143, .18) !important;
   background: #0B1220 !important;
-  color: #E2E8F0 !important;
+  color: #E6E4DD !important;
   box-shadow: 0 18px 36px rgba(0, 0, 0, .26) !important;
 }
 
@@ -2303,9 +2312,9 @@ html.theme-dark .student-shell .profile-form .password-field,
 html.theme-dark .student-shell .notice-settings-grid .toggle-line,
 html.theme-dark .student-shell .notice-settings-grid .time-input,
 html.theme-dark .student-shell .profile-timeline-content {
-  border-color: rgba(148, 163, 184, .18) !important;
-  background: #0F172A !important;
-  color: #E2E8F0 !important;
+  border-color: rgba(140, 148, 143, .18) !important;
+  background: #121614 !important;
+  color: #E6E4DD !important;
 }
 
 html.theme-dark .student-shell .profile-header-info h1,
@@ -2315,7 +2324,7 @@ html.theme-dark .student-shell .profile-main-card .mini-metric strong,
 html.theme-dark .student-shell .profile-form h2,
 html.theme-dark .student-shell .profile-form label,
 html.theme-dark .student-shell .profile-timeline-head strong {
-  color: #F8FAFC !important;
+  color: #F9F8F6 !important;
 }
 
 html.theme-dark .student-shell .profile-contact-list p > span,
@@ -2323,7 +2332,7 @@ html.theme-dark .student-shell .profile-main-card .mini-metric span,
 html.theme-dark .student-shell .profile-timeline-head time,
 html.theme-dark .student-shell .profile-timeline-content p,
 html.theme-dark .student-shell .profile-points-card span {
-  color: #94A3B8 !important;
+  color: #999990 !important;
 }
 
 html.theme-dark .student-shell .profile-tabs button.active {
@@ -2431,7 +2440,7 @@ html.theme-dark .student-shell .profile-tabs button.active {
 .student-modal-scope .field-error {
   display: block;
   margin-top: 8px;
-  color: #DC2626;
+  color: var(--ca-color-error);
 }
 
 .student-modal-scope .preview-course {
@@ -2465,15 +2474,15 @@ html.theme-dark .student-shell .profile-tabs button.active {
 }
 
 html.theme-dark .student-modal-scope {
-  background: rgba(2, 6, 23, .72) !important;
-  color: #E2E8F0 !important;
+  background: rgba(7, 9, 8, .72) !important;
+  color: #E6E4DD !important;
 }
 
 html.theme-dark .student-modal-scope .join-modal,
 html.theme-dark .student-modal-scope .complete-modal {
-  border-color: rgba(148, 163, 184, .22) !important;
-  background: #0F172A !important;
-  color: #E2E8F0 !important;
+  border-color: rgba(140, 148, 143, .22) !important;
+  background: #121614 !important;
+  color: #E6E4DD !important;
   box-shadow: 0 28px 70px rgba(0, 0, 0, .50) !important;
 }
 
@@ -2483,14 +2492,14 @@ html.theme-dark .student-modal-scope .preview-course strong,
 html.theme-dark .student-modal-scope .code-input input,
 html.theme-dark .student-modal-scope .join-modal .input,
 html.theme-dark .student-modal-scope .join-modal .textarea {
-  color: #F8FAFC !important;
+  color: #F9F8F6 !important;
 }
 
 html.theme-dark .student-modal-scope .join-modal label,
 html.theme-dark .student-modal-scope .complete-modal p,
 html.theme-dark .student-modal-scope .preview-course small,
 html.theme-dark .student-modal-scope .done-stats {
-  color: #CBD5E1 !important;
+  color: #D1CBB5 !important;
 }
 
 html.theme-dark .student-modal-scope .modal-head button,
@@ -2498,20 +2507,20 @@ html.theme-dark .student-modal-scope .code-input,
 html.theme-dark .student-modal-scope .preview-course,
 html.theme-dark .student-modal-scope .join-modal .input,
 html.theme-dark .student-modal-scope .join-modal .textarea {
-  border-color: rgba(148, 163, 184, .24) !important;
+  border-color: rgba(140, 148, 143, .24) !important;
   background: #111827 !important;
-  color: #E2E8F0 !important;
+  color: #E6E4DD !important;
 }
 
 html.theme-dark .student-modal-scope .hint-line,
 html.theme-dark .student-modal-scope .ai-summary {
   border-color: rgba(251, 191, 36, .34) !important;
   background: rgba(245, 158, 11, .16) !important;
-  color: #F8FAFC !important;
+  color: #F9F8F6 !important;
 }
 
 html.theme-dark .student-modal-scope .done-stats {
-  border-color: rgba(148, 163, 184, .24) !important;
+  border-color: rgba(140, 148, 143, .24) !important;
 }
 
 /* QA input bar: keep it anchored to the bottom like a chat composer while reserving scroll space. */
@@ -2554,7 +2563,7 @@ html.theme-dark .student-modal-scope .done-stats {
 .student-shell .class-chat .chat-avatar.avatar-ai {
   border-color: transparent !important;
   background: transparent !important;
-  color: #0F172A !important;
+  color: #121614 !important;
   box-shadow: none !important;
 }
 
@@ -2599,7 +2608,7 @@ html.theme-dark .student-modal-scope .done-stats {
   margin: 0;
   border: 0;
   border-radius: 0;
-  background: linear-gradient(to bottom, rgba(244, 246, 249, 0), var(--s-bg, #F4F6F9) 42%) !important;
+  background: linear-gradient(to bottom, rgba(244, 246, 249, 0), var(--s-bg, #F9F8F6) 42%) !important;
   box-shadow: none !important;
   padding: 32px 24px max(12px, env(safe-area-inset-bottom, 0px)) !important;
   pointer-events: none;
@@ -2617,7 +2626,7 @@ html.theme-dark .student-modal-scope .done-stats {
   margin: 0;
   border: 0;
   border-radius: 0;
-  background: linear-gradient(to bottom, rgba(244, 246, 249, 0), var(--qa-bg, #F4F6F9) 42%) !important;
+  background: linear-gradient(to bottom, rgba(244, 246, 249, 0), var(--qa-bg, #F9F8F6) 42%) !important;
   box-shadow: none !important;
   padding: 32px 24px max(12px, env(safe-area-inset-bottom, 0px)) !important;
   pointer-events: none;
@@ -2636,7 +2645,7 @@ html.theme-dark .student-modal-scope .done-stats {
   border-radius: 999px;
   background: rgba(255, 255, 255, .92);
   color: var(--qa-primary-600);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, .16);
+  box-shadow: 0 14px 30px rgba(18, 22, 20, .16);
   transform: translate(-50%, -56%);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
@@ -2674,7 +2683,7 @@ html.theme-dark .student-modal-scope .done-stats {
   border-radius: 999px;
   background: rgba(255, 255, 255, .92);
   color: var(--qa-primary-600);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, .16);
+  box-shadow: 0 14px 30px rgba(18, 22, 20, .16);
   transform: translate(-50%, -56%);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
@@ -2821,7 +2830,7 @@ html.theme-dark .student-modal-scope .done-stats {
   gap: 10px;
   min-width: 0;
   margin: 0;
-  border-bottom: 1px solid rgba(226, 232, 240, .72);
+  border-bottom: 1px solid rgba(230, 228, 221, .72);
   background: transparent;
   padding: 0 0 10px;
 }
@@ -2856,16 +2865,16 @@ html.theme-dark .qa-modern-page.qa-teleport-layer .input-dock-container {
 }
 
 html.theme-dark .qa-modern-page.qa-teleport-layer .input-box {
-  background: #0F172A !important;
-  color: #E2E8F0 !important;
-  border-color: rgba(148, 163, 184, .24) !important;
+  background: #121614 !important;
+  color: #E6E4DD !important;
+  border-color: rgba(140, 148, 143, .24) !important;
 }
 
 html.theme-dark .student-shell .qa-modern-page .avatar-ai,
 html.theme-dark .student-shell .class-chat .chat-avatar.avatar-ai {
   border-color: transparent !important;
   background: transparent !important;
-  color: #F8FAFC !important;
+  color: #F9F8F6 !important;
   box-shadow: none !important;
 }
 
@@ -2875,39 +2884,39 @@ html.theme-dark .student-shell .class-chat .chat-avatar.avatar-ai:hover {
 }
 
 html.theme-dark .qa-modern-page .history-drawer-sticky {
-  border-bottom-color: rgba(148, 163, 184, .18);
+  border-bottom-color: rgba(140, 148, 143, .18);
   background: transparent;
 }
 
 html.theme-dark .qa-modern-page.qa-teleport-layer .input-box > .send-btn,
 html.theme-dark .qa-modern-page.qa-teleport-layer .input-box > .send-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #0891B2, #2563EB) !important;
-  color: #F8FAFC !important;
+  color: #F9F8F6 !important;
   border-color: transparent !important;
 }
 
 html.theme-dark .student-shell .qa-modern-page .qa-jump-latest-btn {
   border-color: rgba(0, 240, 255, .26);
-  background: rgba(15, 23, 42, .88);
+  background: rgba(18, 22, 20, .88);
   color: #67E8F9;
   box-shadow: 0 14px 30px rgba(0, 0, 0, .34);
 }
 
 html.theme-dark .student-shell .qa-modern-page .qa-jump-latest-btn:hover {
   border-color: rgba(103, 232, 249, .52);
-  background: rgba(15, 23, 42, .98);
+  background: rgba(18, 22, 20, .98);
 }
 
 html.theme-dark .qa-modern-page.qa-teleport-layer .qa-jump-latest-btn {
   border-color: rgba(0, 240, 255, .26);
-  background: rgba(15, 23, 42, .88);
+  background: rgba(18, 22, 20, .88);
   color: #67E8F9;
   box-shadow: 0 14px 30px rgba(0, 0, 0, .34);
 }
 
 html.theme-dark .qa-modern-page.qa-teleport-layer .qa-jump-latest-btn:hover {
   border-color: rgba(103, 232, 249, .52);
-  background: rgba(15, 23, 42, .98);
+  background: rgba(18, 22, 20, .98);
 }
 
 @media (max-width: 1080px) {
@@ -3006,8 +3015,8 @@ html.theme-dark .qa-modern-page.qa-teleport-layer .qa-jump-latest-btn:hover {
 }
 
 .student-shell .student-page:not(.student-page-qa) {
-  width: min(1100px, 100%);
-  max-width: 1100px;
+  width: min(1200px, 100%);
+  max-width: 1200px;
   margin-inline: auto;
   padding: 32px 24px 0;
 }
@@ -3445,7 +3454,7 @@ html.theme-dark .qa-modern-page.qa-teleport-layer .qa-jump-latest-btn:hover {
 }
 
 .student-shell .home-course > span.has-image::before {
-  background: linear-gradient(180deg, rgba(15,23,42,.12), rgba(15,23,42,.5));
+  background: linear-gradient(180deg, rgba(18, 22, 20,.12), rgba(18, 22, 20,.5));
 }
 
 .student-shell .home-course > div {
@@ -3544,5 +3553,941 @@ html.theme-dark .qa-modern-page.qa-teleport-layer .qa-jump-latest-btn:hover {
   .student-page-back-leave-to {
     transform: none !important;
     filter: none !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   智学黑板 · 学生端设计审计层（design-audit pass）
+   暖纸桌面 + 墨绿黑板材质 / serif 大标题 / mono 数字 / cyan 单色强调。
+   本层最后加载，所有选择器均带学生端作用域前缀。
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. 版式节奏：留白与栅格呼吸 ─────────────────────────────── */
+.student-shell .student-page:not(.student-page-qa) {
+  gap: 32px;
+  padding: 36px 32px 8px;
+}
+
+.student-shell .home-grid,
+.student-shell .course-overview-layout {
+  gap: 28px;
+}
+
+.student-shell .quick-row {
+  gap: 18px;
+}
+
+.student-shell .panel-card {
+  padding: 26px 28px;
+}
+
+.student-shell .section-head {
+  margin-bottom: 20px;
+}
+
+.student-shell .page-title-row {
+  margin-bottom: 0;
+}
+
+@media (max-width: 760px) {
+  .student-shell .student-page:not(.student-page-qa) {
+    gap: 24px;
+    padding: 22px 16px 8px;
+  }
+}
+
+/* ── 2. 字阶：serif 大标题 / mono 注脚 ───────────────────────── */
+.student-shell .page-title-row h1,
+.student-shell .quiz-hero-card .quiz-modern-title h1,
+.student-shell .wrong-title-block h1,
+.student-shell .student-plan-page .banner-title,
+.student-shell .student-plan-page .card-title,
+.student-shell .student-plan-page .cal-month,
+.student-shell .student-plan-page .empty-task-state h3,
+.student-shell .qa-modern-page .qa-title h1,
+.student-shell .qa-modern-page .qa-welcome h2,
+.student-shell .knowledge-head h1,
+.student-shell .profile-header-info h1,
+.student-shell .profile-main-head h2,
+.student-shell .tutor-card-head h2,
+.student-shell .tutoring-history-head h2,
+.student-shell .practice-card-header h2,
+.student-shell .practice-history-title,
+.student-shell .course-hero-student h1,
+.student-shell .course-route-state h1,
+.student-shell .guide-card .section-head h2,
+.student-modal-scope .complete-modal h2,
+.student-modal-scope .modal-head h2 {
+  font-family: var(--ca-font-serif);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.student-shell .page-title-row h1 {
+  font-size: 30px;
+  line-height: 1.2;
+}
+
+.student-shell .page-title-row p {
+  margin-top: 6px;
+  color: var(--ca-color-paper-muted);
+  font-family: var(--ca-font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.student-shell .section-head h2 svg,
+.student-shell .student-plan-page .card-title svg,
+.student-shell .tutoring-history-head svg,
+.student-shell .practice-history-title svg {
+  color: var(--ca-role-student-primary);
+}
+
+.student-shell .home-ai-rec-content,
+.student-shell .course-route-state p,
+.student-shell .quiz-hero-card .quiz-modern-title p {
+  line-height: 1.7;
+}
+
+/* ── 3. 数字层：mono + tabular-nums ──────────────────────────── */
+.student-shell .mini-metric strong,
+.student-shell .quiz-hero-stats strong,
+.student-shell .wrong-book-page .wrong-hero strong,
+.student-shell .student-plan-page .b-stat-item h2,
+.student-shell .student-plan-page .total-hours span,
+.student-shell .student-plan-page .cal-day,
+.student-shell .profile-points-card strong,
+.student-shell .profile-header-info aside strong,
+.student-shell .course-progress-panel strong,
+.student-shell .course-card-stats b,
+.student-shell .circle-stat span,
+.student-shell .ring-wrap strong,
+.student-shell .home-mp-text,
+.student-shell .practice-history-item em,
+.student-shell .lesson-item b,
+.student-shell .home-course em,
+.exam-answer-page .exam-stat-val,
+.exam-answer-page .exam-q-btn,
+.exam-answer-page .exam-result-card strong,
+.student-modal-scope .done-stats span {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.student-shell .quiz-hero-stats strong,
+.student-shell .wrong-book-page .wrong-hero strong,
+.student-shell .profile-main-card .mini-metric strong,
+.student-shell .profile-points-card strong,
+.student-shell .student-plan-page .b-stat-item h2,
+.student-shell .course-data-card .mini-metric-copy strong {
+  font-weight: 700;
+}
+
+.student-shell .quiz-hero-stats strong {
+  font-size: 28px;
+}
+
+.student-shell .mini-metric span,
+.student-shell .quiz-hero-stats span,
+.student-shell .wrong-book-page .wrong-hero span,
+.student-shell .student-plan-page .b-stat-item span,
+.student-shell .ring-block > span:not(.ring-wrap) {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+
+/* ── 4. 工作台欢迎横幅：黑板 + 粉笔 + 呼吸光点 ───────────────── */
+.student-shell .hello-card {
+  min-height: 176px;
+  border: 1px solid rgba(244, 244, 240, .08);
+  padding: 36px 40px;
+}
+
+.student-shell .hello-card::after {
+  content: "";
+  display: block;
+  position: absolute;
+  right: -56px;
+  top: -72px;
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 229, 255, .17), transparent 62%);
+  pointer-events: none;
+  animation: ca-glow-breathe 5.5s var(--ease-in-out) infinite;
+}
+
+.student-shell .hello-card h1 {
+  font-size: clamp(26px, 2.6vw, 34px);
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+
+.student-shell .hello-card > div:first-child > svg {
+  border-color: rgba(0, 229, 255, .26);
+  background: rgba(0, 229, 255, .07);
+  box-shadow: 0 0 24px rgba(0, 229, 255, .14);
+}
+
+.student-shell .hello-card p {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  letter-spacing: .04em;
+}
+
+.student-shell .hello-card p::before {
+  content: "";
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ca-role-student-glow);
+  box-shadow: 0 0 10px rgba(0, 229, 255, .85);
+  animation: ca-pulse-dot 2.6s var(--ease-in-out) infinite;
+}
+
+.student-shell .hello-card .circle-stat svg circle:first-of-type {
+  stroke: rgba(244, 244, 240, .16);
+}
+
+.student-shell .hello-card .circle-stat svg circle:last-of-type {
+  stroke: var(--ca-role-student-glow);
+}
+
+.student-shell .circle-stat span {
+  color: var(--ca-color-chalk);
+  font-size: 15px;
+}
+
+/* 今日计划黑板条：补噪点层 */
+.student-shell .today-plan {
+  background:
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E'),
+    radial-gradient(circle at 10% 0, rgba(0, 184, 212, .28), transparent 34%),
+    linear-gradient(135deg, rgba(18, 22, 20, .98), rgba(0, 108, 120, .92));
+}
+
+/* ── 5. 统计卡：悬停抬升 + cyan 染边 ─────────────────────────── */
+.student-shell .quiz-hero-stats div,
+.student-shell .wrong-book-page .wrong-hero div,
+.student-shell .mini-metric,
+.student-shell .student-plan-page .b-stat-item {
+  transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out), border-color .2s var(--ease-out);
+}
+
+.student-shell .quiz-hero-stats div:hover,
+.student-shell .wrong-book-page .wrong-hero div:hover,
+.student-shell .profile-main-card .mini-metric:hover,
+.student-shell .course-data-card .mini-metric:hover {
+  border-color: rgba(0, 184, 212, .3);
+  box-shadow: var(--ca-shadow-paper-hover);
+  transform: translateY(-2px);
+}
+
+.student-shell .mini-metric {
+  border: 1px solid var(--s-border, var(--ca-color-paper-border));
+}
+
+.student-shell .rings svg circle:first-of-type {
+  stroke: rgba(140, 148, 143, .24);
+}
+
+/* ── 6. 进度条：4-6px 细圆角胶囊 ────────────────────────────── */
+.student-shell .app-progress {
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--color-bg-muted, #F4F1EA);
+}
+
+.student-shell .app-progress i {
+  border-radius: 999px;
+}
+
+.student-shell .home-mp-track {
+  height: 5px;
+  background: var(--color-bg-muted, #F4F1EA);
+}
+
+.student-shell .home-mp-fill {
+  background: var(--ca-role-student-primary);
+}
+
+/* ── 7. 课时 / 资料行：左侧装订线 ────────────────────────────── */
+.student-shell .lesson-item {
+  position: relative;
+  border: 1px solid var(--s-border, var(--ca-color-paper-border));
+  border-radius: 12px;
+  background: var(--s-card, var(--ca-color-paper-card));
+  padding: 13px 16px 13px 20px;
+}
+
+.student-shell .lesson-item::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--s-border, var(--ca-color-paper-border));
+  transition: background .2s var(--ease-out), top .2s var(--ease-out), bottom .2s var(--ease-out);
+}
+
+.student-shell .lesson-item:hover {
+  border-color: rgba(0, 184, 212, .32);
+  background: var(--s-card, var(--ca-color-paper-card));
+  box-shadow: var(--ca-shadow-paper-hover);
+  transform: translateX(3px);
+}
+
+.student-shell .lesson-item:hover::before,
+.student-shell .lesson-item.current::before {
+  top: 8px;
+  bottom: 8px;
+  background: var(--ca-role-student-primary);
+}
+
+.student-shell .lesson-item.current {
+  border-color: rgba(0, 184, 212, .3);
+  background: var(--s-primary-50, var(--ca-role-student-light));
+  box-shadow: none;
+}
+
+.student-shell .lesson-item b {
+  border: 1px solid var(--s-border, var(--ca-color-paper-border));
+  border-radius: 10px;
+  background: var(--s-bg, var(--ca-color-paper-bg));
+  color: var(--s-muted, var(--ca-color-paper-sub));
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.student-shell .lesson-item.current b,
+.student-shell .lesson-item:hover b {
+  border-color: rgba(0, 184, 212, .3);
+  color: var(--ca-role-student-primary-hover);
+}
+
+.student-shell .material-row {
+  position: relative;
+  border: 1px solid var(--s-border, var(--ca-color-paper-border));
+  border-radius: 12px;
+  background: var(--s-card, var(--ca-color-paper-card));
+}
+
+.student-shell .material-row::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--s-border, var(--ca-color-paper-border));
+  transition: background .2s var(--ease-out);
+}
+
+.student-shell .material-row:hover {
+  border-color: rgba(0, 184, 212, .3);
+  background: var(--s-card, var(--ca-color-paper-card));
+  box-shadow: var(--ca-shadow-paper-hover);
+  transform: translateX(3px);
+}
+
+.student-shell .material-row:hover::before {
+  background: var(--ca-role-student-primary);
+}
+
+.student-shell .file-badge {
+  border: 1px solid var(--s-border, var(--ca-color-paper-border));
+  border-radius: 12px;
+  background: var(--s-bg, var(--ca-color-paper-bg));
+  color: var(--ca-role-student-primary-hover);
+}
+
+/* ── 8. AI 问答：墨绿欢迎徽标 / 小票来源 / 思考胶囊 ──────────── */
+.student-shell .qa-modern-page .qa-welcome > svg {
+  border: 1px solid rgba(0, 229, 255, .24);
+  background: var(--ca-color-slate);
+  color: var(--ca-role-student-glow);
+  box-shadow: 0 18px 44px rgba(0, 184, 212, .22);
+}
+
+.student-shell .qa-modern-page .ai-content-card {
+  border: 1px solid var(--qa-border, var(--ca-color-paper-border));
+  border-radius: 8px 24px 24px 24px;
+  box-shadow: var(--ca-shadow-paper);
+  padding: 22px 26px;
+}
+
+.student-shell .qa-modern-page .ref-tag,
+.student-shell .qa-modern-page .source-tags .tag,
+.student-shell .class-chat .source-tags .tag {
+  border: 1px dashed var(--qa-border, var(--ca-color-paper-border));
+  border-radius: 4px;
+  background: var(--qa-surface, #fff);
+  color: var(--qa-secondary, var(--ca-color-paper-sub));
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
+  letter-spacing: .02em;
+}
+
+.student-shell .qa-modern-page .ref-tag:hover,
+.student-shell .qa-modern-page .source-tags .tag:hover,
+.student-shell .class-chat .source-tags .tag:hover {
+  border-color: rgba(0, 184, 212, .45);
+  background: var(--qa-primary-50, var(--ca-role-student-light));
+  color: var(--ca-role-student-primary-hover);
+}
+
+.student-shell .qa-modern-page .ref-label,
+.student-shell .qa-modern-page .source-label,
+.student-shell .class-chat .source-label {
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+}
+
+.student-shell .qa-modern-page .thinking-process,
+.student-shell .qa-modern-page .thought-toggle,
+.student-shell .class-chat .thought-toggle {
+  border-style: dashed;
+}
+
+.student-shell .qa-modern-page .prompt-grid {
+  gap: 12px;
+}
+
+.student-shell .qa-modern-page .prompt-grid button {
+  border: 1px solid var(--qa-border, var(--ca-color-paper-border));
+  background: var(--qa-surface, #fff);
+}
+
+.student-shell .qa-modern-page .prompt-grid button:hover {
+  border-color: rgba(0, 184, 212, .4);
+}
+
+.student-shell .qa-modern-page .prompt-grid button svg {
+  color: var(--ca-role-student-primary);
+}
+
+.student-shell .qa-modern-page .chat-list.large {
+  gap: 36px;
+}
+
+/* ── 9. 测验 / 错题本：语义色条 + 方角徽章 ───────────────────── */
+.student-shell .quiz-card::before,
+.student-shell .wrong-card::before {
+  width: 4px;
+  border-radius: 0 4px 4px 0;
+  background: var(--ca-role-student-primary);
+}
+
+.student-shell .wrong-book-page .wrong-card::before {
+  background: var(--color-danger-500, #C62828);
+}
+
+.student-shell .quiz-modern-page .tag,
+.student-shell .wrong-book-page .tag,
+.student-shell .wrong-book-page .wrong-state,
+.student-shell .wrong-book-page .wrong-times {
+  border-radius: 4px;
+}
+
+.student-shell .quiz-card:hover,
+.student-shell .wrong-card:hover {
+  border-color: rgba(0, 184, 212, .3);
+}
+
+.student-shell .wrong-book-page .wrong-hero div {
+  position: relative;
+  overflow: hidden;
+}
+
+.student-shell .wrong-book-page .wrong-hero div::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--color-danger-500, #C62828);
+}
+
+.student-shell .wrong-book-page .wrong-hero div:nth-of-type(2)::before {
+  background: var(--color-warning-500, #E65100);
+}
+
+.student-shell .wrong-book-page .wrong-hero div:nth-of-type(3)::before {
+  background: var(--color-info-500, #0277BD);
+}
+
+.student-shell .wrong-book-page .wrong-hero div:nth-of-type(4)::before {
+  background: var(--ca-role-student-primary);
+}
+
+.exam-answer-page .exam-result-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(244, 244, 240, .1);
+  background:
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E'),
+    radial-gradient(circle at 84% 10%, rgba(0, 229, 255, .2), transparent 52%),
+    var(--ca-color-slate);
+  color: var(--ca-color-chalk);
+}
+
+.exam-answer-page .exam-result-card em {
+  border: 1px solid rgba(0, 229, 255, .3);
+  background: rgba(0, 229, 255, .1);
+  color: var(--ca-role-student-glow);
+}
+
+/* ── 10. 学习计划：mono 日历 + 呼吸今日环 ────────────────────── */
+.student-shell .student-plan-page .cal-day {
+  font-size: 15px;
+}
+
+.student-shell .student-plan-page .cal-day.today {
+  animation: ca-ring-pulse 2.8s var(--ease-in-out) infinite;
+}
+
+.student-shell .student-plan-page .badge-item {
+  transition: transform .2s var(--ease-out), box-shadow .2s var(--ease-out), border-color .2s var(--ease-out);
+}
+
+.student-shell .student-plan-page .badge-item.unlocked:hover {
+  box-shadow: var(--ca-shadow-paper-hover);
+  transform: translateY(-2px);
+}
+
+.student-shell .student-plan-page .bar-track {
+  border-radius: 999px;
+}
+
+.student-shell .student-plan-page .bar-fill {
+  border-radius: 999px;
+}
+
+/* ── 11. 辅导页：步骤序号 mono / 步骤卡装订线 ────────────────── */
+.tutoring-page .guide-step b {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tutoring-page .guide-step {
+  position: relative;
+}
+
+.tutoring-page .guide-step::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--tutor-border, var(--ca-color-paper-border));
+  transition: background .2s var(--ease-out);
+  pointer-events: none;
+}
+
+.tutoring-page .guide-step:hover::before {
+  background: var(--ca-role-student-primary);
+}
+
+.tutoring-page .tutor-eyebrow svg {
+  color: var(--ca-role-student-primary);
+}
+
+/* ── 12. 自习室：墨绿黑板舞台 ────────────────────────────────── */
+.study-room {
+  background-color: #0D1210;
+  background-image:
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E'),
+    radial-gradient(circle at 50% -10%, rgba(0, 184, 212, .07), transparent 46%);
+}
+
+.study-room .slide-card {
+  border-radius: 14px;
+  box-shadow: 0 0 0 1px rgba(244, 244, 240, .09), 0 28px 56px rgba(0, 0, 0, .55);
+}
+
+.study-room .study-head code {
+  color: var(--ca-color-dust);
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.study-room .thumb-grid button {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.study-room .thumb-grid .active {
+  border-color: var(--ca-role-student-glow);
+  box-shadow: 0 0 12px rgba(0, 229, 255, .25);
+}
+
+.study-room .player-bar {
+  border: 1px solid var(--ca-color-paper-border);
+  background: rgba(255, 254, 251, .97);
+}
+
+.study-room .subtitle-line {
+  border-color: rgba(244, 244, 240, .12);
+}
+
+/* ── 13. 知识点 / 课程页细节 ─────────────────────────────────── */
+.student-shell .knowledge-block div {
+  border-radius: 12px;
+  line-height: 1.75;
+}
+
+.student-shell .course-hero-student {
+  position: relative;
+  isolation: isolate;
+}
+
+.student-shell .course-hero-student::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E');
+  pointer-events: none;
+}
+
+.student-shell .course-term-pill {
+  font-family: var(--ca-font-mono);
+}
+
+.student-shell .section-head button {
+  transition: transform .18s var(--ease-out), color .18s var(--ease-out), background .18s var(--ease-out);
+}
+
+.student-shell .section-head button:hover {
+  transform: translateX(2px);
+}
+
+/* ── 14. 空状态：完整构图 ────────────────────────────────────── */
+.student-shell .empty {
+  min-height: 168px;
+  gap: 12px;
+  border: 1px dashed var(--s-border, var(--ca-color-paper-border-strong));
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(0, 184, 212, .045), transparent 56%),
+    var(--s-card, var(--ca-color-paper-card));
+  box-shadow: none;
+  padding: 34px 24px;
+}
+
+.student-shell .empty svg {
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--s-border, var(--ca-color-paper-border));
+  border-radius: 14px;
+  background: var(--s-bg, var(--ca-color-paper-bg));
+  color: var(--s-hint, var(--ca-color-paper-muted));
+  padding: 11px;
+}
+
+.student-shell .empty span {
+  color: var(--s-muted, var(--ca-color-paper-sub));
+  font-weight: 700;
+}
+
+.tutoring-page .empty-guide {
+  border-radius: 14px;
+}
+
+/* ── 15. 顶栏 / 弹层 / 全局搜索的纸感 ────────────────────────── */
+.student-shell .student-top {
+  background: rgba(253, 252, 249, .92);
+}
+
+.student-shell .bottom-tabs {
+  background: rgba(253, 252, 249, .94);
+}
+
+.student-shell .global-search-bar,
+.student-shell .global-search-results,
+.global-search .global-search-bar,
+.global-search .global-search-results {
+  border-radius: 18px;
+}
+
+.global-search .global-search-group header {
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+
+.student-shell .notice-item small,
+.student-shell .user-card small {
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
+}
+
+/* ── 16. 手写体点睛：AI 寄语 / 引用动态 ──────────────────────── */
+.student-modal-scope .ai-summary {
+  font-family: var(--ca-font-chalk);
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+.student-shell .home-ac-detail.quote {
+  border-left: 3px solid rgba(0, 184, 212, .4);
+  color: var(--ca-color-paper-ink-soft);
+  font-family: var(--ca-font-chalk);
+  font-size: 15px;
+  font-style: normal;
+}
+
+/* ── 17. 入场编排：fade-slide-up stagger ─────────────────────── */
+.student-shell .student-page:not(.student-page-qa) > * {
+  animation: ca-stagger-rise .5s var(--ease-out) backwards;
+}
+
+.student-shell .student-page:not(.student-page-qa) > *:nth-child(1) { animation-delay: .02s; }
+.student-shell .student-page:not(.student-page-qa) > *:nth-child(2) { animation-delay: .07s; }
+.student-shell .student-page:not(.student-page-qa) > *:nth-child(3) { animation-delay: .12s; }
+.student-shell .student-page:not(.student-page-qa) > *:nth-child(4) { animation-delay: .17s; }
+.student-shell .student-page:not(.student-page-qa) > *:nth-child(5) { animation-delay: .22s; }
+.student-shell .student-page:not(.student-page-qa) > *:nth-child(6) { animation-delay: .27s; }
+.student-shell .student-page:not(.student-page-qa) > *:nth-child(7) { animation-delay: .32s; }
+.student-shell .student-page:not(.student-page-qa) > *:nth-child(n+8) { animation-delay: .36s; }
+
+.student-shell .student-course-grid > *,
+.student-shell .quick-row > *,
+.student-shell .quiz-modern-list > *,
+.student-shell .wrong-list > .wrong-card,
+.student-shell .prompt-grid > button,
+.student-shell .tutoring-history-grid > *,
+.student-shell .practice-history-list > *,
+.student-shell .home-course-strip > * {
+  animation: ca-stagger-rise .45s var(--ease-out) backwards;
+}
+
+.student-shell .student-course-grid > *:nth-child(1),
+.student-shell .quick-row > *:nth-child(1),
+.student-shell .quiz-modern-list > *:nth-child(1),
+.student-shell .wrong-list > .wrong-card:nth-child(1),
+.student-shell .prompt-grid > button:nth-child(1),
+.student-shell .tutoring-history-grid > *:nth-child(1),
+.student-shell .practice-history-list > *:nth-child(1),
+.student-shell .home-course-strip > *:nth-child(1) { animation-delay: .04s; }
+
+.student-shell .student-course-grid > *:nth-child(2),
+.student-shell .quick-row > *:nth-child(2),
+.student-shell .quiz-modern-list > *:nth-child(2),
+.student-shell .wrong-list > .wrong-card:nth-child(2),
+.student-shell .prompt-grid > button:nth-child(2),
+.student-shell .tutoring-history-grid > *:nth-child(2),
+.student-shell .practice-history-list > *:nth-child(2),
+.student-shell .home-course-strip > *:nth-child(2) { animation-delay: .09s; }
+
+.student-shell .student-course-grid > *:nth-child(3),
+.student-shell .quick-row > *:nth-child(3),
+.student-shell .quiz-modern-list > *:nth-child(3),
+.student-shell .wrong-list > .wrong-card:nth-child(3),
+.student-shell .prompt-grid > button:nth-child(3),
+.student-shell .tutoring-history-grid > *:nth-child(3),
+.student-shell .practice-history-list > *:nth-child(3),
+.student-shell .home-course-strip > *:nth-child(3) { animation-delay: .14s; }
+
+.student-shell .student-course-grid > *:nth-child(4),
+.student-shell .quick-row > *:nth-child(4),
+.student-shell .quiz-modern-list > *:nth-child(4),
+.student-shell .wrong-list > .wrong-card:nth-child(4),
+.student-shell .prompt-grid > button:nth-child(4),
+.student-shell .tutoring-history-grid > *:nth-child(4),
+.student-shell .practice-history-list > *:nth-child(4),
+.student-shell .home-course-strip > *:nth-child(4) { animation-delay: .19s; }
+
+.student-shell .student-course-grid > *:nth-child(5),
+.student-shell .quiz-modern-list > *:nth-child(5),
+.student-shell .wrong-list > .wrong-card:nth-child(5),
+.student-shell .prompt-grid > button:nth-child(5),
+.student-shell .practice-history-list > *:nth-child(5) { animation-delay: .24s; }
+
+.student-shell .student-course-grid > *:nth-child(6),
+.student-shell .quiz-modern-list > *:nth-child(6),
+.student-shell .wrong-list > .wrong-card:nth-child(6),
+.student-shell .prompt-grid > button:nth-child(6) { animation-delay: .29s; }
+
+.student-shell .student-course-grid > *:nth-child(n+7),
+.student-shell .quiz-modern-list > *:nth-child(n+7),
+.student-shell .wrong-list > .wrong-card:nth-child(n+7) { animation-delay: .33s; }
+
+/* 按压反馈统一到 scale(.97) */
+.student-shell button:not(:disabled):active,
+.student-shell a:not([aria-disabled=true]):active,
+.student-shell .quick-tile:active,
+.student-shell .lesson-item:active,
+.student-shell .material-row:active,
+.student-shell .home-action-task-card:active,
+.student-shell .practice-history-item:active,
+.student-shell .history-row:active {
+  transform: translateY(0) scale(.97);
+}
+
+/* 课程空间徽签：mono 小票感（含 Teleport 浮层） */
+.qa-modern-page .context-badge {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+}
+
+.qa-modern-page .history-row small {
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
+}
+
+/* ── 18. 暖色细滚动条 ────────────────────────────────────────── */
+.student-shell ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.student-shell ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.student-shell ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(18, 22, 20, .18);
+  background-clip: padding-box;
+}
+
+.student-shell ::-webkit-scrollbar-thumb:hover {
+  background: rgba(18, 22, 20, .32);
+  background-clip: padding-box;
+}
+
+html.theme-dark .student-shell ::-webkit-scrollbar-thumb {
+  background: rgba(244, 244, 240, .16);
+  background-clip: padding-box;
+}
+
+html.theme-dark .student-shell ::-webkit-scrollbar-thumb:hover {
+  background: rgba(244, 244, 240, .28);
+  background-clip: padding-box;
+}
+
+/* ── 19. 新增动效关键帧 ─────────────────────────────────────── */
+@keyframes ca-stagger-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes ca-glow-breathe {
+  0%, 100% {
+    opacity: .75;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes ca-pulse-dot {
+  0%, 100% {
+    opacity: .65;
+    box-shadow: 0 0 6px rgba(0, 229, 255, .55);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 14px rgba(0, 229, 255, .95);
+  }
+}
+
+@keyframes ca-ring-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 184, 212, .32);
+  }
+  55% {
+    box-shadow: 0 0 0 7px rgba(0, 184, 212, 0);
+  }
+}
+
+/* ── 20. 新层的暗色保底（硬编码颜色的类） ────────────────────── */
+html.theme-dark .student-shell .app-progress,
+html.theme-dark .student-shell .home-mp-track {
+  background: rgba(140, 148, 143, .22) !important;
+}
+
+html.theme-dark .student-shell .lesson-item b,
+html.theme-dark .student-shell .file-badge {
+  background: rgba(140, 148, 143, .14);
+  border-color: rgba(140, 148, 143, .22);
+}
+
+html.theme-dark .student-shell .empty {
+  background: var(--s-card, #121614);
+}
+
+/* 深色封面统一铺黑板噪点（内联背景之上、内容之下） */
+.student-shell .continue-cover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E');
+  pointer-events: none;
+}
+
+.student-shell .student-course-card .course-art::before {
+  background:
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E'),
+    linear-gradient(180deg, rgba(18, 22, 20, .08), rgba(18, 22, 20, .22));
+}
+
+.student-shell .student-course-card .course-art.has-image::before {
+  background:
+    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E'),
+    linear-gradient(180deg, rgba(18, 22, 20, .08), rgba(18, 22, 20, .46));
+}
+
+/* 彩色封面上的进度条保持半透明白轨道 */
+.student-shell .course-hero-student .hero-progress {
+  background: rgba(255, 255, 255, .3);
+}
+
+.student-shell .course-hero-student .hero-progress i {
+  background: #fff;
+}
+
+/* ── 21. 动效降级 ───────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .student-shell .student-page:not(.student-page-qa) > *,
+  .student-shell .student-course-grid > *,
+  .student-shell .quick-row > *,
+  .student-shell .quiz-modern-list > *,
+  .student-shell .wrong-list > .wrong-card,
+  .student-shell .prompt-grid > button,
+  .student-shell .tutoring-history-grid > *,
+  .student-shell .practice-history-list > *,
+  .student-shell .home-course-strip > * {
+    animation: none !important;
+  }
+
+  .student-shell .hello-card::after,
+  .student-shell .hello-card p::before,
+  .student-shell .student-plan-page .cal-day.today {
+    animation: none !important;
   }
 }

@@ -116,6 +116,9 @@
       <TransitionGroup name="page-switch" tag="div" class="teacher-page-stack">
       <section v-if="active === 'teacherDashboard'" key="teacherDashboard" class="teacher-content">
         <article class="welcome">
+          <i class="welcome-glow" aria-hidden="true"></i>
+          <i class="welcome-scribble" aria-hidden="true"></i>
+          <i class="welcome-tray" aria-hidden="true"></i>
           <div><Sparkles :size="24" /><section><h1>{{ greeting }}，{{ teacherName }}老师</h1><p>{{ todayText }} · {{ focusCount }} 门课程</p></section></div>
           <button class="btn white-btn" @click="enterRecentCourse"><Presentation :size="16" />最近课程</button>
         </article>
@@ -884,11 +887,11 @@ const materialStatusCards = computed(() => [
   { key: "failed", label: "失败", value: Number(materialStatusCounts.value.failed || 0), tone: "danger", icon: XCircle }
 ]);
 const lessonAnalysisLabels = computed(() => (analysis.value.lesson_completion || []).map((item: any) => item.title));
-const lessonAnalysisSeries = computed(() => [{ name: "完成率", data: (analysis.value.lesson_completion || []).map((item: any) => item.completion_rate || item.average_progress || 0), color: "#10B981" }]);
+const lessonAnalysisSeries = computed(() => [{ name: "完成率", data: (analysis.value.lesson_completion || []).map((item: any) => item.completion_rate || item.average_progress || 0), color: "#2E7D32" }]);
 const analysisTimeLabels = computed(() => (analysis.value.study_time_series || []).map((item: any) => item.label));
 const analysisTimeSeries = computed(() => [{ name: "分钟", data: (analysis.value.study_time_series || []).map((item: any) => item.minutes || 0), color: "#D94925" }]);
 const weakLabels = computed(() => (analysis.value.weak_points || []).map((item: any) => item.knowledge_point));
-const weakSeries = computed(() => [{ name: "错题", data: (analysis.value.weak_points || []).map((item: any) => item.wrong_count), color: "#EF4444" }]);
+const weakSeries = computed(() => [{ name: "错题", data: (analysis.value.weak_points || []).map((item: any) => item.wrong_count), color: "#C62828" }]);
 const weakMax = computed(() => Math.max(1, ...(analysis.value.weak_points || []).map((item: any) => item.wrong_count || 0)));
 const weakQuizPoints = computed(() => weakQuizData.value.weak_points || []);
 const weakQuizAllSets = computed(() => weakQuizData.value.all_sets || []);
@@ -897,7 +900,7 @@ const selectedWeakQuizPoint = computed(() => weakQuizPoints.value[Math.min(weakQ
 const weakQuizTypeTotal = computed(() => weakQuestionTypes.reduce((sum, item) => sum + Number(weakQuizForm.question_type_counts[item.value] || 0), 0));
 const weakQuizFormValid = computed(() => Number(weakQuizForm.question_count || 0) > 0 && weakQuizTypeTotal.value === Number(weakQuizForm.question_count || 0));
 const scoreLabels = computed(() => (analysis.value.score_distribution || []).map((item: any) => item.range));
-const scoreSeries = computed(() => [{ name: "人数", data: (analysis.value.score_distribution || []).map((item: any) => item.count), color: "#06B6D4" }]);
+const scoreSeries = computed(() => [{ name: "人数", data: (analysis.value.score_distribution || []).map((item: any) => item.count), color: "#0277BD" }]);
 const registeredDays = computed(() => props.user.created_at ? Math.max(1, Math.floor((Date.now() - new Date(props.user.created_at).getTime()) / 86400000)) : 1);
 const passwordStrength = computed(() => Math.min(100, Math.max(20, passwordForm.new_password.length * 10)));
 const teacherName = computed(() => profileForm.nickname || props.user.nickname);
@@ -1901,13 +1904,13 @@ function ensureCurrentCourseOperable() {
 }
 function statusClass(status?: string) { if (["ready", "published", "active", "success"].includes(String(status))) return "tag-success"; if (["pending", "processing", "review"].includes(String(status))) return "tag-warning"; if (["failed", "inactive", "disabled"].includes(String(status))) return "tag-danger"; return ""; }
 function statusText(status?: string) { return { ready: "已解析", published: "已发布", active: "进行中", inactive: "已下架", pending: "待处理", processing: "处理中", failed: "失败", draft: "草稿", review: "待发布", closed: "已关闭" }[String(status)] || String(status || "-"); }
-function courseColor(id: number) { return `linear-gradient(135deg, ${palette[id % palette.length]}, #0F172A)`; }
+function courseColor(id: number) { return `linear-gradient(135deg, ${palette[id % palette.length]}, #121614)`; }
 function courseCoverText(course?: any) {
   const text = String(course?.name || "课程名称").replace(/\s+/g, "");
   return text.slice(0, 4) || "课程";
 }
 function courseCoverStyle(course: any) {
-  if (course?.cover_url) return { backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.38)), url(${course.cover_url})` };
+  if (course?.cover_url) return { backgroundImage: `linear-gradient(180deg, rgba(18,22,20,0.08), rgba(18,22,20,0.38)), url(${course.cover_url})` };
   return { background: course?.cover_color || courseColor(Number(course?.id || 1)) };
 }
 function courseHeroStyle(course: any) {
@@ -1922,7 +1925,7 @@ function courseHeroStyle(course: any) {
 }
 function courseCoverPreviewStyle() {
   const preview = courseCoverPreview.value || courseForm.cover_url;
-  if (preview) return { backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.38)), url(${preview})` };
+  if (preview) return { backgroundImage: `linear-gradient(180deg, rgba(18,22,20,0.08), rgba(18,22,20,0.38)), url(${preview})` };
   return { background: courseForm.cover_color };
 }
 function heatOpacity(count: number) { return String(Math.min(1, 0.15 + count / 20)); }

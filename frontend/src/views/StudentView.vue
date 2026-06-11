@@ -1140,6 +1140,7 @@
               <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
               <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || (globalConversationLoading && !globalMessages.length) || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
               <textarea
+                ref="globalQuestionInput"
                 v-model="globalQuestion"
                 placeholder="输入问题"
                 rows="1"
@@ -1371,6 +1372,7 @@ const classConversationLoading = ref(false);
 const classConversationId = ref<number | null>(null);
 const classQaImageInput = ref<HTMLInputElement | null>(null);
 const classQuestionInput = ref<HTMLTextAreaElement | null>(null);
+const globalQuestionInput = ref<HTMLTextAreaElement | null>(null);
 const classQaAttachments = ref<QaAttachment[]>([]);
 const classQaImageUploading = ref(false);
 const lessonSelectionMenu = reactive({ open: false, text: "", x: 0, y: 0 });
@@ -2554,7 +2556,7 @@ function courseCoverText(course?: any) {
 function courseCoverStyle(course?: any) {
   if (course?.cover_url) {
     return {
-      backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.06), rgba(15,23,42,0.42)), url(${course.cover_url})`,
+      backgroundImage: `linear-gradient(180deg, rgba(18,22,20,0.06), rgba(18,22,20,0.42)), url(${course.cover_url})`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
@@ -3200,6 +3202,15 @@ function submitQuestionOnEnter(event: KeyboardEvent, scope: QaInputScope, submit
 }
 function handleClassQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, "class", askInClass); }
 function handleGlobalQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, "global", askGlobal); }
+// 输入框随内容自适应高度，上限交由 CSS 的 max-height 控制（超出后内部滚动）
+function resizeQuestionInput(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${el.scrollHeight}px`;
+}
+// 用 watch 覆盖所有改值路径：键入、快捷追问写入、发送后清空
+watch(classQuestion, () => nextTick(() => resizeQuestionInput(classQuestionInput.value)));
+watch(globalQuestion, () => nextTick(() => resizeQuestionInput(globalQuestionInput.value)));
 async function askGlobal() {
   if ((!globalQuestion.value.trim() && !globalQaAttachments.value.length) || !selectedCourseId.value || globalThinking.value || (globalConversationLoading.value && !globalMessages.value.length) || globalQaImageUploading.value) return;
   const question = globalQuestion.value.trim() || "请分析这张图片";
@@ -3646,7 +3657,7 @@ const RingProgress = defineComponent({
       const radius = 28;
       const circumference = 2 * Math.PI * radius;
       return h("svg", { width: 72, height: 72, viewBox: "0 0 72 72", style: { transform: "rotate(-90deg)" } }, [
-        h("circle", { cx: 36, cy: 36, r: radius, fill: "none", stroke: "rgba(148,163,184,.22)", "stroke-width": 8 }),
+        h("circle", { cx: 36, cy: 36, r: radius, fill: "none", stroke: "rgba(140,148,143,.22)", "stroke-width": 8 }),
         h("circle", {
           cx: 36,
           cy: 36,
