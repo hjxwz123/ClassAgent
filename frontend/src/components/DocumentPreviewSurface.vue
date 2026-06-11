@@ -584,7 +584,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  background: var(--color-bg-muted, #f8fafc);
+  background: var(--color-bg-muted, #F4F1EA);
 }
 
 .document-preview-stage {
@@ -635,7 +635,7 @@ onBeforeUnmount(() => {
 .document-preview-view.docx-view {
   width: 100%;
   height: 100%;
-  background: #eef2f7;
+  background: var(--color-bg-muted, #F4F1EA);
 }
 
 .document-preview-view.pptx-view {
@@ -646,7 +646,7 @@ onBeforeUnmount(() => {
   min-height: 100%;
   border-radius: var(--radius-lg);
   background: var(--color-bg-surface, #fff);
-  color: var(--color-text-body, #334155);
+  color: var(--color-text-body, #444440);
   padding: 24px 28px 32px;
   line-height: 1.78;
 }
@@ -657,7 +657,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   padding: 24px;
-  color: var(--color-text-secondary, #64748b);
+  color: var(--color-text-secondary, #666560);
   text-align: center;
 }
 
@@ -668,15 +668,15 @@ onBeforeUnmount(() => {
   min-height: 38px;
   max-width: min(100%, 420px);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--color-bg-surface, #fff) 94%, var(--color-bg-muted, #f8fafc));
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  background: color-mix(in srgb, var(--color-bg-surface, #fff) 94%, var(--color-bg-muted, #F4F1EA));
+  box-shadow: 0 12px 24px rgba(18, 22, 20, 0.08);
   padding: 0 16px;
 }
 
 .document-preview-loading-mark {
   width: 76px;
   height: 76px;
-  filter: drop-shadow(0 14px 24px rgba(15, 23, 42, 0.14));
+  filter: drop-shadow(0 14px 24px rgba(18, 22, 20, 0.14));
 }
 
 .document-preview-state.loading {
@@ -768,7 +768,7 @@ onBeforeUnmount(() => {
   max-width: none !important;
   box-sizing: border-box;
   margin: 0 auto 8px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 24px rgba(18, 22, 20, 0.08);
 }
 
 .document-preview-surface.bare :deep(.vue-office-docx .docx-wrapper) {
@@ -808,7 +808,7 @@ onBeforeUnmount(() => {
   width: 100% !important;
   max-width: none;
   margin: 0 auto;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 10px 24px rgba(18, 22, 20, 0.08);
 }
 
 :deep(.document-preview-stage.type-pdf.single-page.fit-height .vue-pdf-embed__page) {

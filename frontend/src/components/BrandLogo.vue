@@ -8,8 +8,8 @@
   >
     <defs>
       <linearGradient id="brand-logo-cyan-data" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#00F0FF" />
-        <stop offset="100%" stop-color="#3B82F6" />
+        <stop offset="0%" stop-color="#00E5FF" />
+        <stop offset="100%" stop-color="#00B8D4" />
       </linearGradient>
 
       <mask id="brand-logo-corner-cutout" maskUnits="userSpaceOnUse" x="0" y="0" width="400" height="400">
@@ -40,7 +40,7 @@
       />
       <line x1="120" y1="180" x2="200" y2="180" stroke="currentColor" stroke-width="12" stroke-linecap="round" />
       <rect x="212" y="172" width="16" height="16" rx="4" transform="rotate(45 220 180)" fill="currentColor" />
-      <rect x="247" y="127" width="26" height="26" rx="6" transform="rotate(45 260 140)" fill="#3B82F6" />
+      <rect x="247" y="127" width="26" height="26" rx="6" transform="rotate(45 260 140)" fill="#00B8D4" />
       <rect
         x="282"
         y="82"

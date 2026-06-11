@@ -35,20 +35,20 @@ const percent = computed(() => Math.round((safeValue.value / safeMax.value) * 10
   position: relative;
   display: block;
   width: 100%;
-  height: 7px;
+  height: 6px;
   overflow: hidden;
   border-radius: var(--radius-full);
   background: var(--color-bg-muted);
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(18, 22, 20, 0.05);
 }
 .app-progress.compact {
-  height: 5px;
+  height: 4px;
 }
 .app-progress i {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
-  background: var(--color-primary-600);
+  background: var(--ca-role-primary, var(--color-primary-600));
   transition: width var(--duration-base) var(--ease-in-out), background var(--duration-fast) var(--ease-out);
 }
 .app-progress.success i {

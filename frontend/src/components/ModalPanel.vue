@@ -82,7 +82,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   background: var(--color-bg-overlay);
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(5px);
   padding: var(--space-6);
 }
 .modal {
@@ -90,7 +90,8 @@ onBeforeUnmount(() => {
   max-height: 90vh;
   overflow: auto;
   background: var(--color-bg-surface);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-xl);
 }
 header {
@@ -100,13 +101,23 @@ header {
   border-bottom: 1px solid var(--color-border-default);
   padding: var(--space-5) var(--space-6);
 }
-h2 { margin: 0; color: var(--color-text-primary); font-size: var(--text-h2); line-height: 28px; }
+h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-serif);
+  font-size: var(--text-h2);
+  line-height: 28px;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
+}
 main { padding: var(--space-6); }
 footer {
   display: flex;
   justify-content: flex-end;
-  gap: var(--space-2);
+  gap: var(--space-3);
   border-top: 1px solid var(--color-border-default);
+  background: var(--color-bg-page);
+  border-radius: 0 0 var(--radius-2xl) var(--radius-2xl);
   padding: var(--space-4) var(--space-6);
 }
 header .icon-btn {

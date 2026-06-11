@@ -63,7 +63,21 @@ onBeforeUnmount(() => {
 
 .theme-toggle-control:hover {
   border-color: transparent;
-  background: color-mix(in srgb, currentColor 10%, transparent);
+  background: color-mix(in srgb, currentColor 11%, transparent);
+  color: var(--color-text-primary);
+}
+
+.theme-toggle-control:active > span {
+  transform: scale(0.92);
+}
+
+.theme-toggle-control.is-dark:active > span {
+  transform: translateX(var(--theme-toggle-shift)) scale(0.92);
+}
+
+.theme-toggle-control:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 
 .theme-toggle-control svg {
@@ -83,6 +97,7 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 50%;
   background: color-mix(in srgb, currentColor 16%, transparent);
+  box-shadow: 0 1px 2px rgba(18, 22, 20, .12);
   transition: transform 240ms cubic-bezier(.22, .61, .36, 1), background-color 200ms, box-shadow 200ms;
 }
 

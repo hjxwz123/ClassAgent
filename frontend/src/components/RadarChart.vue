@@ -34,14 +34,21 @@ function draw() {
     radar: {
       indicator: data.map((item) => ({ name: item.name, max: Math.max(5, ...data.map((x) => x.value)) })),
       splitNumber: 3,
-      axisName: { color: textMuted, fontSize: 12 },
+      axisName: { color: textMuted, fontSize: 12, fontFamily: "ClassAgent Mono, SFMono-Regular, Consolas, monospace" },
       splitLine: { lineStyle: { color: borderColor } },
       splitArea: { areaStyle: { color: [cardColor, bgColor] } },
       axisLine: { lineStyle: { color: borderColor } }
     },
     series: [{
       type: "radar",
-      data: [{ value: data.map((item) => item.value), areaStyle: { color: `${primaryColor}2E` }, lineStyle: { color: primaryColor } }]
+      symbol: "circle",
+      symbolSize: 5,
+      data: [{
+        value: data.map((item) => item.value),
+        areaStyle: { color: `${primaryColor}29` },
+        lineStyle: { color: primaryColor, width: 2 },
+        itemStyle: { color: primaryColor, borderColor: cardColor, borderWidth: 1 }
+      }]
     }]
   });
 }

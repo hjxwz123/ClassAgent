@@ -81,8 +81,11 @@ onBeforeUnmount(() => audio?.pause());
   max-height: 120px;
   overflow: auto;
   margin: 0 0 var(--space-3);
+  border-left: 2px solid var(--color-border-default);
   color: var(--color-text-secondary);
   font-size: var(--text-body-sm);
+  padding-left: 10px;
+  line-height: 1.7;
 }
 .audio-chip {
   display: inline-flex;
@@ -92,12 +95,12 @@ onBeforeUnmount(() => audio?.pause());
   min-height: 44px;
   border: 1px solid var(--color-primary-200);
   border-radius: var(--radius-full);
-  background: var(--color-primary-50);
-  color: var(--color-primary-700);
+  background: var(--ca-role-light, var(--color-primary-50));
+  color: var(--ca-role-primary-hover, var(--color-primary-700));
   padding: 0 12px;
-  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  transition: transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out);
 }
-.audio-chip:hover { box-shadow: var(--shadow-sm); }
+.audio-chip:hover { box-shadow: var(--shadow-sm); border-color: var(--ca-role-primary, var(--color-primary-600)); }
 .audio-chip:active { transform: scale(.97); }
 .audio-chip.playing { background: var(--ca-role-student-light); color: var(--ca-role-student-primary-hover); }
 
