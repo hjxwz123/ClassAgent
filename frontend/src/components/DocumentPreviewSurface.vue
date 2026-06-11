@@ -60,6 +60,7 @@ import VueOfficePptx from "@vue-office/pptx";
 import VuePdfEmbed from "vue-pdf-embed";
 import "@vue-office/docx/lib/index.css";
 import "vue-pdf-embed/dist/styles/textLayer.css";
+import { getToken } from "../api/client";
 import { renderRichText } from "../utils/richText";
 import LoadingMark from "./LoadingMark.vue";
 
@@ -335,7 +336,7 @@ async function loadFile() {
 }
 
 function tokenHeaders() {
-  const token = sessionStorage.getItem("class_agent_token") || "";
+  const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
