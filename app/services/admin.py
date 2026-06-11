@@ -11,7 +11,7 @@ from pathlib import Path
 
 import httpx
 import redis
-from sqlalchemy import delete, distinct, func, or_, select, text
+from sqlalchemy import delete, distinct, func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from app.core.config import BACKUP_DIR, VECTOR_DIR, get_settings
@@ -38,8 +38,10 @@ from app.db.models import (
     SystemSetting,
     User,
 )
+from app.services.ai import build_rerank_request, parse_rerank_results
 from app.services.bootstrap import default_system_settings
 from app.services.email import email_service
+from app.services.runtime_settings import invalidate_runtime_setting
 from app.services.parser import (
     DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS,
     DEFAULT_DOC_PARSER_TIMEOUT_SECONDS,
@@ -650,16 +652,48 @@ def save_model_config(
     if not is_supported_model_provider(provider, purpose):
         raise bad_request("暂不支持的模型提供方")
     config = db.get(ModelConfig, config_id) if config_id else ModelConfig()
-    if config is None:
+    if config is None or config.deleted_at is not None:
         raise not_found("模型配置不存在")
     config.provider = provider
     config.model_name = model_name
     config.purpose = purpose
     config.endpoint = endpoint
-    config.api_key_encrypted = encrypt_secret(api_key) if api_key else config.api_key_encrypted
+    if api_key:
+        config.api_key_encrypted = encrypt_secret(api_key)
+    elif not config.api_key_encrypted and endpoint:
+        # 管理端「API Key 留空表示沿用已有」：对已有记录沿用旧值，
+        # 对新建记录沿用同 endpoint 其他配置的密钥，避免新增用途时静默落库成无密钥
+        donor_statement = (
+            select(ModelConfig)
+            .where(
+                ModelConfig.endpoint == endpoint,
+                ModelConfig.api_key_encrypted.is_not(None),
+                ModelConfig.deleted_at.is_(None),
+            )
+            .order_by(ModelConfig.updated_at.desc(), ModelConfig.created_at.desc())
+            .limit(1)
+        )
+        if config.id:
+            donor_statement = donor_statement.where(ModelConfig.id != config.id)
+        donor = db.scalar(donor_statement)
+        if donor is not None:
+            config.api_key_encrypted = donor.api_key_encrypted
     config.is_default = is_default
     config.extra_config = extra_config
     db.add(config)
+    if is_default:
+        # 同一 purpose 只保留一个默认，否则运行时按 is_default+updated_at 选行，
+        # 可能与管理端正在编辑的记录不一致（改 A 生效 B）
+        db.flush()
+        db.execute(
+            update(ModelConfig)
+            .where(
+                ModelConfig.purpose == purpose,
+                ModelConfig.id != config.id,
+                ModelConfig.is_default.is_(True),
+            )
+            .values(is_default=False)
+        )
     db.commit()
     db.refresh(config)
     return config
@@ -680,20 +714,30 @@ def test_model_config(db: Session, *, config_id: int) -> dict:
         raise not_found("模型配置不存在")
     if not is_supported_model_provider(config.provider, config.purpose):
         return {"success": False, "message": "暂不支持的模型提供方"}
-    if not config.endpoint:
+    # rerank 的 qwen 供应商可留空 endpoint（默认 DashScope 重排地址）
+    if not config.endpoint and not (config.purpose == "rerank" and config.provider == "qwen"):
         return {"success": False, "message": "缺少 endpoint"}
     headers = {"Content-Type": "application/json"}
     api_key = decrypt_secret(config.api_key_encrypted) if config.api_key_encrypted else None
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     headers.update((config.extra_config or {}).get("headers") or {})
-    endpoint = config.endpoint.rstrip("/")
+    endpoint = (config.endpoint or "").rstrip("/")
     if config.purpose == "embedding":
         if not endpoint.endswith("/embeddings"):
             endpoint = f"{endpoint}/embeddings"
         payload = {"model": config.model_name, "input": ["连接测试"]}
         if (config.extra_config or {}).get("dimensions"):
             payload["dimensions"] = (config.extra_config or {})["dimensions"]
+    elif config.purpose == "rerank":
+        endpoint, payload = build_rerank_request(
+            provider=config.provider,
+            endpoint=config.endpoint,
+            model_name=config.model_name,
+            query="极限的定义是什么",
+            documents=["极限描述函数在某点附近的趋近行为。", "矩阵可以表示线性变换。"],
+            top_n=2,
+        )
     else:
         if not endpoint.endswith("/chat/completions"):
             endpoint = f"{endpoint}/chat/completions"
@@ -713,6 +757,9 @@ def test_model_config(db: Session, *, config_id: int) -> dict:
             data = body.get("data") or []
             if not data or not isinstance(data[0].get("embedding") if isinstance(data[0], dict) else None, list):
                 return {"success": False, "message": "响应中没有 embedding"}
+        elif config.purpose == "rerank":
+            if not parse_rerank_results(body):
+                return {"success": False, "message": "响应中没有重排 results"}
         else:
             choices = body.get("choices") or []
             if not choices:
@@ -1027,7 +1074,11 @@ def test_all_services(db: Session) -> dict:
             continue
         result = test_service_config(db, config_id=config.id)
         results.append({"type": config.service_type, "name": config.name, **result})
-    for config in db.scalars(select(ModelConfig).where(ModelConfig.deleted_at.is_(None), ModelConfig.is_default.is_(True))):
+    # 覆盖全部用途的模型配置，而不只是 is_default 行：
+    # qa/quiz/task 等用途行不是默认行，但运行时同样会被使用，配置坏了（如缺密钥）也应被一键测试发现
+    for config in db.scalars(
+        select(ModelConfig).where(ModelConfig.deleted_at.is_(None)).order_by(ModelConfig.purpose, ModelConfig.id)
+    ):
         if not is_supported_model_provider(config.provider, config.purpose):
             continue
         result = test_model_config(db, config_id=config.id)
@@ -1056,6 +1107,7 @@ def update_system_setting(db: Session, *, key: str, value) -> SystemSetting:
     db.add(setting)
     db.commit()
     db.refresh(setting)
+    invalidate_runtime_setting(key)
     return setting
 
 
@@ -1070,6 +1122,7 @@ def restore_default_system_settings(db: Session) -> list[dict]:
         setting.category = category
         db.add(setting)
     db.commit()
+    invalidate_runtime_setting()
     return list_system_settings(db)
 
 
