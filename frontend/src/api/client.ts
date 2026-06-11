@@ -2,17 +2,28 @@ import type { ApiResponse } from "../types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
-localStorage.removeItem("class_agent_token");
-let token = sessionStorage.getItem("class_agent_token") || "";
+const TOKEN_KEY = "class_agent_token";
+
+// 记住登录为默认行为：token 持久化在 localStorage，关浏览器重开仍保持登录，
+// 仅用户主动退出（或后端判定 401/403）时清除；改密码/重置密码时后端会提升
+// token_version 吊销全部旧 token。兼容迁移历史版本短暂使用过的 sessionStorage。
+let token = localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY) || "";
+sessionStorage.removeItem(TOKEN_KEY);
+if (token) localStorage.setItem(TOKEN_KEY, token);
 
 export function setToken(value: string) {
   token = value;
-  sessionStorage.setItem("class_agent_token", value);
+  localStorage.setItem(TOKEN_KEY, value);
 }
 
 export function clearToken() {
   token = "";
-  sessionStorage.removeItem("class_agent_token");
+  localStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+}
+
+export function getToken() {
+  return token;
 }
 
 function buildUrl(path: string, query?: Record<string, unknown>) {
@@ -81,14 +92,29 @@ function parsePayload<T>(raw: string) {
   }
 }
 
+/* 带 HTTP 状态码的请求错误：调用方可据此区分鉴权失败(401/403)与网络/服务端异常(0/5xx) */
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}, query?: Record<string, unknown>) {
   const headers = new Headers(init.headers);
   if (!(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(buildUrl(path, query), { ...init, headers });
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path, query), { ...init, headers });
+  } catch {
+    throw new ApiError("网络连接失败，请稍后重试", 0);
+  }
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok || !payload || payload.code !== 0) {
-    throw new Error(errorMessage(payload as ApiResponse<unknown> | null));
+    throw new ApiError(errorMessage(payload as ApiResponse<unknown> | null), response.status);
   }
   return payload.data;
 }

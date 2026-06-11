@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = "development"
     api_v1_prefix: str = "/api/v1"
     secret_key: str = Field(default="change-this-secret-key-in-production", min_length=16)
-    access_token_expire_minutes: int = 60 * 24
+    # 记住登录为默认行为：30 天有效期；改密码/重置密码会提升 token_version 立即吊销旧 token
+    access_token_expire_minutes: int = 60 * 24 * 30
     database_url: str = "mysql+pymysql://class_agent:class_agent_2026@127.0.0.1:3306/class_agent?charset=utf8mb4"
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
