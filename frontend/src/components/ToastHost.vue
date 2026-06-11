@@ -103,12 +103,17 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--space-3);
   background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
   border-left: 3px solid var(--color-info-500);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 10px 28px rgba(18, 22, 20, .1), 0 2px 6px rgba(18, 22, 20, .05);
   padding: var(--space-3);
   color: var(--color-text-body);
 }
+.toast > svg:first-child { color: var(--color-info-500); }
+.toast.success > svg:first-child { color: var(--color-success-500); }
+.toast.warning > svg:first-child { color: var(--color-warning-500); }
+.toast.error > svg:first-child { color: var(--color-danger-500); }
 .toast-progress {
   position: absolute;
   left: 0;
@@ -129,12 +134,12 @@ onBeforeUnmount(() => {
 .toast-leave-active { animation: toast-out var(--duration-fast) var(--ease-in) both; }
 .toast-move { transition: transform var(--duration-base) var(--ease-out); }
 @keyframes toast-in {
-  from { opacity: 0; transform: translateX(100%); }
+  from { opacity: 0; transform: translateX(calc(100% + 24px)); }
   to { opacity: 1; transform: translateX(0); }
 }
 @keyframes toast-out {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-10px); }
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-8px) scale(0.98); }
 }
 @keyframes toast-progress {
   from { transform: scaleX(1); }

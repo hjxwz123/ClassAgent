@@ -61,7 +61,7 @@ function onInput(event: Event) {
   border-color: var(--color-border-strong);
 }
 .password-field:focus-within {
-  border-color: var(--color-primary-600);
+  border-color: var(--ca-role-primary, var(--color-primary-600));
   box-shadow: var(--shadow-focus);
 }
 .password-field.invalid {

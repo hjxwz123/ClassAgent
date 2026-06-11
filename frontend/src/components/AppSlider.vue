@@ -111,7 +111,7 @@ onBeforeUnmount(() => window.removeEventListener("pointermove", onMove));
 }
 .slider-fill {
   right: auto;
-  background: var(--color-primary-600);
+  background: var(--ca-role-primary, var(--color-primary-600));
   transition: width var(--duration-fast) var(--ease-out);
 }
 .slider-thumb {
@@ -119,17 +119,24 @@ onBeforeUnmount(() => window.removeEventListener("pointermove", onMove));
   top: 50%;
   width: 20px;
   height: 20px;
-  border: 3px solid var(--color-primary-600);
+  border: 3px solid var(--ca-role-primary, var(--color-primary-600));
   border-radius: 50%;
-  background: white;
-  box-shadow: var(--shadow-sm);
+  background: var(--color-bg-surface);
+  box-shadow: 0 1px 3px rgba(18, 22, 20, .16);
   transform: translate(-50%, -50%);
   transition: left var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
-.app-slider:hover .slider-thumb,
-.app-slider:focus-visible .slider-thumb {
+.app-slider:hover .slider-thumb {
   transform: translate(-50%, -50%) scale(1.08);
   box-shadow: var(--shadow-md);
+}
+.app-slider:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.app-slider:focus-visible .slider-thumb {
+  transform: translate(-50%, -50%) scale(1.08);
+  box-shadow: var(--shadow-focus);
 }
 .app-slider.disabled {
   opacity: .55;

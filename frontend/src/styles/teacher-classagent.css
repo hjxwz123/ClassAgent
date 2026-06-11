@@ -325,20 +325,23 @@
 .teacher-content {
   width: min(1280px, 100%);
   margin: 0 auto;
-  gap: 24px;
-  padding: 0 32px 64px;
+  gap: 28px;
+  padding: 4px 36px 72px;
 }
 
 .welcome {
   position: relative;
-  min-height: 120px;
+  min-height: 148px;
   height: auto;
   overflow: hidden;
-  border-radius: var(--ca-radius-lg);
-  background: var(--ca-color-slate);
+  border: 1px solid rgba(18, 22, 20, 0.9);
+  border-radius: var(--ca-radius-xl);
+  background:
+    radial-gradient(640px 220px at 12% 0%, rgba(244, 244, 240, 0.05), transparent 64%),
+    var(--ca-color-slate);
   color: var(--ca-color-chalk);
-  box-shadow: var(--ca-shadow-paper);
-  padding: 28px 32px;
+  box-shadow: 0 18px 40px rgba(18, 22, 20, 0.16), inset 0 0 0 1px rgba(244, 244, 240, 0.07);
+  padding: 32px 36px 36px;
 }
 
 .welcome::before {
@@ -352,36 +355,146 @@
 .welcome > div,
 .welcome .btn {
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
-.welcome svg {
-  color: var(--ca-role-teacher-primary);
+.welcome > div {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.welcome > div > svg {
+  flex: 0 0 auto;
+  color: var(--ca-role-teacher-glow);
+  filter: drop-shadow(0 0 8px rgba(255, 87, 34, 0.35));
+  margin-top: 4px;
 }
 
 .welcome h1 {
+  position: relative;
+  display: inline-block;
   color: var(--ca-color-chalk);
   font-family: var(--ca-font-serif);
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: .04em;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.welcome h1::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  right: 14%;
+  bottom: -9px;
+  height: 3px;
+  border-radius: var(--ca-radius-full);
+  background: linear-gradient(90deg, var(--ca-role-teacher-primary) 0%, rgba(217, 73, 37, 0.65) 62%, transparent 100%);
+  opacity: 0.9;
+  pointer-events: none;
 }
 
 .welcome p {
+  margin-top: 14px;
   color: var(--ca-color-dust);
   font-family: var(--ca-font-mono);
   font-size: 13px;
+  letter-spacing: 0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Warm chalk-light pooling in the board corner. */
+.welcome-glow {
+  position: absolute;
+  right: -90px;
+  top: -110px;
+  z-index: 1;
+  width: 340px;
+  height: 280px;
+  pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255, 87, 34, 0.16), rgba(255, 87, 34, 0.05) 58%, transparent 100%);
+  filter: blur(2px);
+}
+
+/* Faint chalk formula doodle, purely decorative. */
+.welcome-scribble {
+  position: absolute;
+  right: 200px;
+  top: 18px;
+  z-index: 1;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--ca-font-chalk);
+  font-size: 17px;
+  font-style: normal;
+  color: rgba(244, 244, 240, 0.16);
+  transform: rotate(-4deg);
+}
+
+.welcome-scribble::before {
+  content: "a² + b² = c²";
+  display: block;
+}
+
+.welcome-scribble::after {
+  content: "f(x) = sin x";
+  display: block;
+  margin-top: 6px;
+  margin-left: 22px;
+  font-size: 14px;
+  color: rgba(244, 244, 240, 0.11);
+}
+
+/* Chalk tray along the bottom edge of the board. */
+.welcome-tray {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  height: 7px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(244, 244, 240, 0.1), rgba(244, 244, 240, 0.03));
+  border-top: 1px solid rgba(244, 244, 240, 0.12);
+}
+
+.welcome-tray::before {
+  content: "";
+  position: absolute;
+  left: 38px;
+  bottom: 6px;
+  width: 34px;
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #FBFAF7, #D8D6CE);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  transform: rotate(-1deg);
+}
+
+.welcome-tray::after {
+  content: "";
+  position: absolute;
+  left: 86px;
+  bottom: 6px;
+  width: 22px;
+  height: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #EB9C84, #D94925);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  transform: rotate(1.6deg);
 }
 
 .white-btn {
-  border: 1px solid rgba(255,255,255,.2);
-  background: transparent;
+  border: 1px solid rgba(244, 244, 240, 0.26);
+  background: rgba(244, 244, 240, 0.04);
   color: var(--ca-color-chalk);
 }
 
 .white-btn:hover {
-  background: rgba(255,255,255,.1);
+  border-color: rgba(255, 87, 34, 0.55);
+  background: rgba(255, 87, 34, 0.12);
   color: var(--ca-color-chalk);
+  box-shadow: 0 0 18px rgba(255, 87, 34, 0.18);
 }
 
 .metric-grid {
@@ -520,7 +633,7 @@
   grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
   justify-content: start;
   align-items: stretch;
-  gap: 14px;
+  gap: 20px;
 }
 
 .course-card {
@@ -593,23 +706,24 @@
 
 .ghost-white.danger {
   border-color: rgba(255, 255, 255, .5);
-  background: rgba(239, 68, 68, .22);
+  background: rgba(198, 40, 40, .3);
 }
 
 .course-inactive-banner {
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid rgba(239, 68, 68, .24);
-  border-radius: var(--ca-radius-md);
-  background: rgba(239, 68, 68, .08);
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-lg);
+  background: var(--ca-color-paper-card);
+  box-shadow: inset 3px 0 0 var(--ca-color-error), var(--ca-shadow-paper);
   color: var(--ca-color-paper-ink);
-  padding: 14px 16px;
+  padding: 14px 18px;
 }
 
 .course-inactive-banner > svg {
   flex: 0 0 auto;
-  color: #EF4444;
+  color: var(--ca-color-error);
 }
 
 .course-inactive-banner div {
@@ -825,7 +939,7 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, .78);
   color: var(--ca-color-paper-muted);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, .10);
+  box-shadow: 0 10px 24px rgba(18, 22, 20, .10);
   padding: 0;
   font-size: 0;
   line-height: 0;
@@ -1465,24 +1579,32 @@ html.theme-light .teacher-shell .course-title {
   color: var(--color-text-muted) !important;
 }
 
+/* The welcome banner stays a chalkboard in light theme: slate board on the paper desk. */
 html.theme-light .teacher-shell .welcome {
-  background: linear-gradient(135deg, #FFF7ED, #FFEDD5) !important;
-  color: var(--color-text-primary) !important;
-  border: 1px solid rgba(249, 115, 22, .18) !important;
+  background:
+    radial-gradient(640px 220px at 12% 0%, rgba(244, 244, 240, 0.05), transparent 64%),
+    #121614 !important;
+  color: #F4F4F0 !important;
+  border: 1px solid rgba(18, 22, 20, 0.9) !important;
 }
 
 html.theme-light .teacher-shell .welcome h1 {
-  color: var(--color-text-primary) !important;
+  color: #F4F4F0 !important;
 }
 
 html.theme-light .teacher-shell .welcome p {
-  color: var(--color-text-secondary) !important;
+  color: #8C948F !important;
 }
 
 html.theme-light .teacher-shell .white-btn {
-  background: rgba(255, 255, 255, .72) !important;
-  color: var(--color-primary-700) !important;
-  border-color: rgba(249, 115, 22, .24) !important;
+  background: rgba(244, 244, 240, 0.04) !important;
+  color: #F4F4F0 !important;
+  border-color: rgba(244, 244, 240, 0.26) !important;
+}
+
+html.theme-light .teacher-shell .white-btn:hover {
+  background: rgba(255, 87, 34, 0.12) !important;
+  border-color: rgba(255, 87, 34, 0.55) !important;
 }
 
 html.theme-light .teacher-shell .btn-ai {
@@ -1514,14 +1636,14 @@ html.theme-light .teacher-shell .course-cover-title {
 }
 
 html.theme-dark .teacher-shell .course-cover:not(.has-image) {
-  background: linear-gradient(135deg, rgba(67, 20, 7, .92), rgba(15, 23, 42, .95)) !important;
+  background: linear-gradient(135deg, rgba(67, 20, 7, .92), rgba(18, 22, 20, .95)) !important;
   color: #FED7AA !important;
 }
 
 html.theme-dark .teacher-shell .course-card .course-cover .tag,
 html.theme-dark .teacher-shell .course-cover-title {
   border-color: rgba(253, 186, 116, .24) !important;
-  background: rgba(15, 23, 42, .62) !important;
+  background: rgba(18, 22, 20, .62) !important;
   color: #FED7AA !important;
   text-shadow: none !important;
 }
@@ -1540,7 +1662,7 @@ html.theme-dark .teacher-shell .lesson-row:hover .lesson-open-label,
 html.theme-dark .teacher-shell .question-row b,
 html.theme-dark .teacher-shell .thumb-card span {
   background: #C2410C !important;
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
   border-color: #EA580C !important;
 }
 
@@ -1548,7 +1670,7 @@ html.theme-dark .teacher-shell .btn-primary:hover,
 html.theme-dark .teacher-shell .view-toggle .active:hover,
 html.theme-dark .teacher-shell .view-toggle button.active:hover {
   background: #9A3412 !important;
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
 }
 
 html.theme-dark .teacher-shell .btn-secondary,
@@ -1561,8 +1683,8 @@ html.theme-dark .teacher-shell .lesson-preview-layout aside button,
 html.theme-dark .teacher-shell .segment-btn,
 html.theme-dark .teacher-shell .view-toggle button {
   background: #111827 !important;
-  color: #E2E8F0 !important;
-  border-color: rgba(148, 163, 184, .24) !important;
+  color: #E2E5E1 !important;
+  border-color: rgba(140, 148, 143, .24) !important;
 }
 
 html.theme-dark .teacher-shell .btn-secondary:hover,
@@ -1583,9 +1705,9 @@ html.theme-dark .teacher-shell .segment-btn.active {
 
 html.theme-dark .teacher-shell .modal-head .modal-close-action,
 html.theme-dark .teacher-shell .drawer-head .modal-close-action {
-  border-color: rgba(148, 163, 184, .24) !important;
-  background: rgba(15, 23, 42, .78) !important;
-  color: #CBD5E1 !important;
+  border-color: rgba(140, 148, 143, .24) !important;
+  background: rgba(18, 22, 20, .78) !important;
+  color: #C2C8C3 !important;
   box-shadow: 0 12px 26px rgba(0, 0, 0, .28) !important;
 }
 
@@ -1602,7 +1724,7 @@ html.theme-dark .teacher-shell .drawer-head .modal-close-action:hover {
 }
 
 html.theme-dark .teacher-shell .header-theme-toggle {
-  color: #CBD5E1;
+  color: #C2C8C3;
 }
 
 /* Icon audit: remove filled tiles from icon containers without changing sizing. */
@@ -1684,7 +1806,7 @@ html.theme-dark .teacher-shell .course-switch > button.active {
 html.theme-dark .teacher-shell .course-switch > button,
 html.theme-dark .teacher-shell .course-switch > button:hover,
 html.theme-dark .teacher-shell .course-switch > button.active {
-  color: #F8FAFC !important;
+  color: #F4F4F0 !important;
 }
 
 .teacher-shell .course-switch > button span,
@@ -1858,5 +1980,1200 @@ html.theme-dark .teacher-shell .course-switch > button span {
   .teacher-shell .course-hero section {
     justify-content: flex-start;
     max-width: 100%;
+  }
+}
+
+/* ============================================================
+   智学黑板 · 教师端设计审计层（朱砂批改红 / 暖纸 / 墨绿黑板）
+   Appended last on purpose: wins same-specificity ties in-file.
+   ============================================================ */
+
+/* ---------- 1. 全局节奏与文字基线 ---------- */
+
+.teacher-shell {
+  line-height: 1.65;
+}
+
+.teacher-shell code {
+  font-variant-numeric: tabular-nums;
+}
+
+.breadcrumb {
+  width: min(1280px, 100%);
+  height: 64px;
+  margin: 0 auto;
+  padding: 0 36px;
+}
+
+.breadcrumb > div > svg {
+  color: var(--ca-color-paper-muted);
+}
+
+.breadcrumb span {
+  color: var(--ca-color-paper-muted);
+  font-size: 13px;
+}
+
+.breadcrumb strong {
+  font-family: var(--ca-font-serif);
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.brand strong {
+  font-family: var(--ca-font-serif);
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.logo-mark {
+  border-radius: var(--ca-radius-lg);
+}
+
+/* ---------- 2. 侧边栏（黑板材质细化） ---------- */
+
+.nav-group > span {
+  padding: 0 12px 9px;
+  color: rgba(140, 148, 143, 0.78);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.nav-group button {
+  border-radius: var(--ca-radius-md);
+  font-weight: 500;
+}
+
+.nav-group button.active {
+  box-shadow: inset 0 0 0 1px rgba(244, 244, 240, 0.07);
+}
+
+.nav-group button.active::before {
+  box-shadow: 0 0 10px rgba(217, 73, 37, 0.55);
+}
+
+.teacher-sidebar .course-title {
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+
+.teacher-sidebar .course-title:hover {
+  background: rgba(244, 244, 240, 0.08);
+  color: var(--ca-color-chalk);
+}
+
+/* ---------- 3. 卡片基底：纸感半径、内边距、悬停节奏 ---------- */
+
+.panel-card,
+.table-card,
+.profile-card,
+.ai-suggestion,
+.filter-card {
+  border-radius: var(--ca-radius-xl);
+}
+
+.panel-card {
+  padding: 24px;
+}
+
+.filter-card {
+  padding: 12px 16px;
+  gap: 12px;
+}
+
+.modal {
+  border-radius: 14px;
+  padding: 24px;
+}
+
+.modal-head {
+  margin-bottom: 16px;
+}
+
+.modal-head h2 {
+  font-family: var(--ca-font-serif);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.modal-head > svg {
+  color: var(--ca-role-teacher-primary);
+}
+
+.panel-head {
+  margin-bottom: 16px;
+}
+
+.panel-head h2 {
+  gap: 9px;
+  letter-spacing: -0.01em;
+}
+
+.panel-head h2 svg {
+  flex: 0 0 auto;
+  color: var(--ca-role-teacher-primary);
+  opacity: 0.88;
+}
+
+.panel-head small {
+  font-size: 12px;
+}
+
+.metric-card,
+.panel-card,
+.course-card,
+.lesson-card,
+.quick-action,
+.material-status-tile,
+.weak-set-card,
+.lesson-row,
+.thumb-card,
+.filter-card,
+.table-card {
+  transition:
+    transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out),
+    border-color 200ms var(--ease-out),
+    background 200ms var(--ease-out);
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tag {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.badge {
+  font-family: var(--ca-font-mono);
+}
+
+/* 进度条统一为 4-6px 胶囊（覆盖子组件） */
+.teacher-shell :deep(.app-progress) {
+  height: 6px;
+  box-shadow: inset 0 0 0 1px rgba(18, 22, 20, 0.04);
+}
+
+.teacher-shell :deep(.app-progress.compact) {
+  height: 4px;
+}
+
+/* ---------- 4. Metric 统计卡：mono 大数字 + 朱砂悬停描边 ---------- */
+
+.metric-card {
+  border-radius: var(--ca-radius-xl);
+  padding: 22px 24px;
+}
+
+.metric-card > div {
+  gap: 10px;
+}
+
+.metric-card > div > span:not(.metric-icon) {
+  color: var(--ca-color-paper-sub);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.metric-icon {
+  width: auto;
+  height: auto;
+}
+
+.metric-card strong {
+  margin-top: 14px;
+  font-family: var(--ca-font-mono);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.compact .metric-card {
+  min-height: 96px;
+  padding: 18px 20px;
+}
+
+.compact .metric-card strong {
+  margin-top: 10px;
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.metric-card small {
+  color: var(--ca-color-paper-muted);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.metric-card:hover {
+  border-color: rgba(217, 73, 37, 0.28);
+  transform: translateY(-2px);
+  box-shadow: var(--ca-shadow-paper-hover);
+}
+
+/* 危险/告警卡降噪：白底 + 左侧 3px 语义条 + 语义色数字 */
+.metric-card.danger {
+  background: var(--ca-color-paper-card);
+  border-color: var(--ca-color-paper-border);
+  box-shadow: inset 3px 0 0 var(--ca-color-error), var(--ca-shadow-paper);
+}
+
+.metric-card.danger strong,
+.metric-card.danger .metric-icon {
+  color: var(--ca-color-error);
+}
+
+.metric-card.danger small {
+  color: var(--ca-color-paper-sub);
+}
+
+.metric-card.danger:hover {
+  border-color: rgba(198, 40, 40, 0.26);
+  box-shadow: inset 3px 0 0 var(--ca-color-error), var(--ca-shadow-paper-hover);
+}
+
+/* ---------- 5. 工作台面板细节 ---------- */
+
+.recent-course {
+  padding: 14px 0;
+}
+
+.recent-course .cover {
+  border-radius: var(--ca-radius-lg);
+  box-shadow: inset 0 0 0 1px rgba(244, 244, 240, 0.08);
+}
+
+.recent-course small,
+.todo-row small,
+.script-row small,
+.activity-item small {
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.todo-row {
+  min-height: 56px;
+}
+
+.script-row {
+  min-height: 52px;
+}
+
+.task-item {
+  min-height: 38px;
+}
+
+.task-item small {
+  font-size: 12px;
+}
+
+.heat-head b {
+  font-family: var(--ca-font-mono);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.heat-row i {
+  border-radius: 4px;
+}
+
+.dashed-btn {
+  min-height: 50px;
+  border-radius: var(--ca-radius-lg);
+  font-weight: 600;
+}
+
+.dashed-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--ca-shadow-paper);
+}
+
+/* ---------- 6. 课程列表页 ---------- */
+
+.course-card {
+  border-radius: 10px;
+}
+
+.course-card:hover {
+  border-color: rgba(217, 73, 37, 0.28);
+  transform: translateY(-3px);
+}
+
+.course-card h2 {
+  font-family: var(--ca-font-serif);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.course-card code {
+  letter-spacing: 0.05em;
+}
+
+.course-stats {
+  font-variant-numeric: tabular-nums;
+}
+
+.course-card section {
+  padding: 12px 14px 10px;
+}
+
+.course-card footer {
+  padding: 10px 12px;
+}
+
+.teacher-table th {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ca-color-paper-border-strong);
+  color: var(--ca-color-paper-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.teacher-table td {
+  padding: 14px 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.teacher-table td code {
+  font-size: 12px;
+}
+
+/* 失活行降噪：白底 + 左侧语义条，不整行铺红 */
+.teacher-table tr.inactive {
+  background: var(--ca-color-paper-card);
+}
+
+.teacher-table tr.inactive td:first-child {
+  box-shadow: inset 3px 0 0 var(--ca-color-error);
+}
+
+.teacher-table tr.inactive:hover {
+  background: var(--ca-color-error-light);
+}
+
+/* ---------- 7. 课程主页 ---------- */
+
+.course-hero {
+  position: relative;
+  min-height: 136px;
+  overflow: hidden;
+  border: 1px solid rgba(18, 22, 20, 0.85);
+  border-radius: var(--ca-radius-xl);
+  box-shadow: 0 16px 36px rgba(18, 22, 20, 0.14);
+  padding: 24px 28px;
+}
+
+.course-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E');
+}
+
+.course-hero.has-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, rgba(18, 22, 20, 0.62), rgba(18, 22, 20, 0.22) 52%, rgba(18, 22, 20, 0.42));
+}
+
+.course-hero > span,
+.course-hero > div,
+.course-hero > section {
+  position: relative;
+  z-index: 1;
+}
+
+.course-hero > span {
+  border: 1px solid rgba(244, 244, 240, 0.28);
+  border-radius: 14px;
+  background: rgba(244, 244, 240, 0.12);
+}
+
+.course-hero h1 {
+  font-family: var(--ca-font-serif);
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+}
+
+.course-hero small {
+  font-family: var(--ca-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ghost-white {
+  border-color: rgba(244, 244, 240, 0.32);
+  border-radius: var(--ca-radius-md);
+  background: rgba(244, 244, 240, 0.06);
+  backdrop-filter: blur(4px);
+}
+
+.ghost-white:hover {
+  border-color: rgba(244, 244, 240, 0.6);
+  background: rgba(244, 244, 240, 0.16);
+}
+
+.quick-action {
+  min-height: 80px;
+  gap: 12px;
+  border-radius: var(--ca-radius-xl);
+  padding: 0 18px;
+}
+
+.quick-action > svg {
+  color: var(--ca-role-teacher-primary);
+}
+
+.quick-action:hover {
+  border-color: rgba(217, 73, 37, 0.28);
+}
+
+.material-health {
+  border-color: rgba(217, 73, 37, 0.16);
+  border-radius: var(--ca-radius-lg);
+  background: linear-gradient(135deg, var(--ca-role-teacher-light), var(--ca-color-paper-card) 72%);
+  padding: 16px;
+}
+
+.material-health strong {
+  font-family: var(--ca-font-mono);
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.material-status-tile {
+  min-height: 48px;
+  border-radius: var(--ca-radius-lg);
+}
+
+.material-status-tile strong {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.material-status-tile:hover {
+  border-color: rgba(217, 73, 37, 0.24);
+}
+
+/* ---------- 8. 课时时间线（lesson-row） ---------- */
+
+.lesson-rows {
+  gap: 12px;
+}
+
+.lesson-row {
+  gap: 14px;
+  border-color: var(--color-border-subtle);
+  padding: 12px 14px;
+}
+
+.lesson-row:hover {
+  border-color: rgba(217, 73, 37, 0.28);
+}
+
+.lesson-index b {
+  border: 1px solid var(--ca-color-paper-border);
+  border-radius: var(--ca-radius-lg);
+  background: var(--ca-color-paper-bg);
+  color: var(--ca-color-paper-sub);
+  font-family: var(--ca-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background 200ms var(--ease-out), color 200ms var(--ease-out), border-color 200ms var(--ease-out);
+}
+
+.lesson-index i {
+  width: 2px;
+  background: repeating-linear-gradient(180deg, var(--ca-color-paper-border-strong) 0 5px, transparent 5px 10px);
+  transition: background 200ms var(--ease-out);
+}
+
+.lesson-row:hover .lesson-index b {
+  border-color: rgba(217, 73, 37, 0.34);
+  background: var(--ca-role-teacher-light);
+  color: var(--ca-role-teacher-primary);
+}
+
+.lesson-row:hover .lesson-index i {
+  background: repeating-linear-gradient(180deg, rgba(217, 73, 37, 0.4) 0 5px, transparent 5px 10px);
+}
+
+.lesson-progress-line em {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.lesson-body small {
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 9. 课时管理页 ---------- */
+
+.lesson-card {
+  border-radius: var(--ca-radius-xl);
+  gap: 18px;
+  padding: 18px 20px;
+}
+
+.lesson-card:hover {
+  border-color: rgba(217, 73, 37, 0.28);
+}
+
+.lesson-thumb {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background-color: var(--ca-color-slate);
+  box-shadow: inset 0 0 0 1px rgba(244, 244, 240, 0.08);
+  color: var(--ca-color-chalk);
+  font-family: var(--ca-font-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.lesson-thumb::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 12px;
+  height: 2px;
+  border-radius: var(--ca-radius-full);
+  background: linear-gradient(90deg, rgba(217, 73, 37, 0.85), rgba(217, 73, 37, 0.1));
+  pointer-events: none;
+}
+
+.lesson-card .lesson-card-title {
+  font-family: var(--ca-font-serif);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.lesson-card p {
+  margin: 7px 0 11px;
+  color: var(--ca-color-paper-sub);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lesson-pager-info {
+  font-family: var(--ca-font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 10. 资料管理页 ---------- */
+
+.materials-layout {
+  border-radius: var(--ca-radius-xl);
+}
+
+.chapter-tree {
+  gap: 7px;
+  padding: 14px;
+}
+
+.chapter-tree-count {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.material-filter {
+  height: 60px;
+  padding: 10px 16px;
+}
+
+.material-row {
+  min-height: 72px;
+  gap: 14px;
+  padding: 13px 16px;
+}
+
+.material-list.grid {
+  gap: 14px;
+  padding: 16px;
+}
+
+.material-list.grid .material-row {
+  border-radius: var(--ca-radius-lg);
+}
+
+.material-row:hover {
+  border-color: rgba(217, 73, 37, 0.28);
+}
+
+.file-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+
+.material-row small {
+  margin-top: 2px;
+  line-height: 1.55;
+}
+
+.material-status {
+  margin-top: 4px;
+  line-height: 1.55;
+}
+
+/* 解析中：呼吸左条 + 暖底；成功/失败语义色 */
+.material-row.processing {
+  border-color: var(--ca-color-warning-border);
+  background: linear-gradient(90deg, rgba(255, 243, 224, 0.55), var(--ca-color-paper-card) 46%);
+  animation: ca-breathe-bar 2.4s var(--ease-in-out) infinite;
+}
+
+.material-status.processing {
+  color: var(--ca-color-warning);
+}
+
+/* ---------- 11. 上传弹窗 ---------- */
+
+.upload-drop {
+  height: 172px;
+  gap: 10px;
+  border-width: 1.5px;
+  border-radius: var(--ca-radius-xl);
+  background: var(--ca-color-paper-bg);
+  color: var(--ca-color-paper-sub);
+}
+
+.upload-drop > svg {
+  color: var(--ca-role-teacher-primary);
+  opacity: 0.85;
+}
+
+.upload-drop span {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.upload-row {
+  padding: 12px 0;
+}
+
+.upload-meta-head small {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.upload-meta-progress em {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.upload-row.is-uploading > svg {
+  color: var(--ca-role-teacher-primary);
+  animation: loading-node-pulse 1.5s ease-in-out infinite;
+}
+
+.upload-row.is-uploaded > svg {
+  color: var(--ca-color-success);
+}
+
+.upload-row.is-failed > svg {
+  color: var(--ca-color-error);
+}
+
+.upload-progress-head strong {
+  font-size: 14px;
+}
+
+.upload-progress-head small {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 12. 教学分析页 ---------- */
+
+.ai-suggestion {
+  padding: 22px 24px;
+  background: linear-gradient(90deg, rgba(251, 233, 231, 0.4), var(--ca-color-paper-card) 36%);
+}
+
+.ai-suggestion h2 {
+  font-family: var(--ca-font-serif);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.ai-suggestion p {
+  line-height: 1.75;
+}
+
+.ai-suggestion.thinking {
+  animation: ca-think-border 1.8s var(--ease-in-out) infinite;
+}
+
+/* 高频问题词云 → 小黑板 */
+.word-cloud {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(18, 22, 20, 0.88);
+  border-radius: var(--ca-radius-xl);
+  background:
+    radial-gradient(420px 200px at 82% 8%, rgba(255, 87, 34, 0.08), transparent 62%),
+    var(--ca-color-slate);
+  box-shadow: inset 0 0 0 1px rgba(244, 244, 240, 0.06), inset 0 0 48px rgba(0, 0, 0, 0.3);
+  color: var(--ca-color-chalk);
+  padding: 24px;
+}
+
+.word-cloud::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E');
+}
+
+.word-cloud span {
+  position: relative;
+  font-family: var(--ca-font-chalk);
+  color: rgba(244, 244, 240, 0.85);
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 14px rgba(244, 244, 240, 0.12);
+}
+
+.word-cloud span:nth-child(4n+2) {
+  color: rgba(255, 138, 101, 0.88);
+}
+
+.word-cloud span:nth-child(5n+3) {
+  color: rgba(140, 148, 143, 0.92);
+}
+
+.word-cloud span:hover {
+  color: #FFFFFF;
+}
+
+.question-row {
+  min-height: 48px;
+}
+
+.question-row b {
+  font-family: var(--ca-font-mono);
+  font-size: 12px;
+}
+
+.question-row strong {
+  color: var(--ca-color-paper-ink);
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.weak-row b {
+  font-size: 12px;
+}
+
+.weak-row strong {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.layer-card {
+  border-radius: var(--ca-radius-lg);
+  gap: 9px;
+  padding: 16px;
+}
+
+.layer-card strong {
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+
+.layer-card span {
+  font-family: var(--ca-font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ca-color-paper-ink);
+}
+
+/* ---------- 13. 薄弱题目页 ---------- */
+
+.weak-config-card,
+.weak-selection-card,
+.weak-detail-card {
+  padding: 24px;
+}
+
+.weak-type-status strong,
+.quiz-editor-stats span {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.weak-point-switcher-head {
+  border-radius: var(--ca-radius-lg);
+  background: var(--ca-color-paper-bg);
+}
+
+.weak-point-switcher-title small {
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.weak-point-card {
+  border-radius: var(--ca-radius-lg);
+}
+
+.weak-point-card h2 {
+  font-family: var(--ca-font-serif);
+  font-weight: 800;
+}
+
+.weak-set-card {
+  border-radius: var(--ca-radius-lg);
+  padding: 14px;
+}
+
+.weak-set-card small {
+  font-variant-numeric: tabular-nums;
+}
+
+.weak-attempt-summary b,
+.weak-attempt-summary em {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 14. 个人中心 ---------- */
+
+.profile-card {
+  height: auto;
+  min-height: 148px;
+  padding: 26px 28px;
+}
+
+.profile-card h1 {
+  font-family: var(--ca-font-serif);
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.profile-card small {
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-tabs button {
+  font-weight: 600;
+}
+
+/* ---------- 15. 课程表单 ---------- */
+
+.form-panel {
+  gap: 26px;
+  padding: 28px;
+}
+
+.form-section h2 {
+  font-family: var(--ca-font-serif);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.form-section label {
+  gap: 8px;
+}
+
+.fixed-actions {
+  border-top-color: var(--ca-color-paper-border);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.course-preview-panel {
+  border-radius: var(--ca-radius-xl);
+}
+
+/* ---------- 16. PPT 工作台（墨绿黑板舞台） ---------- */
+
+.ppt-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="n"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23n)" opacity="0.05"/%3E%3C/svg%3E');
+}
+
+.ppt-head strong {
+  font-family: var(--ca-font-serif);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.stage-top,
+.stage-controls {
+  border: 1px solid rgba(244, 244, 240, 0.14);
+  background: rgba(18, 22, 20, 0.6);
+}
+
+.stage-top .icon-action,
+.stage-controls .icon-action {
+  border-color: rgba(244, 244, 240, 0.18);
+  background: rgba(244, 244, 240, 0.06);
+}
+
+.stage-top .icon-action:hover,
+.stage-controls .icon-action:hover {
+  background: rgba(244, 244, 240, 0.16);
+  color: #FFFFFF;
+}
+
+.slide-preview {
+  border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.slide-preview h2 {
+  font-family: var(--ca-font-serif);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.thumb-top strong {
+  font-size: 13px;
+}
+
+.thumb-top small {
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.thumb-card {
+  border-radius: var(--ca-radius-lg);
+}
+
+.thumb-card span {
+  font-family: var(--ca-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.script-head h2 {
+  font-family: var(--ca-font-serif);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.word-count {
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ppt-status span {
+  font-family: var(--ca-font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.slide-overview span {
+  font-family: var(--ca-font-mono);
+}
+
+/* ---------- 17. 空状态 ---------- */
+
+.empty {
+  min-height: 140px;
+  gap: 10px;
+  padding: 24px;
+  color: var(--ca-color-paper-muted);
+}
+
+.empty svg {
+  color: var(--ca-color-paper-border-strong);
+}
+
+/* ---------- 18. 入场 stagger 与呼吸动效 ---------- */
+
+@keyframes ca-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ca-breathe-bar {
+  0%, 100% {
+    box-shadow: inset 3px 0 0 var(--ca-color-warning);
+  }
+  50% {
+    box-shadow: inset 3px 0 0 rgba(230, 81, 0, 0.38), 0 0 0 4px rgba(230, 81, 0, 0.05);
+  }
+}
+
+@keyframes ca-think-border {
+  0%, 100% {
+    border-left-color: var(--ca-role-teacher-primary);
+  }
+  50% {
+    border-left-color: var(--ca-role-teacher-glow);
+  }
+}
+
+.teacher-content > * {
+  animation: ca-rise 480ms var(--ease-out) backwards;
+}
+
+.teacher-content > *:nth-child(1) { animation-delay: 0ms; }
+.teacher-content > *:nth-child(2) { animation-delay: 50ms; }
+.teacher-content > *:nth-child(3) { animation-delay: 100ms; }
+.teacher-content > *:nth-child(4) { animation-delay: 150ms; }
+.teacher-content > *:nth-child(5) { animation-delay: 200ms; }
+.teacher-content > *:nth-child(6) { animation-delay: 250ms; }
+.teacher-content > *:nth-child(n+7) { animation-delay: 300ms; }
+
+.metric-grid > .metric-card,
+.quick-grid > .quick-action {
+  animation: ca-rise 420ms var(--ease-out) backwards;
+}
+
+.metric-grid > .metric-card:nth-child(1),
+.quick-grid > .quick-action:nth-child(1) { animation-delay: 40ms; }
+.metric-grid > .metric-card:nth-child(2),
+.quick-grid > .quick-action:nth-child(2) { animation-delay: 90ms; }
+.metric-grid > .metric-card:nth-child(3),
+.quick-grid > .quick-action:nth-child(3) { animation-delay: 140ms; }
+.metric-grid > .metric-card:nth-child(4),
+.quick-grid > .quick-action:nth-child(4) { animation-delay: 190ms; }
+.metric-grid > .metric-card:nth-child(5) { animation-delay: 240ms; }
+.metric-grid > .metric-card:nth-child(6) { animation-delay: 290ms; }
+
+.dash-mid > .panel-card,
+.bottom-grid > .panel-card,
+.course-home-grid > .panel-card,
+.course-bottom-grid > .panel-card,
+.analysis-grid > .panel-card {
+  animation: ca-rise 460ms var(--ease-out) backwards;
+}
+
+.dash-mid > .panel-card:nth-child(2),
+.bottom-grid > .panel-card:nth-child(2),
+.course-home-grid > .panel-card:nth-child(2),
+.course-bottom-grid > .panel-card:nth-child(2),
+.analysis-grid > .panel-card:nth-child(2) { animation-delay: 60ms; }
+
+.bottom-grid > .panel-card:nth-child(3),
+.course-home-grid > .panel-card:nth-child(3),
+.analysis-grid > .panel-card:nth-child(3) { animation-delay: 120ms; }
+
+/* ---------- 19. 网格呼吸感补充 ---------- */
+
+.quick-grid {
+  gap: 16px;
+}
+
+.analysis-grid {
+  gap: 20px;
+}
+
+.teacher-shell .course-home-grid,
+.teacher-shell .course-bottom-grid {
+  gap: 20px;
+}
+
+.lesson-card-list {
+  gap: 14px;
+}
+
+/* ---------- 20. 响应式补充（appended 基础规则的小屏回退） ---------- */
+
+@media (max-width: 1100px) {
+  .teacher-content {
+    padding: 4px 24px 56px;
+  }
+
+  .breadcrumb {
+    padding: 0 24px;
+  }
+
+  .welcome {
+    padding: 26px 28px 32px;
+  }
+
+  .welcome-scribble {
+    display: none;
+  }
+
+  .material-filter {
+    height: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .teacher-content {
+    gap: 20px;
+    padding: 0 16px 48px;
+  }
+
+  .breadcrumb {
+    height: auto;
+    padding: 12px 16px;
+  }
+
+  .welcome {
+    min-height: 0;
+    padding: 20px 20px 28px;
+  }
+
+  .welcome h1 {
+    font-size: 22px;
+  }
+
+  .welcome-glow {
+    display: none;
+  }
+
+  .panel-card,
+  .form-panel,
+  .weak-config-card,
+  .weak-selection-card,
+  .weak-detail-card {
+    padding: 18px;
+  }
+
+  .metric-card {
+    padding: 18px 20px;
+  }
+
+  .course-hero {
+    padding: 20px;
+  }
+
+  .material-filter {
+    height: auto;
   }
 }

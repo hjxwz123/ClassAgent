@@ -59,7 +59,7 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onDocumentKeydown)
   display: grid;
   place-items: center;
   background: var(--color-bg-overlay);
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(5px);
   padding: 24px;
 }
 .confirm-card {
@@ -67,10 +67,10 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onDocumentKeydown)
   display: grid;
   gap: 18px;
   border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-2xl);
   background: var(--color-bg-surface);
   box-shadow: var(--shadow-xl);
-  padding: 20px;
+  padding: 22px;
 }
 .confirm-card header {
   display: grid;
@@ -82,32 +82,37 @@ onBeforeUnmount(() => document.removeEventListener("keydown", onDocumentKeydown)
   height: 40px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-primary-700);
+  border-radius: 12px;
+  background: var(--ca-role-light, var(--color-primary-50));
+  color: var(--ca-role-primary-hover, var(--color-primary-700));
   box-shadow: none;
 }
 .confirm-icon.danger {
-  background: transparent;
+  background: var(--color-danger-50);
   color: var(--color-danger-700);
 }
 .confirm-card h2 {
   margin: 0;
   color: var(--color-text-primary);
+  font-family: var(--font-family-serif);
   font-size: var(--text-h3);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
 }
 .confirm-card p {
   margin: 6px 0 0;
   color: var(--color-text-secondary);
   font-size: var(--text-body-sm);
+  line-height: 1.6;
 }
 .confirm-card footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 12px;
+  margin-top: 2px;
 }
 .confirm-card footer button:focus-visible {
-  outline: 2px solid var(--color-primary-600);
+  outline: 2px solid var(--ca-role-primary, var(--color-primary-600));
   outline-offset: 2px;
 }
 </style>

@@ -145,8 +145,8 @@
                     </div>
                     <span v-else class="muted-cell">暂无</span>
                   </td>
-                  <td>{{ shortDate(item.created_at) }}</td>
-                  <td :class="{ stale: isStale(item.last_login_at) }">{{ relativeTime(item.last_login_at) }}</td>
+                  <td class="cell-time">{{ shortDate(item.created_at) }}</td>
+                  <td class="cell-time" :class="{ stale: isStale(item.last_login_at) }">{{ relativeTime(item.last_login_at) }}</td>
                   <td class="row-actions"><button class="text-action" @click="openUserDetail(item.id)"><Eye :size="14" />详情</button><button class="text-action" :data-loading="isPending(`reset:${item.id}`)" :disabled="isPending(`reset:${item.id}`)" @click="openResetPasswordModal(item)"><KeyRound :size="14" />修改密码</button><button class="text-action danger" :data-loading="isPending(`delete:${item.id}`)" :disabled="isPending(`delete:${item.id}`)" @click="deleteUser(item.id)"><Trash2 :size="14" />删除</button></td>
                 </tr>
                 <tr v-if="!users.length"><td colspan="8"><EmptyState text="暂无用户" /></td></tr>
@@ -178,8 +178,8 @@
                   <td><AppCheckbox :model-value="selectedCourses.includes(item.id)" @update:model-value="toggleSelect(selectedCourses, item.id)" /></td>
                   <td><strong>{{ item.name }}</strong><span class="tag mono">{{ item.course_code }}</span></td>
                   <td><span class="avatar mini">{{ firstChar(item.teacher_name) }}</span>{{ item.teacher_name || item.teacher_id }}</td>
-                  <td>{{ item.term }}</td><td><Users :size="14" />{{ item.student_count || 0 }}</td><td><FileText :size="14" />{{ item.material_count || 0 }}</td>
-                  <td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td><td>{{ shortDate(item.created_at) }}</td>
+                  <td>{{ item.term }}</td><td class="cell-num"><Users :size="14" />{{ item.student_count || 0 }}</td><td class="cell-num"><FileText :size="14" />{{ item.material_count || 0 }}</td>
+                  <td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td><td class="cell-time">{{ shortDate(item.created_at) }}</td>
                   <td class="row-actions">
                     <button class="icon-action" @click="openCourseDetail(item.id)"><Eye :size="15" />详情</button>
                     <button class="icon-action" @click="openTakeover(item)"><UserCheck :size="15" />接管</button>
@@ -235,7 +235,7 @@
                   <td><AppCheckbox :model-value="selectedMaterials.includes(item.id)" @update:model-value="toggleSelect(selectedMaterials, item.id)" /></td>
                   <td class="material-name-cell"><div class="identity material-file-identity"><component :is="fileIcon(item.material_type)" :size="18" :class="`file-${item.material_type}`" /><div><strong :title="item.title">{{ item.title }}</strong><span>{{ item.size_label || sizeLabel(item.size_bytes) }}</span></div></div></td>
                   <td>{{ item.course_name || item.course_id }}</td><td><span class="avatar mini">{{ firstChar(item.teacher_name) }}</span>{{ item.teacher_name || item.uploader_id }}</td>
-                  <td><span class="tag">{{ typeText(item.material_type) }}</span></td><td>{{ shortDate(item.created_at) }}</td>
+                  <td><span class="tag">{{ typeText(item.material_type) }}</span></td><td class="cell-time">{{ shortDate(item.created_at) }}</td>
                   <td><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span></td>
                   <td class="row-actions"><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" @click="downloadMaterial(item)"><Download :size="15" />下载</button><button class="icon-action danger" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></td>
                 </tr>
@@ -245,7 +245,7 @@
         </section>
 
         <section v-if="active === 'adminModels'" key="adminModels" class="admin-page model-layout">
-          <aside class="vertical-tabs"><button :class="{ active: modelTab === 'llm' }" @click="modelTab = 'llm'">大模型</button><button :class="{ active: modelTab === 'embedding' }" @click="modelTab = 'embedding'">Embedding</button><button :class="{ active: modelTab === 'usage' }" @click="modelTab = 'usage'">调用统计</button></aside>
+          <aside class="vertical-tabs"><button :class="{ active: modelTab === 'llm' }" @click="modelTab = 'llm'">大模型</button><button :class="{ active: modelTab === 'embedding' }" @click="modelTab = 'embedding'">检索模型</button><button :class="{ active: modelTab === 'usage' }" @click="modelTab = 'usage'">调用统计</button></aside>
           <section class="model-content">
             <div v-if="modelWarning" class="alert alert-danger"><AlertTriangle :size="16" />{{ modelWarning }}<button class="link-btn" @click="modelTab = 'llm'">配置</button></div>
             <article v-if="modelTab === 'llm'" class="panel-card form-panel">
@@ -254,6 +254,7 @@
               <div class="form-section"><h3>用途分配</h3><div class="purpose-config-grid"><article v-for="item in llmPurposes" :key="item.key" class="purpose-card"><div><component :is="item.icon" :size="16" /><strong>{{ item.label }}</strong></div><input v-model="modelDrafts[item.key].model_name" class="input" placeholder="qwen-max" /><label>Temperature <AppSlider v-model="modelDrafts[item.key].temperature" :min="0" :max="2" :step="0.1" /> <b>{{ modelDrafts[item.key].temperature }}</b></label><label>最大 Token<input v-model.number="modelDrafts[item.key].max_tokens" class="input" type="number" /></label></article></div></div>
             </article>
             <article v-if="modelTab === 'embedding'" class="panel-card form-panel"><div class="panel-head"><div><h2><Layers :size="18" />Embedding 模型</h2><span>用于资料向量化</span></div><button class="btn btn-secondary" @click="testEmbeddingModel">测试</button></div><div class="form-grid"><label>供应商<AppSelect v-model="embeddingDraft.provider" :options="embeddingProviderOptions" /></label><label>模型<input v-model="embeddingDraft.model_name" class="input" placeholder="text-embedding-v2" /></label><label>向量维度<input v-model.number="embeddingDraft.dimensions" class="input" type="number" /></label><label>API Key<PasswordField v-model="embeddingDraft.api_key" /></label><label class="wide-field">API Base<input v-model="embeddingDraft.endpoint" class="input" /></label></div></article>
+            <article v-if="modelTab === 'embedding'" class="panel-card form-panel"><div class="panel-head"><div><h2><Search :size="18" />重排模型 Rerank</h2><span>问答多路检索结果二次精排；留空模型名则不启用，自动回退原排序</span></div><button class="btn btn-secondary" @click="testRerankModel">测试</button></div><div class="form-grid"><label>供应商<AppSelect v-model="rerankDraft.provider" :options="rerankProviderOptions" /></label><label>模型<input v-model="rerankDraft.model_name" class="input" placeholder="gte-rerank-v2" /></label><label>精排条数 Top N<input v-model.number="rerankDraft.top_n" class="input" type="number" min="1" max="20" /></label><label>API Key<PasswordField v-model="rerankDraft.api_key" /></label><label class="wide-field">API Base<input v-model="rerankDraft.endpoint" class="input" placeholder="通义留空走 DashScope 重排地址；自定义填标准 /rerank 接口" /></label></div></article>
             <article v-if="modelTab === 'usage'" class="panel-card">
               <div class="panel-head">
                 <div><h2>模型调用统计</h2><span>最近调用汇总</span></div>
@@ -490,13 +491,13 @@
           <div class="log-tabs"><button :class="{ active: logType === 'login' }" @click="logType = 'login'"><UserCheck :size="16" />登录日志</button><button :class="{ active: logType === 'operations' }" @click="logType = 'operations'"><Pencil :size="16" />操作日志</button><button :class="{ active: logType === 'errors' }" @click="logType = 'errors'"><AlertCircle :size="16" />错误日志</button></div>
           <article class="filter-card"><div class="search-field"><Search :size="16" /><input v-model="logKeyword" placeholder="关键词/IP地址" @keyup.enter="loadLogs" /></div><AppSelect v-if="logType === 'login'" v-model="logFilter.success" :options="logSuccessOptions" /><input v-if="logType === 'operations'" v-model="logFilter.action" class="input" placeholder="操作类型" /><AppSelect v-if="logType === 'errors'" v-model="logFilter.level" :options="logLevelOptions" /><input v-model="logFilter.start_at" class="input" type="text" placeholder="开始时间" /><input v-model="logFilter.end_at" class="input" type="text" placeholder="结束时间" /><button class="btn btn-secondary" @click="loadLogs"><Search :size="16" />查询</button></article>
           <article v-if="logType === 'errors' && todayErrors" class="alert alert-danger"><XCircle :size="16" />今日错误 {{ todayErrors }} 次<button class="link-btn" @click="logFilter.level = 'error'; loadLogs()">筛选</button></article>
-          <article class="table-card"><table class="admin-table"><thead><tr><th>时间</th><th>主体</th><th>内容</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in logs" :key="item.id"><td>{{ formatTime(item.created_at) }}</td><td>{{ logSubject(item) }}</td><td><code>{{ logContent(item) }}</code></td><td><span class="tag">{{ logMeta(item) }}</span></td><td><span class="tag" :class="item.detail?.resolved ? 'tag-success' : 'tag-warning'">{{ item.detail?.resolved ? '已处理' : '未处理' }}</span></td><td><button class="icon-action" @click="logDetail = item"><Eye :size="15" />详情</button><button v-if="logType === 'errors'" class="icon-action" @click="resolveError(item.id)"><CheckCircle :size="15" />处理</button></td></tr><tr v-if="!logs.length"><td colspan="6"><EmptyState text="暂无日志" /></td></tr></tbody></table></article>
+          <article class="table-card"><table class="admin-table"><thead><tr><th>时间</th><th>主体</th><th>内容</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="item in logs" :key="item.id"><td class="cell-time">{{ formatTime(item.created_at) }}</td><td>{{ logSubject(item) }}</td><td><code>{{ logContent(item) }}</code></td><td><span class="tag">{{ logMeta(item) }}</span></td><td><span class="tag" :class="item.detail?.resolved ? 'tag-success' : 'tag-warning'">{{ item.detail?.resolved ? '已处理' : '未处理' }}</span></td><td><button class="icon-action" @click="logDetail = item"><Eye :size="15" />详情</button><button v-if="logType === 'errors'" class="icon-action" @click="resolveError(item.id)"><CheckCircle :size="15" />处理</button></td></tr><tr v-if="!logs.length"><td colspan="6"><EmptyState text="暂无日志" /></td></tr></tbody></table></article>
         </section>
 
         <section v-if="active === 'adminBackups'" key="adminBackups" class="admin-page">
           <article class="backup-summary"><div><span>最后备份</span><strong>{{ backupSummary.last_backup ? relativeTime(backupSummary.last_backup.created_at) : '暂无' }}</strong><small>{{ backupSummary.last_backup?.status || '-' }}</small></div><div><span>备份文件</span><strong>{{ backupSummary.backup_count || 0 }}</strong><small>最旧：{{ shortDate(backupSummary.oldest_at) }}</small></div><div><span>总大小</span><strong>{{ backupSummary.total_size_label || '0 B' }}</strong><small>本地存储</small></div></article>
           <div class="backup-layout">
-            <article class="panel-card"><div class="panel-head"><h2><File :size="18" />备份文件</h2><span class="tag">{{ backups.length }}</span></div><table class="admin-table compact-table"><thead><tr><th>名称</th><th>类型</th><th>大小</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in backups" :key="item.id" :class="{ disabled: item.status === 'failed' }"><td class="mono">{{ item.backup_name }}</td><td><span class="tag">全量</span></td><td>{{ sizeLabel(item.file_size_bytes) }}</td><td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td><td>{{ formatTime(item.created_at) }}</td><td class="row-actions"><button class="icon-action" @click="downloadBackup(item)"><Download :size="15" />下载</button><button class="icon-action" @click="verifyBackup(item.id)"><ShieldCheck :size="15" />校验</button><button class="icon-action danger" @click="deleteBackup(item.id)"><Trash2 :size="15" />删除</button></td></tr></tbody></table></article>
+            <article class="panel-card"><div class="panel-head"><h2><File :size="18" />备份文件</h2><span class="tag">{{ backups.length }}</span></div><table class="admin-table compact-table"><thead><tr><th>名称</th><th>类型</th><th>大小</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody><tr v-for="item in backups" :key="item.id" :class="{ disabled: item.status === 'failed' }"><td class="mono">{{ item.backup_name }}</td><td><span class="tag">全量</span></td><td class="cell-num">{{ sizeLabel(item.file_size_bytes) }}</td><td><span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span></td><td class="cell-time">{{ formatTime(item.created_at) }}</td><td class="row-actions"><button class="icon-action" @click="downloadBackup(item)"><Download :size="15" />下载</button><button class="icon-action" @click="verifyBackup(item.id)"><ShieldCheck :size="15" />校验</button><button class="icon-action danger" @click="deleteBackup(item.id)"><Trash2 :size="15" />删除</button></td></tr></tbody></table></article>
             <article class="panel-card"><div class="panel-head"><h2><Settings :size="18" />自动备份</h2></div><div class="policy-form"><AppCheckbox v-model="backupPolicy.enabled" variant="switch" label="启用自动备份" /><label>备份频率<AppSelect v-model="backupPolicy.frequency" :options="backupFrequencyOptions" /></label><label>备份时间<input v-model="backupPolicy.time" class="input" type="text" placeholder="03:00" /></label><label>保留数量<input v-model.number="backupPolicy.retention" class="input" type="number" /></label><label>通知邮箱<input v-model="backupNotifyEmail" class="input" type="email" /></label><button class="btn btn-primary wide-btn" @click="saveBackupPolicy">保存</button></div></article>
           </div>
           <article class="danger-zone"><AlertTriangle :size="18" /><div><strong>数据恢复</strong><span>恢复将覆盖当前数据。</span></div><AppSelect v-model="restoreBackupId" :options="restoreBackupOptions" /><input v-model="restoreConfirm" class="input" placeholder="CONFIRM" /><button class="btn btn-danger" :disabled="restoreConfirm !== 'CONFIRM' || !restoreBackupId" @click="restoreBackupAction">恢复</button></article>
@@ -735,6 +736,7 @@ const materialTypeOptions = [{ label: "全部", value: "" }, { label: "PPT", val
 const materialCategoryOptions = [{ label: "分类", value: "" }, { label: "课件", value: "courseware" }, { label: "讲义", value: "handout" }, { label: "练习", value: "exercise" }, { label: "参考", value: "reference" }];
 const modelProviderOptions = [{ label: "通义千问", value: "qwen" }, { label: "DeepSeek", value: "deepseek" }, { label: "OpenAI", value: "openai" }, { label: "Azure", value: "azure" }, { label: "自定义", value: "custom" }];
 const embeddingProviderOptions = [{ label: "通义千问", value: "qwen" }, { label: "OpenAI", value: "openai" }];
+const rerankProviderOptions = [{ label: "通义 DashScope", value: "qwen" }, { label: "自定义（标准 /rerank 协议）", value: "custom" }];
 const ossProviderOptions = [{ label: "阿里云 OSS", value: "aliyun" }, { label: "本地存储", value: "local" }];
 const aliyunProviderOptions = [{ label: "阿里云 OCR", value: "aliyun" }];
 const docParserProviderOptions = [{ label: "阿里云 DocMind", value: "aliyun" }];
@@ -752,6 +754,7 @@ const adminForm = reactive({ email: "", nickname: "", password: "", confirm: "",
 const modelGlobal = reactive({ provider: "qwen", endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", api_key: "" });
 const modelDrafts = reactive<Record<string, any>>({});
 const embeddingDraft = reactive({ config_id: null as number | null, provider: "qwen", model_name: "text-embedding-v2", endpoint: "", api_key: "", dimensions: 1536 });
+const rerankDraft = reactive({ config_id: null as number | null, provider: "qwen", model_name: "", endpoint: "", api_key: "", top_n: 10 });
 const settingDrafts = reactive<Record<string, any>>({});
 const originalSettings = ref<Record<string, any>>({});
 const backupPolicy = reactive({ enabled: false, frequency: "daily", time: "03:00", retention: 30 });
@@ -801,6 +804,8 @@ const settingRows = [
   { key: "qa.out_of_scope_policy", category: "ai", label: "超范围策略", desc: "课程外回答方式", type: "select", options: ["reject", "answer_with_notice"] },
   { key: "qa.max_answer_tokens", category: "ai", label: "回答 Token", desc: "问答最大长度", type: "number" },
   { key: "qa.source_limit", category: "ai", label: "引用条数", desc: "最多来源数量", type: "number" },
+  { key: "qa.retrieval.min_similarity", category: "ai", label: "召回相似度阈值", desc: "低于此余弦相似度的向量召回丢弃（0 不过滤）", type: "number" },
+  { key: "qa.rerank.min_score", category: "ai", label: "重排分数下限", desc: "低于此相关性的重排结果丢弃（0 不过滤）", type: "number" },
   { key: "lesson.script.max_length", category: "classroom", label: "脚本字数", desc: "每页最大长度", type: "number" },
   { key: "tts.default_rate", category: "classroom", label: "TTS 语速", desc: "默认语速", type: "range", min: -500, max: 500 },
   { key: "tts.default_volume", category: "classroom", label: "TTS 音量", desc: "默认音量", type: "range", min: 0, max: 100 },
@@ -827,7 +832,7 @@ const activityLabels = computed(() => (dashboard.value.activity_trend || []).map
 const activitySeries = computed(() => [{ name: "活跃用户", data: (dashboard.value.activity_trend || []).map((item: any) => item.active_users), color: "#D9A05B" }, { name: "AI 调用", data: (dashboard.value.activity_trend || []).map((item: any) => item.ai_calls), color: "#00B8D4" }]);
 const filteredCourses = computed(() => courses.value.filter((item) => !courseTerm.value || String(item.term || "").includes(courseTerm.value)));
 const storagePercent = computed(() => Math.round(((materialStats.value.storage_used_bytes || 0) / (materialStats.value.storage_quota_bytes || 1)) * 100));
-const modelWarning = computed(() => models.value.some((item) => item.purpose !== "embedding") ? "" : "大语言模型未配置");
+const modelWarning = computed(() => models.value.some((item) => item.purpose !== "embedding" && item.purpose !== "rerank") ? "" : "大语言模型未配置");
 const usageTotal = computed(() => {
   const items = usage.value.items || [];
   const calls = items.reduce((sum: number, item: any) => sum + Number(item.call_count || 0), 0);
@@ -1107,6 +1112,9 @@ function hydrateModels() {
   }
   const embedding = models.value.find((model) => model.purpose === "embedding");
   if (embedding) Object.assign(embeddingDraft, { config_id: embedding.id, provider: embedding.provider, model_name: embedding.model_name, endpoint: embedding.endpoint || "", api_key: "", dimensions: embedding.extra_config?.dimensions || 1536 });
+  const rerank = models.value.find((model) => model.purpose === "rerank");
+  if (rerank) Object.assign(rerankDraft, { config_id: rerank.id, provider: rerank.provider, model_name: rerank.model_name, endpoint: rerank.endpoint || "", api_key: "", top_n: rerank.extra_config?.top_n ?? 10 });
+  else Object.assign(rerankDraft, { config_id: null, model_name: "", api_key: "" });
 }
 function hydrateServices() {
   for (const key of Object.keys(serviceDrafts) as ServiceKey[]) {
@@ -1265,11 +1273,18 @@ async function saveAllModels() {
     await run(() => api.post("/admin/model-configs", { config_id: draft.config_id, provider: modelGlobal.provider, model_name: draft.model_name, purpose: purpose.key, endpoint: modelGlobal.endpoint, api_key: modelGlobal.api_key, is_default: purpose.key === "general", extra_config: { temperature: draft.temperature, max_tokens: draft.max_tokens } }));
   }
   if (embeddingDraft.model_name) await run(() => api.post("/admin/model-configs", { config_id: embeddingDraft.config_id, provider: embeddingDraft.provider, model_name: embeddingDraft.model_name, purpose: "embedding", endpoint: embeddingDraft.endpoint, api_key: embeddingDraft.api_key, is_default: true, extra_config: { dimensions: embeddingDraft.dimensions } }));
+  if (rerankDraft.model_name) await run(() => api.post("/admin/model-configs", { config_id: rerankDraft.config_id, provider: rerankDraft.provider, model_name: rerankDraft.model_name, purpose: "rerank", endpoint: rerankDraft.endpoint, api_key: rerankDraft.api_key, is_default: true, extra_config: { top_n: Math.max(1, Math.min(20, Number(rerankDraft.top_n) || 10)) } }));
+  else if (rerankDraft.config_id) {
+    // 文案承诺「留空模型名则不启用」：清空后删除已保存的 rerank 配置，否则后端仍会继续用旧配置重排
+    await run(() => api.delete(`/admin/model-configs/${rerankDraft.config_id}`));
+    rerankDraft.config_id = null;
+  }
   emit("notice", "success", "已保存");
   await loadModels();
 }
 async function testDefaultModel() { const item = models.value.find((model) => model.purpose === "general") || models.value.find((model) => model.purpose !== "embedding"); if (!item) return emit("notice", "warning", "先保存"); const data = await run(() => api.post<any>(`/admin/model-configs/${item.id}/test`)); if (data) emit("notice", data.success ? "success" : "warning", data.message); }
 async function testEmbeddingModel() { const item = models.value.find((model) => model.purpose === "embedding"); if (!item) return emit("notice", "warning", "先保存"); const data = await run(() => api.post<any>(`/admin/model-configs/${item.id}/test`)); if (data) emit("notice", data.success ? "success" : "warning", data.message); }
+async function testRerankModel() { const item = models.value.find((model) => model.purpose === "rerank"); if (!item) return emit("notice", "warning", "先保存"); const data = await run(() => api.post<any>(`/admin/model-configs/${item.id}/test`)); if (data) emit("notice", data.success ? "success" : "warning", data.message); }
 function serviceConfigPayload(type: ServiceKey) {
   const draft = serviceDrafts[type];
   const { config_id, provider, name, is_enabled, ...config } = draft;

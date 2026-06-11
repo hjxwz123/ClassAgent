@@ -62,8 +62,17 @@ function toggle() {
 }
 .app-checkbox:hover:not(:disabled) .check-box,
 .app-checkbox:hover:not(:disabled) .switch-track {
-  border-color: var(--color-primary-400);
+  border-color: var(--ca-role-primary, var(--color-primary-400));
   box-shadow: var(--shadow-sm);
+}
+.app-checkbox:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.app-checkbox:focus-visible .check-box,
+.app-checkbox:focus-visible .switch-track {
+  border-color: var(--ca-role-primary, var(--color-primary-600));
+  box-shadow: var(--shadow-focus);
 }
 .check-box {
   width: 20px;
@@ -75,13 +84,13 @@ function toggle() {
   border-radius: 5px;
   background: var(--color-bg-surface);
   color: white;
-  box-shadow: inset 0 0 0 0 var(--color-primary-600);
+  box-shadow: inset 0 0 0 0 var(--ca-role-primary, var(--color-primary-600));
   transition: background var(--duration-fast) var(--ease-out), border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
 .app-checkbox.checked .check-box {
-  border-color: var(--color-primary-600);
-  background: var(--color-primary-600);
-  box-shadow: inset 0 0 0 9px var(--color-primary-600);
+  border-color: var(--ca-role-primary, var(--color-primary-600));
+  background: var(--ca-role-primary, var(--color-primary-600));
+  box-shadow: inset 0 0 0 9px var(--ca-role-primary, var(--color-primary-600));
 }
 .check-label {
   line-height: 20px;
@@ -103,13 +112,13 @@ function toggle() {
   height: 20px;
   border-radius: 50%;
   background: white;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 3px rgba(18, 22, 20, .18);
   transform: translateX(0);
   transition: transform var(--duration-base) var(--ease-spring), background var(--duration-fast) var(--ease-out);
 }
 .app-checkbox.switch.checked .switch-track {
-  border-color: var(--color-primary-600);
-  background: var(--color-primary-600);
+  border-color: var(--ca-role-primary, var(--color-primary-600));
+  background: var(--ca-role-primary, var(--color-primary-600));
 }
 .app-checkbox.switch.checked .switch-track i {
   transform: translateX(18px);

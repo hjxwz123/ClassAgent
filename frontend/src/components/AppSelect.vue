@@ -186,7 +186,12 @@ onBeforeUnmount(() => {
   transition: transform var(--duration-fast) var(--ease-out);
 }
 .app-select.open .app-select-trigger {
-  border-color: var(--color-primary-600);
+  border-color: var(--ca-role-primary, var(--color-primary-600));
+  box-shadow: var(--shadow-focus);
+}
+.app-select-trigger:focus-visible {
+  outline: none;
+  border-color: var(--ca-role-primary, var(--color-primary-600));
   box-shadow: var(--shadow-focus);
 }
 .app-select.open .app-select-trigger svg {
@@ -244,8 +249,8 @@ onBeforeUnmount(() => {
   transform: translateY(-1px);
 }
 .app-select-pop button.active {
-  background: var(--color-primary-50);
-  color: var(--color-primary-700);
+  background: var(--ca-role-light, var(--color-primary-50));
+  color: var(--ca-role-primary-hover, var(--color-primary-700));
   font-weight: 600;
 }
 .app-select-pop button.danger {

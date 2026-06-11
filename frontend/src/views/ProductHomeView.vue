@@ -1,5 +1,5 @@
 <template>
-  <main class="product-home" :class="[homeThemeClass, { 'is-workbench-loading': enteringWorkbench }]">
+  <main class="product-home" :class="[homeThemeClass, { 'is-workbench-loading': enteringWorkbench, 'entered-from-auth': enteredFromAuth }]">
     <PageLoader v-if="enteringWorkbench" />
     <template v-else>
     <div class="board-texture"></div>
@@ -86,6 +86,10 @@
               <span>今天，黑板开始思考。</span>
               <div ref="heroGlowRef" class="ai-reveal-layer">全知伴学引擎_已激活</div>
             </div>
+
+            <svg class="hero-chalk-underline" viewBox="0 0 420 24" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M6,15 Q104,5 206,12 T414,9" />
+            </svg>
 
             <p class="hero-copy">
               上传你的课本、试卷与错题。<br />
@@ -253,6 +257,9 @@
 
     <footer class="product-footer">
       <h2>将知识留在校园。</h2>
+      <svg class="footer-chalk-rule" viewBox="0 0 320 18" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M4,12 Q86,4 162,10 T316,7" />
+      </svg>
       <p>
         支持教育机构完整私有化部署。后端基于 FastAPI，前端搭载 Vue3，接管核心教务数据资产，构建真正属于您自己的智能基建。
       </p>
@@ -260,6 +267,7 @@
         <RouterLink to="/auth" class="trial-link">申请校园试用授权</RouterLink>
         <a href="/docs/api" class="docs-link">审阅 API 开发文档</a>
       </div>
+      <div class="footer-chalk-tray" aria-hidden="true"></div>
     </footer>
     </template>
   </main>
@@ -291,6 +299,7 @@ const shadow1BackRef = ref<HTMLElement | null>(null);
 const shadow2FrontRef = ref<HTMLElement | null>(null);
 const shadow2BackRef = ref<HTMLElement | null>(null);
 const enteringWorkbench = ref(false);
+const enteredFromAuth = ref(false);
 const user = computed(() => props.user);
 const workbenchPath = computed(() => defaultRouteForRole(props.user?.role));
 const homeTheme = ref<AppTheme>(readStoredTheme());
@@ -370,8 +379,8 @@ function homeCssVar(name: string, fallback: string) {
 }
 
 function drawChalkBackground(context: CanvasRenderingContext2D, width: number, height: number, now: number) {
-  const lineColor = homeCssVar("--home-canvas-line", "rgba(15, 23, 42, .16)");
-  const formulaColor = homeCssVar("--home-canvas-muted", "rgba(15, 23, 42, .2)");
+  const lineColor = homeCssVar("--home-canvas-line", "rgba(18, 22, 20, .16)");
+  const formulaColor = homeCssVar("--home-canvas-muted", "rgba(18, 22, 20, .2)");
   context.save();
   context.globalAlpha = 0.055;
   context.strokeStyle = lineColor;
@@ -404,11 +413,11 @@ function drawWritingFormula(
   height: number,
   now: number,
 ) {
-  const mainTextColor = homeCssVar("--home-canvas-text", "rgba(15, 23, 42, .72)");
-  const ghostTextColor = homeCssVar("--home-canvas-ghost", "rgba(15, 23, 42, .12)");
+  const mainTextColor = homeCssVar("--home-canvas-text", "rgba(18, 22, 20, .72)");
+  const ghostTextColor = homeCssVar("--home-canvas-ghost", "rgba(18, 22, 20, .12)");
   const cursorColor = homeCssVar("--home-canvas-cursor", "rgba(0, 151, 167, .46)");
-  const eraserColor = homeCssVar("--home-bg", "#F8FAFC");
-  const dustColor = homeCssVar("--home-canvas-dust", "rgba(15, 23, 42, .24)");
+  const eraserColor = homeCssVar("--home-bg", "#F9F8F6");
+  const dustColor = homeCssVar("--home-canvas-dust", "rgba(18, 22, 20, .24)");
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const cycleMs = reduceMotion ? 1 : 7600;
   const elapsed = reduceMotion ? 0 : now - formulaCycleStart;
@@ -616,6 +625,8 @@ function startFormulaLoop() {
 
 onMounted(() => {
   homeMounted = true;
+  // 经由登录页转场返回时打上持久标记：转场类移除后由它禁止 hero 直载入场动画重播（视觉用途）
+  enteredFromAuth.value = Boolean(document.querySelector(".product-home.route-auth-home-enter-active"));
   document.documentElement.classList.add(homeActiveClass);
   document.body.classList.add(homeActiveClass);
   document.getElementById("app")?.classList.add(homeActiveClass);
@@ -688,7 +699,7 @@ onBeforeUnmount(() => {
 :global(body.product-home-active),
 :global(#app.product-home-active) {
   min-height: 100%;
-  background: #0E3329 !important;
+  background: #121614 !important;
   overscroll-behavior-y: none;
 }
 
@@ -706,21 +717,25 @@ onBeforeUnmount(() => {
     monospace;
   --shared-title-left: max(24px, calc((100vw - 1040px) / 2));
   --shared-title-top: clamp(190px, calc(50vh - 190px), 290px);
+  --shared-title-size: clamp(64px, 10vw, 128px);
   --home-logo-left: max(24px, calc((100vw - 1280px) / 2 + 24px));
-  --home-logo-top: 16px;
+  /* 品牌字静止时的真实视口坐标：nav 上内边距 12px + (44px 行高 − 18px 字行盒) / 2 = 25px。
+     飞行公式两端共用，改动需与 AuthView.vue 同步 */
+  --home-logo-text-top: 25px;
   --home-logo-text-offset: 68px;
+  --brand-flight-glow: 0 0 2px rgba(244, 244, 240, 0.7), 0 0 18px rgba(244, 244, 240, 0.18);
   --logo-to-title-x: calc(var(--shared-title-left) - var(--home-logo-left));
   --logo-text-to-title-x: calc(var(--logo-to-title-x) - var(--home-logo-text-offset));
-  --logo-to-title-y: calc(var(--shared-title-top) - var(--home-logo-top));
+  --logo-to-title-y: calc(var(--shared-title-top) - var(--home-logo-text-top));
 
   min-height: 100vh;
   overflow-x: hidden;
   background:
     radial-gradient(
-      ellipse 100% 80% at 50% 40%,
-      #15392F 0%,
-      #0E3329 55%,
-      #082018 100%
+      ellipse 100% 80% at 50% 38%,
+      #1B211D 0%,
+      #121614 56%,
+      #0A0D0B 100%
     );
   background-attachment: fixed;
   color: #f4f4f0;
@@ -798,10 +813,12 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   z-index: 50;
-  padding: 16px 0;
-  border-bottom: 1px solid rgba(244, 244, 240, 0.05);
-  background: rgba(14, 51, 41, 0.8);
-  backdrop-filter: blur(16px);
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(244, 244, 240, 0.06);
+  background: rgba(18, 22, 20, 0.72);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
 }
 .product-nav-inner {
   max-width: 1280px;
@@ -837,9 +854,10 @@ onBeforeUnmount(() => {
 }
 .product-nav-links {
   display: flex;
-  gap: 40px;
+  gap: 36px;
   color: #8c948f;
-  font-size: 14px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
 }
 .product-nav a {
   color: inherit;
@@ -850,6 +868,33 @@ onBeforeUnmount(() => {
 }
 .product-nav a:hover {
   color: #f4f4f0;
+}
+.product-nav-links a {
+  position: relative;
+}
+.product-nav-links a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 100%;
+  bottom: 9px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.85), rgba(0, 229, 255, 0));
+  transition: right 240ms var(--ease-out);
+}
+.product-nav-links a:hover::after {
+  right: 0;
+}
+.product-home:has(#hero:target) .product-nav-links a[href="#hero"],
+.product-home:has(#book-section:target) .product-nav-links a[href="#book-section"],
+.product-home:has(#roles:target) .product-nav-links a[href="#roles"] {
+  color: #f4f4f0;
+}
+.product-home:has(#hero:target) .product-nav-links a[href="#hero"]::after,
+.product-home:has(#book-section:target) .product-nav-links a[href="#book-section"]::after,
+.product-home:has(#roles:target) .product-nav-links a[href="#roles"]::after {
+  right: 0;
 }
 .product-nav-actions {
   display: flex;
@@ -867,35 +912,51 @@ onBeforeUnmount(() => {
   min-height: 44px !important;
   display: inline-flex;
   align-items: center;
+  border-radius: 4px;
   background: #f4f4f0;
   color: #121614 !important;
   padding: 0 20px;
   font-size: 13px;
   font-weight: 700;
-  transition: background-color 300ms, color 300ms;
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.24);
+  transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out),
+    transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
 }
 .register-link:hover {
   background: #00e5ff;
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.35);
+}
+.register-link:active {
+  transform: translateY(0) scale(0.97);
 }
 .workbench-link {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
   border: 0;
+  border-radius: 4px;
   background: #f4f4f0;
   color: #121614;
   padding: 0 20px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 700;
-  transition: background-color 300ms, color 300ms, opacity 200ms, transform 200ms;
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+  transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out),
+    opacity 200ms, transform 200ms var(--ease-out), box-shadow 200ms var(--ease-out);
 }
 .workbench-link:hover:not(:disabled) {
   background: #00e5ff;
+  transform: translateY(-1px);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.35);
 }
 .workbench-link:active:not(:disabled),
 .workbench-link.is-loading {
-  transform: translateY(1px);
+  transform: translateY(0) scale(0.97);
 }
 .workbench-link:disabled {
   cursor: wait;
@@ -933,7 +994,7 @@ onBeforeUnmount(() => {
   color: #8c948f;
 }
 .theme-toggle-moon {
-  color: #bfdbfe;
+  color: #80deea;
 }
 .theme-toggle-thumb {
   position: absolute;
@@ -943,7 +1004,7 @@ onBeforeUnmount(() => {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: rgba(248, 250, 252, 0.92);
+  background: rgba(244, 244, 240, 0.94);
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.24);
   transform: translateX(var(--theme-toggle-shift));
   transition: transform 260ms cubic-bezier(.22, .61, .36, 1), background-color 240ms, box-shadow 240ms;
@@ -1075,7 +1136,7 @@ onBeforeUnmount(() => {
 .ai-scanner-container {
   position: relative;
   display: inline-block;
-  margin-bottom: 64px;
+  margin-bottom: 18px;
   color: #f4f4f0;
   font-family: var(--ca-font-chalk);
   font-size: clamp(48px, 8.4vw, 104px);
@@ -1102,10 +1163,28 @@ onBeforeUnmount(() => {
   pointer-events: none;
   transition: clip-path 0.1s ease-out;
 }
+.hero-chalk-underline {
+  display: block;
+  width: min(440px, 58vw);
+  height: 24px;
+  margin: 0 auto 52px;
+  overflow: visible;
+  fill: none;
+  stroke: #00e5ff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 9px rgba(0, 229, 255, 0.45));
+}
+.hero-chalk-underline path {
+  stroke-dasharray: 460;
+  stroke-dashoffset: 460;
+  animation: draw 1.4s cubic-bezier(0.4, 0, 0.2, 1) forwards 1.2s;
+}
 .hero-copy {
-  max-width: 680px;
-  margin: 0 auto 64px;
-  color: #9ca3af;
+  max-width: 640px;
+  margin: 0 auto 60px;
+  color: #8c948f;
   font-family: var(--ca-font-serif);
   font-size: 17px;
   font-weight: 300;
@@ -1123,7 +1202,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 48px;
+  gap: 44px;
   opacity: 0;
   animation: fade-in 2s forwards 2.5s;
 }
@@ -1139,6 +1218,7 @@ onBeforeUnmount(() => {
   font-size: 19px;
   font-weight: 700;
   letter-spacing: 0.1em;
+  transition: color 200ms var(--ease-out), transform 200ms var(--ease-out);
 }
 .hand-drawn-link svg:last-child {
   position: absolute;
@@ -1150,23 +1230,37 @@ onBeforeUnmount(() => {
   stroke: currentColor;
   stroke-width: 2;
   opacity: 0.6;
+  transition: opacity 200ms var(--ease-out), filter 200ms var(--ease-out);
 }
 .hand-drawn-link:hover,
 .teacher-console-link:hover {
   color: #00e5ff;
+  transform: translateY(-2px);
+}
+.hand-drawn-link:hover svg:last-child {
+  opacity: 1;
+  filter: drop-shadow(0 0 7px rgba(0, 229, 255, 0.45));
+}
+.hand-drawn-link:active,
+.teacher-console-link:active {
+  transform: translateY(0) scale(0.97);
 }
 .teacher-console-link {
   color: #8c948f;
   font-size: 17px;
 }
+.teacher-console-link:hover {
+  color: #ff5722;
+}
 .scroll-hint {
-  margin-top: 96px;
+  margin-top: 92px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 24px;
   color: #8c948f;
-  font-size: 12px;
+  font-family: var(--ca-font-mono);
+  font-size: 11px;
   letter-spacing: 0.5em;
   opacity: 0;
   animation: fade-in 2s forwards 3s;
@@ -1319,7 +1413,7 @@ onBeforeUnmount(() => {
 }
 .book-final-left p {
   margin: 0;
-  color: #9a9a9a;
+  color: #999990;
   font-family: var(--ca-font-sans);
   font-size: 12px;
   letter-spacing: 0.22em;
@@ -1340,9 +1434,10 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 40px;
   right: 40px;
-  color: #999;
+  color: #999990;
   font-family: var(--ca-font-mono);
   font-size: 12px;
+  letter-spacing: 0.08em;
 }
 .book-final-right h2 {
   margin: 0 0 32px;
@@ -1366,7 +1461,7 @@ onBeforeUnmount(() => {
 }
 .book-final-right footer p {
   margin: 0 0 16px;
-  color: #777;
+  color: #666560;
   font-family: var(--ca-font-sans);
   font-size: 11px;
   letter-spacing: 0.18em;
@@ -1421,7 +1516,7 @@ onBeforeUnmount(() => {
 .page-no {
   position: absolute;
   bottom: 40px;
-  color: #999;
+  color: #999990;
   font-family: var(--ca-font-serif);
   font-size: 14px;
   font-style: italic;
@@ -1435,7 +1530,7 @@ onBeforeUnmount(() => {
 .page-footer-number {
   position: absolute;
   bottom: 40px;
-  color: #999;
+  color: #999990;
   font-family: var(--ca-font-serif);
   font-size: 14px;
   font-style: italic;
@@ -1498,7 +1593,7 @@ onBeforeUnmount(() => {
 }
 .wrong-text {
   margin: 0;
-  color: #666;
+  color: #666560;
   font-family: var(--ca-font-serif);
   font-size: 18px;
   font-style: italic;
@@ -1509,18 +1604,18 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: 16px;
   margin-top: 24px;
-  border-top: 1px dashed #e5e7eb;
+  border-top: 1px dashed #e6e4dd;
   padding-top: 14px;
 }
 .wrong-footer span {
-  color: #c8c8c8;
+  color: #bfbcb2;
   font-family: var(--ca-font-sans);
   font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .wrong-x {
-  color: #7f1d1d;
+  color: #c23a22;
   font-family: var(--ca-font-sans);
   font-size: 24px;
   font-weight: 900;
@@ -1552,7 +1647,7 @@ onBeforeUnmount(() => {
 .paper-note {
   position: relative;
   margin: auto 0 24px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e6e4dd;
   border-radius: 2px;
   background: #ffffff;
   box-shadow: 2px 5px 15px rgba(0, 0, 0, 0.05);
@@ -1577,11 +1672,15 @@ onBeforeUnmount(() => {
   bottom: -28px;
   left: -20px;
   width: calc(100% + 40px);
-  border-radius: 4px;
-  background: #0a1118;
-  color: white;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  border-radius: 6px;
+  background:
+    radial-gradient(ellipse 80% 90% at 24% 0%, rgba(0, 229, 255, 0.07), transparent 58%),
+    #121614;
+  color: #f4f4f0;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.16),
+    0 8px 10px -6px rgba(0, 0, 0, 0.12),
+    0 0 18px rgba(0, 229, 255, 0.08);
   padding: 20px;
   transform: rotate(-1deg);
 }
@@ -1596,10 +1695,12 @@ onBeforeUnmount(() => {
 }
 .ai-sticker p {
   margin: 0;
-  font-family: var(--ca-font-sans);
-  font-size: 14px;
-  font-weight: 300;
-  line-height: 1.625;
+  color: rgba(244, 244, 240, 0.92);
+  font-family: var(--ca-font-chalk);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
 }
 
 .dark-page {
@@ -1661,9 +1762,9 @@ onBeforeUnmount(() => {
 .roles-section {
   position: relative;
   z-index: 10;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  background: #143A30;
-  padding: 128px 24px;
+  border-top: 1px solid rgba(244, 244, 240, 0.06);
+  background: #161B17;
+  padding: 128px 24px 136px;
   overflow: hidden;
   isolation: isolate;
 }
@@ -1705,91 +1806,181 @@ onBeforeUnmount(() => {
     );
 }
 .section-inner {
-  max-width: 1280px;
+  max-width: 1180px;
   margin: 0 auto;
 }
 .roles-section header {
-  margin-bottom: 96px;
-  text-align: center;
+  margin-bottom: 88px;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 20px;
+  text-align: left;
 }
 .roles-section h2 {
-  margin: 0 0 24px;
+  margin: 0;
   color: #f4f4f0;
   font-family: var(--ca-font-serif);
-  font-size: clamp(36px, 5vw, 48px);
+  font-size: clamp(36px, 4.6vw, 54px);
   font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 .roles-section header p {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
   color: #8c948f;
-  font-size: 15px;
-  letter-spacing: 0.1em;
+  font-family: var(--ca-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+}
+.roles-section header p::before {
+  content: "";
+  width: 44px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.8), rgba(0, 229, 255, 0.1));
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.35);
 }
 .role-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 32px;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: minmax(0, auto);
+  gap: 24px;
 }
 .role-card {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-  background: #0E3329;
-  padding: 40px;
-  transition: border-color 500ms;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(244, 244, 240, 0.08);
+  border-radius: 10px;
+  background: linear-gradient(165deg, #181E1A 0%, #121614 70%);
+  padding: 36px;
+  transition: border-color 240ms var(--ease-out), transform 240ms var(--ease-out),
+    box-shadow 240ms var(--ease-out);
+}
+.role-card:hover {
+  transform: translateY(-4px);
+}
+.role-card::after {
+  position: absolute;
+  top: 30px;
+  right: 32px;
+  color: rgba(244, 244, 240, 0.22);
+  font-family: var(--ca-font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.14em;
+}
+.role-card.student::after {
+  content: "01";
+}
+.role-card.teacher::after {
+  content: "02";
+}
+.role-card.admin::after {
+  content: "03";
+}
+.role-card.student {
+  grid-column: 1 / 8;
+  grid-row: 1 / 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 48px 52px;
+}
+.role-card.teacher {
+  grid-column: 8 / 13;
+  grid-row: 1;
+}
+.role-card.admin {
+  grid-column: 8 / 13;
+  grid-row: 2;
+}
+.role-card.student::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 56% at 88% -6%, rgba(0, 229, 255, 0.1), transparent 62%),
+    radial-gradient(ellipse 46% 38% at -8% 108%, rgba(0, 229, 255, 0.05), transparent 60%);
 }
 .role-card.student:hover {
-  border-color: rgba(0, 229, 255, 0.5);
+  border-color: rgba(0, 229, 255, 0.45);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34), 0 0 22px rgba(0, 229, 255, 0.12);
 }
 .role-card.teacher:hover {
-  border-color: rgba(255, 87, 34, 0.5);
+  border-color: rgba(255, 87, 34, 0.45);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34), 0 0 22px rgba(255, 87, 34, 0.1);
 }
 .role-card.admin:hover {
-  border-color: rgba(217, 160, 91, 0.5);
+  border-color: rgba(217, 160, 91, 0.45);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34), 0 0 22px rgba(217, 160, 91, 0.1);
 }
 .role-icon {
-  width: 48px;
-  height: 48px;
+  position: relative;
+  width: 52px;
+  height: 52px;
   display: grid;
   place-items: center;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
+  border: 1px solid rgba(244, 244, 240, 0.1);
+  border-radius: 10px;
 }
 .role-card.student .role-icon {
-  background: transparent;
+  background: rgba(0, 229, 255, 0.08);
   color: #00e5ff;
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.18);
 }
 .role-card.teacher .role-icon {
-  background: transparent;
+  background: rgba(255, 87, 34, 0.08);
   color: #ff5722;
 }
 .role-card.admin .role-icon {
-  background: transparent;
+  background: rgba(217, 160, 91, 0.1);
   color: #d9a05b;
 }
 .role-card h3 {
-  margin: 0 0 24px;
+  margin: 0 0 22px;
   color: #f4f4f0;
   font-family: var(--ca-font-serif);
   font-size: 20px;
   font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.role-card.student h3 {
+  font-size: 24px;
 }
 .role-card ul {
+  position: relative;
   display: grid;
   gap: 16px;
   margin: 0;
   padding: 0;
-  color: #9ca3af;
+  color: #8c948f;
   font-family: var(--ca-font-sans);
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.7;
   list-style: none;
+}
+.role-card.student ul {
+  gap: 20px;
+  font-size: 15px;
 }
 .role-card li {
   display: flex;
   gap: 12px;
   align-items: flex-start;
 }
+.role-card li svg {
+  flex: 0 0 auto;
+  margin-top: 4px;
+}
 .role-card.student li svg {
   color: #00e5ff;
+  filter: drop-shadow(0 0 5px rgba(0, 229, 255, 0.4));
 }
 .role-card.teacher li svg {
   color: #ff5722;
@@ -1798,13 +1989,63 @@ onBeforeUnmount(() => {
   color: #d9a05b;
 }
 
+/* 滚动入场（渐进增强；不支持则静态显示） */
+@supports (animation-timeline: view()) {
+  .role-card,
+  .roles-section header {
+    animation: rise-reveal both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 52%;
+  }
+  .role-card.teacher {
+    animation-range: entry 8% entry 62%;
+  }
+  .role-card.admin {
+    animation-range: entry 16% entry 72%;
+  }
+  .product-footer h2,
+  .product-footer .footer-chalk-rule,
+  .product-footer > p,
+  .product-footer > div {
+    animation: rise-reveal both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 46%;
+  }
+  .product-footer > p {
+    animation-range: entry 6% entry 54%;
+  }
+  .product-footer > div {
+    animation-range: entry 12% entry 62%;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .role-card,
+    .roles-section header,
+    .product-footer h2,
+    .product-footer .footer-chalk-rule,
+    .product-footer > p,
+    .product-footer > div {
+      animation: none;
+    }
+  }
+}
+@keyframes rise-reveal {
+  from {
+    opacity: 0;
+    translate: 0 28px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
 /* ====== 页脚 ====== */
 .product-footer {
   position: relative;
   z-index: 10;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  background: #0E3329;
-  padding: 128px 24px;
+  border-top: 1px solid rgba(244, 244, 240, 0.06);
+  background: #0E1411;
+  padding: 140px 24px 96px;
   text-align: center;
   overflow: hidden;
   isolation: isolate;
@@ -1839,25 +2080,38 @@ onBeforeUnmount(() => {
     );
 }
 .product-footer h2 {
-  margin: 0 0 48px;
+  margin: 0 0 20px;
   color: #f4f4f0;
   font-family: var(--ca-font-serif);
-  font-size: clamp(36px, 7vw, 80px);
+  font-size: clamp(40px, 7vw, 84px);
   font-weight: 900;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.footer-chalk-rule {
+  display: block;
+  width: min(340px, 52vw);
+  height: 18px;
+  margin: 0 auto 44px;
+  overflow: visible;
+  fill: none;
+  stroke: rgba(244, 244, 240, 0.4);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgba(244, 244, 240, 0.18));
 }
 .product-footer > p {
-  max-width: 680px;
-  margin: 0 auto 64px;
+  max-width: 62ch;
+  margin: 0 auto 72px;
   color: #8c948f;
   font-size: 16px;
-  line-height: 1.625;
+  line-height: 1.8;
 }
 .product-footer > div {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 24px;
+  gap: 20px;
 }
 .trial-link,
 .docs-link {
@@ -1866,10 +2120,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   padding: 0 48px;
-  border-radius: 2px;
+  border-radius: 4px;
   font-size: 15px;
   font-weight: 700;
-  transition: all 300ms;
+  letter-spacing: 0.02em;
+  transition: background-color 200ms var(--ease-out), color 200ms var(--ease-out),
+    border-color 200ms var(--ease-out), transform 200ms var(--ease-out),
+    box-shadow 200ms var(--ease-out);
 }
 .trial-link {
   background: #f4f4f0;
@@ -1877,31 +2134,58 @@ onBeforeUnmount(() => {
 }
 .trial-link:hover {
   background: #00e5ff;
+  transform: translateY(-2px);
   box-shadow: 0 0 30px rgba(0, 229, 255, 0.4);
 }
+.trial-link:active {
+  transform: translateY(0) scale(0.97);
+}
 .docs-link {
-  border: 1px solid #8c948f;
+  border: 1px solid rgba(140, 148, 143, 0.6);
   color: #f4f4f0;
 }
 .docs-link:hover {
   border-color: #f4f4f0;
+  transform: translateY(-2px);
+}
+.docs-link:active {
+  transform: translateY(0) scale(0.97);
+}
+.footer-chalk-tray {
+  max-width: 1180px;
+  height: 0;
+  margin: 96px auto 0;
+  border-top: 1px solid rgba(244, 244, 240, 0.08);
+  position: relative;
+}
+.footer-chalk-tray::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  left: 50%;
+  width: 72px;
+  height: 3px;
+  border-radius: 3px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, rgba(244, 244, 240, 0.45), transparent);
+  box-shadow: 0 0 10px rgba(244, 244, 240, 0.2);
 }
 
 /* ====== 首页主题 ====== */
 :global(html.product-home-active.product-home-light-active),
 :global(body.product-home-active.product-home-light-active),
 :global(#app.product-home-active.product-home-light-active) {
-  background: #f8fafc !important;
+  background: #F9F8F6 !important;
 }
 
 :global(html.product-home-active.product-home-dark-active),
 :global(body.product-home-active.product-home-dark-active),
 :global(#app.product-home-active.product-home-dark-active) {
-  background: #0E3329 !important;
+  background: #121614 !important;
 }
 
 .product-home.product-home-dark {
-  --home-bg: #0E3329;
+  --home-bg: #151A16;
   --home-canvas-line: rgba(244, 244, 240, 0.13);
   --home-canvas-muted: #f4f4f0;
   --home-canvas-text: rgba(244, 244, 240, 0.82);
@@ -1911,26 +2195,28 @@ onBeforeUnmount(() => {
 }
 
 .product-home.product-home-light {
-  --home-bg: #ffffff;
-  --home-surface: #ffffff;
-  --home-surface-soft: #f8fafc;
-  --home-ink: #0f172a;
-  --home-text: #1e293b;
-  --home-muted: #64748b;
-  --home-subtle: #94a3b8;
-  --home-border: rgba(15, 23, 42, 0.1);
-  --home-border-strong: rgba(15, 23, 42, 0.16);
+  /* 浅色主题下登录页 h1 无粉笔辉光，飞行字也保持无光，交接才无缝 */
+  --brand-flight-glow: 0 0 2px rgba(44, 43, 41, 0), 0 0 18px rgba(44, 43, 41, 0);
+  --home-bg: #F9F8F6;
+  --home-surface: #FFFFFF;
+  --home-surface-soft: #F4F1EA;
+  --home-ink: #2C2B29;
+  --home-text: #444440;
+  --home-muted: #666560;
+  --home-subtle: #999990;
+  --home-border: #E6E4DD;
+  --home-border-strong: #D1CBB5;
   --home-cyan: #0097a7;
   --home-cyan-bright: #00b8d4;
-  --home-blue: #2563eb;
-  --home-warm: #b45309;
-  --home-orange: #ea580c;
-  --home-canvas-line: rgba(15, 23, 42, 0.2);
-  --home-canvas-muted: rgba(15, 23, 42, 0.28);
-  --home-canvas-text: rgba(15, 23, 42, 0.88);
-  --home-canvas-ghost: rgba(15, 23, 42, 0.2);
+  --home-blue: #00b8d4;
+  --home-warm: #d9a05b;
+  --home-orange: #d94925;
+  --home-canvas-line: rgba(44, 43, 41, 0.2);
+  --home-canvas-muted: rgba(44, 43, 41, 0.28);
+  --home-canvas-text: rgba(44, 43, 41, 0.88);
+  --home-canvas-ghost: rgba(44, 43, 41, 0.2);
   --home-canvas-cursor: rgba(0, 151, 167, 0.5);
-  --home-canvas-dust: rgba(15, 23, 42, 0.3);
+  --home-canvas-dust: rgba(44, 43, 41, 0.3);
 
   background: var(--home-bg);
   color: var(--home-ink);
@@ -1945,17 +2231,25 @@ onBeforeUnmount(() => {
   pointer-events: auto;
 }
 
-.product-home.product-home-light .board-texture,
+.product-home.product-home-light .board-texture {
+  opacity: 0.4;
+  mix-blend-mode: multiply;
+  background-blend-mode: normal;
+}
+
 .product-home.product-home-light .board-smudge {
-  opacity: 0;
-  background: none;
+  opacity: 1;
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(255, 255, 255, 0.85) 0%, transparent 55%),
+    radial-gradient(ellipse 130% 110% at 50% 50%, transparent 64%, rgba(44, 43, 41, 0.05) 100%);
 }
 
 .product-home.product-home-light .product-nav {
   border-bottom-color: var(--home-border);
-  background: #ffffff;
-  backdrop-filter: none;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+  background: rgba(249, 248, 246, 0.86);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 10px 28px rgba(18, 22, 20, 0.04);
 }
 
 .product-home.product-home-light .product-logo,
@@ -1972,48 +2266,49 @@ onBeforeUnmount(() => {
 
 .product-home.product-home-light .theme-toggle {
   border-color: transparent;
-  background: rgba(15, 23, 42, 0.05);
+  background: rgba(44, 43, 41, 0.06);
   box-shadow: none;
 }
 
 .product-home.product-home-light .theme-toggle:hover {
   border-color: transparent;
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(44, 43, 41, 0.1);
 }
 
 .product-home.product-home-light .theme-toggle-sun {
-  color: #b45309;
+  color: #d9a05b;
 }
 
 .product-home.product-home-light .theme-toggle-moon {
-  color: #64748b;
+  color: #999990;
 }
 
 .product-home.product-home-light .theme-toggle-thumb {
   background: #ffffff;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 6px 16px rgba(18, 22, 20, 0.16);
   transform: translateX(0);
 }
 
 .product-home.product-home-light .register-link,
 .product-home.product-home-light .workbench-link {
-  border: 1px solid rgba(8, 145, 178, 0.34);
-  background: #0891B2;
-  color: #ffffff !important;
-  box-shadow: 0 12px 24px rgba(8, 145, 178, 0.14);
+  border: 0;
+  background: #2C2B29;
+  color: #F9F8F6 !important;
+  box-shadow: 0 10px 22px rgba(18, 22, 20, 0.16);
 }
 
 .product-home.product-home-light .register-link:hover,
 .product-home.product-home-light .workbench-link:hover:not(:disabled) {
-  background: #0E7490;
+  background: #0097a7;
   color: #ffffff !important;
+  box-shadow: 0 12px 26px rgba(0, 151, 167, 0.26);
 }
 
 .product-home.product-home-light .scroll-track,
 .product-home.product-home-light .home-stage,
 .product-home.product-home-light .scene-blackboard,
 .product-home.product-home-light .scene-book {
-  background: var(--home-bg);
+  background: transparent;
 }
 
 .product-home.product-home-light .formula-writing-canvas {
@@ -2025,11 +2320,11 @@ onBeforeUnmount(() => {
 }
 
 .product-home.product-home-light .chalk-svg {
-  stroke: rgba(15, 23, 42, 0.62);
+  stroke: rgba(44, 43, 41, 0.62);
 }
 
 .product-home.product-home-light .formula-text {
-  fill: rgba(15, 23, 42, 0.72);
+  fill: rgba(44, 43, 41, 0.72);
 }
 
 .product-home.product-home-light .classic-quote,
@@ -2044,6 +2339,12 @@ onBeforeUnmount(() => {
   text-shadow: 0 0 18px rgba(0, 184, 212, 0.45);
 }
 
+.product-home.product-home-light .hero-chalk-underline {
+  stroke: var(--home-cyan);
+  opacity: 0.9;
+  filter: drop-shadow(0 0 7px rgba(0, 184, 212, 0.35));
+}
+
 .product-home.product-home-light .hero-copy,
 .product-home.product-home-light .teacher-console-link,
 .product-home.product-home-light .scroll-hint {
@@ -2055,9 +2356,16 @@ onBeforeUnmount(() => {
   color: var(--home-ink);
 }
 
-.product-home.product-home-light .hand-drawn-link:hover,
-.product-home.product-home-light .teacher-console-link:hover {
+.product-home.product-home-light .hand-drawn-link:hover {
   color: var(--home-cyan);
+}
+
+.product-home.product-home-light .hand-drawn-link:hover svg:last-child {
+  filter: drop-shadow(0 0 6px rgba(0, 184, 212, 0.35));
+}
+
+.product-home.product-home-light .teacher-console-link:hover {
+  color: #d94925;
 }
 
 .product-home.product-home-light .scroll-hint i {
@@ -2066,8 +2374,8 @@ onBeforeUnmount(() => {
 
 .product-home.product-home-light .book {
   box-shadow:
-    0 28px 56px -18px rgba(15, 23, 42, 0.28),
-    0 16px 32px -24px rgba(15, 23, 42, 0.22),
+    0 28px 56px -18px rgba(18, 22, 20, 0.26),
+    0 16px 32px -24px rgba(18, 22, 20, 0.2),
     0 5px 0 -1px #e5e0d5,
     0 5px 0 0 #d1ccc0,
     0 10px 0 -2px #e5e0d5,
@@ -2084,60 +2392,146 @@ onBeforeUnmount(() => {
   color: var(--home-ink);
 }
 
-.product-home.product-home-light .roles-section header p,
+.product-home.product-home-light .roles-section header p {
+  color: var(--home-muted);
+}
+
+.product-home.product-home-light .roles-section header p::before {
+  background: linear-gradient(90deg, rgba(0, 151, 167, 0.85), rgba(0, 151, 167, 0.1));
+  box-shadow: none;
+}
+
 .product-home.product-home-light .role-card ul {
   color: var(--home-muted);
 }
 
 .product-home.product-home-light .role-card {
   border-color: var(--home-border);
-  background: #ffffff;
-  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.05);
+  background: var(--home-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.product-home.product-home-light .role-card::after {
+  color: var(--home-subtle);
+}
+
+.product-home.product-home-light .role-icon {
+  border-color: var(--home-border);
+}
+
+.product-home.product-home-light .role-card.student .role-icon {
+  background: rgba(0, 184, 212, 0.08);
+  color: #0097a7;
+  box-shadow: none;
+}
+
+.product-home.product-home-light .role-card.teacher .role-icon {
+  background: rgba(217, 73, 37, 0.07);
+  color: #d94925;
+}
+
+.product-home.product-home-light .role-card.admin .role-icon {
+  background: rgba(217, 160, 91, 0.12);
+  color: #c68a3f;
+}
+
+.product-home.product-home-light .role-card.student::before {
+  background:
+    radial-gradient(ellipse 70% 56% at 88% -6%, rgba(0, 184, 212, 0.08), transparent 62%),
+    radial-gradient(ellipse 46% 38% at -8% 108%, rgba(0, 184, 212, 0.04), transparent 60%);
+}
+
+.product-home.product-home-light .role-card.student li svg {
+  color: #0097a7;
+  filter: none;
+}
+
+.product-home.product-home-light .role-card.teacher li svg {
+  color: #d94925;
+}
+
+.product-home.product-home-light .role-card.admin li svg {
+  color: #c68a3f;
 }
 
 .product-home.product-home-light .role-card.student:hover {
-  border-color: rgba(0, 151, 167, 0.46);
+  border-color: rgba(0, 151, 167, 0.45);
+  box-shadow: 0 18px 42px rgba(18, 22, 20, 0.08), 0 0 0 1px rgba(0, 151, 167, 0.08);
 }
 
 .product-home.product-home-light .role-card.teacher:hover {
-  border-color: rgba(234, 88, 12, 0.42);
+  border-color: rgba(217, 73, 37, 0.4);
+  box-shadow: 0 18px 42px rgba(18, 22, 20, 0.08);
 }
 
 .product-home.product-home-light .role-card.admin:hover {
-  border-color: rgba(180, 83, 9, 0.38);
+  border-color: rgba(217, 160, 91, 0.55);
+  box-shadow: 0 18px 42px rgba(18, 22, 20, 0.08);
 }
 
+/* 亮色主题的黑板收尾：页脚保留 slate 材质，与纸面形成对比 */
 .product-home.product-home-light .product-footer {
-  border-top-color: var(--home-border);
-  background: var(--home-surface);
+  border-top-color: transparent;
+  background: #121614;
 }
 
 .product-home.product-home-light .product-footer h2 {
-  color: var(--home-ink);
-  letter-spacing: 0;
+  color: #f4f4f0;
+  letter-spacing: -0.03em;
 }
 
 .product-home.product-home-light .product-footer > p {
-  color: var(--home-muted);
+  color: #8c948f;
 }
 
 .product-home.product-home-light .trial-link {
-  background: #0891B2;
-  color: #ffffff;
+  background: #f4f4f0;
+  color: #121614;
 }
 
 .product-home.product-home-light .trial-link:hover {
-  background: #0E7490;
-  box-shadow: 0 18px 34px rgba(8, 145, 178, 0.2);
+  background: #00e5ff;
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.35);
 }
 
 .product-home.product-home-light .docs-link {
-  border-color: var(--home-border-strong);
-  color: var(--home-ink);
+  border-color: rgba(140, 148, 143, 0.6);
+  color: #f4f4f0;
 }
 
 .product-home.product-home-light .docs-link:hover {
-  border-color: var(--home-ink);
+  border-color: #f4f4f0;
+}
+
+/* ====== 深色主题 CTA 校准（覆盖全局 dark.css 的旧色残留） ====== */
+.product-home.product-home-dark .product-nav-actions .register-link,
+.product-home.product-home-dark .product-nav-actions .workbench-link {
+  border: 0 !important;
+  background: #f4f4f0 !important;
+  color: #121614 !important;
+}
+.product-home.product-home-dark .product-nav-actions .register-link:hover,
+.product-home.product-home-dark .product-nav-actions .workbench-link:hover:not(:disabled) {
+  background: #00e5ff !important;
+  color: #121614 !important;
+}
+.product-home.product-home-dark .product-footer .trial-link {
+  border: 0 !important;
+  background: #f4f4f0 !important;
+  color: #121614 !important;
+}
+.product-home.product-home-dark .product-footer .trial-link:hover {
+  background: #00e5ff !important;
+  color: #121614 !important;
+  box-shadow: 0 0 30px rgba(0, 229, 255, 0.4) !important;
+}
+.product-home.product-home-dark .product-footer .docs-link {
+  background: transparent !important;
+  border: 1px solid rgba(140, 148, 143, 0.6) !important;
+  color: #f4f4f0 !important;
+}
+.product-home.product-home-dark .product-footer .docs-link:hover {
+  border-color: #f4f4f0 !important;
 }
 
 /* ====== 动画 ====== */
@@ -2178,6 +2572,12 @@ onBeforeUnmount(() => {
 .product-home.route-home-auth-leave-active .scene-blackboard {
   background: transparent;
 }
+/* 离场层背景转透明后，自身因 opacity 过渡成为隔离组，噪点层失去可混合的板底
+   会泛白成"磨砂雾"——立即隐藏，由下层 AuthView 的同款纹理从第一帧接管 */
+.product-home.route-home-auth-leave-active .board-texture,
+.product-home.route-home-auth-leave-active .board-smudge {
+  opacity: 0;
+}
 .product-home.route-home-auth-leave-active .formula-corner.left {
   animation: home-leave-corner-left 940ms cubic-bezier(.55, .06, .68, .19) forwards;
 }
@@ -2201,15 +2601,36 @@ onBeforeUnmount(() => {
   animation: home-leave-nav-items 520ms cubic-bezier(.55, .06, .68, .19) forwards;
 }
 .product-home.route-home-auth-leave-active .product-logo {
+  /* 占住飞走的文字宽度，避免 space-between 让中间导航瞬移 */
+  min-width: 148px;
   transform-origin: left center;
 }
-.product-home.route-home-auth-leave-active .product-logo-mark {
-  transform-origin: center;
-  animation: home-logo-mark-to-auth-title 940ms cubic-bezier(.22, .61, .36, 1) forwards;
+@media (min-width: 861px) {
+  .product-home.route-home-auth-leave-active .product-logo-mark {
+    transform-origin: center;
+    will-change: transform, opacity;
+    animation: home-logo-mark-to-auth-title 940ms cubic-bezier(.3, .7, .25, 1) forwards;
+  }
+  /* 脱离 nav 的 flex 流、钉在真实静止坐标上飞行：
+     字号增长不再被 flex 居中上推，终点与 AuthView 的 h1 逐像素重合。
+     absolute 的包含块是 .product-nav（fixed 且铺满顶部），坐标等价于视口 */
+  .product-home.route-home-auth-leave-active .product-logo-text {
+    position: absolute;
+    top: var(--home-logo-text-top);
+    left: calc(var(--home-logo-left) + var(--home-logo-text-offset));
+    margin: 0;
+    transform-origin: left top;
+    font-synthesis: none;
+    will-change: transform, opacity;
+    animation: home-logo-text-to-auth-title 940ms cubic-bezier(.3, .7, .25, 1) forwards;
+  }
 }
-.product-home.route-home-auth-leave-active .product-logo-text {
-  transform-origin: left center;
-  animation: home-logo-text-to-auth-title 940ms cubic-bezier(.22, .61, .36, 1) forwards;
+@media (max-width: 860px) {
+  /* 窄屏下登录页文案区改为流式布局，共享坐标失效——退化为柔和淡出 */
+  .product-home.route-home-auth-leave-active .product-logo-mark,
+  .product-home.route-home-auth-leave-active .product-logo-text {
+    animation: home-leave-nav-items 520ms cubic-bezier(.55, .06, .68, .19) forwards;
+  }
 }
 .product-home.route-auth-home-enter-active .formula-corner.left {
   animation: home-enter-corner-left 760ms cubic-bezier(.22, .61, .36, 1) both;
@@ -2223,9 +2644,25 @@ onBeforeUnmount(() => {
 .product-home.route-auth-home-enter-active .hero-center {
   animation: home-enter-hero 760ms cubic-bezier(.22, .61, .36, 1) both;
 }
+/* 返程时离场层已透明，主页在其下方可见地搭建：文案/按钮/滚动提示在窗口内快速淡入
+   （直载时它们走 2s/2.5s/3s 的慢节奏粉笔叙事，这里压缩进 980ms 窗口） */
 .product-home.route-auth-home-enter-active .hero-copy,
 .product-home.route-auth-home-enter-active .hero-actions,
 .product-home.route-auth-home-enter-active .scroll-hint {
+  animation: fade-in 520ms cubic-bezier(.22, .61, .36, 1) 320ms both;
+}
+/* 转场类移除瞬间禁止 hero 直载慢动画重播（动画名切换会从 opacity:0 重来），
+   entered-from-auth 由脚本在挂载时打上并永久保留。
+   quote 自带离场动画，须排除离场类避免压掉它；
+   copy/按钮/滚动提示无独立离场动画（随父级 hero-center 整体淡出），离场期间保持抑制，
+   否则离场瞬间会回退到带 2-3s 延迟的直载动画而瞬间隐形 */
+.product-home.entered-from-auth:not(.route-auth-home-enter-active):not(.route-home-auth-leave-active) .classic-quote {
+  opacity: 1;
+  animation: none;
+}
+.product-home.entered-from-auth:not(.route-auth-home-enter-active) .hero-copy,
+.product-home.entered-from-auth:not(.route-auth-home-enter-active) .hero-actions,
+.product-home.entered-from-auth:not(.route-auth-home-enter-active) .scroll-hint {
   opacity: 1;
   animation: none;
 }
@@ -2242,13 +2679,13 @@ onBeforeUnmount(() => {
 .product-home.route-auth-home-enter-active .product-logo {
   transform-origin: left center;
 }
+/* 返程时首页位于不透明的离场层之下：登录页 h1 在上层飞抵 nav 角落并停驻，
+   980ms 揭幕瞬间由静止的品牌字无缝接棒，因此这里只需保证静止终态 */
 .product-home.route-auth-home-enter-active .product-logo-mark {
-  transform-origin: center;
-  animation: home-logo-mark-from-auth-title 940ms cubic-bezier(.22, .61, .36, 1) both;
+  animation: home-logo-mark-from-auth-title 940ms linear both;
 }
 .product-home.route-auth-home-enter-active .product-logo-text {
-  transform-origin: left center;
-  animation: home-auth-title-to-logo-text 940ms cubic-bezier(.22, .61, .36, 1) both;
+  animation: home-auth-title-to-logo-text 940ms linear both;
 }
 
 @keyframes home-leave-corner-left {
@@ -2291,11 +2728,11 @@ onBeforeUnmount(() => {
   to { transform: translateX(0) scale(1); opacity: .62; }
 }
 @keyframes home-leave-nav-surface {
-  to { border-bottom-color: transparent; background: rgba(14, 51, 41, 0); backdrop-filter: blur(0); }
+  to { border-bottom-color: transparent; background: rgba(18, 22, 20, 0); backdrop-filter: blur(0); }
 }
 @keyframes home-enter-nav-surface {
-  from { border-bottom-color: transparent; background: rgba(14, 51, 41, 0); backdrop-filter: blur(0); }
-  to { border-bottom-color: rgba(244, 244, 240, 0.05); background: rgba(14, 51, 41, 0.8); backdrop-filter: blur(16px); }
+  from { border-bottom-color: transparent; background: rgba(18, 22, 20, 0); backdrop-filter: blur(0); }
+  to { border-bottom-color: rgba(244, 244, 240, 0.06); background: rgba(18, 22, 20, 0.72); backdrop-filter: blur(18px); }
 }
 @keyframes home-leave-nav-items {
   to { opacity: 0; transform: translateY(-12px); }
@@ -2304,25 +2741,40 @@ onBeforeUnmount(() => {
   from { opacity: 0; transform: translateY(-12px); }
   to { opacity: 1; transform: translateY(0); }
 }
+/* 去程：0→76% 减速飞抵 → 76→84% 停笔落定 → 84→96% 与下层 h1 交叉淡化（字形完全重合） */
 @keyframes home-logo-text-to-auth-title {
-  0% { transform: translate(0, 0); font-size: 20px; opacity: 1; }
-  78% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 1; }
-  100% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 1; }
+  0% {
+    transform: translate(0, 0);
+    font-size: 20px;
+    opacity: 1;
+    text-shadow: 0 0 2px rgba(244, 244, 240, 0), 0 0 18px rgba(244, 244, 240, 0);
+  }
+  76%, 84% {
+    transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y));
+    font-size: var(--shared-title-size);
+    opacity: 1;
+    text-shadow: var(--brand-flight-glow);
+  }
+  96%, 100% {
+    transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y));
+    font-size: var(--shared-title-size);
+    opacity: 0;
+    text-shadow: var(--brand-flight-glow);
+  }
 }
+/* 图标随行一小段即隐去，把视线让给文字主角 */
 @keyframes home-logo-mark-to-auth-title {
   0% { transform: translate(0, 0) scale(1); opacity: 1; }
-  42% { transform: translate(calc(var(--logo-text-to-title-x) * .22), calc(var(--logo-to-title-y) * .22)) scale(.78); opacity: .68; }
-  100% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)) scale(.08); opacity: 0; }
+  52%, 100% { transform: translate(calc(var(--logo-text-to-title-x) * .26), calc(var(--logo-to-title-y) * .26)) scale(.5); opacity: 0; }
 }
+/* 返程在不透明上层之下进行：原位淡入即可，揭幕时已是静止终态 */
 @keyframes home-auth-title-to-logo-text {
-  0% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 0; }
-  72% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)); font-size: clamp(64px, 10vw, 128px); opacity: 0; }
-  100% { transform: translate(0, 0); font-size: 20px; opacity: 1; }
+  0%, 72% { opacity: 0; }
+  90%, 100% { opacity: 1; }
 }
 @keyframes home-logo-mark-from-auth-title {
-  0% { transform: translate(var(--logo-text-to-title-x), var(--logo-to-title-y)) scale(.08); opacity: 0; }
-  64% { transform: translate(calc(var(--logo-text-to-title-x) * .18), calc(var(--logo-to-title-y) * .18)) scale(.72); opacity: 0; }
-  100% { transform: translate(0, 0) scale(1); opacity: 1; }
+  0%, 72% { opacity: 0; transform: scale(.9); }
+  92%, 100% { opacity: 1; transform: scale(1); }
 }
 /* ====== 响应式 ====== */
 @media (min-width: 640px) {
@@ -2367,6 +2819,28 @@ onBeforeUnmount(() => {
   }
   .role-grid {
     grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .role-card.student,
+  .role-card.teacher,
+  .role-card.admin {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .role-card.student {
+    padding: 36px;
+  }
+  .roles-section {
+    padding: 88px 24px 96px;
+  }
+  .roles-section header {
+    margin-bottom: 56px;
+  }
+  .product-footer {
+    padding: 96px 24px 72px;
+  }
+  .footer-chalk-tray {
+    margin-top: 64px;
   }
   .book {
     width: min(920px, calc(100vw - 32px));
