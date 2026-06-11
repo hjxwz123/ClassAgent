@@ -15,7 +15,7 @@ class QAAttachment(BaseModel):
 
 class QAAskRequest(BaseModel):
     course_id: int
-    question: str = Field(min_length=2, max_length=4000)
+    question: str = Field(min_length=1, max_length=4000)
     conversation_id: int | None = None
     lesson_page_id: int | None = None
     chapter_id: int | None = None
