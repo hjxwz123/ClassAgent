@@ -55,7 +55,7 @@ def get_enabled_service_config(db: Session | None, service_type: str) -> Runtime
     )
 
 
-def get_default_model_config(db: Session | None, purpose: str) -> RuntimeModelConfig | None:
+def get_default_model_config(db: Session | None, purpose: str, *, fallback_to_general: bool = True) -> RuntimeModelConfig | None:
     if db is None:
         return None
     statement = (
@@ -65,7 +65,7 @@ def get_default_model_config(db: Session | None, purpose: str) -> RuntimeModelCo
     )
     records = db.scalars(statement)
     record = next((item for item in records if is_supported_model_provider(item.provider, item.purpose)), None)
-    if record is None and purpose != "general":
+    if record is None and purpose != "general" and fallback_to_general:
         fallback_records = db.scalars(
             select(ModelConfig)
             .where(ModelConfig.purpose == "general", ModelConfig.deleted_at.is_(None))

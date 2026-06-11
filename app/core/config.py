@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     celery_task_always_eager: bool = True
     cors_allow_origins: str = ""
     cors_allow_credentials: bool = False
+    # 限流取真实客户端 IP 时信任的反向代理跳数。0=不信任 X-Forwarded-For（默认，防伪造）。
+    # 部署在 1 层反代（如 nginx）之后时设为 1，依此类推。
+    rate_limit_trusted_proxy_count: int = Field(default=0, ge=0, le=10)
     openapi_enabled: bool = True
     security_headers_enabled: bool = True
     upload_av_scan_enabled: bool = False
