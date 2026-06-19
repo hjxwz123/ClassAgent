@@ -236,15 +236,18 @@ class TTSService:
     def _synthesize_aliyun(self, text: str, db: Session, config: dict) -> tuple[str, float]:
         config = self._clean_config(config)
         content, audio_format = self._synthesize_aliyun_bytes(text, config)
+        # 讲解音频属课程教学资料，落到私有存储（不经无鉴权的 /static 暴露）。
+        # 存"相对路径"，由 storage.normalize_public_url 在每次序列化时签发短时效 /media 链接，
+        # 这样不会过期断播，且 generated/audio/ 已在签名白名单内。
         relative_path = storage_service.save_bytes(
             content,
             folder="generated/audio",
             filename=f"{uuid4().hex}.{audio_format}",
             db=db,
-            public=True,
+            public=False,
         )
         duration = self._duration_from_wav(content, text) if audio_format == "wav" else self._estimate_duration(text)
-        return storage_service.public_url(relative_path, db=db), duration
+        return relative_path, duration
 
     def test_config(self, config: dict) -> dict:
         try:

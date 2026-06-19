@@ -340,13 +340,13 @@ def _is_remote_url(value: str) -> bool:
 
 
 def _ip_allowed(ip: ipaddress._BaseAddress) -> bool:
-    return not (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_multicast
-        or ip.is_reserved
-        or ip.is_unspecified
+    # 用正向 is_global 判定（仅放行全球可路由地址），自动排除私网/环回/链路本地/保留/多播/未指定，
+    # 并覆盖 IPv4-mapped IPv6(如 ::ffff:127.0.0.1)等否定式黑名单易漏的段。
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+    return bool(getattr(ip, "is_global", False)) and not (
+        ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified
     )
 
 

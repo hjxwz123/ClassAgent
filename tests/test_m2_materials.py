@@ -430,10 +430,9 @@ def test_aliyun_tts_uses_official_nls_sdk(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         "app.services.tts.storage_service.save_bytes",
         lambda content, *, folder, filename, db=None, public=False: (
-            calls.update({"content": content, "filename": filename, "public": public}) or "public/generated/audio/fake.wav"
+            calls.update({"content": content, "filename": filename, "public": public}) or f"{folder}/{filename}"
         ),
     )
-    monkeypatch.setattr("app.services.tts.storage_service.public_url", lambda relative_path, db=None: f"/static/{relative_path.removeprefix('public/')}")
 
     url, duration = tts_service._synthesize_aliyun(
         "连接测试",
@@ -447,7 +446,9 @@ def test_aliyun_tts_uses_official_nls_sdk(monkeypatch, tmp_path: Path):
     assert calls["init"]["url"] == "wss://nls-gateway.cn-shanghai.aliyuncs.com/ws/v1"
     assert calls["start"]["voice"] == "xiaoyun"
     assert calls["content"] == b"fake-audio"
-    assert url == "/static/generated/audio/fake.wav"
+    # 讲解音频改为私有存储（public=False），返回相对路径，由序列化时签发 /media 短时链接
+    assert calls["public"] is False
+    assert url.startswith("generated/audio/") and url.endswith(".wav")
     assert duration >= 2
 
 
@@ -527,8 +528,9 @@ def test_material_management_flow(client):
     assert len(detail["pages"]) == 2
     assert detail["pages"][0]["script_text"]
     if detail["pages"][0]["audio_url"]:
-        assert detail["pages"][0]["audio_url"].startswith("/static/")
-        assert detail["pages"][0]["audio_url"].endswith(".wav")
+        # 讲解音频改为私有存储 + 签名 /media 链接（不再无鉴权 /static 暴露）
+        assert "/api/v1/media/files/generated/audio/" in detail["pages"][0]["audio_url"]
+        assert "sig=" in detail["pages"][0]["audio_url"]
     with db_session.SessionLocal() as db:
         stored_material = db.get(CourseMaterial, material["id"])
         stored_page = db.get(LessonPage, detail["pages"][0]["id"])
@@ -550,7 +552,10 @@ def test_material_management_flow(client):
     assert legacy_detail_resp.status_code == 200, legacy_detail_resp.text
     legacy_detail = legacy_detail_resp.json()["data"]
     assert legacy_detail["material"]["preview_url"] is None
-    assert legacy_detail["pages"][0]["audio_url"] == "/static/generated/audio/legacy.wav"
+    # 存量 /static 音频在序列化时也被重新签发为 /media 短时链接（存量数据一并受保护）
+    legacy_audio = legacy_detail["pages"][0]["audio_url"]
+    assert legacy_audio.startswith("/api/v1/media/files/generated/audio/legacy.wav")
+    assert "sig=" in legacy_audio
 
     page_id = detail["pages"][0]["id"]
     update_script_resp = client.patch(
@@ -568,7 +573,7 @@ def test_material_management_flow(client):
     assert regenerate_resp.status_code == 200, regenerate_resp.text
     regenerated_audio = regenerate_resp.json()["data"]["audio_url"]
     if regenerated_audio:
-        assert regenerated_audio.endswith(".wav")
+        assert "/api/v1/media/files/generated/audio/" in regenerated_audio
 
     student_list_resp = client.get(
         "/api/v1/materials",
