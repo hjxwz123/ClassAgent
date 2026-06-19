@@ -1,5 +1,5 @@
 import { defineComponent, h, onBeforeUnmount, ref, Transition, type PropType } from "vue";
-import { BookMarked, BookOpen, Check, ChevronDown, Copy, Sparkles } from "../../../icons";
+import { BookMarked, BookOpen, ChevronDown, Copy, Sparkles, ThumbsDown, ThumbsUp } from "../../../icons";
 import { renderRichText } from "../../../utils/richText";
 import BrandLogo from "../../../components/BrandLogo.vue";
 
@@ -14,8 +14,10 @@ type ChatMessage = {
   thoughtOpen?: boolean;
   record_id?: number;
   favorite?: boolean;
+  feedback?: "positive" | "negative" | null;
   outOfScope?: boolean;
   streaming?: boolean;
+  statusText?: string;
 };
 
 export default defineComponent({
@@ -27,7 +29,7 @@ export default defineComponent({
     userAvatarUrl: { type: String, default: "" },
     userName: { type: String, default: "" }
   },
-  emits: ["toggle-thought", "copy", "favorite", "feedback"],
+  emits: ["toggle-thought", "copy", "favorite", "feedback", "jump-source"],
   setup(p, { emit }) {
     const expandedSourceMessageIds = ref<number[]>([]);
     const burstingAvatarKeys = ref<string[]>([]);
@@ -77,6 +79,48 @@ export default defineComponent({
       }
       expandedSourceMessageIds.value = [...expandedSourceMessageIds.value, message.id];
     }
+    function sourceIsJumpable(source: any) {
+      return Boolean(source?.lesson_page_id || source?.page_number);
+    }
+    function sourceExcerpt(source: any) {
+      const excerpt = String(source?.excerpt || "").trim();
+      return excerpt || "";
+    }
+    function sourceTagTitle(source: any) {
+      const excerpt = sourceExcerpt(source);
+      if (excerpt) return excerpt;
+      return sourceIsJumpable(source) ? "点击跳转到来源" : "";
+    }
+    function renderSourceTag(source: any, index: number, tagClass: string, expanded: boolean) {
+      const label = sourceLabel(source, index);
+      const jumpable = sourceIsJumpable(source);
+      const excerpt = sourceExcerpt(source);
+      const tagBody = excerpt && expanded
+        ? [h("span", { class: "ref-tag-label" }, label), h("span", { class: "ref-tag-excerpt" }, excerpt)]
+        : label;
+      if (jumpable) {
+        return h(
+          "button",
+          {
+            type: "button",
+            class: `${tagClass} ref-tag-jump${excerpt && expanded ? " ref-tag-detailed" : ""}`,
+            key: sourceKey(source, index),
+            role: "button",
+            tabindex: 0,
+            title: sourceTagTitle(source),
+            "aria-label": `跳转到来源：${label}`,
+            style: "cursor:pointer",
+            onClick: () => emit("jump-source", source)
+          },
+          tagBody
+        );
+      }
+      return h(
+        "span",
+        { class: `${tagClass}${excerpt && expanded ? " ref-tag-detailed" : ""}`, key: sourceKey(source, index), title: sourceTagTitle(source) },
+        tagBody
+      );
+    }
     function sourceSection(message: ChatMessage, classes: string, labelClass: string, tagClass = "tag") {
       const sources = uniqueSources(message);
       if (!sources.length) return null;
@@ -85,7 +129,7 @@ export default defineComponent({
       const visibleSources = expanded ? sources : sources.slice(0, previewLimit);
       return h("div", { class: classes }, [
         h("span", { class: labelClass }, [h(BookOpen, { size: 14 }), "引用来源："]),
-        ...visibleSources.map((source, index) => h("span", { class: tagClass, key: sourceKey(source, index) }, sourceLabel(source, index))),
+        ...visibleSources.map((source, index) => renderSourceTag(source, index, tagClass, expanded)),
         sources.length > previewLimit
           ? h(
             "button",
@@ -127,6 +171,14 @@ export default defineComponent({
         }, 720));
       });
     }
+    function streamingIndicator(message: ChatMessage) {
+      // 发送后、首 token 前展示动画化的加载指示（波动圆点 + 渐变流光的阶段文案），取代静态"正在生成"文字
+      if (!message.streaming) return h("div", { class: "ai-text streaming-placeholder" }, "");
+      return h("div", { class: "ai-text qa-thinking" }, [
+        h("span", { class: "qa-thinking-dots", "aria-hidden": "true" }, [h("i"), h("i"), h("i")]),
+        h("span", { class: "qa-thinking-label" }, message.statusText || "正在生成回答")
+      ]);
+    }
     function bubble(message: ChatMessage) {
       if (p.large && message.role === "user") {
         return h("div", { class: "chat-bubble bubble-user" }, [h("p", message.text), attachmentNodes(message)]);
@@ -139,12 +191,13 @@ export default defineComponent({
             message.outOfScope ? h("span", { class: "tag tag-warning" }, "可能超纲") : null,
             message.text
               ? h("div", { class: "ai-text markdown-body", innerHTML: renderRichText(message.text) })
-              : h("div", { class: "ai-text streaming-placeholder" }, message.streaming ? "AI 正在生成..." : ""),
+              : streamingIndicator(message),
             sourceSection(message, "source-tags references-area", "source-label ref-label", "tag ref-tag"),
             h("div", { class: "msg-actions ai-action-bar" }, [
               h("button", { type: "button", title: "复制", class: "ai-action-btn", disabled: !message.text, onClick: () => emit("copy", message.text) }, [h(Copy, { size: 16 }), "复制"]),
               !message.streaming && message.record_id ? h("button", { type: "button", title: message.favorite ? "已收藏" : "收藏", class: "ai-action-btn", onClick: () => emit("favorite", message) }, [h(BookMarked, { size: 16 }), message.favorite ? "已收藏" : "收藏"]) : null,
-              !message.streaming && message.record_id ? h("button", { type: "button", title: "有用", class: "ai-action-btn success", onClick: () => emit("feedback", message, "positive") }, [h(Check, { size: 16 }), "有用"]) : null
+              !message.streaming && message.record_id ? h("button", { type: "button", title: "有用", class: ["ai-action-btn", "success", { "is-active": message.feedback === "positive" }], "aria-pressed": message.feedback === "positive", onClick: () => emit("feedback", message, "positive") }, [h(ThumbsUp, { size: 16 }), "有用"]) : null,
+              !message.streaming && message.record_id ? h("button", { type: "button", title: "没用", class: ["ai-action-btn", "danger", { "is-active": message.feedback === "negative" }], "aria-pressed": message.feedback === "negative", onClick: () => emit("feedback", message, "negative") }, [h(ThumbsDown, { size: 16 }), "没用"]) : null
             ])
           ])
         ]);
@@ -154,13 +207,14 @@ export default defineComponent({
         h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought markdown-body", innerHTML: renderRichText(message.thought) }) : null }),
         message.outOfScope ? h("span", { class: "tag tag-warning" }, "可能超纲") : null,
         message.role === "ai"
-          ? (message.text ? h("div", { class: "ai-text markdown-body", innerHTML: renderRichText(message.text) }) : h("div", { class: "ai-text streaming-placeholder" }, message.streaming ? "AI 正在生成..." : ""))
+          ? (message.text ? h("div", { class: "ai-text markdown-body", innerHTML: renderRichText(message.text) }) : streamingIndicator(message))
           : [h("p", message.text), attachmentNodes(message)],
         sourceSection(message, "source-tags", "source-label"),
         h("div", { class: "msg-actions" }, [
           h("button", { type: "button", title: "复制", disabled: !message.text, onClick: () => emit("copy", message.text) }, [h(Copy, { size: 13 }), "复制"]),
           message.role === "ai" && p.large && !message.streaming && message.record_id ? h("button", { type: "button", title: message.favorite ? "已收藏" : "收藏", onClick: () => emit("favorite", message) }, [h(BookMarked, { size: 13 }), message.favorite ? "已收藏" : "收藏"]) : null,
-          message.role === "ai" && p.large && !message.streaming && message.record_id ? h("button", { type: "button", title: "有用", class: "success", onClick: () => emit("feedback", message, "positive") }, [h(Check, { size: 13 }), "有用"]) : null
+          message.role === "ai" && p.large && !message.streaming && message.record_id ? h("button", { type: "button", title: "有用", class: ["success", { "is-active": message.feedback === "positive" }], "aria-pressed": message.feedback === "positive", onClick: () => emit("feedback", message, "positive") }, [h(ThumbsUp, { size: 13 }), "有用"]) : null,
+          message.role === "ai" && p.large && !message.streaming && message.record_id ? h("button", { type: "button", title: "没用", class: ["danger", { "is-active": message.feedback === "negative" }], "aria-pressed": message.feedback === "negative", onClick: () => emit("feedback", message, "negative") }, [h(ThumbsDown, { size: 13 }), "没用"]) : null
         ])
       ];
       return h("div", { class: "chat-bubble" }, body);
