@@ -172,7 +172,7 @@ async function download(path: string, filename?: string, query?: Record<string, 
 
 type StreamHandler = (event: string, data: any) => void;
 
-async function streamPost(path: string, body: unknown, onEvent: StreamHandler, query?: Record<string, unknown>) {
+async function streamPost(path: string, body: unknown, onEvent: StreamHandler, query?: Record<string, unknown>, signal?: AbortSignal) {
   const headers = new Headers();
   headers.set("Content-Type", "application/json");
   headers.set("Accept", "text/event-stream");
@@ -181,6 +181,7 @@ async function streamPost(path: string, body: unknown, onEvent: StreamHandler, q
     method: "POST",
     headers,
     body: JSON.stringify(body ?? {}),
+    signal,
   });
   if (!response.ok || !response.body) {
     const payload = (await response.json().catch(() => null)) as ApiResponse<unknown> | null;
@@ -240,5 +241,6 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(body ?? {}) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
   download,
-  streamPost
+  streamPost: (path: string, body: unknown, onEvent: StreamHandler, query?: Record<string, unknown>, signal?: AbortSignal) =>
+    streamPost(path, body, onEvent, query, signal)
 };
