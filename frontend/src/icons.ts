@@ -84,9 +84,12 @@ import {
   PhSpinnerGap,
   PhStack,
   PhStar,
+  PhStop,
   PhSun,
   PhSquaresFour,
   PhTextT,
+  PhThumbsDown,
+  PhThumbsUp,
   PhTrash,
   PhTray,
   PhTrendDown,
@@ -197,10 +200,13 @@ export const SkipBack = icon(PhSkipBack);
 export const SkipForward = icon(PhSkipForward);
 export const SlidersHorizontal = icon(PhSlidersHorizontal);
 export const Sparkles = icon(PhSparkle);
+export const Square = icon(PhStop);
 export const Star = icon(PhStar);
 export const Sun = icon(PhSun);
 export const Trash2 = icon(PhTrash);
 export const TrendingDown = icon(PhTrendDown);
+export const ThumbsDown = icon(PhThumbsDown);
+export const ThumbsUp = icon(PhThumbsUp);
 export const Type = icon(PhTextT);
 export const Upload = icon(PhUpload);
 export const User = icon(PhUser);

@@ -161,7 +161,7 @@
           <section v-else-if="classroomTab === 'qa'" key="qa" class="class-chat">
             <div class="class-chat-scroll">
               <div v-if="classConversationLoading && !classMessages.length" class="chat-local-loading compact"><LoadingMark :label="false" /></div>
-              <ChatList :messages="classMessages" :thinking="classThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" @toggle-thought="toggleThought" @copy="copyText" />
+              <ChatList :messages="classMessages" :thinking="classThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" @toggle-thought="toggleThought" @copy="copyText" @feedback="feedbackQaMessage" @jump-source="jumpToSource" />
             </div>
             <div class="class-chat-dock">
               <div v-if="classQaAttachments.length" class="qa-attachment-strip compact">
@@ -188,7 +188,8 @@
                   @compositionend="handleQuestionCompositionEnd('class')"
                   @keydown="handleClassQuestionKeydown"
                 ></textarea>
-                <button :disabled="(!classQuestion.trim() && !classQaAttachments.length) || classThinking || (classConversationLoading && !classMessages.length) || classQaImageUploading" :data-loading="classThinking" class="send-btn"><Send :size="18" /></button>
+                <button v-if="classThinking" type="button" class="send-btn send-btn-stop" title="停止生成" aria-label="停止生成" @click="stopClassGeneration"><Square :size="16" /></button>
+                <button v-else :disabled="(!classQuestion.trim() && !classQaAttachments.length) || (classConversationLoading && !classMessages.length) || classQaImageUploading" class="send-btn"><Send :size="18" /></button>
               </form>
               <div class="quick-tags lesson-quick-tags">
                 <button v-for="item in quickPageQuestions" :key="item" :title="item" @click="sendQuickClass(item)">{{ item }}</button>
@@ -631,7 +632,7 @@
                 </div>
                 <div v-if="globalConversationLoading && !globalMessages.length" class="chat-local-loading"><LoadingMark :label="false" /></div>
                 <div v-if="!globalMessages.length && !globalConversationLoading" class="qa-welcome"><Sparkles :size="48" /><h2>{{ courseScopeName }}专属问答</h2></div>
-                <ChatList v-else-if="globalMessages.length" :messages="globalMessages" :thinking="globalThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" />
+                <ChatList v-else-if="globalMessages.length" :messages="globalMessages" :thinking="globalThinking" :user-avatar-url="currentAvatarUrl" :user-name="profileForm.nickname || user.nickname" large @toggle-thought="toggleThought" @copy="copyText" @favorite="favoriteQaMessage" @feedback="feedbackQaMessage" @jump-source="jumpToSource" />
                 <div v-if="!globalMessages.length && !globalConversationLoading" class="prompt-grid"><button v-for="item in promptCards" :key="item.text" @click="sendGlobalQuick(item.text)"><component :is="item.icon" :size="18" />{{ item.text }}</button></div>
                 <div class="qa-latest-anchor" aria-hidden="true"></div>
               </div>
@@ -1148,7 +1149,8 @@
                 @compositionend="handleQuestionCompositionEnd('global')"
                 @keydown="handleGlobalQuestionKeydown"
               ></textarea>
-              <button :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || globalThinking || (globalConversationLoading && !globalMessages.length) || globalQaImageUploading" :data-loading="globalThinking" class="send-btn"><Send :size="20" /></button>
+              <button v-if="globalThinking" type="button" class="send-btn send-btn-stop" title="停止生成" aria-label="停止生成" @click="stopGlobalGeneration"><Square :size="18" /></button>
+              <button v-else :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || (globalConversationLoading && !globalMessages.length) || globalQaImageUploading" class="send-btn"><Send :size="20" /></button>
             </section>
           </div>
         </form>
@@ -1205,7 +1207,7 @@ import {
   CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Cpu, Download, FileText, Flame, FolderOpen, GitBranch, Grid2X2,
   Eye, History, IdCard, Info, Flag, Layers, ListChecks, LogOut, Mail, Maximize, MessageCircle, PanelRight,
   Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings,
-  Shield, Sparkles, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
+  Shield, Sparkles, Square, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
 } from "../icons";
 import { api } from "../api/client";
 import { routeByPage } from "../router";
@@ -1235,7 +1237,7 @@ import "../styles/student/tutoring.css";
 import "../styles/student/classagent.css";
 
 type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };
-type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: any[]; attachments?: QaAttachment[]; thought?: string; thoughtOpen?: boolean; record_id?: number; favorite?: boolean; outOfScope?: boolean; streaming?: boolean };
+type ChatMessage = { id: number; role: "user" | "ai"; text: string; sources?: any[]; attachments?: QaAttachment[]; thought?: string; thoughtOpen?: boolean; record_id?: number; favorite?: boolean; feedback?: "positive" | "negative" | null; outOfScope?: boolean; streaming?: boolean; statusText?: string };
 type QaHistoryConversation = { id: number; conversation_id: number; course_id: number; user_id: number; title: string; question: string; answer_preview?: string; created_at: string; updated_at?: string; lesson_page_id?: number | null; attachments?: QaAttachment[]; is_favorite?: boolean; record_count: number };
 type QaInputScope = "class" | "global";
 type StudentSearchResultType = "course" | "lesson" | "material" | "knowledge" | "qa";
@@ -1363,11 +1365,15 @@ const lessonFullscreen = ref(false);
 const lessonLayoutWidth = ref(typeof window === "undefined" ? 0 : window.innerWidth || 0);
 const slideViewportFitScale = ref(1);
 const currentPage = ref(1);
+const pendingSourcePageNumber = ref<number | null>(null);
+const pendingSourcePageId = ref<number | null>(null);
 const pageDirection = ref<"next" | "prev">("next");
 const classroomTab = ref<"script" | "activity" | "qa" | "note">("script");
 const classMessages = ref<ChatMessage[]>([]);
 const classQuestion = ref("");
 const classThinking = ref(false);
+let classAbortController: AbortController | null = null;
+let globalAbortController: AbortController | null = null;
 const classConversationLoading = ref(false);
 const classConversationId = ref<number | null>(null);
 const classQaImageInput = ref<HTMLInputElement | null>(null);
@@ -2716,6 +2722,7 @@ async function loadLessonStudyRoute() {
     } catch (error) {
       emit("notice", "warning", `学习进度加载失败：${(error as Error).message}`);
     }
+    if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId) applyPendingSourcePage();
     if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId) await loadNote(activePage.value?.id || 0);
     if (loadSeq === lessonLoadSeq && routeLessonId() === lessonId) void loadClassQaHistory();
   } catch (error) {
@@ -3076,10 +3083,20 @@ function patchChatMessage(messages: Ref<ChatMessage[]>, id: number, updater: (me
 }
 
 function applyQaStreamEvent(messages: Ref<ChatMessage[]>, messageId: number, event: string, data: any) {
+  if (event === "stage") {
+    // 首 token 前的进度提示（检索中→生成中），让用户不再面对空白干等
+    patchChatMessage(messages, messageId, (message) => ({ ...message, statusText: data?.text || "" }));
+    return;
+  }
+  if (event === "created") {
+    // 会话/记录已在后端建好，提前挂上 record_id：即使中途停止，该消息也能收藏/反馈
+    patchChatMessage(messages, messageId, (message) => ({ ...message, record_id: data?.record_id ?? message.record_id }));
+    return;
+  }
   if (event === "delta") {
     patchChatMessage(messages, messageId, (message) => data?.type === "thought"
-      ? { ...message, thought: `${message.thought || ""}${data.text || ""}`, thoughtOpen: true }
-      : { ...message, text: `${message.text || ""}${data?.text || ""}` });
+      ? { ...message, thought: `${message.thought || ""}${data.text || ""}`, thoughtOpen: true, statusText: "" }
+      : { ...message, text: `${message.text || ""}${data?.text || ""}`, statusText: "" });
     return;
   }
   if (event === "final") {
@@ -3157,6 +3174,8 @@ async function askInClass() {
   const aiMessageId = Date.now() + 1;
   const aiMessage: ChatMessage = { id: aiMessageId, role: "ai", text: "", thought: "", sources: [], streaming: true };
   classMessages.value.push(aiMessage);
+  const controller = new AbortController();
+  classAbortController = controller;
   classThinking.value = true;
   try {
     await api.streamPost("/qa/ask/stream", {
@@ -3167,17 +3186,22 @@ async function askInClass() {
       attachments
     }, (event, data) => {
       applyQaStreamEvent(classMessages, aiMessageId, event, data);
-      if (event === "final") classConversationId.value = data.conversation_id;
-    });
+      if (event === "created" || event === "final") classConversationId.value = data.conversation_id ?? classConversationId.value;
+    }, undefined, controller.signal);
   } catch (error) {
-    const current = classMessages.value.find((message) => message.id === aiMessageId);
-    if (!current?.text) patchChatMessage(classMessages, aiMessageId, (message) => ({ ...message, text: "请求失败，请稍后重试。" }));
-    emit("notice", "error", (error as Error).message);
+    // 用户主动停止：保留已生成内容，不提示错误
+    if (!controller.signal.aborted) {
+      const current = classMessages.value.find((message) => message.id === aiMessageId);
+      if (!current?.text) patchChatMessage(classMessages, aiMessageId, (message) => ({ ...message, text: "请求失败，请稍后重试。" }));
+      emit("notice", "error", (error as Error).message);
+    }
   } finally {
     patchChatMessage(classMessages, aiMessageId, (message) => ({ ...message, streaming: false }));
     classThinking.value = false;
+    if (classAbortController === controller) classAbortController = null;
   }
 }
+function stopClassGeneration() { classAbortController?.abort(); }
 function sendQuickClass(text: string) { classQuestion.value = text; askInClass(); }
 function handleQuestionCompositionStart(scope: QaInputScope) {
   questionCompositionState[scope].active = true;
@@ -3222,6 +3246,8 @@ async function askGlobal() {
   const aiMessage: ChatMessage = { id: aiMessageId, role: "ai", text: "", thought: "", sources: [], streaming: true };
   globalMessages.value.push(aiMessage);
   scrollQaToLatest(false);
+  const controller = new AbortController();
+  globalAbortController = controller;
   globalThinking.value = true;
   try {
     await api.streamPost("/qa/ask/stream", {
@@ -3233,19 +3259,25 @@ async function askGlobal() {
       const shouldFollowLatest = isQaNearLatest(320);
       applyQaStreamEvent(globalMessages, aiMessageId, event, data);
       keepQaAtLatestIfNeeded(shouldFollowLatest);
-      if (event === "final") globalConversationId.value = data.conversation_id;
-    });
-    if (globalConversationId.value && routeQaConversationId() !== globalConversationId.value) await router.replace(qaConversationRoute(globalConversationId.value));
-    await loadQaHistory();
+      if (event === "created" || event === "final") globalConversationId.value = data.conversation_id ?? globalConversationId.value;
+    }, undefined, controller.signal);
   } catch (error) {
-    const current = globalMessages.value.find((message) => message.id === aiMessageId);
-    if (!current?.text) patchChatMessage(globalMessages, aiMessageId, (message) => ({ ...message, text: "请求失败，请稍后重试。" }));
-    emit("notice", "error", (error as Error).message);
+    // 用户主动停止：保留已生成内容，不提示错误
+    if (!controller.signal.aborted) {
+      const current = globalMessages.value.find((message) => message.id === aiMessageId);
+      if (!current?.text) patchChatMessage(globalMessages, aiMessageId, (message) => ({ ...message, text: "请求失败，请稍后重试。" }));
+      emit("notice", "error", (error as Error).message);
+    }
   } finally {
     patchChatMessage(globalMessages, aiMessageId, (message) => ({ ...message, streaming: false }));
     globalThinking.value = false;
+    if (globalAbortController === controller) globalAbortController = null;
   }
+  // 停止或正常完成后都刷新历史并续接路由会话，保证停止的对话也进历史、刷新后可见
+  if (globalConversationId.value && routeQaConversationId() !== globalConversationId.value) await router.replace(qaConversationRoute(globalConversationId.value));
+  await loadQaHistory();
 }
+function stopGlobalGeneration() { globalAbortController?.abort(); }
 function sendGlobalQuick(text: string) { globalQuestion.value = text; askGlobal(); }
 async function sendCourseQuick(text: string) { quickCourseQuestion.value = text; await askCourseQuick(); }
 async function askCourseQuick() { if (!quickCourseQuestion.value.trim()) return; globalQuestion.value = quickCourseQuestion.value; quickCourseQuestion.value = ""; await go("studentQa"); await askGlobal(); }
@@ -3302,6 +3334,7 @@ function qaRecordsToMessages(records: any[]) {
       thought: item.thinking_process || item.reasoning_content || item.thought || "",
       record_id: item.id,
       favorite: item.is_favorite,
+      feedback: item.feedback === "positive" || item.feedback === "negative" ? item.feedback : null,
       outOfScope: item.is_out_of_scope,
     }
   ]);
@@ -3377,7 +3410,70 @@ async function openQaConversation(item: any) {
 function reuseHistory(item: any) { void openQaConversation(item); }
 function toggleThought(message: ChatMessage) { message.thoughtOpen = !message.thoughtOpen; }
 async function favoriteQaMessage(message: ChatMessage) { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/favorite`, { is_favorite: !message.favorite }), "已收藏"); message.favorite = !message.favorite; }
-async function feedbackQaMessage(message: ChatMessage, feedback = "positive") { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/feedback`, { feedback }), "已评价"); }
+async function feedbackQaMessage(message: ChatMessage, feedback: "positive" | "negative" = "positive") {
+  if (!message.record_id) return;
+  await run(() => api.post(`/qa/${message.record_id}/feedback`, { feedback }), feedback === "positive" ? "感谢反馈" : "已记录，会持续改进");
+  message.feedback = feedback;
+}
+async function jumpToSource(source: any) {
+  if (!source) return;
+  const lessonId = Number(source.lesson_id || 0);
+  const lessonPageId = Number(source.lesson_page_id || 0);
+  const rawPageNumber = Number(source.page_number || 0);
+  // 课堂内问答：来源属于当前打开的课时，直接定位到对应页面
+  if (classroomOpen.value && classroomLesson.value && (!lessonId || classroomLesson.value.lesson.id === lessonId)) {
+    const targetPage = resolveSourcePageNumber(source);
+    if (targetPage) {
+      if (classroomTab.value === "qa") classroomTab.value = "script";
+      await jumpPage(targetPage);
+    }
+    return;
+  }
+  // 全局问答或来源属于其它课时：打开来源所属课时，再定位到对应页面
+  if (lessonId) {
+    pendingSourcePageNumber.value = rawPageNumber || null;
+    pendingSourcePageId.value = lessonPageId || null;
+    await openLesson(lessonId);
+    return;
+  }
+  // 没有课时信息但能解析出当前课时的页码时也尝试跳转
+  const fallbackPage = resolveSourcePageNumber(source);
+  if (fallbackPage && classroomOpen.value) await jumpPage(fallbackPage);
+}
+function applyPendingSourcePage() {
+  const lesson = classroomLesson.value;
+  if (!lesson) { pendingSourcePageNumber.value = null; pendingSourcePageId.value = null; return; }
+  let targetPage = 0;
+  if (pendingSourcePageId.value) {
+    const byId = lesson.pages.find((page) => page.id === pendingSourcePageId.value);
+    if (byId) targetPage = byId.page_number;
+  }
+  if (!targetPage && pendingSourcePageNumber.value) {
+    const byNumber = lesson.pages.find((page) => page.page_number === pendingSourcePageNumber.value);
+    targetPage = byNumber?.page_number || pendingSourcePageNumber.value;
+  }
+  pendingSourcePageNumber.value = null;
+  pendingSourcePageId.value = null;
+  if (targetPage && targetPage !== currentPage.value) {
+    pageDirection.value = targetPage >= currentPage.value ? "next" : "prev";
+    currentPage.value = targetPage;
+  }
+}
+function resolveSourcePageNumber(source: any) {
+  const lesson = classroomLesson.value;
+  if (!lesson) return Number(source?.page_number || 0) || 0;
+  const lessonPageId = Number(source?.lesson_page_id || 0);
+  if (lessonPageId) {
+    const byId = lesson.pages.find((page) => page.id === lessonPageId);
+    if (byId) return byId.page_number;
+  }
+  const pageNumber = Number(source?.page_number || 0);
+  if (pageNumber) {
+    const byNumber = lesson.pages.find((page) => page.page_number === pageNumber);
+    if (byNumber) return byNumber.page_number;
+  }
+  return pageNumber || 0;
+}
 
 async function createTextProblem() {
   if (problemSubmitting.value) return;

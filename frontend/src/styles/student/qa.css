@@ -127,7 +127,26 @@
 .qa-modern-page .ai-action-btn svg,.qa-modern-page .msg-actions button svg{width:16px;height:16px}
 .qa-modern-page .ai-action-btn:hover,.qa-modern-page .msg-actions button:hover{background:var(--qa-muted-bg);color:var(--qa-text);transform:translateY(-1px)}
 .qa-modern-page .ai-action-btn.success:hover,.qa-modern-page .msg-actions button.success:hover{background:#E8F5E9;color:#2E7D32}
+.qa-modern-page .ai-action-btn.success.is-active,.qa-modern-page .msg-actions button.success.is-active{background:#E8F5E9;color:#2E7D32}
+.qa-modern-page .ai-action-btn.danger:hover,.qa-modern-page .msg-actions button.danger:hover{background:#FDECEA;color:#C62828}
+.qa-modern-page .ai-action-btn.danger.is-active,.qa-modern-page .msg-actions button.danger.is-active{background:#FDECEA;color:#C62828}
+.qa-modern-page .ref-tag-jump{cursor:pointer;transition:background var(--duration-fast) var(--ease-in-out),box-shadow var(--duration-fast) var(--ease-in-out)}
+.qa-modern-page .ref-tag-jump:hover{background:var(--qa-primary-100);box-shadow:var(--qa-shadow-sm)}
+.qa-modern-page .ref-tag-jump:focus-visible{outline:2px solid var(--qa-primary-600);outline-offset:2px}
+.qa-modern-page .ref-tag.ref-tag-detailed,.qa-modern-page .ref-tag-jump.ref-tag-detailed,.qa-modern-page .references-area .ref-tag-jump:has(.ref-tag-excerpt){flex-direction:column;align-items:flex-start;gap:3px;min-height:0;padding:8px 12px;max-width:100%;text-align:left}
+.qa-modern-page .ref-tag-label{font-size:12px;font-weight:700;line-height:1.3}
+.qa-modern-page .ref-tag-excerpt{font-size:11px;font-weight:500;line-height:1.45;color:var(--qa-hint);opacity:.92;white-space:normal;word-break:break-word}
 .qa-modern-page .streaming-placeholder{color:var(--qa-hint);font-weight:600}
+/* 发送后首 token 前的加载动画：波动圆点 + 渐变流光阶段文案，取代静态"正在生成"文字 */
+.qa-thinking{display:inline-flex;align-items:center;gap:11px;min-height:24px}
+.qa-thinking-dots{display:inline-flex;align-items:center;gap:5px}
+.qa-thinking-dots i{width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#06B6D4,#00E5FF);box-shadow:0 0 8px rgba(0,184,212,.45);animation:qa-dot-wave 1.2s ease-in-out infinite}
+.qa-thinking-dots i:nth-child(2){animation-delay:.16s}
+.qa-thinking-dots i:nth-child(3){animation-delay:.32s}
+.qa-thinking-label{font-size:13px;font-weight:700;letter-spacing:.01em;background:linear-gradient(90deg,#9aa39e 0%,#9aa39e 35%,#00B8D4 50%,#9aa39e 65%,#9aa39e 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:qa-thinking-shimmer 1.8s linear infinite}
+@keyframes qa-dot-wave{0%,65%,100%{transform:translateY(0) scale(.82);opacity:.4}28%{transform:translateY(-7px) scale(1);opacity:1}}
+@keyframes qa-thinking-shimmer{from{background-position:120% 0}to{background-position:-120% 0}}
+@media (prefers-reduced-motion: reduce){.qa-thinking-dots i,.qa-thinking-label{animation:none}.qa-thinking-label{color:var(--qa-hint);-webkit-text-fill-color:currentColor}}
 .qa-modern-page .thinking{width:fit-content;display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(178,235,242,.9);border-radius:var(--qa-pill);background:#fff;color:var(--qa-secondary);box-shadow:var(--qa-shadow-sm);padding:10px 14px}
 .qa-modern-page .thinking i{width:7px;height:7px;border-radius:50%;background:var(--qa-ai-gradient);animation:thinking-c9e07e67 var(--duration-slow) var(--ease-in-out) infinite}
 .qa-modern-page .thinking .dot-2{animation-delay:.12s}
@@ -168,6 +187,12 @@
 .class-chat .source-tags{display:flex;align-items:center;flex-wrap:wrap;gap:6px;border-top:1px dashed var(--class-chat-border);margin-top:10px;padding-top:10px}
 .class-chat .source-label{display:inline-flex;align-items:center;gap:4px;color:var(--class-chat-muted);font-size:12px;font-weight:700}
 .class-chat .source-tags .tag{min-height:22px;border-radius:9999px;background:var(--class-chat-primary-50);color:var(--class-chat-primary);padding:0 9px;font-size:12px;font-weight:700}
+.class-chat .source-tags .ref-tag-jump{cursor:pointer;border:0;transition:background var(--duration-fast) var(--ease-in-out)}
+.class-chat .source-tags .ref-tag-jump:hover{background:var(--class-chat-primary-100,#b2ebf2)}
+.class-chat .source-tags .ref-tag-jump:focus-visible{outline:2px solid var(--class-chat-primary);outline-offset:2px}
+.class-chat .source-tags .ref-tag-detailed{flex-direction:column;align-items:flex-start;gap:2px;min-height:0;border-radius:12px;padding:7px 10px;max-width:100%;text-align:left}
+.class-chat .source-tags .ref-tag-label{font-size:12px;font-weight:700;line-height:1.3}
+.class-chat .source-tags .ref-tag-excerpt{font-size:11px;font-weight:500;line-height:1.4;color:var(--class-chat-muted);white-space:normal;word-break:break-word}
 .class-chat .source-toggle{border:0}
 .class-chat .msg-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;opacity:1}
 .class-chat .msg-actions button{width:auto;min-height:30px;display:inline-flex;align-items:center;justify-content:center;gap:5px;border:0;border-radius:8px;background:transparent;color:var(--class-chat-muted);padding:0 8px;font-size:12px;font-weight:700;white-space:nowrap}
@@ -200,6 +225,10 @@
 .qa-modern-page.is-empty .send-btn svg{width:16px;height:16px}
 .qa-modern-page .send-btn:hover:not(:disabled){background:var(--qa-primary-500);transform:scale(1.05);box-shadow:0 6px 16px #0097a766}
 .qa-modern-page .send-btn:disabled{cursor:not-allowed;opacity:.55;transform:none}
+.send-btn.send-btn-stop{background:var(--ca-color-slate);box-shadow:0 4px 12px rgba(18,22,20,.26)}
+.send-btn.send-btn-stop:hover{background:#000;transform:scale(1.05)}
+.send-btn.send-btn-stop svg{animation:qa-stop-pulse 1.4s ease-in-out infinite}
+@keyframes qa-stop-pulse{0%,100%{opacity:.7}50%{opacity:1}}
 .qa-modern-page .disclaimer{display:block;margin-top:8px;color:var(--qa-hint);text-align:center;font-size:12px}
 .qa-modern-page .thought-roll-enter-active,.qa-modern-page .thought-roll-leave-active{overflow:hidden;transition:max-height var(--duration-slow) var(--ease-out),opacity var(--duration-base) var(--ease-out),padding-top var(--duration-base) var(--ease-out),padding-bottom var(--duration-base) var(--ease-out),margin var(--duration-base) var(--ease-out)}
 .qa-modern-page .thought-roll-enter-from,.qa-modern-page .thought-roll-leave-to{max-height:0;opacity:0;padding-top:0;padding-bottom:0;margin-top:0;margin-bottom:0}
