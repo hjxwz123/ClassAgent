@@ -63,7 +63,8 @@ def test_agent_extracts_markdown_tables_as_structured_rows() -> None:
     assert tables[0].rows[0] == ["JPEG", "有损压缩", "适合照片"]
 
 
-def test_agent_answer_appends_sources_and_followups_but_strips_from_history() -> None:
+def test_agent_answer_keeps_followups_but_omits_sources_from_body() -> None:
+    # 来源不再拼进答案正文（前端下方以标签展示）；仍保留追问建议，且历史里会被剥掉
     plan = ClassroomAgentPlan(
         question_type="concept",
         scope="specific",
@@ -84,17 +85,19 @@ def test_agent_answer_appends_sources_and_followups_but_strips_from_history() ->
         out_of_scope=False,
     )
 
-    assert "来源：" in answer
-    assert "第12页/幻灯片" in answer
-    assert "动态字典" in answer
+    assert "来源：" not in answer
     assert "你还可以继续问" in answer
     assert _strip_agent_answer_suffix(answer) == "LZW 是无损压缩。"
+
+
+def _pair(text):
+    return (text, {"title": text})
 
 
 def test_rerank_retrieval_pool_filters_below_min_score(monkeypatch):
     from app.services import qa as qa_module
 
-    pool = ["doc-a", "doc-b", "doc-c", "doc-d", "doc-e"]
+    pool = [_pair(name) for name in ("doc-a", "doc-b", "doc-c", "doc-d", "doc-e")]
     monkeypatch.setattr(
         qa_module.ai_service,
         "rerank_documents",
@@ -102,24 +105,38 @@ def test_rerank_retrieval_pool_filters_below_min_score(monkeypatch):
     )
     monkeypatch.setattr(qa_module, "runtime_setting_float", lambda db, key, default, **kwargs: 0.25)
 
-    result = qa_module._rerank_retrieval_pool(object(), question="极限", pool=pool)
-    # 0.1 低于下限被丢弃，其余按相关性降序
-    assert result == ["doc-e", "doc-b"]
+    result = qa_module._rerank_retrieval_pool(object(), query="极限", pool=pool)
+    # 0.1 低于下限被丢弃，其余按相关性降序；返回 (文本, 来源) 配对
+    assert [text for text, _ in result] == ["doc-e", "doc-b"]
 
 
-def test_rerank_retrieval_pool_returns_empty_when_all_below_threshold(monkeypatch):
+def test_rerank_retrieval_pool_keeps_best_when_all_below_threshold(monkeypatch):
     from app.services import qa as qa_module
 
-    pool = ["a", "b", "c", "d", "e"]
+    pool = [_pair(name) for name in ("a", "b", "c", "d", "e")]
+    # 全部低于阈值但最佳项 0.2 ≥ keep-floor(0.06) → 保留最佳一条，避免误判"资料外"
     monkeypatch.setattr(
         qa_module.ai_service,
         "rerank_documents",
-        lambda *, query, documents, db, top_n=None: [(0, 0.05), (1, 0.02)],
+        lambda *, query, documents, db, top_n=None: [(2, 0.2), (1, 0.02)],
     )
     monkeypatch.setattr(qa_module, "runtime_setting_float", lambda db, key, default, **kwargs: 0.25)
+    result = qa_module._rerank_retrieval_pool(object(), query="q", pool=pool)
+    assert [text for text, _ in result] == ["c"]
 
-    # 全部弱相关 → 空池（资料不足），而不是退回原始顺序
-    assert qa_module._rerank_retrieval_pool(object(), question="q", pool=pool) == []
+
+def test_rerank_retrieval_pool_returns_empty_when_best_near_zero(monkeypatch):
+    from app.services import qa as qa_module
+
+    pool = [_pair(name) for name in ("a", "b", "c", "d", "e")]
+    # 连最佳也接近 0（< keep-floor）→ 空池，视为确实无相关资料
+    monkeypatch.setattr(
+        qa_module.ai_service,
+        "rerank_documents",
+        lambda *, query, documents, db, top_n=None: [(0, 0.03), (1, 0.01)],
+    )
+    monkeypatch.setattr(qa_module, "runtime_setting_float", lambda db, key, default, **kwargs: 0.25)
+    assert qa_module._rerank_retrieval_pool(object(), query="q", pool=pool) == []
 
 
 def test_rerank_retrieval_pool_degrades_to_none(monkeypatch):
@@ -131,5 +148,5 @@ def test_rerank_retrieval_pool_degrades_to_none(monkeypatch):
         lambda *, query, documents, db, top_n=None: None,
     )
     # 模型未配置/调用失败 → None（保持原有拼接顺序）；池子过小同样 None
-    assert qa_module._rerank_retrieval_pool(object(), question="q", pool=["a"] * 5) is None
-    assert qa_module._rerank_retrieval_pool(object(), question="q", pool=["a", "b"]) is None
+    assert qa_module._rerank_retrieval_pool(object(), query="q", pool=[_pair("a")] * 5) is None
+    assert qa_module._rerank_retrieval_pool(object(), query="q", pool=[_pair("a"), _pair("b")]) is None

@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 from dataclasses import dataclass
 import html
+import logging
 from pathlib import Path
 import re
 from time import sleep
@@ -22,12 +23,14 @@ from app.services.knowledge import search_course_knowledge
 from app.services.learning_signals import record_qa_learning_signals
 from app.services.parser import _extract_text_payload
 from app.services.ocr import ocr_service
-from app.services.pedagogy import QA_ARTIFACT_TYPES, artifact_contexts, artifact_sources, search_pedagogy_artifacts
+from app.services.pedagogy import QA_ARTIFACT_TYPES, artifact_context, artifact_source, search_pedagogy_artifacts
 from app.services.retrieval import page_numbers_from_query, query_terms, score_text_for_query
 from app.services.runtime_settings import runtime_setting_float, runtime_setting_int, runtime_setting_value
 from app.services.storage import storage_service
 from app.services.usage import log_ai_usage
 
+
+logger = logging.getLogger(__name__)
 
 _THINK_START_TAGS = ("<think>", "<thinking>")
 _THINK_END_TAGS = ("</think>", "</thinking>")
@@ -41,6 +44,16 @@ _QA_DETAIL_VECTOR_CONTEXT_LIMIT = 10
 _QA_RELATED_PAGE_CONTEXT_LIMIT = 6
 _QA_CHAPTER_RANGE_MAX = 8
 _QA_RERANK_MIN_POOL = 5
+_QA_RERANK_KEEP_FLOOR = 0.06
+_QA_HISTORY_MESSAGE_LIMIT = 1600
+_QA_HISTORY_TOTAL_BUDGET = 8000
+_QA_FAST_PATH_MAX_LEN = 40
+# 出现任一结构化意图词，就交给完整 LLM 规划器（涉及章节/页码/出题/总结/对比等复杂路由）
+_QA_FAST_PATH_BLOCK_KEYWORDS = (
+    "章", "节", "页", "幻灯片", "题", "练习", "测验", "试卷", "总结", "复习", "梳理",
+    "提纲", "重点", "难点", "对比", "区别", "表格", "流程图", "整门", "全部", "所有",
+    "这门课", "本章", "全书", "汇总", "归纳", "大纲", "目录",
+)
 _HTML_TABLE_PATTERN = re.compile(r"<table[\s\S]*?</table>", re.IGNORECASE)
 _HTML_ROW_PATTERN = re.compile(r"<tr[\s\S]*?</tr>", re.IGNORECASE)
 _HTML_CELL_PATTERN = re.compile(r"<t[dh][^>]*>([\s\S]*?)</t[dh]>", re.IGNORECASE)
@@ -116,6 +129,7 @@ class ClassroomAgentPlan:
     section_numbers: list[str]
     tools: list[str]
     retrieval_query: str
+    standalone_question: str = ""
     large_request: bool = False
     quiz_count: int | None = None
     quiz_type_counts: dict[str, int] | None = None
@@ -691,16 +705,33 @@ def _strip_agent_answer_suffix(answer: str) -> str:
 
 
 def _history_messages(records: list[QARecord]) -> list[dict[str, str]]:
-    # 历史完整进入 messages 数组，不做字符截断；仅剥掉答案尾部的"来源/继续问"噪音。
-    # 上下文体量由管理端「上下文轮次」控制。
-    messages: list[dict[str, str]] = []
+    # 进入 messages 数组的历史受两道约束，避免与当前上下文叠加后撑爆模型窗口：
+    #   1) 单条上限 _QA_HISTORY_MESSAGE_LIMIT（长答案压缩）；
+    #   2) 总字符预算 _QA_HISTORY_TOTAL_BUDGET（超出则丢最早的轮次，保留最近）。
+    # 轮数上限仍由管理端「上下文轮次」控制，这里是字符层面的兜底。仅剥掉答案尾部的"来源/继续问"噪音。
+    pairs: list[list[dict[str, str]]] = []
     for record in records:
-        question = str(record.question or "").strip()
-        answer = _strip_agent_answer_suffix(record.answer)
+        turn: list[dict[str, str]] = []
+        question = _trim_context(str(record.question or "").strip(), limit=_QA_HISTORY_MESSAGE_LIMIT)
+        answer = _trim_context(_strip_agent_answer_suffix(record.answer), limit=_QA_HISTORY_MESSAGE_LIMIT)
         if question:
-            messages.append({"role": "user", "content": question})
+            turn.append({"role": "user", "content": question})
         if answer:
-            messages.append({"role": "assistant", "content": answer})
+            turn.append({"role": "assistant", "content": answer})
+        if turn:
+            pairs.append(turn)
+    # 从最近往前累加，控制总预算；超预算的更早轮次整轮丢弃
+    selected: list[list[dict[str, str]]] = []
+    used = 0
+    for turn in reversed(pairs):
+        turn_len = sum(len(item["content"]) for item in turn)
+        if selected and used + turn_len > _QA_HISTORY_TOTAL_BUDGET:
+            break
+        selected.append(turn)
+        used += turn_len
+    messages: list[dict[str, str]] = []
+    for turn in reversed(selected):
+        messages.extend(turn)
     return messages
 
 
@@ -761,6 +792,35 @@ def _build_agent_retrieval_query(
     return "\n".join(part for part in parts if part).strip()[:3600]
 
 
+def _fast_path_plan(payload: QAAskRequest, *, retrieval_question: str) -> ClassroomAgentPlan | None:
+    """简单问题（短、无结构化意图、无页码/数量）直接走默认 plan，省掉一次规划 LLM 调用、降低首 token 延迟。
+    任何疑似结构化请求（章节/页码/出题/总结/对比等）一律返回 None 交给完整规划器，避免误路由。
+    指代类追问依赖 retrieval_question（已含最近几轮历史）来消解，仍可命中正确资料。"""
+    question = (payload.question or "").strip()
+    if not question or len(question) > _QA_FAST_PATH_MAX_LEN:
+        return None
+    if payload.attachments:  # 带图片走完整规划（OCR 内容需要意图判断）
+        return None
+    if re.search(r"\d", question):  # 含数字可能是页码/题量/章节号
+        return None
+    if any(token in question for token in _QA_FAST_PATH_BLOCK_KEYWORDS):
+        return None
+    return ClassroomAgentPlan(
+        question_type="specific",
+        scope="specific",
+        keywords=ai_service.extract_keywords(question),
+        search_phrases=[],
+        expanded_terms=[],
+        chapter_ids=[],
+        chapter_id=None,
+        page_numbers=[],
+        section_numbers=[],
+        tools=["search_courseware"],
+        retrieval_query=retrieval_question or question,
+        standalone_question=question,
+    )
+
+
 def _classroom_agent_plan(
     db: Session,
     *,
@@ -782,7 +842,9 @@ def _classroom_agent_plan(
             chapter_id=payload.chapter_id,
             db=db,
         )
-    except Exception:
+    except Exception as exc:
+        # 规划失败会静默降级为空 plan、检索质量明显下降，必须留痕便于排障
+        logger.warning("QA 任务规划失败，降级为空 plan（course_id=%s）：%s", course_id, exc)
         plan_payload = {}
     scope = _valid_plan_scope(plan_payload.get("scope") if isinstance(plan_payload, dict) else None)
     question_type = _valid_plan_question_type(plan_payload.get("question_type") if isinstance(plan_payload, dict) else None)
@@ -812,6 +874,9 @@ def _classroom_agent_plan(
     page_numbers = _sanitize_positive_ints(plan_payload.get("page_numbers") if isinstance(plan_payload, dict) else None, limit=8, max_value=9999)
     section_numbers = _sanitize_strings(plan_payload.get("section_numbers") if isinstance(plan_payload, dict) else None, limit=4, max_length=20)
     keywords = _sanitize_strings(plan_payload.get("keywords") if isinstance(plan_payload, dict) else None, limit=12)
+    standalone_question = str(plan_payload.get("standalone_question") or "").strip()[:400] if isinstance(plan_payload, dict) else ""
+    if not standalone_question:
+        standalone_question = (payload.question or "").strip()
     search_phrases = _sanitize_strings(plan_payload.get("search_phrases") if isinstance(plan_payload, dict) else None, limit=8, max_length=120)
     expanded_terms = _sanitize_strings(plan_payload.get("expanded_terms") if isinstance(plan_payload, dict) else None, limit=8)
     tools = _valid_plan_tools(plan_payload.get("tools") if isinstance(plan_payload, dict) else None, question_type)
@@ -848,6 +913,7 @@ def _classroom_agent_plan(
         section_numbers=section_numbers,
         tools=tools,
         retrieval_query=retrieval_query,
+        standalone_question=standalone_question,
         large_request=bool(plan_payload.get("large_request")) if isinstance(plan_payload, dict) else question_type == "large_chapter_request",
         quiz_count=quiz_count,
         quiz_type_counts=quiz_type_counts,
@@ -1418,23 +1484,41 @@ def _chunk_context(chunk: KnowledgeChunk) -> str:
     return f"资料片段：{title}\n{content}" if content else ""
 
 
-def _rerank_retrieval_pool(db: Session, *, question: str, pool: list[str]) -> list[str] | None:
-    """用管理端配置的 rerank 模型对多路召回池统一重排。
+def _rerank_retrieval_pool(db: Session, *, query: str, pool: list[tuple[str, dict]]) -> list[tuple[str, dict]] | None:
+    """用管理端配置的 rerank 模型对多路召回池（(文本, 来源) 配对）统一重排。
 
-    返回按相关性降序、截到 top_n 且过滤掉低于「重排分数下限」(qa.rerank.min_score)
-    的池子；全部低于下限时返回空列表（视为没有足够相关的资料，而不是退回原池）。
-    未配置模型/池子过小/调用失败时返回 None，调用方降级保持原有拼接顺序。
+    - query 用消解指代后的检索词，而非裸问题，提升指代类追问的相关性。
+    - 按相关性降序、截到 top_n，过滤低于「重排分数下限」(qa.rerank.min_score) 的项。
+    - 全部低于下限时不直接判为"资料外"：只要最佳项不是几乎无关（≥ keep-floor），
+      仍保留这一条最佳，避免误判；若连最佳也接近 0，才返回空（视为确实无相关资料）。
+    - 未配置模型/池子过小/调用失败返回 None，调用方降级保持原有拼接顺序。
     """
+    # 小池(≥2)也走重排：只排序不截断也比原始拼接顺序好；min_pool 仅用于跳过 1 条无意义的情况
     if len(pool) < _QA_RERANK_MIN_POOL:
         return None
     try:
-        results = ai_service.rerank_documents(query=question, documents=pool, db=db)
+        results = ai_service.rerank_documents(query=query, documents=[text for text, _ in pool], db=db)
     except Exception:
         return None
     if not results:
         return None
-    min_score = runtime_setting_float(db, "qa.rerank.min_score", 0.25, minimum=0.0, maximum=1.0)
-    return [pool[index] for index, score in results if score >= min_score]
+    min_score = runtime_setting_float(db, "qa.rerank.min_score", 0.15, minimum=0.0, maximum=1.0)
+    passed = [pool[index] for index, score in results if score >= min_score]
+    # 可观测性：把 query 摘要、池大小、top-k 命中与分数落日志，便于复盘"召回了什么/被阈值砍了什么"
+    top_preview = ", ".join(f"{_source_identity(pool[i][1])[:1] or pool[i][1].get('title','?')}:{s:.3f}" for i, s in results[:5])
+    logger.info(
+        "QA rerank: query=%r pool=%d passed=%d min_score=%.2f top=[%s]",
+        (query or "")[:60], len(pool), len(passed), min_score, top_preview,
+    )
+    if passed:
+        return passed
+    # 全部未达阈值：保留最高分的一条（若它还不算完全无关），给模型一次作答机会
+    best_index, best_score = results[0]
+    if best_score >= _QA_RERANK_KEEP_FLOOR and 0 <= best_index < len(pool):
+        logger.info("QA rerank: 全部低于阈值，保留最佳项 best=%.3f", best_score)
+        return [pool[best_index]]
+    logger.info("QA rerank: 全部低于阈值且最佳 %.3f < keep-floor %.2f，判定资料外", best_score, _QA_RERANK_KEEP_FLOOR)
+    return []
 
 
 def _merge_contexts(primary: list[str], chunks: list[KnowledgeChunk], trailing: list[str] | None = None) -> list[str]:
@@ -1575,11 +1659,8 @@ def _follow_up_suggestions(plan: ClassroomAgentPlan, *, has_sources: bool) -> li
 
 
 def _answer_suffix(answer: str, *, sources: list[dict], plan: ClassroomAgentPlan, out_of_scope: bool, source_limit: int = 3) -> str:
+    # 不再把「来源：…」拼进答案正文——前端已在回答下方以来源标签单独展示，避免重复。
     pieces: list[str] = []
-    if sources and "来源" not in answer[-500:]:
-        source_text = _format_sources_for_answer(sources, limit=source_limit)
-        if source_text:
-            pieces.append(f"来源：{source_text}")
     suggestions = _follow_up_suggestions(plan, has_sources=bool(sources))
     if suggestions and "你还可以继续问" not in answer and "可继续" not in answer:
         suggestion_lines = "\n".join(f"{index}. {item}" for index, item in enumerate(suggestions[:3], start=1))
@@ -1806,34 +1887,37 @@ def _qa_contexts_and_sources(
                 query=material_query,
                 chapter_id=fallback_chapter_id,
             )
-    structured_contexts = artifact_contexts(artifact_hits)
-    # 多路召回池（教学制品/表图/相关页/资料/向量块）的各路打分标尺互不可比，
-    # 交给 rerank 模型按"问题-段落"交叉相关性统一排序并截断；
-    # 当前页/章节/课程上下文属于结构性内容（顺序有语义），固定在池子之前不参与重排
-    retrieval_pool = [
-        *structured_contexts,
-        *tool_contexts,
-        *related_page_contexts,
-        *material_contexts,
-        *(text for text in (_chunk_context(chunk) for chunk in chunks) if text),
-    ]
-    reranked_pool = _rerank_retrieval_pool(db, question=payload.question, pool=retrieval_pool)
-    if reranked_pool is not None:
-        ordered_pool = reranked_pool
-        merge_chunks: list[KnowledgeChunk] = []
-    else:
-        ordered_pool = [
-            *structured_contexts,
-            *tool_contexts,
-            *related_page_contexts,
-            *material_contexts,
-        ]
-        merge_chunks = chunks
+    # ── 多路召回池：每项携带自己的来源，rerank 重排后据此同时得出 contexts 与 sources ──
+    # 各路打分标尺互不可比，交给 rerank 模型按"问题-段落"交叉相关性统一排序并截断；
+    # 配对（文本↔来源）保证下方展示的"来源"标签就是模型实际读到的内容（grounding 一致）。
+    pool_pairs: list[tuple[str, dict]] = []
+    for artifact in artifact_hits:
+        text = artifact_context(artifact)
+        if text:
+            pool_pairs.append((text, artifact_source(artifact)))
+    pool_pairs.extend(zip(tool_contexts, tool_sources))
+    pool_pairs.extend(zip(related_page_contexts, related_page_sources))
+    pool_pairs.extend(zip(material_contexts, material_sources))
+    for chunk in chunks:
+        text = _chunk_context(chunk)
+        if text:
+            pool_pairs.append((text, _chunk_source(chunk)))
+
+    # rerank 用消解指代后的自然语言问句(standalone_question)而非关键词拼接串：
+    # cross-encoder 对自然问句的"问题-段落"相关性判别更准
+    rerank_query = (agent_plan.standalone_question or "").strip() or retrieval_query
+    reranked = _rerank_retrieval_pool(db, query=rerank_query, pool=pool_pairs)
+    ordered_pairs = reranked if reranked is not None else pool_pairs
+    pool_contexts = [text for text, _ in ordered_pairs]
+    pool_source_list = [source for _, source in ordered_pairs]
+
+    # 高相关内容（当前页 + 重排精选）排在体量大的章节/课程总览之前：
+    # 即便后续按预算截断，被截掉的也是密度较低的大段结构性内容，而非最相关段落
     primary_contexts = [
         *page_contexts,
+        *pool_contexts,
         *chapter_contexts,
         *course_contexts,
-        *ordered_pool,
     ]
     if agent_plan.question_type == "quiz_request":
         quiz_context = _generate_quiz_context(
@@ -1845,25 +1929,25 @@ def _qa_contexts_and_sources(
         )
         if quiz_context:
             primary_contexts = [quiz_context, *primary_contexts]
-    if primary_contexts or chunks:
+    if primary_contexts:
         primary_contexts = [_agent_instruction_context(agent_plan), *primary_contexts]
-    contexts = _merge_contexts(
-        primary_contexts,
-        merge_chunks,
-        trailing=lesson_outline_contexts,
-    )
+    contexts = _merge_contexts(primary_contexts, [], trailing=lesson_outline_contexts)
     sources = [
         *page_sources,
+        *pool_source_list,
         *chapter_sources,
         *course_sources,
-        *artifact_sources(artifact_hits),
-        *tool_sources,
-        *related_page_sources,
-        *material_sources,
-        *(_chunk_source(chunk) for chunk in chunks),
         *lesson_outline_sources,
     ]
-    return contexts, _normalize_sources(sources), chunks
+    normalized_sources = _normalize_sources(sources)
+    # 可观测性：各路召回规模 + 最终上下文条数，便于复盘"哪条路在出力/是否退化为兜底"
+    logger.info(
+        "QA retrieval: type=%s scope=%s pool=%d(rerank=%s) page=%d chapter=%d course=%d material=%d chunks=%d → contexts=%d sources=%d",
+        agent_plan.question_type, scope, len(pool_pairs), "yes" if reranked is not None else "no",
+        len(page_contexts), len(chapter_contexts), len(course_contexts), len(material_contexts),
+        len(chunks), len(contexts), len(normalized_sources),
+    )
+    return contexts, normalized_sources, chunks
 
 
 def upload_qa_image(db: Session, *, user: User, course_id: int, upload: UploadFile) -> dict:
@@ -1893,7 +1977,9 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
     attachments = _attachment_dicts(payload)
     question_for_ai = _question_with_attachments(payload.question, attachments)
     retrieval_question = _question_with_history_for_retrieval(question_for_ai, history_for_prompt)
-    agent_plan = _classroom_agent_plan(db, course_id=payload.course_id, payload=payload, question_for_ai=retrieval_question)
+    agent_plan = _fast_path_plan(payload, retrieval_question=retrieval_question) or _classroom_agent_plan(
+        db, course_id=payload.course_id, payload=payload, question_for_ai=retrieval_question
+    )
     contexts, sources, _chunks = _qa_contexts_and_sources(
         db,
         course_id=payload.course_id,
@@ -1961,13 +2047,17 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
 
 def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> Iterator[dict]:
     _assert_student_course_access(db, course_id=payload.course_id, user=user)
+    # 进度事件：规划+检索在首 token 前串行执行，先给用户"检索中"的即时反馈，避免空白干等
+    yield {"event": "stage", "data": {"stage": "retrieving", "text": "正在检索课件资料…"}}
     conversation = _get_or_create_course_conversation(db, user=user, payload=payload)
     history = _conversation_history(db, conversation_id=conversation.id)
     history_for_prompt = _history_messages(history)
     attachments = _attachment_dicts(payload)
     question_for_ai = _question_with_attachments(payload.question, attachments)
     retrieval_question = _question_with_history_for_retrieval(question_for_ai, history_for_prompt)
-    agent_plan = _classroom_agent_plan(db, course_id=payload.course_id, payload=payload, question_for_ai=retrieval_question)
+    agent_plan = _fast_path_plan(payload, retrieval_question=retrieval_question) or _classroom_agent_plan(
+        db, course_id=payload.course_id, payload=payload, question_for_ai=retrieval_question
+    )
     contexts, sources, _chunks = _qa_contexts_and_sources(
         db,
         course_id=payload.course_id,
@@ -1976,6 +2066,7 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
         history=history_for_prompt,
         agent_plan=agent_plan,
     )
+    yield {"event": "stage", "data": {"stage": "generating", "text": "正在生成回答…"}}
     allow_general_ai_answer = _general_answer_allowed(db, course_id=payload.course_id)
     out_of_scope = not contexts
     answer_parts: list[str] = []
@@ -1983,106 +2074,149 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
     tag_state: dict[str, object] = {"buffer": "", "in_think": False}
     ai_error_message: str | None = None
 
-    if not contexts:
-        if allow_general_ai_answer:
-            general_answer, general_thinking = ai_service.answer_general_question(
-                question=question_for_ai,
-                history=history_for_prompt,
-                db=db,
-            )
-            answer = f"{_GENERAL_AI_NOTICE}\n\n{general_answer}".strip()
-            if general_thinking:
-                yield from _stream_text_delta("thought", general_thinking, answer_parts, thought_parts)
-            yield from _stream_text_delta("answer", answer, answer_parts, thought_parts)
-        else:
-            answer = _general_ai_blocked_notice(db)
-            yield from _stream_text_delta("answer", answer, answer_parts, thought_parts)
-    else:
-        try:
-            for delta in ai_service.stream_answer_question(
-                question=question_for_ai,
-                contexts=contexts,
-                history=history_for_prompt,
-                db=db,
-            ):
-                if delta.kind == "reasoning":
-                    yield from _stream_text_delta("thought", delta.text, answer_parts, thought_parts)
-                    continue
-                for kind, text in _split_thinking_tags(tag_state, delta.text):
-                    yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
-        except Exception as exc:
-            answer_parts.clear()
-            thought_parts.clear()
-            tag_state = {"buffer": "", "in_think": False}
-            try:
-                fallback_answer, fallback_out_of_scope, fallback_thinking = ai_service.answer_question(
-                    question=question_for_ai,
-                    contexts=contexts,
-                    history=history_for_prompt,
-                    db=db,
-                )
-                out_of_scope = fallback_out_of_scope
-                if fallback_thinking:
-                    yield from _stream_text_delta("thought", fallback_thinking, answer_parts, thought_parts)
-                for kind, text in _split_thinking_tags(tag_state, fallback_answer):
-                    yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
-            except Exception as fallback_exc:
-                ai_error_message = str(fallback_exc or exc)
-                answer = "AI 服务暂时不可用，请稍后重试，或联系管理员检查问答模型配置。"
-                answer_parts.append(answer)
-                yield {"event": "delta", "data": {"type": "answer", "text": answer}}
-
-    for kind, text in _flush_thinking_tags(tag_state):
-        yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
-
-    answer = "".join(answer_parts).strip()
-    thinking_process = "".join(thought_parts).strip() or None
-    if not answer:
-        answer = "当前没有生成有效回答，请换一种问法或稍后重试。"
-        answer_parts.append(answer)
-        yield {"event": "delta", "data": {"type": "answer", "text": answer}}
-    suffix = _answer_suffix(answer, sources=sources, plan=agent_plan, out_of_scope=out_of_scope, source_limit=_qa_source_limit(db))
-    if suffix:
-        yield from _stream_text_delta("answer", f"\n\n{suffix}", answer_parts, thought_parts)
-        answer = "".join(answer_parts).strip()
+    # 先把问题以占位记录入库（answer 为空），随后边流式边增量更新。
+    # 这样用户中途点停止、关页或断网，已生成的内容也会被保留，下次进入会话能正常显示。
+    keywords = agent_plan.keywords or ai_service.extract_keywords(payload.question)
     record = QARecord(
         conversation_id=conversation.id,
         course_id=payload.course_id,
         user_id=user.id,
         lesson_page_id=payload.lesson_page_id,
         question=payload.question,
-        answer=answer,
-        thinking_process=thinking_process,
+        answer="",
+        thinking_process=None,
         is_out_of_scope=out_of_scope,
         sources=sources,
         attachments=attachments,
-        keywords=agent_plan.keywords or ai_service.extract_keywords(payload.question),
+        keywords=keywords,
     )
     db.add(record)
-    log_ai_usage(
-        db,
-        module="qa",
-        user_id=user.id,
-        course_id=payload.course_id,
-        prompt_chars=len(question_for_ai),
-        completion_chars=len(answer),
-        success=not out_of_scope and ai_error_message is None,
-        error_message=ai_error_message[:500] if ai_error_message else ("out_of_scope" if out_of_scope else None),
-    )
     db.commit()
     db.refresh(record)
-    record_qa_learning_signals(db, user=user, record=record)
+    record_id = record.id
+
+    completed = False
+    usage_logged = False
+    persisted_len = -1
+
+    def persist(*, final: bool) -> None:
+        nonlocal usage_logged, persisted_len
+        answer_now = "".join(answer_parts).strip()
+        if not final and len(answer_now) == persisted_len:
+            return
+        record.answer = answer_now
+        record.thinking_process = "".join(thought_parts).strip() or None
+        record.is_out_of_scope = out_of_scope
+        db.add(record)
+        if final and not usage_logged:
+            log_ai_usage(
+                db,
+                module="qa",
+                user_id=user.id,
+                course_id=payload.course_id,
+                prompt_chars=len(question_for_ai),
+                completion_chars=len(answer_now),
+                success=completed and not out_of_scope and ai_error_message is None,
+                error_message=(
+                    ai_error_message[:500]
+                    if ai_error_message
+                    else ("out_of_scope" if out_of_scope else (None if completed else "interrupted"))
+                ),
+            )
+            usage_logged = True
+        db.commit()
+        persisted_len = len(answer_now)
+
+    # 首发 created 事件：前端立即拿到会话/记录 id，停止或断流后仍能续接同一会话
+    yield {"event": "created", "data": {"conversation_id": conversation.id, "record_id": record_id}}
+
+    try:
+        if not contexts:
+            if allow_general_ai_answer:
+                general_answer, general_thinking = ai_service.answer_general_question(
+                    question=question_for_ai,
+                    history=history_for_prompt,
+                    db=db,
+                )
+                answer = f"{_GENERAL_AI_NOTICE}\n\n{general_answer}".strip()
+                if general_thinking:
+                    yield from _stream_text_delta("thought", general_thinking, answer_parts, thought_parts)
+                yield from _stream_text_delta("answer", answer, answer_parts, thought_parts)
+            else:
+                answer = _general_ai_blocked_notice(db)
+                yield from _stream_text_delta("answer", answer, answer_parts, thought_parts)
+        else:
+            try:
+                deltas_since_flush = 0
+                for delta in ai_service.stream_answer_question(
+                    question=question_for_ai,
+                    contexts=contexts,
+                    history=history_for_prompt,
+                    db=db,
+                ):
+                    if delta.kind == "reasoning":
+                        yield from _stream_text_delta("thought", delta.text, answer_parts, thought_parts)
+                    else:
+                        for kind, text in _split_thinking_tags(tag_state, delta.text):
+                            yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
+                    deltas_since_flush += 1
+                    if deltas_since_flush >= 24:
+                        persist(final=False)  # 增量落库，硬性中断也尽量少丢内容
+                        deltas_since_flush = 0
+            except Exception as exc:
+                answer_parts.clear()
+                thought_parts.clear()
+                tag_state = {"buffer": "", "in_think": False}
+                try:
+                    fallback_answer, fallback_out_of_scope, fallback_thinking = ai_service.answer_question(
+                        question=question_for_ai,
+                        contexts=contexts,
+                        history=history_for_prompt,
+                        db=db,
+                    )
+                    out_of_scope = fallback_out_of_scope
+                    if fallback_thinking:
+                        yield from _stream_text_delta("thought", fallback_thinking, answer_parts, thought_parts)
+                    for kind, text in _split_thinking_tags(tag_state, fallback_answer):
+                        yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
+                except Exception as fallback_exc:
+                    ai_error_message = str(fallback_exc or exc)
+                    answer = "AI 服务暂时不可用，请稍后重试，或联系管理员检查问答模型配置。"
+                    answer_parts.append(answer)
+                    yield {"event": "delta", "data": {"type": "answer", "text": answer}}
+
+        for kind, text in _flush_thinking_tags(tag_state):
+            yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
+
+        answer = "".join(answer_parts).strip()
+        if not answer:
+            answer = "当前没有生成有效回答，请换一种问法或稍后重试。"
+            answer_parts.append(answer)
+            yield {"event": "delta", "data": {"type": "answer", "text": answer}}
+        suffix = _answer_suffix(answer, sources=sources, plan=agent_plan, out_of_scope=out_of_scope, source_limit=_qa_source_limit(db))
+        if suffix:
+            yield from _stream_text_delta("answer", f"\n\n{suffix}", answer_parts, thought_parts)
+        completed = True
+    finally:
+        # 正常收尾或客户端断开（GeneratorExit）都会到这里，把已生成内容落库
+        try:
+            persist(final=True)
+            if completed and not out_of_scope and ai_error_message is None:
+                record_qa_learning_signals(db, user=user, record=record)
+        except Exception:
+            db.rollback()
+
     yield {
         "event": "final",
         "data": {
-            "conversation_id": record.conversation_id,
-            "record_id": record.id,
-            "question": record.question,
-            "answer": record.answer,
-            "thinking_process": record.thinking_process,
-            "is_out_of_scope": record.is_out_of_scope,
-            "sources": record.sources or [],
-            "attachments": record.attachments or [],
+            "conversation_id": conversation.id,
+            "record_id": record_id,
+            "question": payload.question,
+            "answer": "".join(answer_parts).strip(),
+            "thinking_process": "".join(thought_parts).strip() or None,
+            "is_out_of_scope": out_of_scope,
+            "sources": sources or [],
+            "attachments": attachments or [],
         },
     }
 
@@ -2256,4 +2390,16 @@ def update_feedback(db: Session, *, record_id: int, user: User, feedback: str, f
     db.add(record)
     db.commit()
     db.refresh(record)
+    # 负反馈不再是黑洞：把问题与命中来源落日志，作为检索质量闭环的最小可观测信号，
+    # 供离线分析"哪些问题/哪些 chunk 反复被判没用"，后续可据此对相应来源降权。
+    if feedback == QAFeedback.NEGATIVE.value:
+        source_keys = [
+            str(s.get("title") or s.get("material_title") or s.get("chapter_title") or s.get("chunk_id") or "?")
+            for s in (record.sources or [])[:5]
+            if isinstance(s, dict)
+        ]
+        logger.warning(
+            "QA 负反馈: record=%s course=%s 问题=%r 命中来源=%s 备注=%r",
+            record.id, record.course_id, (record.question or "")[:80], source_keys, (feedback_comment or "")[:120],
+        )
     return record
