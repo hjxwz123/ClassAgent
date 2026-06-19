@@ -51,7 +51,6 @@ class MaterialResponse(ORMModel):
     material_type: str
     size_bytes: int
     original_filename: str
-    storage_path: str
     preview_url: str | None
     extracted_text: str | None
     parse_status: str

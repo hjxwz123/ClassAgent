@@ -30,6 +30,7 @@ from app.services.courses import _assert_course_active_for_teacher, _assert_cour
 from app.services.parser import parse_material
 from app.services.pedagogy import generate_material_pedagogy_artifacts
 from app.services.runtime_config import get_enabled_service_config
+from app.services.runtime_settings import runtime_setting_int
 from app.services.storage import storage_service
 from app.services.tts import tts_service
 from app.services.usage import log_ai_usage
@@ -100,6 +101,16 @@ def _validate_material_payload(course_id: int, category: str, chapter_id: int | 
         chapter = db.get(Chapter, chapter_id)
         if chapter is None or chapter.course_id != course_id:
             raise bad_request("章节不存在或不属于当前课程")
+    # 单课程资料数量上限：每条资料都会触发 DocMind 解析 + 多页 AI 脚本 + TTS + 向量入库（重计费链路），
+    # 必须有硬上限防止资源耗尽 / 第三方 API 计费放大。上限由管理端「单课程资料数」实时控制。
+    max_count = runtime_setting_int(db, "course.material.max_count", get_settings().max_course_materials, minimum=1, maximum=100000)
+    existing = db.scalar(
+        select(func.count(CourseMaterial.id)).where(
+            CourseMaterial.course_id == course_id, CourseMaterial.deleted_at.is_(None)
+        )
+    ) or 0
+    if existing >= max_count:
+        raise bad_request(f"该课程资料数量已达上限（{max_count} 条），请先删除部分资料再上传")
 
 
 def _detect_material_type(filename: str) -> str:
@@ -389,6 +400,12 @@ def create_material(
     upload: UploadFile,
 ) -> CourseMaterial:
     settings = get_settings()
+    # title 显式校验：避免空白脏数据，并防止超长在 MySQL 严格模式触发未捕获 500（应返回干净 400）
+    title = (title or "").strip()
+    if not title:
+        raise bad_request("资料标题不能为空")
+    if len(title) > 255:
+        raise bad_request("资料标题不能超过 255 个字符")
     _validate_material_payload(course_id, category, chapter_id, user, db)
     material_type = _detect_material_type(upload.filename or "")
     validated = validate_material_upload(upload, max_bytes=settings.default_upload_limit_mb * 1024 * 1024)
@@ -682,15 +699,28 @@ def _split_knowledge_text(
     return chunks
 
 
-def _page_knowledge_text(*, material: CourseMaterial, page: LessonPage) -> str:
+def _page_knowledge_text(
+    *,
+    material: CourseMaterial,
+    page: LessonPage,
+    chapter_title: str = "",
+    lesson_summary: str = "",
+) -> str:
     page_text = _compact_knowledge_text(page.page_text)
     script_text = _compact_knowledge_text(page.script_text or "")
-    parts = [
-        f"资料：{material.title}",
-        f"页码：第{page.page_number}页",
-    ]
+    # 语境头：所属章节 + 资料 + 课时主题，让每个 chunk 自带"它属于哪一章/讲什么"的定位，
+    # 显著提升中文教学库的章节类召回与 rerank 区分度（轻量版 contextual chunking，零额外 LLM 成本）
+    parts: list[str] = []
+    chapter_title = _compact_knowledge_text(chapter_title or "")
+    if chapter_title:
+        parts.append(f"章节：{chapter_title}")
+    parts.append(f"资料：{material.title}")
+    parts.append(f"页码：第{page.page_number}页")
     if page.page_title:
         parts.append(f"页面标题：{page.page_title}")
+    lesson_summary = _compact_knowledge_text(lesson_summary or "")
+    if lesson_summary:
+        parts.append(f"本课时概要：{lesson_summary[:120]}")
     if page_text:
         parts.append(f"页面内容：\n{page_text}")
     if script_text and script_text != page_text:
@@ -698,8 +728,16 @@ def _page_knowledge_text(*, material: CourseMaterial, page: LessonPage) -> str:
     return "\n\n".join(parts)
 
 
-def _build_page_knowledge_chunks(*, material: CourseMaterial, page: LessonPage) -> list[KnowledgeChunk]:
-    windows = _split_knowledge_text(_page_knowledge_text(material=material, page=page))
+def _build_page_knowledge_chunks(
+    *,
+    material: CourseMaterial,
+    page: LessonPage,
+    chapter_title: str = "",
+    lesson_summary: str = "",
+) -> list[KnowledgeChunk]:
+    windows = _split_knowledge_text(
+        _page_knowledge_text(material=material, page=page, chapter_title=chapter_title, lesson_summary=lesson_summary)
+    )
     if not windows:
         windows = [f"资料：{material.title}\n页码：第{page.page_number}页\n本页未提取到有效文字内容。"]
     chunk_count = len(windows)
@@ -1222,8 +1260,15 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         db.commit()
 
         created_chunks: list[KnowledgeChunk] = []
+        chapter_title = ""
+        if material.chapter_id is not None:
+            chapter = db.get(Chapter, material.chapter_id)
+            chapter_title = chapter.title if chapter else ""
+        lesson_summary = lesson.summary or ""
         for page in created_pages:
-            page_chunks = _build_page_knowledge_chunks(material=material, page=page)
+            page_chunks = _build_page_knowledge_chunks(
+                material=material, page=page, chapter_title=chapter_title, lesson_summary=lesson_summary
+            )
             for chunk in page_chunks:
                 db.add(chunk)
             created_chunks.extend(page_chunks)

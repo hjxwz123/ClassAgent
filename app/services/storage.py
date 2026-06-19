@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import PUBLIC_DIR, STORAGE_DIR, get_settings
 from app.core.errors import bad_request
+from app.core.media import is_signed_media_path, normalize_storage_path, signed_media_url
 from app.services.runtime_config import RuntimeServiceConfig, get_enabled_service_config
 
 
@@ -83,6 +84,13 @@ class StorageService:
     def normalize_public_url(self, value: str | None) -> str | None:
         if not value:
             return value
+        # 签名媒体（讲解音频等课程资料）：服务端在每次序列化时实时签发短时效链接，
+        # 既杜绝无鉴权 /static 永久外链，又保证存量记录（旧公开 URL）也被重新签名、且不会过期断播。
+        try:
+            if is_signed_media_path(value):
+                return signed_media_url(normalize_storage_path(value))
+        except Exception:
+            pass
         private_static_prefixes = ("/static/uploads/", "/static/backups/", "/static/vectors/", "/static/runtime/")
         if value.startswith("/static/"):
             if value.startswith(private_static_prefixes):
