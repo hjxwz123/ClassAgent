@@ -658,6 +658,10 @@ class ChatDelta:
 
 
 RERANK_DASHSCOPE_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank"
+# qwen3-rerank 使用 DashScope 的 OpenAI 兼容版 reranks 接口，请求/响应结构与旧 text-rerank 接口不同。
+RERANK_DASHSCOPE_COMPAT_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+# qwen3-rerank 的排序任务指令：默认按"问答检索"任务排序，可由模型 extra_config.rerank_instruct 覆盖。
+RERANK_DEFAULT_INSTRUCT = "Given a web search query, retrieve relevant passages that answer the query."
 
 
 def build_rerank_request(
@@ -668,13 +672,31 @@ def build_rerank_request(
     query: str,
     documents: list[str],
     top_n: int,
+    instruct: str | None = None,
 ) -> tuple[str, dict]:
     """构造重排请求 (url, payload)。
 
-    qwen 走 DashScope 文本重排协议（output.results）；其余 provider 走标准 /rerank 协议
-    （Jina / Cohere v2 / SiliconFlow / vLLM 等通用的 query+documents → results 格式）。
+    - qwen3-rerank：DashScope 兼容版 reranks 协议（/compatible-api/v1/reranks），
+      query/documents/top_n/instruct 平铺在顶层，响应 results 直接在顶层（不含 output 包裹、无 document）。
+    - 其它 qwen 重排模型（gte-rerank-v2 / qwen3-vl-rerank）：DashScope 文本重排协议
+      （/api/v1/services/rerank/text-rerank/text-rerank，input/parameters 嵌套、output.results）。
+    - 其余 provider：标准 /rerank 协议（Jina / Cohere v2 / SiliconFlow / vLLM 等）。
     """
     if provider == "qwen":
+        model_key = str(model_name or "").strip().lower()
+        if model_key.startswith("qwen3-rerank"):
+            url = str(endpoint or "").strip()
+            # 仅当显式配置了兼容版 reranks 端点才沿用；空值或旧 text-rerank 端点都换成默认兼容端点。
+            if "/compatible-api/" not in url or "rerank" not in url:
+                url = RERANK_DASHSCOPE_COMPAT_ENDPOINT
+            payload = {
+                "model": model_name,
+                "query": query,
+                "documents": documents,
+                "top_n": top_n,
+                "instruct": (str(instruct).strip() if instruct and str(instruct).strip() else RERANK_DEFAULT_INSTRUCT),
+            }
+            return url, payload
         url = str(endpoint or "").strip()
         if not url or "rerank" not in url:
             url = RERANK_DASHSCOPE_ENDPOINT
@@ -1577,6 +1599,7 @@ class AIService:
             query=query_text[:2000],
             documents=[doc[:2000] for doc in docs],
             top_n=limit,
+            instruct=config.extra_config.get("rerank_instruct"),
         )
         headers = {"Content-Type": "application/json"}
         if config.api_key:

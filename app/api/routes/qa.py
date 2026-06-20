@@ -14,7 +14,7 @@ from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.qa import QAAskRequest, QAFeedbackRequest, QAFavoriteRequest, QAHistoryConversation, QAHistoryItem, QAResponse
-from app.services.qa import _resign_attachments, ask_question, ask_question_stream, list_conversation_records, list_history, update_favorite, update_feedback, upload_qa_image
+from app.services.qa import _resign_attachments, ask_question, ask_question_stream, delete_conversation, list_conversation_records, list_history, update_favorite, update_feedback, upload_qa_image
 
 
 router = APIRouter()
@@ -123,6 +123,17 @@ def get_conversation_endpoint(
         serialized["attachments"] = _resign_attachments(serialized.get("attachments"))
         items.append(serialized)
     return success_response(data=items, request_id=request.state.request_id)
+
+
+@router.delete("/conversations/{conversation_id}")
+def delete_conversation_endpoint(
+    conversation_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    delete_conversation(db, user=user, conversation_id=conversation_id)
+    return success_response(data={"conversation_id": conversation_id}, message="已删除该问答历史", request_id=request.state.request_id)
 
 
 @router.post("/{record_id}/favorite")
