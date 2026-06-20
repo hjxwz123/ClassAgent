@@ -276,6 +276,22 @@ def _attachment_dicts(payload: QAAskRequest) -> list[dict]:
     return [attachment.model_dump(mode="json", exclude_none=True) for attachment in payload.attachments]
 
 
+def _resign_attachments(attachments: Any) -> list[dict]:
+    """读出/输出附件时对每条 url 现签现给：签名媒体路径会被重新签发短时效 URL，
+    即使存库 URL 已过期也按其路径重签，避免历史里的图片附件 1 小时后 403 裂图。不改持久化内容。"""
+    if not attachments:
+        return []
+    resigned: list[dict] = []
+    for item in attachments:
+        if not isinstance(item, dict):
+            resigned.append(item)
+            continue
+        new_item = dict(item)
+        new_item["url"] = storage_service.normalize_public_url(item.get("url")) or item.get("url")
+        resigned.append(new_item)
+    return resigned
+
+
 _OCR_BLOCK_START = "<<<IMAGE_OCR_START>>>"
 _OCR_BLOCK_END = "<<<IMAGE_OCR_END>>>"
 _ATTACHMENT_UNTRUSTED_NOTICE = (
@@ -2218,7 +2234,7 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
             "thinking_process": "".join(thought_parts).strip() or None,
             "is_out_of_scope": out_of_scope,
             "sources": sources or [],
-            "attachments": attachments or [],
+            "attachments": _resign_attachments(attachments),
         },
     }
 
@@ -2339,7 +2355,7 @@ def list_history(db: Session, *, user: User, course_id: int | None = None, lesso
                 "question": row.question,
                 "answer_preview": answer[:160],
                 "lesson_page_id": row.lesson_page_id,
-                "attachments": row.attachments or [],
+                "attachments": _resign_attachments(row.attachments),
                 "is_favorite": bool(row.favorite_count),
                 "record_count": int(row.record_count or 0),
                 "created_at": row.created_at,

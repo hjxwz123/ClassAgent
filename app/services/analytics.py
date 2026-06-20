@@ -17,10 +17,10 @@ from app.db.models import (
     ProblemRecord,
     QARecord,
     Quiz,
+    QuizAnswer,
     QuizAttempt,
     QuizQuestion,
     User,
-    WrongQuestion,
 )
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.pedagogy import ARTIFACT_MISCONCEPTION_CARD, ARTIFACT_PROBLEM_TEMPLATE, ARTIFACT_TYPE_LABELS
@@ -153,22 +153,36 @@ def get_course_analytics(db: Session, *, course_id: int, user: User, days: int =
         else []
     )
 
-    point_id = func.coalesce(WrongQuestion.knowledge_point_id, QuizQuestion.knowledge_point_id)
+    # #M8：薄弱点采用"窗口内实际发生的错误事件数"口径，而非对错题本(WrongQuestion)的历史
+    # 累计 wrong_count 求和——后者会把老错题的全部历史错误次数计入本期，导致区间统计系统性偏高。
+    # 这里直接统计 since 之后真实落库的错误作答事件：QuizAnswer.is_correct=False，
+    # 时间字段用 QuizAnswer.created_at（作答记录在提交时一次性创建，反映错误实际发生时间），
+    # 经 QuizAttempt 取 user_id、经 QuizQuestion 取 course_id 与 knowledge_point_id 归因到知识点。
+    point_id = QuizQuestion.knowledge_point_id
     point_name = func.coalesce(KnowledgePoint.name, "未标注知识点")
     weak_points = (
         [
             {"knowledge_point_id": point_id_value, "knowledge_point": name, "wrong_count": int(count or 0)}
             for point_id_value, name, count in db.execute(
-                select(point_id, point_name, func.sum(WrongQuestion.wrong_count))
-                .select_from(WrongQuestion)
-                .outerjoin(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
+                select(point_id, point_name, func.count(QuizAnswer.id))
+                .select_from(QuizAnswer)
+                .join(QuizAttempt, QuizAttempt.id == QuizAnswer.attempt_id)
+                .join(QuizQuestion, QuizQuestion.id == QuizAnswer.question_id)
                 .outerjoin(
                     KnowledgePoint,
                     KnowledgePoint.id == point_id,
                 )
-                .where(WrongQuestion.course_id == course_id, WrongQuestion.updated_at >= since, WrongQuestion.user_id.in_(student_ids))
+                .where(
+                    QuizQuestion.course_id == course_id,
+                    QuizAnswer.is_correct.is_(False),
+                    # 修复 #1：排除"待人工批改"的主观题——它以 is_correct=False 落库但并非真正答错，
+                    # 否则会把待批改题误计为该知识点的错误事件，虚高薄弱点排名、误导教师布置专项练习。
+                    QuizAnswer.pending_review.is_(False),
+                    QuizAnswer.created_at >= since,
+                    QuizAttempt.user_id.in_(student_ids),
+                )
                 .group_by(point_id, point_name)
-                .order_by(func.sum(WrongQuestion.wrong_count).desc(), point_name.asc())
+                .order_by(func.count(QuizAnswer.id).desc(), point_name.asc())
                 .limit(10)
             )
         ]
