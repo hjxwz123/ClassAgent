@@ -947,7 +947,11 @@ class AIService:
             payload["response_format"] = {"type": "json_object"}
 
         try:
-            with httpx.Client(timeout=self.settings.external_service_timeout_seconds) as client:
+            # 流式生成用更长的读超时：思考型模型首 token 前可能停顿数十秒，沿用 30s 通用超时会
+            # 在首 token 前就 ReadTimeout，导致回退非流式并拖长响应。连接超时仍保持短。
+            gen_timeout = self._generation_timeout(db)
+            stream_timeout = httpx.Timeout(gen_timeout, connect=min(15.0, gen_timeout), read=gen_timeout, write=min(30.0, gen_timeout))
+            with httpx.Client(timeout=stream_timeout) as client:
                 with client.stream("POST", self._chat_endpoint(config.endpoint), headers=headers, json=payload) as response:
                     if response.status_code >= 400:
                         error_text = response.read().decode("utf-8", errors="ignore")
@@ -1544,6 +1548,14 @@ class AIService:
         if db is None:
             return None
         return runtime_setting_int(db, "qa.max_answer_tokens", 2048, minimum=256, maximum=16384)
+
+    def _generation_timeout(self, db: Session | None) -> float:
+        """生成类(问答/出题等)调用的超时：必须远大于通用外部服务超时(默认 30s)。
+        思考型模型常在首 token 前停顿数十秒，30s 的读超时会让流式在首 token 前就超时、
+        被迫回退非流式，表现为"网站长时间无响应且非流"。可由管理端 qa.generation_timeout_seconds 调整。"""
+        if db is None:
+            return 120.0
+        return float(runtime_setting_int(db, "qa.generation_timeout_seconds", 120, minimum=30, maximum=600))
 
     def _qa_context_char_budget(self, db: Session | None) -> int:
         """RAG 上下文字符预算：优先按问答模型的上下文窗口(context_window, 单位 token)推导，

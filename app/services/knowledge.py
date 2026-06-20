@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import time
 from collections import Counter
 
 from sqlalchemy import select
@@ -10,6 +12,8 @@ from app.services.ai import ai_service
 from app.services.retrieval import build_retrieval_query_variants, page_numbers_from_query, query_terms, score_text_for_query
 from app.services.runtime_settings import runtime_setting_float
 from app.services.vector_store import vector_store
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _clean_excerpt(value: str, limit: int = 260) -> str:
@@ -68,9 +72,14 @@ def search_course_knowledge(
             backfill_statement = backfill_statement.where(KnowledgeChunk.lesson_page_id == lesson_page_id)
         chunks_to_index = list(db.scalars(backfill_statement))
         if chunks_to_index:
+            # 向量索引缺失时的自愈回填：会同步重嵌入整门课程的全部 chunk，是问答"卡在检索阶段
+            # 数分钟"的常见原因。打点记录数量与耗时，便于定位；若频繁触发应排查向量库持久化。
+            LOGGER.warning("QA 检索触发向量回填：course_id=%s 待重嵌入 chunk 数=%s（同步重建索引，可能较慢）", course_id, len(chunks_to_index))
+            backfill_started = time.monotonic()
             try:
                 vector_store.upsert_chunks(db, chunks=chunks_to_index)
                 db.commit()
+                LOGGER.warning("QA 检索向量回填完成：course_id=%s 耗时=%.1fs", course_id, time.monotonic() - backfill_started)
                 rows = _query_course_variants(
                     db,
                     course_id=course_id,
@@ -202,11 +211,20 @@ def _query_course_variants(
     # vector_store 内部的 vector_max_distance(默认 0.9) 只是兜底粗筛，这里才是业务阈值。
     min_similarity = runtime_setting_float(db, "qa.retrieval.min_similarity", 0.35, minimum=0.0, maximum=0.99)
     max_distance = 1.0 - min_similarity
+    # 一次性批量嵌入全部查询变体（单次 embedding 请求），再用预算向量逐个检索；
+    # 避免旧实现对每个变体各发一次嵌入请求——慢/多变体时会把检索阶段拖到数十秒甚至数分钟。
+    try:
+        variant_embeddings = ai_service.embed_texts(db, list(queries))
+    except Exception:
+        variant_embeddings = []
     for query_index, variant in enumerate(queries):
-        rows = vector_store.query_course(
+        embedding = variant_embeddings[query_index] if query_index < len(variant_embeddings) else None
+        if not embedding:
+            continue
+        rows = vector_store.query_course_by_embedding(
             db,
             course_id=course_id,
-            query=variant,
+            embedding=embedding,
             chapter_id=chapter_id,
             lesson_id=lesson_id,
             lesson_page_id=lesson_page_id,
