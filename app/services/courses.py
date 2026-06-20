@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 
 from fastapi import UploadFile
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -258,7 +259,21 @@ def join_course(db: Session, user: User, course_code: str) -> Course:
         target_type="course",
         target_id=course.id,
     )
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # #L11：并发双击加入同一课程时，两个请求都通过上面的存在性检查，第二个 commit
+        # 会命中 (course_id,user_id) 唯一约束（uq_course_membership）抛 IntegrityError。
+        # 回滚后重新查询既有 membership，按"已加入该课程"的既有语义友好返回，不再 500。
+        db.rollback()
+        existing = db.scalar(
+            select(CourseMembership.id).where(
+                CourseMembership.course_id == course.id, CourseMembership.user_id == user.id
+            )
+        )
+        if existing is None:
+            raise
+        raise bad_request("你已加入该课程")
     return course
 
 

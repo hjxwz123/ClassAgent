@@ -29,7 +29,8 @@ class LessonDetailResponse(BaseModel):
 class ProgressUpdateRequest(BaseModel):
     current_page: int = Field(ge=1)
     added_seconds: int = Field(default=0, ge=0, le=3600)
-    completed: bool = False
+    # 注意：完成与否由服务层根据 current_page>=page_count 判定，客户端无法直接声明已完成，
+    # 因此此处不再接收 `completed` 字段（旧字段从不被服务层读取，属契约误导，已移除）。
 
 
 class LearningProgressResponse(ORMModel):
