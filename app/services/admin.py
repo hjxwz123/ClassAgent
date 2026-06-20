@@ -764,9 +764,23 @@ def save_model_config(
 ) -> ModelConfig:
     if not is_supported_model_provider(provider, purpose):
         raise bad_request("暂不支持的模型提供方")
-    config = db.get(ModelConfig, config_id) if config_id else ModelConfig()
-    if config is None or config.deleted_at is not None:
+    config = db.get(ModelConfig, config_id) if config_id else None
+    if config_id and (config is None or config.deleted_at is not None):
         raise not_found("模型配置不存在")
+    if config is None:
+        # 未带 config_id 的新建：先按 (purpose, provider, model_name) 去重复用已有记录，
+        # 避免前端未回填 id 时重复点击"保存"在库中生成多条相同模型配置。
+        config = db.scalar(
+            select(ModelConfig)
+            .where(
+                ModelConfig.purpose == purpose,
+                ModelConfig.provider == provider,
+                ModelConfig.model_name == model_name,
+                ModelConfig.deleted_at.is_(None),
+            )
+            .order_by(ModelConfig.updated_at.desc(), ModelConfig.created_at.desc())
+            .limit(1)
+        ) or ModelConfig()
     config.provider = provider
     config.model_name = model_name
     config.purpose = purpose
