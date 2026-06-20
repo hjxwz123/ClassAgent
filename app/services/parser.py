@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.enums import MaterialType
 from app.core.errors import bad_request
-from app.core.media import signed_media_url
+from app.core.media import normalize_storage_path, signed_media_url
 from app.services.runtime_config import get_enabled_service_config
 from app.services.storage import storage_service
 
@@ -385,6 +385,97 @@ def _url_host_allowed(value: str) -> bool:
     return True
 
 
+def _resolve_allowed_ip(hostname: str, port: int, scheme: str) -> str | None:
+    # M14: 解析 host 得到 IP，并对每个解析结果做私网/保留/元数据网段拒绝校验。
+    # 返回首个校验通过的 IP（literal IP 直接校验返回）。任一解析结果不通过则整体拒绝，
+    # 避免攻击者在 DNS 中混入内网地址。
+    try:
+        direct_ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        direct_ip = None
+    if direct_ip is not None:
+        return str(direct_ip) if _ip_allowed(direct_ip) else None
+    try:
+        infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        return None
+    addresses = [item[4][0] for item in infos]
+    if not addresses:
+        return None
+    chosen: str | None = None
+    for address in addresses:
+        try:
+            candidate = ipaddress.ip_address(address)
+        except ValueError:
+            return None
+        if not _ip_allowed(candidate):
+            return None
+        if chosen is None:
+            chosen = str(candidate)
+    return chosen
+
+
+class _PinnedIPTransport(httpx.HTTPTransport):
+    """M14 SSRF / DNS-rebinding TOCTOU 防护。
+
+    方案：自定义 transport 拦截每一次请求（含每一跳重定向），在即将连接之前
+    自行 socket.getaddrinfo 解析目标 host，复用 _ip_allowed 对解析出的 IP 做
+    私网/环回/链路本地/保留/元数据(169.254.169.254) 网段拒绝校验，然后把请求 URL 的
+    host 替换为这个“校验通过的 IP”，使 httpcore 直连该 IP——校验与连接锁定为同一个 IP，
+    杜绝“校验后再次 DNS 解析”的时间窗。同时：
+      - 保留原始 Host 头（Host: 原 hostname），让目标按虚拟主机正确路由；
+      - https 通过 sni_hostname 扩展把 TLS SNI / 证书校验的 server_hostname 设为原 hostname
+        （而非 IP），保证证书校验仍针对真实域名、verify 不被削弱。
+    残留风险：仅在“解析→校验→连接”的极短同步窗口内复用本进程一次解析结果；httpcore 不会
+    再次解析（连接目标已是字面 IP），故 rebinding 无法在校验与连接之间切换到内网。
+    """
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        url = request.url
+        scheme = url.scheme
+        if scheme not in {"http", "https"}:
+            raise httpx.ConnectError("blocked non-http(s) url", request=request)
+        hostname = url.host
+        if not hostname:
+            raise httpx.ConnectError("missing host", request=request)
+        # 若 URL host 已是字面 IP，直接校验该 IP；否则解析域名得到 IP 再校验。
+        port = url.port or (443 if scheme == "https" else 80)
+        pinned_ip = _resolve_allowed_ip(hostname, port, scheme)
+        if pinned_ip is None:
+            raise httpx.ConnectError("blocked private/reserved address", request=request)
+        try:
+            ip_literal = ipaddress.ip_address(pinned_ip)
+        except ValueError:
+            raise httpx.ConnectError("invalid resolved address", request=request)
+        host_is_literal_ip = False
+        try:
+            ipaddress.ip_address(hostname)
+            host_is_literal_ip = True
+        except ValueError:
+            host_is_literal_ip = False
+        # 把连接目标锁定为校验通过的 IP（IPv6 需用 [..] 包裹）。
+        connect_host = f"[{pinned_ip}]" if ip_literal.version == 6 else pinned_ip
+        request.url = url.copy_with(host=connect_host)
+        if not host_is_literal_ip:
+            # 保留原始 Host 头（host[:port]，仅在显式非默认端口时带端口），供目标按域名虚拟主机路由。
+            default_port = 443 if scheme == "https" else 80
+            host_header = hostname if url.port in (None, default_port) else f"{hostname}:{url.port}"
+            request.headers["Host"] = host_header
+            # https 下让 TLS SNI / 证书校验仍针对真实域名而非字面 IP。
+            if scheme == "https":
+                request.extensions = {**request.extensions, "sni_hostname": hostname}
+        return super().handle_request(request)
+
+
+def _build_pinned_client(timeout: httpx.Timeout) -> httpx.Client:
+    return httpx.Client(
+        transport=_PinnedIPTransport(),
+        timeout=timeout,
+        follow_redirects=False,
+        headers={"User-Agent": "class-agent-doc-parser/1.0"},
+    )
+
+
 def _is_temporary_docmind_url(value: str) -> bool:
     try:
         parsed = urlsplit(html.unescape(value))
@@ -397,22 +488,38 @@ def _is_temporary_docmind_url(value: str) -> bool:
 
 
 def _local_docmind_image_url(value: str) -> str | None:
+    # H2: 该函数被 Pydantic 序列化器 sanitize_temporary_docmind_images 调用，
+    # 绝不能向上抛异常（否则 GET /materials 整页 500，持久 DoS），且绝不能用未规范化、
+    # 含 `..`/绝对路径的相对路径去触碰文件系统或参与签名（路径穿越 + signed_media_url 抛 ValueError）。
     try:
         parsed = urlsplit(html.unescape(value))
-    except ValueError:
+        if parsed.netloc and not storage_service._is_loopback_url(value):
+            return None
+        path = parsed.path.lstrip("/")
+        marker = "docmind_images/"
+        if marker not in path:
+            return None
+        relative_path = path[path.index(marker) :]
+        if not relative_path:
+            return None
+        # 先用 normalize_storage_path 做规范化校验：拒绝任何含 `..`/绝对路径/越界的目标。
+        # urlsplit().path 不会折叠 `..`，必须在触碰文件系统/签名之前拦截，避免跨目录文件
+        # 存在性探测（OS stat 真实解析 `..`）以及后续签名时 `..` in path.parts 抛 ValueError。
+        try:
+            safe_path = normalize_storage_path(relative_path)
+        except ValueError:
+            return None
+        if not safe_path.startswith(marker):
+            return None
+        if (
+            not storage_service.absolute_path(safe_path).is_file()
+            and not storage_service.absolute_path(f"public/{safe_path}").is_file()
+        ):
+            return None
+        return signed_media_url(safe_path)
+    except Exception:
+        # 兜底：任何意外异常都返回 None，确保序列化器永不因本函数 500。
         return None
-    if parsed.netloc and not storage_service._is_loopback_url(value):
-        return None
-    path = parsed.path.lstrip("/")
-    marker = "docmind_images/"
-    if marker not in path:
-        return None
-    relative_path = path[path.index(marker) :]
-    if not relative_path:
-        return None
-    if not storage_service.absolute_path(relative_path).is_file() and not storage_service.absolute_path(f"public/{relative_path}").is_file():
-        return None
-    return signed_media_url(relative_path)
 
 
 def _image_suffix(url: str, content_type: str | None) -> str:
@@ -493,8 +600,9 @@ def _persist_markdown_image(
                 location = response.headers.get("location")
                 if not location:
                     return None
-                response_url = getattr(response, "url", current_url)
-                current_url = str(httpx.URL(str(response_url)).join(location))
+                # 用调用方原始 URL（非被 transport 改写成 IP 的 response.url）解析相对重定向，
+                # 保证下一跳仍按真实域名重新解析+校验（_PinnedIPTransport 会再次锁 IP）。
+                current_url = str(httpx.URL(current_url).join(location))
                 continue
             response.raise_for_status()
             break
@@ -600,11 +708,7 @@ def _localize_markdown_images(content: str, db: Session | None, cache: dict[str,
     if not urls:
         return content
     rewritten = content
-    with httpx.Client(
-        timeout=httpx.Timeout(20.0, connect=8.0),
-        follow_redirects=False,
-        headers={"User-Agent": "class-agent-doc-parser/1.0"},
-    ) as client:
+    with _build_pinned_client(httpx.Timeout(20.0, connect=8.0)) as client:
         for raw_url in urls:
             public_url = _persist_markdown_image(client, raw_url, db=db, cache=cache)
             if not public_url:
@@ -878,11 +982,7 @@ class DocParserService:
         current_url = url
         response: httpx.Response | None = None
         try:
-            with httpx.Client(
-                timeout=httpx.Timeout(60.0, connect=10.0),
-                follow_redirects=False,
-                headers={"User-Agent": "class-agent-doc-parser/1.0"},
-            ) as client:
+            with _build_pinned_client(httpx.Timeout(60.0, connect=10.0)) as client:
                 for _ in range(MAX_MARKDOWN_IMAGE_REDIRECTS + 1):
                     if not _is_remote_url(current_url):
                         return ""
@@ -891,8 +991,9 @@ class DocParserService:
                         location = response.headers.get("location")
                         if not location:
                             return ""
-                        response_url = getattr(response, "url", current_url)
-                        current_url = str(httpx.URL(str(response_url)).join(location))
+                        # 用原始 current_url（非被改写成 IP 的 response.url）解析相对重定向，
+                        # 下一跳仍按真实域名重新解析+校验并锁 IP。
+                        current_url = str(httpx.URL(current_url).join(location))
                         continue
                     response.raise_for_status()
                     break

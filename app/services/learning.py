@@ -1300,6 +1300,10 @@ def _grade_question(question: QuizQuestion, user_answer, *, db: Session) -> dict
 
 
 def _attempt_ai_feedback(*, score: float, total_score: float, accuracy: float, wrong_count: int, pending_count: int) -> str:
+    # 修复 #2：全部题目均为待批改主观题时（无任何已自动判分题），不要套用按正确率分档的文案，
+    # 否则会出现"正确率 0%、错题较多（0 道）"的自相矛盾，让学生误以为挂科。
+    if total_score <= 0 and pending_count > 0:
+        return f"本次共 {pending_count} 道主观题，均需教师批改，待批改完成后给出成绩，请耐心等待。"
     parts: list[str] = [f"系统判分：本次得分 {score}/{total_score}（正确率 {accuracy}%）。"]
     if total_score > 0 and score >= total_score:
         parts.append("全部答对，表现优秀，可挑战更高难度的题目。")
@@ -1337,6 +1341,9 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
         db.rollback()
         raise
     total_score = 0.0
+    # #M7：正确率/总分分母只统计"已自动判分"的题，排除待人工批改(pending)的主观题，
+    # 否则其满分会永久压低正确率。graded_full_score 即已判分题的满分之和。
+    graded_full_score = 0.0
     wrong_count = 0
     pending_count = 0
     attempt = QuizAttempt(quiz_id=quiz_id, user_id=user.id, total_score=quiz.total_score, submitted_at=datetime.now(UTC))
@@ -1344,9 +1351,12 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
     db.flush()
     db.refresh(attempt)
     for question, user_answer, result in graded:
-        total_score += float(result["score"])
         if result["pending_review"]:
+            # #M7：pending(score is None)的主观题既不计入得分，也不计入满分分母，待教师批改。
             pending_count += 1
+        else:
+            total_score += float(result["score"])
+            graded_full_score += float(question.score)
         db.add(
             QuizAnswer(
                 attempt_id=attempt.id,
@@ -1355,6 +1365,7 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
                 is_correct=result["is_correct"],
                 score=result["score"],
                 feedback=result["feedback"],
+                pending_review=bool(result["pending_review"]),
             )
         )
         # #47/#28：达到及格比例的填空题、待人工批改的主观题不计入错题，也不进/出错题本。
@@ -1363,10 +1374,15 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
                 wrong_count += 1
             _record_answer_to_wrong_book(db, user=user, quiz=quiz, question=question, attempt=attempt, is_correct=result["is_correct"])
     attempt.score = round(total_score, 2)
-    attempt.accuracy = round((total_score / max(quiz.total_score, 1)) * 100, 2)
+    # #M7：正确率/总分以"已判分题满分(graded_full_score)"为分母，pending 题不计入，
+    # 避免主观题待批改期间正确率被永久低估；若全部题目都待批改则分母兜底为 1 防除零。
+    attempt.accuracy = round((total_score / max(graded_full_score, 1)) * 100, 2)
+    # 展示口径一致(修复 #3)：persisted total_score 也用 graded 分母，保证 score/total_score
+    # 的比例与 accuracy 一致（含 pending 时不再出现"30/100 却显示 75%"的矛盾）。
+    attempt.total_score = round(graded_full_score, 2)
     attempt.ai_feedback = _attempt_ai_feedback(
         score=attempt.score,
-        total_score=quiz.total_score,
+        total_score=round(graded_full_score, 2),
         accuracy=attempt.accuracy,
         wrong_count=wrong_count,
         pending_count=pending_count,
@@ -1781,7 +1797,17 @@ def checkin_task(db: Session, *, task_id: int, user: User, notes: str | None) ->
         if notes is not None:
             checkin.notes = notes
     db.add_all([task, checkin])
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # #L18：并发双击/重试打卡时，(task_id,user_id) 唯一约束会让第二个 commit 抛 IntegrityError。
+        # 回滚后重新查询既有打卡记录，按"已打卡"幂等返回（保留首次 checked_in_at），不再 500。
+        db.rollback()
+        existing = db.scalar(select(StudyCheckin).where(StudyCheckin.task_id == task_id, StudyCheckin.user_id == user.id))
+        if existing is None:
+            raise
+        existing.already_checked_in = True
+        return existing
     db.refresh(checkin)
     checkin.already_checked_in = already_checked_in
     return checkin
