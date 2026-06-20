@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -28,8 +28,11 @@ def _parse_test_pages(path, material_type, db=None, filename=None, resume_task_i
     ]
 
 
-def _generate_test_study_plan(*, goal, available_days, daily_minutes, course_name, db=None):
-    today = date.today()
+def _generate_test_study_plan(*, goal, available_days, daily_minutes, course_name, db=None, **kwargs):
+    # #18：生产 generate_study_plan 现注入 knowledge_points/weak_points 等课程内容，桩函数以 **kwargs 兼容忽略。
+    # 与生产保持一致：计划任务日期按 UTC 当日计算（checkin 也用 datetime.now(UTC).date() 校验），
+    # 避免本地时区比 UTC 超前一天时，首日任务被判为"未来任务"无法打卡。
+    today = datetime.now(UTC).date()
     return [
         {
             "title": f"{course_name} 第{index + 1}天学习任务",

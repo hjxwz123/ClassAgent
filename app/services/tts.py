@@ -1,5 +1,6 @@
 import html
 import json
+import logging
 import re
 import time
 import wave
@@ -9,9 +10,12 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import bad_request
+from app.core.errors import AppError, bad_request
 from app.services.runtime_config import get_enabled_service_config
 from app.services.storage import storage_service
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 MARKDOWN_IMAGE_PATTERN = re.compile(r"!\[(?P<alt>[^\]]*)]\(\s*(?:<[^>]+>|[^)\s]+)(?:\s+['\"][^'\"]*['\"])?\s*\)")
@@ -118,8 +122,12 @@ class TTSService:
         self.settings = get_settings()
         self._token_cache: dict[tuple[str, str], tuple[str, int]] = {}
 
+    # 中文 TTS 大致 4~5 字/秒，按 4.5 字/秒估算朗读时长。
+    _ESTIMATE_CHARS_PER_SECOND = 4.5
+
     def _estimate_duration(self, text: str) -> float:
-        return max(2.0, min(30.0, round(max(len(text), 40) / 20, 2)))
+        # #58: 去掉原 30 秒硬上限，避免长音频被记成 30 秒。仅保留下限，避免过短。
+        return max(2.0, round(max(len(text), 1) / self._ESTIMATE_CHARS_PER_SECOND, 2))
 
     def _duration_from_wav(self, content: bytes, fallback_text: str) -> float:
         try:
@@ -129,6 +137,89 @@ class TTSService:
                 return round(frame_count / rate, 2) if rate else self._estimate_duration(fallback_text)
         except wave.Error:
             return self._estimate_duration(fallback_text)
+
+    def _duration_from_pcm(self, content: bytes, sample_rate: int) -> float | None:
+        # 原始 PCM（无文件头）：每采样 16bit 单声道，时长 = 字节数 / (采样率 * 2)。
+        if sample_rate <= 0 or not content:
+            return None
+        return round(len(content) / (sample_rate * 2), 2)
+
+    def _duration_for_format(self, content: bytes, audio_format: str, fallback_text: str, sample_rate: int) -> float:
+        # #58: 对所有格式尽量从真实音频字节推算时长，无法解析时退回不被 30s 截断的合理估算。
+        fmt = (audio_format or "").lower()
+        if fmt == "wav":
+            return self._duration_from_wav(content, fallback_text)
+        if fmt == "pcm":
+            pcm_duration = self._duration_from_pcm(content, sample_rate)
+            if pcm_duration is not None:
+                return pcm_duration
+        if fmt in {"mp3", "mp3-16k", "mp3-8k"}:
+            mp3_duration = self._duration_from_mp3(content)
+            if mp3_duration is not None:
+                return mp3_duration
+        return self._estimate_duration(fallback_text)
+
+    def _duration_from_mp3(self, content: bytes) -> float | None:
+        # 无第三方解析库时，按 MP3 帧头逐帧累加每帧时长得到较真实的总时长。
+        if not content:
+            return None
+        try:
+            return self._scan_mp3_frames(content)
+        except Exception:  # noqa: BLE001 - 解析失败时回退估算，不应让时长计算抛错
+            LOGGER.warning("MP3 duration parse failed", exc_info=True)
+            return None
+
+    _MP3_BITRATES_V1_L3 = (0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 0)
+    _MP3_BITRATES_V2_L3 = (0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160, 0)
+    _MP3_SAMPLE_RATES = {
+        3: (44100, 48000, 32000),  # MPEG1
+        2: (22050, 24000, 16000),  # MPEG2
+        0: (11025, 12000, 8000),   # MPEG2.5
+    }
+
+    def _scan_mp3_frames(self, content: bytes) -> float | None:
+        offset = 0
+        length = len(content)
+        # 跳过 ID3v2 头（若存在）。
+        if length >= 10 and content[:3] == b"ID3":
+            size = (content[6] << 21) | (content[7] << 14) | (content[8] << 7) | content[9]
+            offset = 10 + size
+        total_seconds = 0.0
+        frames = 0
+        while offset + 4 <= length:
+            if content[offset] != 0xFF or (content[offset + 1] & 0xE0) != 0xE0:
+                offset += 1
+                continue
+            header = content[offset:offset + 4]
+            version_bits = (header[1] >> 3) & 0x03
+            layer_bits = (header[1] >> 1) & 0x03
+            bitrate_index = (header[2] >> 4) & 0x0F
+            sample_rate_index = (header[2] >> 2) & 0x03
+            padding = (header[2] >> 1) & 0x01
+            if layer_bits != 0x01 or bitrate_index in (0, 15) or sample_rate_index == 0x03:
+                offset += 1
+                continue
+            sample_rates = self._MP3_SAMPLE_RATES.get(version_bits)
+            if not sample_rates:
+                offset += 1
+                continue
+            sample_rate = sample_rates[sample_rate_index]
+            bitrate_table = self._MP3_BITRATES_V1_L3 if version_bits == 3 else self._MP3_BITRATES_V2_L3
+            bitrate = bitrate_table[bitrate_index] * 1000
+            if bitrate <= 0 or sample_rate <= 0:
+                offset += 1
+                continue
+            samples_per_frame = 1152 if version_bits == 3 else 576
+            frame_length = int((samples_per_frame // 8 * bitrate) / sample_rate) + padding
+            if frame_length <= 0:
+                offset += 1
+                continue
+            total_seconds += samples_per_frame / sample_rate
+            frames += 1
+            offset += frame_length
+        if frames == 0:
+            return None
+        return round(total_seconds, 2)
 
     def _nls_url(self) -> str:
         return self.default_nls_url
@@ -162,13 +253,20 @@ class TTSService:
         request.set_domain(self.token_domain)
         request.set_version(self.token_api_version)
         request.set_action_name("CreateToken")
-        response = client.do_action_with_exception(request)
+        try:
+            response = client.do_action_with_exception(request)
+        except Exception as exc:
+            # #60: 阿里云 SDK 原始异常（含 RequestId/错误码等）仅写服务端日志，对外统一文案。
+            LOGGER.warning("TTS token request failed", exc_info=True)
+            raise bad_request("语音服务令牌获取失败，请稍后重试或联系管理员") from exc
         payload = json.loads(response.decode("utf-8") if isinstance(response, bytes) else response)
         token_data = payload.get("Token") if isinstance(payload, dict) else None
         token = token_data.get("Id") if isinstance(token_data, dict) else None
         expire_time = int(token_data.get("ExpireTime") or 0) if isinstance(token_data, dict) else 0
         if not token or not expire_time:
-            raise bad_request(f"TTS Token 获取失败: {payload}")
+            # #60: 原始响应 payload 仅写服务端日志，对用户返回统一友好文案。
+            LOGGER.warning("TTS token acquisition failed: %s", payload)
+            raise bad_request("语音服务令牌获取失败，请稍后重试或联系管理员")
         return str(token), expire_time
 
     def _access_token(self, config: dict) -> str:
@@ -181,6 +279,18 @@ class TTSService:
         token, expire_time = self._create_token(config)
         self._token_cache[cache_key] = (token, expire_time)
         return token
+
+    def _release_synthesizer(self, synthesizer) -> None:
+        # #59: 尽力释放底层 websocket 连接；不同 SDK 版本方法名可能是 shutdown/close，
+        # 释放失败不应影响主流程，仅记日志。
+        for method_name in ("shutdown", "close"):
+            method = getattr(synthesizer, method_name, None)
+            if callable(method):
+                try:
+                    method()
+                except Exception:  # noqa: BLE001 - 释放阶段异常吞掉但记录，避免掩盖原始错误
+                    LOGGER.warning("Failed to release TTS synthesizer via %s", method_name, exc_info=True)
+                return
 
     def _synthesize_aliyun_bytes(self, text: str, config: dict) -> tuple[bytes, str]:
         config = self._clean_config(config)
@@ -211,6 +321,8 @@ class TTSService:
             on_data=on_data,
             on_error=on_error,
         )
+        # #59: 用 try/finally 确保即便 start() 抛异常，也调用 SDK 的 shutdown/close 释放 websocket，
+        # 避免连接泄漏。
         try:
             synthesizer.start(
                 text=text,
@@ -225,9 +337,14 @@ class TTSService:
                 completed_timeout=int(config.get("completed_timeout_seconds") or self.settings.external_service_timeout_seconds),
             )
         except Exception as exc:
-            raise bad_request(f"TTS 合成失败: {exc}") from exc
+            # #60: 原始 SDK 异常仅写服务端日志，对用户返回统一友好文案。
+            LOGGER.warning("TTS synthesis failed", exc_info=True)
+            raise bad_request("语音合成失败，请稍后重试或联系管理员") from exc
+        finally:
+            self._release_synthesizer(synthesizer)
         if errors:
-            raise bad_request(f"TTS 合成失败: {errors[-1][:300]}")
+            LOGGER.warning("TTS synthesis returned error: %s", errors[-1][:300])
+            raise bad_request("语音合成失败，请稍后重试或联系管理员")
         content = b"".join(chunks)
         if not content:
             raise bad_request("TTS 合成失败: 未返回音频数据")
@@ -246,14 +363,22 @@ class TTSService:
             db=db,
             public=False,
         )
-        duration = self._duration_from_wav(content, text) if audio_format == "wav" else self._estimate_duration(text)
+        # #58: 按真实音频字节推算时长（wav/pcm/mp3），无法解析时退回不被 30s 截断的合理估算。
+        sample_rate = int(config.get("sample_rate") or self.sample_rate)
+        duration = self._duration_for_format(content, audio_format, text, sample_rate)
         return relative_path, duration
 
     def test_config(self, config: dict) -> dict:
         try:
             self._synthesize_aliyun_bytes("连接测试", self._clean_config(config))
-        except Exception as exc:
-            return {"success": False, "message": str(exc)}
+        except AppError as exc:
+            # 我方友好文案（已脱敏）可直接回显给管理员。
+            message = exc.detail.get("message") if isinstance(exc.detail, dict) else "TTS 配置测试失败"
+            return {"success": False, "message": message}
+        except Exception:
+            # #60: 原始 SDK 异常细节仅写服务端日志，对管理员返回统一文案。
+            LOGGER.warning("TTS config test failed", exc_info=True)
+            return {"success": False, "message": "TTS 配置测试失败，请检查配置或稍后重试"}
         return {"success": True, "message": "TTS 配置可用"}
 
     def synthesize(self, text: str, db: Session | None = None) -> tuple[str, float]:

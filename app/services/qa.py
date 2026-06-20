@@ -19,6 +19,7 @@ from app.core.upload_validation import validate_image_upload
 from app.db.models import Chapter, Course, CourseMaterial, CourseMembership, KnowledgeChunk, Lesson, LessonPage, QAConversation, QARecord, User
 from app.schemas.qa import QAAskRequest
 from app.services.ai import ai_service
+from app.services.courses import _assert_course_available_for_student
 from app.services.knowledge import search_course_knowledge
 from app.services.learning_signals import record_qa_learning_signals
 from app.services.parser import _extract_text_payload
@@ -152,6 +153,7 @@ def _assert_student_course_access(db: Session, *, course_id: int, user: User) ->
     )
     if membership is None:
         raise forbidden("仅可在已加入课程内提问")
+    _assert_course_available_for_student(db, course_id)
 
 
 def _course_allows_general_ai_answer(db: Session, *, course_id: int) -> bool:

@@ -230,7 +230,9 @@ def get_quiz_detail_endpoint(
     for item in questions:
         payload = QuizQuestionPayload.model_validate(item).model_dump(mode="json")
         if user.role == "student":
+            # #3：作答前对学生统一剥离正确答案与解析，避免提前泄露答案。
             payload["reference_answer"] = None
+            payload["explanation"] = None
         serialized_questions.append(payload)
     payload = QuizDetailResponse(
         quiz=QuizResponse.model_validate(quiz),
@@ -325,8 +327,10 @@ def generate_wrong_book_practice_endpoint(
     course_id: int,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    wrong_question_id: int | None = None,
 ):
-    task = enqueue_wrong_book_practice(db, course_id=course_id, user=user)
+    # #64：可选 wrong_question_id 用于定向重练，确保该错题被纳入并排在首位。
+    task = enqueue_wrong_book_practice(db, course_id=course_id, user=user, wrong_question_id=wrong_question_id)
     return success_response(data=_generation_task_response(db, task), request_id=request.state.request_id)
 
 
@@ -389,7 +393,18 @@ def checkin_task_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     checkin = checkin_task(db, task_id=task_id, user=user, notes=payload.notes)
-    return success_response(data={"id": checkin.id, "task_id": checkin.task_id, "checked_in_at": checkin.checked_in_at, "notes": checkin.notes}, request_id=request.state.request_id)
+    already_checked_in = bool(getattr(checkin, "already_checked_in", False))
+    return success_response(
+        data={
+            "id": checkin.id,
+            "task_id": checkin.task_id,
+            "checked_in_at": checkin.checked_in_at,
+            "notes": checkin.notes,
+            "already_checked_in": already_checked_in,
+            "status": "already_checked_in" if already_checked_in else "checked_in",
+        },
+        request_id=request.state.request_id,
+    )
 
 
 @router.get("/records")
