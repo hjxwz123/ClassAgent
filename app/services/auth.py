@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from secrets import token_urlsafe
 from urllib.parse import urlencode
 
-from sqlalchemy import Select, desc, or_, select
+from sqlalchemy import Select, desc, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -14,6 +14,7 @@ from app.schemas.auth import (
     AuthLinkResponse,
     LoginRequest,
     LoginResponse,
+    PasswordChangeResponse,
     PasswordResetConfirmRequest,
     ProfileUpdateRequest,
     RegisterRequest,
@@ -26,6 +27,10 @@ REGISTERABLE_ROLES = {UserRole.STUDENT.value}
 LOGIN_FAILED_MESSAGE = "登录失败，请检查用户名或者密码"
 AUTH_LINK_EXPIRES_IN_SECONDS = 600
 AUTH_LINK_INVALID_MESSAGE = "链接无效或已过期"
+
+# 导入时预计算一次固定 dummy 哈希：用户不存在时也走一次 verify_password，
+# 使"邮箱不存在"与"密码错误"两条路径耗时恒定，消除用户名枚举时序侧信道。
+_DUMMY_PASSWORD_HASH = hash_password("a-constant-dummy-password")
 
 
 def _ensure_unique_identity(db: Session, payload: RegisterRequest) -> None:
@@ -88,28 +93,6 @@ def _latest_available_email_token(db: Session, *, email: str, purpose: str, toke
     return db.scalars(statement).first()
 
 
-def _latest_pending_email_token(db: Session, *, email: str, purpose: str) -> EmailCode | None:
-    statement: Select[tuple[EmailCode]] = (
-        select(EmailCode)
-        .where(
-            EmailCode.email == email,
-            EmailCode.purpose == purpose,
-            EmailCode.used_at.is_(None),
-        )
-        .order_by(desc(EmailCode.id))
-    )
-    return db.scalars(statement).first()
-
-
-def _record_email_token_failure(db: Session, *, email: str, purpose: str) -> None:
-    record = _latest_pending_email_token(db, email=email, purpose=purpose)
-    if record is None:
-        return
-    record.attempt_count = int(record.attempt_count or 0) + 1
-    db.add(record)
-    db.commit()
-
-
 def _ensure_email_token_valid(record: EmailCode | None) -> EmailCode:
     if record is None:
         raise bad_request(AUTH_LINK_INVALID_MESSAGE)
@@ -122,20 +105,31 @@ def _ensure_email_token_valid(record: EmailCode | None) -> EmailCode:
 
 
 def _consume_email_token(db: Session, *, email: str, purpose: str, token: str) -> EmailCode:
+    # token 不命中任何有效记录时直接判为无效，不再对他人 pending 令牌累加失败计数。
+    # （盲目累加会让攻击者用任意错误 token 把受害者真实令牌顶到 attempt_count 上限锁死；
+    #  爆破改由 routes 层 IP+账号双维度限流防护。）
     record = _latest_available_email_token(db, email=email, purpose=purpose, token=token)
-    if record is None:
-        _record_email_token_failure(db, email=email, purpose=purpose)
     record = _ensure_email_token_valid(record)
-    record.used_at = datetime.now(UTC)
+    now = datetime.now(UTC)
+    # 原子条件更新：只有 used_at 仍为 NULL 时才标记为已用，rowcount==1 表示本次抢到消费权。
+    # 并发下另一请求会得到 rowcount==0，视为已被消费，避免重复消费同一令牌。
+    result = db.execute(
+        update(EmailCode)
+        .where(EmailCode.id == record.id, EmailCode.used_at.is_(None))
+        .values(used_at=now)
+    )
+    if result.rowcount != 1:
+        raise bad_request(AUTH_LINK_INVALID_MESSAGE)
+    # 让 ORM 实例与刚写入的 used_at 保持一致，供调用方继续 add/commit。
+    record.used_at = now
     db.add(record)
     return record
 
 
 def validate_auth_link(db: Session, *, email: str, mode: str, token: str) -> AuthLinkResponse:
     purpose = "register" if mode == "register" else "password_reset"
+    # 仅按提交 token 的 digest 匹配；不命中即判无效，不对他人有效令牌累加失败计数。
     record = _latest_available_email_token(db, email=email, purpose=purpose, token=token)
-    if record is None:
-        _record_email_token_failure(db, email=email, purpose=purpose)
     record = _ensure_email_token_valid(record)
     if purpose == "register":
         existing = db.scalar(select(User).where(User.email == email, User.deleted_at.is_(None)))
@@ -199,6 +193,9 @@ def register_user(db: Session, payload: RegisterRequest) -> User:
 def authenticate_user(db: Session, payload: LoginRequest, *, login_ip: str | None, user_agent: str | None) -> LoginResponse:
     user = db.scalar(select(User).where(User.email == payload.email, User.deleted_at.is_(None)))
     if user is None:
+        # 用户不存在时仍执行一次 bcrypt 校验（结果丢弃）再返回，
+        # 使"邮箱不存在"与"密码错误"两条路径耗时恒定，消除用户名枚举时序侧信道。
+        verify_password(payload.password, _DUMMY_PASSWORD_HASH)
         raise unauthorized(LOGIN_FAILED_MESSAGE)
     if not verify_password(payload.password, user.password_hash):
         log_login(db, user_id=user.id, login_ip=login_ip, user_agent=user_agent, success=False)
@@ -241,7 +238,7 @@ def update_profile(db: Session, user: User, payload: ProfileUpdateRequest) -> Us
     return user
 
 
-def change_password(db: Session, user: User, old_password: str, new_password: str) -> None:
+def change_password(db: Session, user: User, old_password: str, new_password: str) -> PasswordChangeResponse:
     if not verify_password(old_password, user.password_hash):
         raise bad_request("旧密码错误")
     user.password_hash = hash_password(new_password)
@@ -255,6 +252,11 @@ def change_password(db: Session, user: User, old_password: str, new_password: st
         target_id=user.id,
     )
     db.commit()
+    db.refresh(user)
+    # bump token_version 会使旧 access_token 静默失效；改密成功后用新的 token_version
+    # 重新签发 access_token 返回，前端用它替换本地 token，避免被立即登出。
+    token = create_access_token(str(user.id), extra={"role": user.role, "token_version": user.token_version})
+    return PasswordChangeResponse(access_token=token)
 
 
 def create_password_reset_link(db: Session, email: str) -> tuple[AuthLinkResponse, str | None]:
