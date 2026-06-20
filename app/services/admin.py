@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 import tempfile
+import time
 import zipfile
 import os
 from datetime import UTC, datetime, timedelta
@@ -16,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import BACKUP_DIR, VECTOR_DIR, get_settings
 from app.core.enums import BackupStatus, ConfigScope, CourseStatus, LessonStatus, UserRole, UserStatus
-from app.core.errors import bad_request, forbidden, not_found
+from app.core.errors import AppError, bad_request, forbidden, not_found
 from app.core.security import decrypt_secret, encrypt_secret, hash_password, mask_secret
 from app.db.models import (
     AIUsageLog,
@@ -39,6 +41,7 @@ from app.db.models import (
     User,
 )
 from app.services.ai import build_rerank_request, parse_rerank_results
+from app.services.audit import log_operation
 from app.services.bootstrap import default_system_settings
 from app.services.email import email_service
 from app.services.runtime_settings import invalidate_runtime_setting
@@ -46,11 +49,23 @@ from app.services.parser import (
     DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS,
     DEFAULT_DOC_PARSER_TIMEOUT_SECONDS,
     MAX_DOC_PARSER_TIMEOUT_SECONDS,
+    _url_host_allowed,
 )
 from app.services.provider_policy import is_supported_model_provider, is_supported_service_provider
 from app.services.storage import storage_service
 from app.services.tts import tts_service
 from app.services.vector_store import vector_store
+
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _service_test_error_message(exc: Exception, fallback: str) -> str:
+    # #60: 我方 AppError 是已脱敏的友好文案，可回显；其它（外部 SDK/HTTP）原始异常仅写日志。
+    if isinstance(exc, AppError) and isinstance(exc.detail, dict):
+        return str(exc.detail.get("message") or fallback)
+    LOGGER.warning("%s", fallback, exc_info=True)
+    return fallback
 
 
 def assert_admin(user: User) -> None:
@@ -85,15 +100,37 @@ def _day_start() -> datetime:
     return datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+# 全盘 rglob 统计本地存储用量在文件多时较重，且被材料统计/仪表盘等热路径调用，
+# 用进程内带 TTL 的缓存兜底，思路同 runtime_settings 的短缓存。
+_STORAGE_USAGE_CACHE_TTL_SECONDS = 60.0
+_storage_usage_cache: dict[str, tuple[float, int]] = {}
+
+
 def _storage_usage_bytes() -> int:
-    total = 0
     storage_dir = get_settings().storage_dir
-    if not storage_dir.exists():
-        return 0
-    for path in storage_dir.rglob("*"):
-        if path.is_file():
-            total += path.stat().st_size
+    cache_key = str(storage_dir)
+    now = time.monotonic()
+    cached = _storage_usage_cache.get(cache_key)
+    if cached is not None and cached[0] > now:
+        return cached[1]
+    total = 0
+    if storage_dir.exists():
+        for path in storage_dir.rglob("*"):
+            if path.is_file():
+                total += path.stat().st_size
+    _storage_usage_cache[cache_key] = (now + _STORAGE_USAGE_CACHE_TTL_SECONDS, total)
     return total
+
+
+def _active_admin_count(db: Session, *, exclude_user_id: int | None = None) -> int:
+    statement = select(func.count(User.id)).where(
+        User.deleted_at.is_(None),
+        User.role == UserRole.ADMIN.value,
+        User.status == UserStatus.ACTIVE.value,
+    )
+    if exclude_user_id is not None:
+        statement = statement.where(User.id != exclude_user_id)
+    return int(db.scalar(statement) or 0)
 
 
 def _human_size(size: int) -> str:
@@ -305,13 +342,24 @@ def create_admin_user(
     return created_user
 
 
-def update_user(db: Session, *, user_id: int, status: str | None, role: str | None) -> User:
+def update_user(db: Session, *, user_id: int, status: str | None, role: str | None, actor_id: int | None = None) -> User:
     user = db.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise not_found("用户不存在")
     if status is not None:
         if status not in {item.value for item in UserStatus}:
             raise bad_request("用户状态不合法")
+        # 禁止管理员禁用自己，避免把自己锁在系统外
+        if status != UserStatus.ACTIVE.value and actor_id is not None and user.id == actor_id:
+            raise forbidden("不能禁用当前登录的管理员账号")
+        # 把最后一个活跃管理员禁用会导致系统无人可管理
+        if (
+            status != UserStatus.ACTIVE.value
+            and user.role == UserRole.ADMIN.value
+            and user.status == UserStatus.ACTIVE.value
+            and _active_admin_count(db, exclude_user_id=user.id) < 1
+        ):
+            raise bad_request("系统至少需保留一名管理员")
         if status != user.status:
             user.token_version = int(user.token_version or 0) + 1
         user.status = status
@@ -321,30 +369,65 @@ def update_user(db: Session, *, user_id: int, status: str | None, role: str | No
         if role != user.role:
             raise bad_request("用户角色创建后不可更改")
     db.add(user)
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.user.update",
+        target_type="user",
+        target_id=user.id,
+        detail={"status": status, "role": role, "target_email": user.email},
+    )
     db.commit()
     db.refresh(user)
     return user
 
 
-def reset_user_password(db: Session, *, user_id: int, new_password: str) -> User:
+def reset_user_password(db: Session, *, user_id: int, new_password: str, actor_id: int | None = None) -> User:
     user = db.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise not_found("用户不存在")
     user.password_hash = hash_password(new_password)
     user.token_version = int(user.token_version or 0) + 1
     db.add(user)
+    # detail 不记录新密码，仅记录被重置的目标账号
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.user.reset_password",
+        target_type="user",
+        target_id=user.id,
+        detail={"target_email": user.email},
+    )
     db.commit()
     db.refresh(user)
     return user
 
 
-def soft_delete_user(db: Session, *, user_id: int) -> None:
+def soft_delete_user(db: Session, *, user_id: int, actor_id: int | None = None) -> None:
     user = db.get(User, user_id)
     if user is None or user.deleted_at is not None:
         raise not_found("用户不存在")
+    # 禁止管理员删除自己
+    if actor_id is not None and user.id == actor_id:
+        raise forbidden("不能删除当前登录的管理员账号")
+    # 删除最后一个活跃管理员会导致系统无人可管理
+    if (
+        user.role == UserRole.ADMIN.value
+        and user.status == UserStatus.ACTIVE.value
+        and _active_admin_count(db, exclude_user_id=user.id) < 1
+    ):
+        raise bad_request("系统至少需保留一名管理员")
     user.deleted_at = datetime.now(UTC)
     user.token_version = int(user.token_version or 0) + 1
     db.add(user)
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.user.delete",
+        target_type="user",
+        target_id=user.id,
+        detail={"target_email": user.email, "role": user.role},
+    )
     db.commit()
 
 
@@ -454,15 +537,24 @@ def get_course_detail_admin(db: Session, *, course_id: int) -> dict:
     }
 
 
-def takeover_course(db: Session, *, course_id: int, teacher_id: int) -> Course:
+def takeover_course(db: Session, *, course_id: int, teacher_id: int, actor_id: int | None = None) -> Course:
     course = db.get(Course, course_id)
     teacher = db.get(User, teacher_id)
     if course is None or course.deleted_at is not None:
         raise not_found("课程不存在")
     if teacher is None or teacher.deleted_at is not None or teacher.role not in {UserRole.TEACHER.value, UserRole.ADMIN.value}:
         raise bad_request("新负责教师不存在或角色不合法")
+    previous_teacher_id = course.teacher_id
     course.teacher_id = teacher_id
     db.add(course)
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.course.takeover",
+        target_type="course",
+        target_id=course.id,
+        detail={"previous_teacher_id": previous_teacher_id, "new_teacher_id": teacher_id},
+    )
     db.commit()
     db.refresh(course)
     return course
@@ -595,7 +687,7 @@ def get_material_stats(db: Session) -> dict:
     }
 
 
-def remove_material_admin(db: Session, *, material_id: int) -> None:
+def remove_material_admin(db: Session, *, material_id: int, actor_id: int | None = None) -> None:
     material = db.get(CourseMaterial, material_id)
     if material is None or material.deleted_at is not None:
         raise not_found("资料不存在")
@@ -603,6 +695,14 @@ def remove_material_admin(db: Session, *, material_id: int) -> None:
     db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.material_id == material.id))
     material.deleted_at = datetime.now(UTC)
     db.add(material)
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.material.delete",
+        target_type="material",
+        target_id=material.id,
+        detail={"course_id": material.course_id, "title": material.title},
+    )
     db.commit()
 
 
@@ -648,6 +748,7 @@ def save_model_config(
     api_key: str | None,
     is_default: bool,
     extra_config: dict | None,
+    actor_id: int | None = None,
 ) -> ModelConfig:
     if not is_supported_model_provider(provider, purpose):
         raise bad_request("暂不支持的模型提供方")
@@ -694,17 +795,41 @@ def save_model_config(
             )
             .values(is_default=False)
         )
+    # detail 记关键参数但不含 api_key（密钥脱敏，不入审计日志）
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.config.update",
+        target_type="model_config",
+        target_id=config.id,
+        detail={
+            "config_id": config_id,
+            "provider": provider,
+            "model_name": model_name,
+            "purpose": purpose,
+            "is_default": is_default,
+            "api_key_provided": bool(api_key),
+        },
+    )
     db.commit()
     db.refresh(config)
     return config
 
 
-def delete_model_config(db: Session, *, config_id: int) -> None:
+def delete_model_config(db: Session, *, config_id: int, actor_id: int | None = None) -> None:
     config = db.get(ModelConfig, config_id)
     if config is None or config.deleted_at is not None:
         raise not_found("模型配置不存在")
     config.deleted_at = datetime.now(UTC)
     db.add(config)
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.config.delete",
+        target_type="model_config",
+        target_id=config.id,
+        detail={"provider": config.provider, "model_name": config.model_name, "purpose": config.purpose},
+    )
     db.commit()
 
 
@@ -747,6 +872,9 @@ def test_model_config(db: Session, *, config_id: int) -> dict:
             "temperature": 0,
             "max_tokens": 8,
         }
+    # 外发探测前对目标 endpoint 做主机校验，禁止私网/环回/链路本地/云元数据地址，防 SSRF
+    if not _url_host_allowed(endpoint):
+        return {"success": False, "message": "endpoint 主机不被允许（禁止私网或元数据地址）"}
     try:
         with httpx.Client(timeout=5.0) as client:
             response = client.post(endpoint, headers=headers, json=payload)
@@ -766,7 +894,7 @@ def test_model_config(db: Session, *, config_id: int) -> dict:
                 return {"success": False, "message": "响应中没有 choices"}
         return {"success": True, "message": "模型配置可用"}
     except Exception as exc:
-        return {"success": False, "message": str(exc)}
+        return {"success": False, "message": _service_test_error_message(exc, "模型配置测试失败，请检查配置或稍后重试")}
 
 
 def get_model_usage_stats(db: Session) -> dict:
@@ -825,6 +953,7 @@ def save_service_config(
     name: str,
     config: dict,
     is_enabled: bool,
+    actor_id: int | None = None,
 ) -> ServiceConfig:
     if not is_supported_service_provider(provider, service_type):
         raise bad_request("暂不支持的服务提供方")
@@ -880,17 +1009,40 @@ def save_service_config(
     record.is_enabled = is_enabled
     record.config_encrypted = encrypt_secret(json.dumps(config, ensure_ascii=False))
     db.add(record)
+    # detail 仅记录非敏感字段，config 内容已加密入 config_encrypted，不写明文密钥
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.config.update",
+        target_type="service_config",
+        target_id=record.id,
+        detail={
+            "config_id": config_id,
+            "service_type": service_type,
+            "provider": provider,
+            "name": name,
+            "is_enabled": is_enabled,
+        },
+    )
     db.commit()
     db.refresh(record)
     return record
 
 
-def delete_service_config(db: Session, *, config_id: int) -> None:
+def delete_service_config(db: Session, *, config_id: int, actor_id: int | None = None) -> None:
     record = db.get(ServiceConfig, config_id)
     if record is None or record.deleted_at is not None:
         raise not_found("服务配置不存在")
     record.deleted_at = datetime.now(UTC)
     db.add(record)
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.config.delete",
+        target_type="service_config",
+        target_id=record.id,
+        detail={"service_type": record.service_type, "provider": record.provider, "name": record.name},
+    )
     db.commit()
 
 
@@ -927,7 +1079,7 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
                 bucket = oss2.Bucket(auth, endpoint, config["bucket"])
             bucket.get_bucket_info()
         except Exception as exc:
-            return {"success": False, "message": f"OSS 连接失败: {exc}"}
+            return {"success": False, "message": _service_test_error_message(exc, "OSS 连接失败，请检查配置或稍后重试")}
         return {"success": True, "message": "OSS 配置可用"}
     if record.service_type == "email":
         return email_service.test_config(config)
@@ -946,7 +1098,7 @@ def test_service_config(db: Session, *, config_id: int) -> dict:
                 )
             )
         except Exception as exc:
-            return {"success": False, "message": f"文档解析 SDK 初始化失败: {exc}"}
+            return {"success": False, "message": _service_test_error_message(exc, "文档解析 SDK 初始化失败，请检查配置或稍后重试")}
         return {"success": True, "message": "文档解析配置字段完整"}
     if record.service_type == "tts":
         return tts_service.test_config(config)
@@ -1099,19 +1251,27 @@ def list_system_settings(db: Session) -> list[dict]:
     ]
 
 
-def update_system_setting(db: Session, *, key: str, value) -> SystemSetting:
+def update_system_setting(db: Session, *, key: str, value, actor_id: int | None = None) -> SystemSetting:
     setting = db.scalar(select(SystemSetting).where(SystemSetting.setting_key == key))
     if setting is None:
         setting = SystemSetting(setting_key=key)
     setting.setting_value = value
     db.add(setting)
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.config.update",
+        target_type="system_setting",
+        target_id=setting.id,
+        detail={"setting_key": key, "setting_value": value},
+    )
     db.commit()
     db.refresh(setting)
     invalidate_runtime_setting(key)
     return setting
 
 
-def restore_default_system_settings(db: Session) -> list[dict]:
+def restore_default_system_settings(db: Session, *, actor_id: int | None = None) -> list[dict]:
     defaults = default_system_settings()
     for key, (value, description, category) in defaults.items():
         setting = db.scalar(select(SystemSetting).where(SystemSetting.setting_key == key))
@@ -1121,6 +1281,14 @@ def restore_default_system_settings(db: Session) -> list[dict]:
         setting.description = description
         setting.category = category
         db.add(setting)
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.config.update",
+        target_type="system_setting",
+        target_id=None,
+        detail={"restore_defaults": True, "keys": list(defaults.keys())},
+    )
     db.commit()
     invalidate_runtime_setting()
     return list_system_settings(db)
@@ -1431,6 +1599,14 @@ def create_backup(db: Session, *, trigger_user_id: int | None) -> BackupRecord:
         if temp_root is not None:
             shutil.rmtree(temp_root, ignore_errors=True)
     db.add(record)
+    log_operation(
+        db,
+        user_id=trigger_user_id,
+        action="admin.backup.create",
+        target_type="backup",
+        target_id=record.id,
+        detail={"status": record.status, "file_path": record.file_path},
+    )
     db.commit()
     db.refresh(record)
     return record
@@ -1475,32 +1651,47 @@ def verify_backup(db: Session, *, backup_id: int) -> dict:
     return {"success": ok, "message": "备份正常" if ok else "备份损坏或缺失", "id": record.id}
 
 
-def delete_backup(db: Session, *, backup_id: int) -> None:
+def delete_backup(db: Session, *, backup_id: int, actor_id: int | None = None) -> None:
     record = db.get(BackupRecord, backup_id)
     if record is None:
         raise not_found("备份不存在")
-    if record.file_path:
-        Path(record.file_path).unlink(missing_ok=True)
+    file_path = record.file_path
+    if file_path:
+        Path(file_path).unlink(missing_ok=True)
+    # 备份记录将被物理删除，审计日志须在删除前写入（不依赖被删行的 id 主键约束）
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.backup.delete",
+        target_type="backup",
+        target_id=backup_id,
+        detail={"file_path": file_path},
+    )
     db.delete(record)
     db.commit()
 
 
-def mark_error_log_resolved(db: Session, *, error_id: int, resolved: bool = True) -> dict:
+def mark_error_log_resolved(db: Session, *, error_id: int, resolved: bool = True, actor_id: int | None = None) -> dict:
     record = db.get(SystemErrorLog, error_id)
     if record is None:
         raise not_found("错误日志不存在")
+    # 仅打标记，不物理删除，保留审计轨迹；列表默认过滤 detail.resolved=true 的已解决项
     record.detail = {**(record.detail or {}), "resolved": resolved, "resolved_at": datetime.now(UTC).isoformat() if resolved else None}
     db.add(record)
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.error_log.resolve",
+        target_type="error_log",
+        target_id=record.id,
+        detail={"resolved": resolved},
+    )
     db.commit()
     db.refresh(record)
-    payload = _model_dict(record)
-    if resolved:
-        db.delete(record)
-        db.commit()
-    return payload
+    return _model_dict(record)
 
 
-def restore_backup(db: Session, *, backup_id: int) -> dict:
+def restore_backup(db: Session, *, backup_id: int, actor_id: int | None = None) -> dict:
     record = db.get(BackupRecord, backup_id)
     if record is None or not record.file_path:
         raise not_found("备份不存在")
@@ -1539,4 +1730,17 @@ def restore_backup(db: Session, *, backup_id: int) -> dict:
             raise bad_request("不支持的备份文件格式")
     finally:
         shutil.rmtree(temp_root, ignore_errors=True)
-    return {"success": True, "message": "备份已恢复，请重启 API 与 Celery 服务使连接重新加载"}
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.backup.restore",
+        target_type="backup",
+        target_id=record.id,
+        detail={"file_path": record.file_path},
+    )
+    db.commit()
+    return {
+        "success": True,
+        # 恢复后连接池仍指向旧数据，必须手动重启服务才真正生效，message 如实告知避免状态与感知不一致
+        "message": "恢复完成，需手动重启 API 与 Celery 服务后才会生效（当前运行中的进程仍使用旧连接）",
+    }
