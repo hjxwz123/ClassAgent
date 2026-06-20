@@ -8,15 +8,15 @@ from time import sleep
 from typing import Any
 
 from fastapi import UploadFile
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.enums import MaterialType, QAFeedback, QuestionType, UserRole
+from app.core.enums import LearningSignalSource, MaterialType, QAFeedback, QuestionType, UserRole
 from app.core.errors import bad_request, forbidden, not_found
 from app.core.media import signed_media_url
 from app.core.upload_validation import validate_image_upload
-from app.db.models import Chapter, Course, CourseMaterial, CourseMembership, KnowledgeChunk, Lesson, LessonPage, QAConversation, QARecord, User
+from app.db.models import Chapter, Course, CourseMaterial, CourseMembership, KnowledgeChunk, Lesson, LessonPage, QAConversation, QARecord, StudentLearningSignal, User
 from app.schemas.qa import QAAskRequest
 from app.services.ai import ai_service
 from app.services.courses import _assert_course_available_for_student
@@ -38,7 +38,9 @@ _THINK_END_TAGS = ("</think>", "</thinking>")
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 _QA_IMAGE_LIMIT_BYTES = 10 * 1024 * 1024
 _STREAM_CHUNK_SIZE = 36
-_STREAM_CHUNK_DELAY_SECONDS = 0.015
+# 仅用于"整段文本一次性下发"(通用回答/兜底/后缀)的渐进式分块，真实流式 token 路径单 token 单块不触发。
+# 取很小的值即可，过大会让前端逐块等待、表现为"逐字卡顿"。
+_STREAM_CHUNK_DELAY_SECONDS = 0.004
 _QA_FALLBACK_PAGE_SCAN_LIMIT = 240
 _QA_VECTOR_CONTEXT_LIMIT = 8
 _QA_DETAIL_VECTOR_CONTEXT_LIMIT = 10
@@ -268,7 +270,7 @@ def _stream_text_delta(kind: str, text: str, answer_parts: list[str], thought_pa
     for chunk in chunks:
         target.append(chunk)
         yield {"event": "delta", "data": {"type": kind, "text": chunk}}
-        if len(chunks) > 1:
+        if len(chunks) > 1 and _STREAM_CHUNK_DELAY_SECONDS > 0:
             sleep(_STREAM_CHUNK_DELAY_SECONDS)
 
 
@@ -2178,8 +2180,8 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
                         for kind, text in _split_thinking_tags(tag_state, delta.text):
                             yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
                     deltas_since_flush += 1
-                    if deltas_since_flush >= 24:
-                        persist(final=False)  # 增量落库，硬性中断也尽量少丢内容
+                    if deltas_since_flush >= 8:
+                        persist(final=False)  # 增量落库（更勤），刷新/断流时尽量少丢已生成内容
                         deltas_since_flush = 0
             except Exception as exc:
                 answer_parts.clear()
@@ -2380,6 +2382,30 @@ def list_conversation_records(db: Session, *, user: User, conversation_id: int) 
             .order_by(QARecord.created_at.asc(), QARecord.id.asc())
         )
     )
+
+
+def delete_conversation(db: Session, *, user: User, conversation_id: int) -> None:
+    """删除一整条问答历史（会话及其全部问答记录），仅本人可删。"""
+    conversation = db.scalar(
+        select(QAConversation).where(QAConversation.id == conversation_id, QAConversation.user_id == user.id)
+    )
+    if conversation is None:
+        raise not_found("问答对话不存在")
+    record_ids = list(
+        db.scalars(select(QARecord.id).where(QARecord.conversation_id == conversation_id, QARecord.user_id == user.id))
+    )
+    if record_ids:
+        # 同步清除由这些问答派生的学习信号(source_id 非外键)，避免留下指向已删记录的孤儿数据。
+        db.execute(
+            delete(StudentLearningSignal).where(
+                StudentLearningSignal.user_id == user.id,
+                StudentLearningSignal.source_type == LearningSignalSource.QA.value,
+                StudentLearningSignal.source_id.in_(record_ids),
+            )
+        )
+        db.execute(delete(QARecord).where(QARecord.conversation_id == conversation_id, QARecord.user_id == user.id))
+    db.delete(conversation)
+    db.commit()
 
 
 def update_favorite(db: Session, *, record_id: int, user: User, is_favorite: bool) -> QARecord:
