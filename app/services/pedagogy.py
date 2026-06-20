@@ -229,6 +229,11 @@ def _payload_says_non_teaching(payload: Any) -> bool:
     return False
 
 
+def _payload_is_degraded(payload: Any) -> bool:
+    """AI 教学结构生成在模型不可用/调用失败时回退到关键词模板，会带 _degraded sentinel。"""
+    return isinstance(payload, dict) and bool(payload.get("_degraded"))
+
+
 def _is_teachable_page(page: LessonPage, lesson: Lesson, payload: Any | None = None) -> bool:
     if _payload_says_non_teaching(payload):
         return False
@@ -358,8 +363,14 @@ def _new_artifact(
     summary: str | None = None,
     keywords: list[str] | None = None,
     payload: dict[str, Any] | None = None,
+    degraded: bool = False,
 ) -> PedagogyArtifact:
     scene_type = SCENE_TYPE_BY_ARTIFACT.get(artifact_type, "explain")
+    extra = dict(payload or {})
+    if degraded:
+        # 模型不可用/调用失败时用模板兜底产生的制品：显式标记，避免被 QA/出题当作真实 AI 产物。
+        extra["degraded"] = True
+        extra["source"] = "template"
     return PedagogyArtifact(
         course_id=material.course_id,
         material_id=material.id,
@@ -371,7 +382,7 @@ def _new_artifact(
         summary=_compact_text(summary, limit=500) if summary else None,
         content=_compact_text(content, limit=3000) or _compact_text(title, limit=500) or "可结合课程资料进一步补充。",
         keywords=keywords or None,
-        payload=_base_payload(material=material, lesson=lesson, page=page, scene_type=scene_type, extra=payload),
+        payload=_base_payload(material=material, lesson=lesson, page=page, scene_type=scene_type, extra=extra),
         order_index=order_index,
     )
 
@@ -384,6 +395,7 @@ def _page_artifacts(
     page: LessonPage,
     order_base: int,
     use_ai: bool = True,
+    warnings: list[str] | None = None,
 ) -> list[PedagogyArtifact]:
     if not _is_teachable_page(page, lesson):
         return []
@@ -400,6 +412,15 @@ def _page_artifacts(
         )
     if _payload_says_non_teaching(raw_payload):
         return []
+    # 模型不可用/调用失败时 AI 层会回退关键词模板并带 _degraded；纯模板补齐(use_ai=False)同样不是真实 AI 产物。
+    degraded = (not use_ai) or _payload_is_degraded(raw_payload)
+    if degraded and warnings is not None:
+        page_label = page.page_title or f"第{page.page_number}页"
+        if use_ai:
+            reason = _compact_text((raw_payload or {}).get("_degraded_reason"), limit=160) or "模型未配置或调用失败"
+            warnings.append(f"第{page.page_number}页（{page_label}）教学结构降级为模板：{reason}")
+        else:
+            warnings.append(f"第{page.page_number}页（{page_label}）教学结构以模板补齐，未走 AI 生成")
     payload = _normalize_page_payload(
         raw_payload,
         page=page,
@@ -531,6 +552,9 @@ def _page_artifacts(
             )
         )
         order += 1
+    if degraded:
+        for artifact in artifacts:
+            artifact.payload = {**(artifact.payload or {}), "degraded": True, "source": "template"}
     return artifacts
 
 
@@ -567,6 +591,7 @@ def _chapter_outline_artifact(
     lesson: Lesson,
     pages: Sequence[LessonPage],
     page_artifacts: Sequence[PedagogyArtifact],
+    degraded: bool = False,
 ) -> PedagogyArtifact:
     summaries = [artifact for artifact in page_artifacts if artifact.artifact_type == ARTIFACT_PAGE_SUMMARY]
     concepts = [artifact.title.replace("：知识点", "") for artifact in page_artifacts if artifact.artifact_type == ARTIFACT_CONCEPT_CARD]
@@ -604,6 +629,7 @@ def _chapter_outline_artifact(
             "misconceptions": list(dict.fromkeys(mistakes[:24])),
         },
         order_index=0,
+        degraded=degraded,
     )
 
 
@@ -614,6 +640,7 @@ def generate_material_pedagogy_artifacts(
     lesson: Lesson,
     pages: Sequence[LessonPage],
     on_progress: Callable[[dict[str, Any]], None] | None = None,
+    warnings: list[str] | None = None,
 ) -> list[PedagogyArtifact]:
     db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.material_id == material.id))
     artifacts: list[PedagogyArtifact] = []
@@ -625,6 +652,7 @@ def generate_material_pedagogy_artifacts(
             lesson=lesson,
             page=page,
             order_base=(index - 1) * 100 + 1,
+            warnings=warnings,
         )
         artifacts.extend(page_artifacts)
         if on_progress is not None:
@@ -669,7 +697,7 @@ def ensure_lesson_pedagogy_artifacts(
                 use_ai=False,
             )
         )
-    artifacts.insert(0, _chapter_outline_artifact(material=material, lesson=lesson, pages=pages, page_artifacts=artifacts))
+    artifacts.insert(0, _chapter_outline_artifact(material=material, lesson=lesson, pages=pages, page_artifacts=artifacts, degraded=True))
     for artifact in artifacts:
         db.add(artifact)
     db.flush()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import smtplib
 from datetime import datetime
 from html import escape
@@ -11,6 +12,9 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.errors import bad_request
 from app.db import session as db_session
+
+
+LOGGER = logging.getLogger(__name__)
 from app.db.models import SystemErrorLog
 from app.services.runtime_config import get_enabled_service_config
 
@@ -270,8 +274,10 @@ class EmailService:
                     server.login(str(config["username"]), str(config["password"]))
             finally:
                 server.quit()
-        except Exception as exc:
-            return {"success": False, "message": f"SMTP 连接失败: {exc}"}
+        except Exception:
+            # #60: SMTP 原始异常（含主机/端口/服务器应答/鉴权诊断）仅写服务端日志，对管理员返回统一文案。
+            LOGGER.warning("SMTP config test failed", exc_info=True)
+            return {"success": False, "message": "SMTP 连接失败，请检查邮件服务配置或稍后重试"}
         return {"success": True, "message": "邮件服务配置可用"}
 
 

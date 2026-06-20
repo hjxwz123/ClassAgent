@@ -1,15 +1,15 @@
 from fastapi import UploadFile
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.enums import ProblemSourceType, UserRole
-from app.core.errors import forbidden, not_found
-from app.core.media import signed_media_url
+from app.core.errors import bad_request, forbidden, not_found
 from app.core.upload_validation import validate_image_upload
 from app.db.models import Course, CourseMembership, KnowledgeChunk, ProblemGuidance, ProblemRecord, User
 from app.schemas.tutoring import ProblemTextRequest
 from app.services.ai import ai_service
+from app.services.courses import _assert_course_available_for_student
 from app.services.knowledge import search_course_knowledge
 from app.services.ocr import ocr_service
 from app.services.pedagogy import TUTORING_ARTIFACT_TYPES, artifact_contexts, search_pedagogy_artifacts
@@ -29,6 +29,7 @@ def _assert_student_course_access(db: Session, *, course_id: int, user: User) ->
     )
     if membership is None:
         raise forbidden("仅可在已加入课程内使用题目辅导")
+    _assert_course_available_for_student(db, course_id)
 
 
 def _student_course_scope(db: Session, *, user: User, course_id: int | None) -> int | None:
@@ -144,7 +145,7 @@ def create_image_problem(db: Session, *, user: User, course_id: int, upload: Upl
         course_id=course_id,
         user_id=user.id,
         source_type=ProblemSourceType.IMAGE.value,
-        image_path=signed_media_url(relative_path),
+        image_path=relative_path,
         ocr_text=ocr_text,
     )
     db.add(problem)
@@ -175,6 +176,11 @@ def get_problem_guidance(db: Session, *, problem_id: int, user: User, level: int
     )
     if guidance is not None:
         return guidance
+    max_unlocked = db.scalar(
+        select(func.max(ProblemGuidance.level)).where(ProblemGuidance.problem_id == problem_id)
+    ) or 0
+    if level > max_unlocked + 1:
+        raise bad_request("请先完成前序层级的引导后再解锁更高层级")
     source_text = problem.corrected_text or problem.ocr_text or problem.raw_text or ""
     contexts = _problem_guidance_contexts(db, course_id=problem.course_id, problem_text=source_text)
     allow_general_ai_answer = _course_allows_general_ai_answer(db, course_id=problem.course_id)

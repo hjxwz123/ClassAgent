@@ -318,9 +318,14 @@ def _synthesize_or_none(script_text: str, db: Session) -> tuple[str | None, floa
         return None, None, str(exc)
 
 
+# 降级标记前缀：明确告知该文本因模型未配置/调用失败而以模板兜底，不是真实 AI 产物。
+_DEGRADED_SUMMARY_PREFIX = "【未生成AI摘要】"
+_DEGRADED_SCRIPT_PREFIX = "【未生成AI讲解稿】"
+
+
 def _fallback_lesson_summary(*, title: str, pages: list[dict[str, Any]]) -> str:
     merged = " ".join(str(page.get("page_text") or "").strip() for page in pages if str(page.get("page_text") or "").strip())
-    return f"{title}：{merged[:200] or '该资料已解析出课件页面，可继续补充讲解脚本。'}"
+    return f"{_DEGRADED_SUMMARY_PREFIX}{title}：摘要因未配置模型或模型调用失败未生成，以下为页面原文片段供参考：{merged[:160] or '该资料已解析出课件页面，可继续补充讲解脚本。'}"
 
 
 def _fallback_page_script(page_data: dict[str, Any]) -> str:
@@ -328,52 +333,62 @@ def _fallback_page_script(page_data: dict[str, Any]) -> str:
     content = re.sub(r"\s+", " ", str(page_data.get("page_text") or "")).strip()
     summary = content[:220] if len(content) > 220 else content
     return (
-        f"{heading}的核心内容如下：\n"
-        f"1. 先理解本页定义与背景：{summary or '本页暂无可提取文字。'}\n"
-        "2. 再关注概念之间的联系与典型应用。\n"
-        "3. 最后结合课程上下文总结本页重点并准备继续学习。"
+        f"{_DEGRADED_SCRIPT_PREFIX}{heading}：讲解稿因未配置模型或模型调用失败未生成，以下为页面原文片段供参考：\n"
+        f"{summary or '本页暂无可提取文字。'}"
     )
 
 
-def _summarize_lesson_with_limit(db: Session, *, title: str, pages: list[dict[str, Any]]) -> str:
+def _summarize_lesson_with_limit(db: Session, *, title: str, pages: list[dict[str, Any]]) -> tuple[str, str | None]:
+    """返回 (摘要, 降级原因)；降级原因非空表示用了模板兜底，需上层记入 warnings。"""
     try:
         with _material_ai_limiter:
-            return ai_service.summarize_lesson(title, [page["page_text"] for page in pages], db=db)
-    except Exception:
-        return _fallback_lesson_summary(title=title, pages=pages)
+            result = ai_service.summarize_lesson(title, [page["page_text"] for page in pages], db=db)
+        if result and result.strip():
+            return result.strip(), None
+        return _fallback_lesson_summary(title=title, pages=pages), "模型未返回有效摘要"
+    except Exception as exc:
+        return _fallback_lesson_summary(title=title, pages=pages), str(exc) or "模型调用失败"
 
 
-def _generate_page_script_with_new_session(page_data: dict[str, Any]) -> str:
+def _generate_page_script_with_new_session(page_data: dict[str, Any]) -> tuple[str, str | None]:
+    """返回 (讲解稿, 降级原因)；降级原因非空表示用了模板兜底，需上层记入 warnings。"""
     from app.db import session as db_session
 
     with db_session.SessionLocal() as task_db:
         try:
             with _material_ai_limiter:
-                return ai_service.generate_page_script(
+                result = ai_service.generate_page_script(
                     title=page_data.get("page_title"),
                     content=page_data["page_text"],
                     db=task_db,
                 )
-        except Exception:
-            return _fallback_page_script(page_data)
+            if result and result.strip():
+                return result.strip(), None
+            return _fallback_page_script(page_data), "模型未返回有效讲解稿"
+        except Exception as exc:
+            return _fallback_page_script(page_data), str(exc) or "模型调用失败"
 
 
 def _generate_page_scripts(
     pages: list[dict[str, Any]],
     *,
     on_progress: Any | None = None,
-) -> list[str]:
+) -> tuple[list[str], list[str | None]]:
+    """返回 (讲解稿列表, 每页降级原因列表)；降级原因为 None 表示该页为真实 AI 讲解稿。"""
     if not pages:
-        return []
+        return [], []
     max_workers = min(len(pages), max(1, int(_settings.material_ai_max_concurrency)))
     if max_workers <= 1:
-        results: list[str] = []
+        scripts: list[str] = []
+        reasons: list[str | None] = []
         for index, page_data in enumerate(pages, start=1):
-            results.append(_generate_page_script_with_new_session(page_data))
+            script, reason = _generate_page_script_with_new_session(page_data)
+            scripts.append(script)
+            reasons.append(reason)
             if callable(on_progress):
                 on_progress(index, len(pages), page_data)
-        return results
-    results: list[str | None] = [None] * len(pages)
+        return scripts, reasons
+    results: list[tuple[str, str | None] | None] = [None] * len(pages)
     completed = 0
     with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="material-script") as executor:
         future_map = {
@@ -386,7 +401,9 @@ def _generate_page_scripts(
             completed += 1
             if callable(on_progress):
                 on_progress(completed, len(pages), pages[index])
-    return [str(item or "") for item in results]
+    scripts = [str((item or ("", None))[0] or "") for item in results]
+    reasons = [(item or ("", None))[1] for item in results]
+    return scripts, reasons
 
 
 def create_material(
@@ -624,7 +641,17 @@ def regenerate_page_script(db: Session, *, page_id: int, user: User) -> LessonPa
     if material is None:
         raise not_found("资料不存在")
     _assert_material_owner(db, material, user, require_active=True)
-    script_text = ai_service.generate_page_script(title=page.page_title, content=page.page_text, db=db)
+    try:
+        script_text = ai_service.generate_page_script(title=page.page_title, content=page.page_text, db=db)
+    except Exception:
+        script_text = None
+    script_degraded_reason: str | None = None
+    if not (script_text and script_text.strip()):
+        # 模型未配置/调用失败/返回空：用带降级标记的兜底稿，不让页面落空或冒充真实讲解稿。
+        script_text = _fallback_page_script(
+            {"page_title": page.page_title, "page_text": page.page_text}
+        )
+        script_degraded_reason = "模型未返回有效讲解稿"
     audio_url, duration, error_message = _synthesize_or_none(script_text, db)
     page.script_text = script_text
     page.subtitle_text = script_text
@@ -632,13 +659,18 @@ def regenerate_page_script(db: Session, *, page_id: int, user: User) -> LessonPa
     page.audio_url = audio_url
     page.audio_duration_seconds = duration
     db.add(page)
+    log_detail: dict[str, Any] = {}
+    if error_message:
+        log_detail["tts_warning"] = error_message
+    if script_degraded_reason:
+        log_detail["script_degraded"] = script_degraded_reason
     log_operation(
         db,
         user_id=user.id,
         action="material.page.script.regenerate",
         target_type="lesson_page",
         target_id=page.id,
-        detail={"tts_warning": error_message} if error_message else None,
+        detail=log_detail or None,
     )
     db.commit()
     db.refresh(page)
@@ -1163,7 +1195,9 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         lesson.title = material.title
         lesson.chapter_id = material.chapter_id
         _update_task_stage(db, task, stage="lesson_summary", status=ProcessStatus.PROCESSING.value, progress=20)
-        lesson.summary = _summarize_lesson_with_limit(db, title=material.title, pages=pages)
+        lesson.summary, summary_degraded_reason = _summarize_lesson_with_limit(db, title=material.title, pages=pages)
+        if summary_degraded_reason:
+            warnings.append(f"课时摘要降级为模板：{summary_degraded_reason}")
         db.add(lesson)
         db.commit()
         _update_task_stage(db, task, stage="lesson_summary", status=ProcessStatus.READY.value, progress=25)
@@ -1193,7 +1227,10 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
                 current_page=page_data.get("page_number"),
             )
 
-        script_texts = _generate_page_scripts(pages, on_progress=record_script_progress)
+        script_texts, script_degraded_reasons = _generate_page_scripts(pages, on_progress=record_script_progress)
+        for page_data, degraded_reason in zip(pages, script_degraded_reasons, strict=True):
+            if degraded_reason:
+                warnings.append(f"第{page_data['page_number']}页讲解稿降级为模板：{degraded_reason}")
         _update_task_stage(
             db,
             task,
@@ -1327,6 +1364,7 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
                 lesson=lesson,
                 pages=created_pages,
                 on_progress=record_pedagogy_progress,
+                warnings=warnings,
             )
             artifact_count = len(artifacts)
             _update_task_stage(

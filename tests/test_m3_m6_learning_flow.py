@@ -441,6 +441,19 @@ def test_learning_core_flow(client, monkeypatch):
         headers=student_headers,
     )
     assert guidance_lvl1.status_code == 200, guidance_lvl1.text
+    # #16：分层引导服务端顺序解锁，不能跳级，须逐级解锁 1 -> 2 -> 3。
+    guidance_skip = client.get(
+        f"/api/v1/tutoring/problems/{problem['id']}/guidance",
+        params={"level": 3},
+        headers=student_headers,
+    )
+    assert guidance_skip.status_code == 400, guidance_skip.text
+    guidance_lvl2 = client.get(
+        f"/api/v1/tutoring/problems/{problem['id']}/guidance",
+        params={"level": 2},
+        headers=student_headers,
+    )
+    assert guidance_lvl2.status_code == 200, guidance_lvl2.text
     guidance_lvl3 = client.get(
         f"/api/v1/tutoring/problems/{problem['id']}/guidance",
         params={"level": 3},
@@ -1696,9 +1709,10 @@ def test_tutoring_guidance_uses_course_retrieval_and_rewrite_retry(client, monke
 
     monkeypatch.setattr(tutoring_service.ai_service, "generate_problem_guidance", fake_generate_problem_guidance)
 
+    # #16：新题目仅 level 1 可解锁（顺序解锁），本用例只验证检索改写，用 level 1 即可。
     guidance_resp = client.get(
         f"/api/v1/tutoring/problems/{problem['id']}/guidance",
-        params={"level": 2},
+        params={"level": 1},
         headers=student_headers,
     )
 
@@ -1747,7 +1761,7 @@ def test_tutoring_guidance_returns_existing_when_parallel_insert_wins(client, mo
                 db.add(
                     ProblemGuidance(
                         problem_id=problem["id"],
-                        level=2,
+                        level=1,
                         content="并发请求已经生成的辅导内容",
                         similar_questions=["已有相似题"],
                     )
@@ -1758,9 +1772,10 @@ def test_tutoring_guidance_returns_existing_when_parallel_insert_wins(client, mo
 
     monkeypatch.setattr(tutoring_service.ai_service, "generate_problem_guidance", generate_problem_guidance)
 
+    # #16：新题目首个可解锁层级为 1，本用例验证并发插入命中唯一约束的回退，用 level 1。
     guidance_resp = client.get(
         f"/api/v1/tutoring/problems/{problem['id']}/guidance",
-        params={"level": 2},
+        params={"level": 1},
         headers=student_headers,
     )
 

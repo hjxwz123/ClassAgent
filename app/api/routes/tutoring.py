@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -15,6 +15,7 @@ from app.services.tutoring import confirm_problem_text, create_image_problem, cr
 router = APIRouter()
 TUTORING_RULE = RateLimitRule(limit=60, window_seconds=300)
 TUTORING_UPLOAD_RULE = RateLimitRule(limit=30, window_seconds=300)
+TUTORING_GUIDANCE_RULE = RateLimitRule(limit=60, window_seconds=300)
 
 
 @router.post("/problems/text")
@@ -50,6 +51,7 @@ def confirm_problem_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "tutoring-guidance-ip", rule=TUTORING_GUIDANCE_RULE)
     problem = confirm_problem_text(db, problem_id=problem_id, user=user, corrected_text=payload.corrected_text)
     return success_response(data=ProblemResponse.model_validate(problem).model_dump(mode="json"), request_id=request.state.request_id)
 
@@ -57,11 +59,12 @@ def confirm_problem_endpoint(
 @router.get("/problems/{problem_id}/guidance")
 def get_guidance_endpoint(
     problem_id: int,
-    level: int,
     request: Request,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    level: int = Query(ge=1, le=3),
 ):
+    limit_request(request, "tutoring-guidance-ip", rule=TUTORING_GUIDANCE_RULE)
     guidance = get_problem_guidance(db, problem_id=problem_id, user=user, level=level)
     return success_response(data=ProblemGuidanceResponse.model_validate(guidance).model_dump(mode="json"), request_id=request.state.request_id)
 
