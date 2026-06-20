@@ -512,6 +512,34 @@
       </div>
     </Transition>
 
+    <Transition name="modal-pop">
+      <div v-if="helpOpen" class="modal-mask" @click.self="helpOpen = false">
+        <article class="modal help-modal">
+          <div class="modal-head"><HelpCircle :size="20" /><h2>使用帮助</h2><button class="icon-action modal-close-action" aria-label="关闭" title="关闭" @click="helpOpen = false"><X :size="16" />关闭</button></div>
+          <div class="help-body">
+            <section class="help-section">
+              <h3><BookOpen :size="16" />快速上手</h3>
+              <ol>
+                <li>在「我的课程」创建课程并填写章节结构。</li>
+                <li>进入「资料管理」上传 PPT/PDF/Word/TXT，等待 AI 解析。</li>
+                <li>解析完成后在「PPT 工作台」审核脚本并发布课时。</li>
+                <li>用课程码邀请学生加入，在「学生管理」跟踪进度。</li>
+              </ol>
+            </section>
+            <section class="help-section">
+              <h3><Sparkles :size="16" />AI 任务与重试</h3>
+              <p>资料解析、脚本生成和测验生成会进入 AI 任务队列。若任务显示「失败」，可点击任务上的「重试」重新提交处理。</p>
+            </section>
+            <section class="help-section">
+              <h3><Mail :size="16" />联系与反馈</h3>
+              <p>遇到问题可联系平台管理员，或通过页面右上角「通知」查看系统提醒。</p>
+            </section>
+          </div>
+          <footer><button class="btn btn-primary" @click="helpOpen = false">我知道了</button></footer>
+        </article>
+      </div>
+    </Transition>
+
     <MaterialPreviewModal :open="!!previewItem" :item="previewItem" :detail="previewDetail" :loading="previewItem ? isPending(`preview-material-${previewItem.id}`) : false" @download="downloadMaterial" @close="closePreview" />
     <Transition name="modal-pop">
       <div v-if="lessonPreview" class="modal-mask">
@@ -597,6 +625,15 @@
       @cancel="confirmDeleteCourseOpen = false"
       @confirm="confirmDeleteCourse"
     />
+    <ConfirmDialog
+      :open="confirmRemoveStudentOpen"
+      title="移出课程"
+      :message="`确认将学生 ${confirmRemoveStudent.name} 移出课程？移出后该学生将无法继续学习本课程。`"
+      confirm-text="移出"
+      tone="danger"
+      @cancel="confirmRemoveStudentOpen = false"
+      @confirm="confirmRemoveStudentAction"
+    />
   </section>
 </template>
 
@@ -611,7 +648,7 @@ import {
   Save, Search, Settings, Share2, SkipBack, SkipForward, Sparkles, Trash2, TrendingDown, Upload, User, UserPlus, UserX,
   Users, Volume2, Wand2, X, XCircle, ZoomIn
 } from "../icons";
-import { api } from "../api/client";
+import { api, setToken } from "../api/client";
 import { routeByPage } from "../router";
 import type { Course, CourseDetail, MaterialDetail, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
@@ -703,6 +740,9 @@ const scriptUndoStack = ref<string[]>([]);
 const scriptRedoStack = ref<string[]>([]);
 const editorPulse = ref("");
 const confirmDeleteCourseOpen = ref(false);
+const confirmRemoveStudentOpen = ref(false);
+const confirmRemoveStudent = reactive<{ id: number; name: string }>({ id: 0, name: "" });
+const helpOpen = ref(false);
 const reminderOpen = ref(false);
 const reminderTargetIds = ref<number[]>([]);
 const courseCoverFile = ref<File | null>(null);
@@ -984,7 +1024,12 @@ async function markTeacherNotificationsRead(item?: any) {
     notificationReading.value = false;
   }
 }
-function openHelp() { emit("notice", "info", "教师端帮助已准备，可以从当前页面继续操作"); }
+function openHelp() {
+  courseMenuOpen.value = false;
+  userMenuOpen.value = false;
+  teacherNoticeOpen.value = false;
+  helpOpen.value = true;
+}
 async function loadCourses() { courses.value = (await run(() => api.get<any[]>("/teacher/courses"))) || []; if ((!currentCourseId.value || !courses.value.some((course) => course.id === currentCourseId.value)) && courses.value[0]) currentCourseId.value = courses.value[0].id; }
 async function loadDashboard() { dashboard.value = (await run(() => api.get("/teacher/dashboard"))) || {}; }
 async function loadCourseHome() { if (!currentCourse.value) return; courseHome.value = (await run(() => api.get(`/teacher/courses/${currentCourse.value.id}/home`))) || {}; lessons.value = courseHome.value.lessons || []; }
@@ -1825,7 +1870,21 @@ function openReminderModal(ids: number[]) {
   reminderOpen.value = true;
 }
 function remindStudent(id: number) { openReminderModal([id]); }
-async function removeStudent(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`remove-student-${id}`, async () => { await run(() => api.delete(`/teacher/courses/${currentCourse.value!.id}/students/${id}`), "已移出"); studentDrawer.value = null; await loadStudents(); }); }
+function removeStudent(id: number) {
+  if (!ensureCurrentCourseOperable()) return;
+  const target = studentDrawer.value?.student?.id === id
+    ? studentDrawer.value?.student
+    : filteredStudents.value.find((item: any) => Number(item.student?.id) === Number(id))?.student;
+  confirmRemoveStudent.id = id;
+  confirmRemoveStudent.name = target?.nickname || "该学生";
+  confirmRemoveStudentOpen.value = true;
+}
+async function confirmRemoveStudentAction() {
+  const id = confirmRemoveStudent.id;
+  confirmRemoveStudentOpen.value = false;
+  if (!id || !ensureCurrentCourseOperable()) return;
+  await withAction(`remove-student-${id}`, async () => { await run(() => api.delete(`/teacher/courses/${currentCourse.value!.id}/students/${id}`), "已移出"); studentDrawer.value = null; await loadStudents(); });
+}
 function batchRemind() { openReminderModal(filteredStudents.value.map((item: any) => item.student.id)); }
 async function sendReminder() {
   if (!ensureCurrentCourseOperable() || !reminderTargetIds.value.length) return;
@@ -1847,7 +1906,32 @@ async function sendReminder() {
 }
 function clearStudentFilter() { Object.assign(studentFilter, { keyword: "", progress: "", active: "" }); }
 async function exportCurrent() { if (!currentCourse.value) return; await withAction(`export-${active.value}`, async () => { if (active.value === "teacherStudents") await run(() => api.download(`/teacher/courses/${currentCourse.value!.id}/students/export`, `students-${currentCourse.value!.course_code}.csv`), "已导出"); if (active.value === "teacherAnalytics") { const days = analysisRange.value === "本周" ? 7 : analysisRange.value === "本月" ? 30 : 120; await run(() => api.download(`/teacher/courses/${currentCourse.value!.id}/analysis/export`, `analysis-${currentCourse.value!.course_code}.csv`, { days }), "已导出"); } }); }
-function retryTask() { emit("notice", "info", "已重试"); }
+async function retryTask(task: any) {
+  const targetId = Number(task?.target_id || 0);
+  if (task?.target_type === "material" && targetId) {
+    // Reprocess is authorized per-material on the backend (course must be active),
+    // so retry directly instead of relying on the currently selected course.
+    await withAction(`reprocess-material-${targetId}`, async () => {
+      const material = await run<any>(() => api.post(`/materials/${targetId}/reprocess`), "已重新提交解析，正在解析中");
+      if (!material) return;
+      if (currentCourse.value && Number(material.course_id) === Number(currentCourse.value.id)) {
+        markMaterialReprocessing(targetId);
+        await loadMaterials();
+        scheduleMaterialRefreshes();
+      }
+      await Promise.all([loadDashboard(), currentCourse.value ? loadCourseHome() : Promise.resolve()]);
+    });
+    return;
+  }
+  if (task?.target_type === "quiz") {
+    const courseId = Number(task?.detail?.course_id || 0);
+    if (courseId && currentCourseId.value !== courseId) currentCourseId.value = courseId;
+    emit("notice", "info", "请在薄弱题目页面重新生成该测验");
+    await go("teacherWeakQuizzes");
+    return;
+  }
+  emit("notice", "warning", "该任务暂不支持重试");
+}
 async function copyText(text: unknown) {
   const copied = await copyToClipboard(text);
   emit("notice", copied ? "success" : "warning", copied ? "已复制" : "复制失败，请手动复制");
@@ -1879,7 +1963,7 @@ async function uploadProfileAvatar(event: Event) {
   }, "头像已更新");
 }
 async function saveProfile() { const data = await withAction<any>("save-profile", () => api.patch("/teacher/profile", { nickname: profileForm.nickname, avatar_url: profileForm.avatar_url, bio: profileForm.bio, organization: profileForm.organization, department: profileForm.department }), "已保存"); if (data) applyTeacherProfile(data); profileEditing.value = false; }
-async function changePassword() { if (passwordForm.new_password !== passwordConfirm.value) return emit("notice", "warning", "密码不一致"); await withAction("change-password", async () => { await run(() => api.post("/auth/me/password", passwordForm), "已保存"); Object.assign(passwordForm, { old_password: "", new_password: "" }); passwordConfirm.value = ""; }); }
+async function changePassword() { if (passwordForm.new_password !== passwordConfirm.value) return emit("notice", "warning", "密码不一致"); await withAction("change-password", async () => { const res = await run(() => api.post<{ access_token: string }>("/auth/me/password", passwordForm), "已保存"); if (res?.access_token) setToken(res.access_token); Object.assign(passwordForm, { old_password: "", new_password: "" }); passwordConfirm.value = ""; }); }
 async function saveNotice() { const data = await withAction<any[]>("save-notice", () => api.put("/teacher/profile/notifications", { settings: noticeSettings.map((item) => ({ key: item.key, enabled: item.enabled })) }), "已保存"); if (data) noticeSettings.splice(0, noticeSettings.length, ...data); }
 
 function firstChar(value?: string) { return (value || "-").slice(0, 1); }
@@ -2006,3 +2090,12 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 
 <style scoped src="../styles/teacher-scoped.css"></style>
 <style scoped src="../styles/teacher-classagent.css"></style>
+<style scoped>
+.help-modal { width: min(560px, 94vw); display: grid; gap: 16px; }
+.help-body { display: grid; gap: 18px; }
+.help-section { display: grid; gap: 8px; }
+.help-section h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--text-body); font-weight: var(--font-weight-bold); color: var(--color-text-primary); }
+.help-section p { margin: 0; color: var(--color-text-secondary); font-size: var(--text-body-sm); line-height: 1.65; }
+.help-section ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--color-text-secondary); font-size: var(--text-body-sm); line-height: 1.6; }
+.help-section li { padding-left: 2px; }
+</style>

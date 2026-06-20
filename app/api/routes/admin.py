@@ -174,7 +174,7 @@ def update_user_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    updated = update_user(db, user_id=user_id, status=payload.status, role=payload.role)
+    updated = update_user(db, user_id=user_id, status=payload.status, role=payload.role, actor_id=user.id)
     return success_response(data=UserSummary.model_validate(updated).model_dump(mode="json"), request_id=request.state.request_id)
 
 
@@ -187,7 +187,7 @@ def reset_user_password_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    updated = reset_user_password(db, user_id=user_id, new_password=payload.new_password)
+    updated = reset_user_password(db, user_id=user_id, new_password=payload.new_password, actor_id=user.id)
     return success_response(data=UserSummary.model_validate(updated).model_dump(mode="json"), request_id=request.state.request_id)
 
 
@@ -199,7 +199,7 @@ def delete_user_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    soft_delete_user(db, user_id=user_id)
+    soft_delete_user(db, user_id=user_id, actor_id=user.id)
     return success_response(message="用户已删除", request_id=request.state.request_id)
 
 
@@ -272,7 +272,7 @@ def takeover_course_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    course = takeover_course(db, course_id=course_id, teacher_id=payload.teacher_id)
+    course = takeover_course(db, course_id=course_id, teacher_id=payload.teacher_id, actor_id=user.id)
     output = sa_dict(course)
     return success_response(data=output, request_id=request.state.request_id)
 
@@ -323,7 +323,7 @@ def delete_material_admin_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    remove_material_admin(db, material_id=material_id)
+    remove_material_admin(db, material_id=material_id, actor_id=user.id)
     return success_response(message="资料已删除", request_id=request.state.request_id)
 
 
@@ -355,6 +355,7 @@ def save_model_config_endpoint(
         api_key=payload.api_key,
         is_default=payload.is_default,
         extra_config=payload.extra_config,
+        actor_id=user.id,
     )
     return success_response(data={"id": config.id}, request_id=request.state.request_id)
 
@@ -378,7 +379,7 @@ def delete_model_config_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    delete_model_config(db, config_id=config_id)
+    delete_model_config(db, config_id=config_id, actor_id=user.id)
     return success_response(message="模型配置已删除", request_id=request.state.request_id)
 
 
@@ -418,6 +419,7 @@ def save_service_config_endpoint(
         name=payload.name,
         config=payload.config,
         is_enabled=payload.is_enabled,
+        actor_id=user.id,
     )
     return success_response(data={"id": config.id}, request_id=request.state.request_id)
 
@@ -441,7 +443,7 @@ def delete_service_config_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    delete_service_config(db, config_id=config_id)
+    delete_service_config(db, config_id=config_id, actor_id=user.id)
     return success_response(message="服务配置已删除", request_id=request.state.request_id)
 
 
@@ -464,7 +466,7 @@ def update_system_setting_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    setting = update_system_setting(db, key=key, value=payload.value)
+    setting = update_system_setting(db, key=key, value=payload.value, actor_id=user.id)
     return success_response(
         data={"id": setting.id, "setting_key": setting.setting_key, "setting_value": setting.setting_value},
         request_id=request.state.request_id,
@@ -478,7 +480,7 @@ def restore_default_system_settings_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    return success_response(data=restore_default_system_settings(db), request_id=request.state.request_id)
+    return success_response(data=restore_default_system_settings(db, actor_id=user.id), request_id=request.state.request_id)
 
 
 @router.get("/monitoring/overview")
@@ -588,7 +590,7 @@ def resolve_error_log_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    return success_response(data=mark_error_log_resolved(db, error_id=error_id), request_id=request.state.request_id)
+    return success_response(data=mark_error_log_resolved(db, error_id=error_id, actor_id=user.id), request_id=request.state.request_id)
 
 
 @router.get("/backups/summary")
@@ -639,7 +641,7 @@ def restore_backup_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    return success_response(data=restore_backup(db, backup_id=backup_id), request_id=request.state.request_id)
+    return success_response(data=restore_backup(db, backup_id=backup_id, actor_id=user.id), request_id=request.state.request_id)
 
 
 @router.post("/backups/{backup_id}/verify")
@@ -674,5 +676,5 @@ def delete_backup_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     assert_admin(user)
-    delete_backup(db, backup_id=backup_id)
+    delete_backup(db, backup_id=backup_id, actor_id=user.id)
     return success_response(message="备份已删除", request_id=request.state.request_id)

@@ -128,37 +128,7 @@ def get_course_analytics(db: Session, *, course_id: int, user: User, days: int =
     _assert_teacher_access(db, course_id=course_id, user=user)
     since = datetime.now(UTC) - timedelta(days=days)
 
-    high_frequency_questions = [
-        {"question": question, "count": int(count or 0)}
-        for question, count in db.execute(
-            select(QARecord.question, func.count(QARecord.id))
-            .where(QARecord.course_id == course_id, QARecord.created_at >= since)
-            .group_by(QARecord.question)
-            .order_by(func.count(QARecord.id).desc(), func.max(QARecord.created_at).desc())
-            .limit(10)
-        )
-    ]
-
-    point_id = func.coalesce(WrongQuestion.knowledge_point_id, QuizQuestion.knowledge_point_id)
-    point_name = func.coalesce(KnowledgePoint.name, "未标注知识点")
-    weak_points = [
-        {"knowledge_point_id": point_id_value, "knowledge_point": name, "wrong_count": int(count or 0)}
-        for point_id_value, name, count in db.execute(
-            select(point_id, point_name, func.sum(WrongQuestion.wrong_count))
-            .select_from(WrongQuestion)
-            .outerjoin(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
-            .outerjoin(
-                KnowledgePoint,
-                KnowledgePoint.id == point_id,
-            )
-            .where(WrongQuestion.course_id == course_id, WrongQuestion.updated_at >= since)
-            .group_by(point_id, point_name)
-            .order_by(func.sum(WrongQuestion.wrong_count).desc(), point_name.asc())
-            .limit(10)
-        )
-    ]
-    _weak_point_artifact_refs(db, course_id=course_id, weak_points=weak_points)
-
+    # 仅统计在册学生：移除学生后其派生数据（问答/错题/学习时长）不再计入。
     student_ids = list(
         db.scalars(
             select(CourseMembership.user_id).where(
@@ -167,6 +137,45 @@ def get_course_analytics(db: Session, *, course_id: int, user: User, days: int =
             )
         )
     )
+
+    high_frequency_questions = (
+        [
+            {"question": question, "count": int(count or 0)}
+            for question, count in db.execute(
+                select(QARecord.question, func.count(QARecord.id))
+                .where(QARecord.course_id == course_id, QARecord.created_at >= since, QARecord.user_id.in_(student_ids))
+                .group_by(QARecord.question)
+                .order_by(func.count(QARecord.id).desc(), func.max(QARecord.created_at).desc())
+                .limit(10)
+            )
+        ]
+        if student_ids
+        else []
+    )
+
+    point_id = func.coalesce(WrongQuestion.knowledge_point_id, QuizQuestion.knowledge_point_id)
+    point_name = func.coalesce(KnowledgePoint.name, "未标注知识点")
+    weak_points = (
+        [
+            {"knowledge_point_id": point_id_value, "knowledge_point": name, "wrong_count": int(count or 0)}
+            for point_id_value, name, count in db.execute(
+                select(point_id, point_name, func.sum(WrongQuestion.wrong_count))
+                .select_from(WrongQuestion)
+                .outerjoin(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
+                .outerjoin(
+                    KnowledgePoint,
+                    KnowledgePoint.id == point_id,
+                )
+                .where(WrongQuestion.course_id == course_id, WrongQuestion.updated_at >= since, WrongQuestion.user_id.in_(student_ids))
+                .group_by(point_id, point_name)
+                .order_by(func.sum(WrongQuestion.wrong_count).desc(), point_name.asc())
+                .limit(10)
+            )
+        ]
+        if student_ids
+        else []
+    )
+    _weak_point_artifact_refs(db, course_id=course_id, weak_points=weak_points)
     active_students: set[int] = set()
     if student_ids:
         active_students.update(
@@ -234,11 +243,15 @@ def get_course_analytics(db: Session, *, course_id: int, user: User, days: int =
     )
     score_distribution_map = {
         str(bucket): int(count or 0)
-        for bucket, count in db.execute(
-            select(score_bucket, func.count(QuizAttempt.id))
-            .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
-            .where(Quiz.course_id == course_id, QuizAttempt.created_at >= since)
-            .group_by(score_bucket)
+        for bucket, count in (
+            db.execute(
+                select(score_bucket, func.count(QuizAttempt.id))
+                .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+                .where(Quiz.course_id == course_id, QuizAttempt.created_at >= since, QuizAttempt.user_id.in_(student_ids))
+                .group_by(score_bucket)
+            )
+            if student_ids
+            else []
         )
     }
     score_distribution = [
@@ -268,30 +281,35 @@ def get_course_analytics(db: Session, *, course_id: int, user: User, days: int =
         db.scalar(
             select(func.coalesce(func.sum(LearningProgress.total_study_seconds), 0))
             .join(Lesson, Lesson.id == LearningProgress.lesson_id)
-            .where(Lesson.course_id == course_id)
+            .where(Lesson.course_id == course_id, LearningProgress.user_id.in_(student_ids))
         )
         or 0
-    )
+    ) if student_ids else 0
     period_study_seconds = int(
         db.scalar(
             select(func.coalesce(func.sum(LearningProgress.total_study_seconds), 0))
             .join(Lesson, Lesson.id == LearningProgress.lesson_id)
-            .where(Lesson.course_id == course_id, LearningProgress.updated_at >= since)
+            .where(Lesson.course_id == course_id, LearningProgress.updated_at >= since, LearningProgress.user_id.in_(student_ids))
         )
         or 0
-    )
+    ) if student_ids else 0
     day_count = min(max(days, 1), 30)
     day_start = (datetime.now(UTC) - timedelta(days=day_count - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
     daily_seconds: dict[str, int] = {}
     for index in range(day_count):
         day = day_start + timedelta(days=index)
         daily_seconds[day.date().isoformat()] = 0
-    for day_value, seconds in db.execute(
-        select(func.date(LearningProgress.updated_at), func.coalesce(func.sum(LearningProgress.total_study_seconds), 0))
-        .join(Lesson, Lesson.id == LearningProgress.lesson_id)
-        .where(Lesson.course_id == course_id, LearningProgress.updated_at >= day_start)
-        .group_by(func.date(LearningProgress.updated_at))
-    ):
+    daily_rows = (
+        db.execute(
+            select(func.date(LearningProgress.updated_at), func.coalesce(func.sum(LearningProgress.total_study_seconds), 0))
+            .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+            .where(Lesson.course_id == course_id, LearningProgress.updated_at >= day_start, LearningProgress.user_id.in_(student_ids))
+            .group_by(func.date(LearningProgress.updated_at))
+        )
+        if student_ids
+        else []
+    )
+    for day_value, seconds in daily_rows:
         key = day_value.isoformat() if hasattr(day_value, "isoformat") else str(day_value)
         if key in daily_seconds:
             daily_seconds[key] = int(seconds or 0)

@@ -232,7 +232,7 @@
             <h2>恭喜完成</h2>
             <p>{{ classroomLesson?.lesson.title }}</p>
             <div class="done-stats"><span>本次 {{ Math.max(1, Math.round(studySeconds / 60)) }} 分钟</span><span>{{ classroomLesson?.pages.length || 0 }} 页</span><span>{{ classMessages.filter((m) => m.role === 'user').length }} 次提问</span></div>
-            <div class="ai-summary"><Sparkles :size="16" />{{ completionSummary }}</div>
+            <div class="ai-summary"><Info :size="16" />{{ completionSummary }}</div>
             <footer><button class="btn btn-primary" @click="nextLessonAfterComplete">下一课时</button><button class="btn btn-secondary" @click="returnCourse">回课程</button><button class="btn btn-ghost" @click="openQuizSelection('practice')">做练习</button></footer>
           </article>
         </div>
@@ -393,7 +393,7 @@
           <section :key="active" class="student-page" :class="{ 'student-page-qa': active === 'studentQa' }">
           <template v-if="active === 'studentHome'">
             <article class="hello-card">
-              <div><Sun :size="24" /><section><h1>{{ greeting }}，{{ user.nickname }}</h1><p>{{ todayText }} · 距本学期结束还有 {{ termLeftDays }} 天</p></section></div>
+              <div><Sun :size="24" /><section><h1>{{ greeting }}，{{ user.nickname }}</h1><p>{{ todayText }}<template v-if="currentTermLabel"> · {{ currentTermLabel }}</template></p></section></div>
               <div v-if="todayTasks.length" class="circle-stat"><RingProgress :value="todayDoneRate" /><span>{{ doneTasks }}/{{ todayTasks.length }}</span></div>
             </article>
             <article class="today-plan" :class="{ 'is-empty': !todayTasks.length }">
@@ -723,7 +723,7 @@
 
           <template v-else-if="active === 'studentKnowledge'">
             <PageTitle title="知识点精讲"><CourseSelect /></PageTitle>
-            <div class="knowledge-layout"><aside class="knowledge-tree"><div class="pretty-input"><Search :size="15" /><input v-model="knowledgeKeyword" placeholder="搜索知识点" /></div><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" @click="selectedChapterId = chapter.id; loadKnowledge()"><ChevronRight :size="14" />{{ chapter.title }}</button><div class="weak-tags"><strong><Zap :size="14" />薄弱知识点</strong><span v-for="item in weakPoints.slice(0, 3)" :key="item.knowledge_point" class="tag tag-danger">{{ item.knowledge_point }}</span></div></aside><section class="knowledge-content"><article class="knowledge-head"><h1>{{ selectedKnowledge?.name || '选择知识点' }}</h1><p>所属：{{ chapterName(selectedKnowledge?.chapter_id) }}</p><span class="tag" :class="knowledgeMasteryClass">{{ knowledgeMasteryText }}</span><AppProgress :value="knowledgeMastery" :tone="knowledgeMastery >= 70 ? 'success' : knowledgeMastery >= 35 ? 'warning' : 'danger'" /></article><div class="segmented"><button v-for="item in levelItems" :key="item.value" type="button" :class="{ active: knowledgeLevel === item.value }" @click="knowledgeLevel = String(item.value)">{{ item.label }}</button></div><article class="knowledge-body"><KnowledgeBlock icon="Quote" title="定义" :content="knowledgeContent.definition" /><KnowledgeBlock icon="Layers" title="核心原理" :content="knowledgeContent.principle" ai /><KnowledgeBlock icon="Pencil" title="例题解析" :content="knowledgeContent.example" /><KnowledgeBlock icon="AlertTriangle" title="常见易错点" warning :content="knowledgeContent.common_mistake" /><div class="practice-cta"><Sparkles :size="16" />生成练习题<button @click="generateKnowledgeQuiz(5)">练习5题</button><button @click="generateKnowledgeQuiz(10)">练习10题</button></div></article></section></div>
+            <div class="knowledge-layout"><aside class="knowledge-tree"><div class="pretty-input"><Search :size="15" /><input v-model="knowledgeKeyword" placeholder="搜索知识点" /></div><button v-for="chapter in courseHome.chapters || []" :key="chapter.id" @click="selectedChapterId = chapter.id; loadKnowledge()"><ChevronRight :size="14" />{{ chapter.title }}</button><div class="weak-tags"><strong><Zap :size="14" />薄弱知识点</strong><span v-for="item in weakPoints.slice(0, 3)" :key="item.knowledge_point" class="tag tag-danger">{{ item.knowledge_point }}</span></div></aside><section class="knowledge-content"><article class="knowledge-head"><h1>{{ selectedKnowledge?.name || '选择知识点' }}</h1><p>所属：{{ chapterName(selectedKnowledge?.chapter_id) }}</p><span class="tag" :class="knowledgeMasteryClass">{{ knowledgeMasteryText }}</span></article><div class="segmented"><button v-for="item in levelItems" :key="item.value" type="button" :class="{ active: knowledgeLevel === item.value }" @click="knowledgeLevel = String(item.value)">{{ item.label }}</button></div><article class="knowledge-body"><KnowledgeBlock icon="Quote" title="定义" :content="knowledgeContent.definition" /><KnowledgeBlock icon="Layers" title="核心原理" :content="knowledgeContent.principle" ai /><KnowledgeBlock icon="Pencil" title="例题解析" :content="knowledgeContent.example" /><KnowledgeBlock icon="AlertTriangle" title="常见易错点" warning :content="knowledgeContent.common_mistake" /><div class="practice-cta"><Sparkles :size="16" />生成练习题<button @click="generateKnowledgeQuiz(5)">练习5题</button><button @click="generateKnowledgeQuiz(10)">练习10题</button></div></article></section></div>
           </template>
 
           <template v-else-if="active === 'studentQuizzes'">
@@ -823,7 +823,7 @@
                     class="practice-feature-card"
                     :data-loading="wrongPracticeGenerating"
                     :disabled="wrongPracticeGenerating || !wrongQuestions.length"
-                    @click="loadWrongPractice"
+                    @click="loadWrongPractice()"
                   >
                     <div>
                       <div class="practice-feature-icon"><BookMarked :size="24" /></div>
@@ -864,7 +864,7 @@
                 </div>
                 <div class="wrong-head-actions">
                   <CourseSelect />
-                  <button class="btn btn-primary" :data-loading="wrongPracticeGenerating" :disabled="wrongPracticeGenerating || !wrongQuestions.length" @click="loadWrongPractice"><RefreshCw :size="16" />开始重练</button>
+                  <button class="btn btn-primary" :data-loading="wrongPracticeGenerating" :disabled="wrongPracticeGenerating || !wrongQuestions.length" @click="loadWrongPractice()"><RefreshCw :size="16" />开始重练</button>
                 </div>
               </header>
 
@@ -918,7 +918,7 @@
                     <span>本月打卡</span>
                   </div>
                   <div class="b-stat-item">
-                    <h2><Flame :size="28" />{{ Math.max(stats.streak_days || 0, 0) }}</h2>
+                    <h2><Flame :size="28" />{{ longestStreakDays === null ? '—' : longestStreakDays }}</h2>
                     <span>最长连续</span>
                   </div>
                 </div>
@@ -991,16 +991,19 @@
                 <div class="side-col">
                   <article class="card">
                     <div class="card-header compact">
-                      <div class="card-title"><BarChart2 :size="22" />本周学习</div>
+                      <div class="card-title"><BarChart2 :size="22" />学习时长</div>
                     </div>
 
-                    <div class="mini-chart">
-                      <div v-for="item in weeklyChart" :key="item.label" class="bar-col">
-                        <div class="bar-track"><div class="bar-fill" :style="{ height: `${item.percent}%` }"></div></div>
-                        <span class="bar-label">{{ item.label }}</span>
+                    <template v-if="hasWeeklyChartData">
+                      <div class="mini-chart">
+                        <div v-for="item in weeklyChart" :key="item.label" class="bar-col">
+                          <div class="bar-track"><div class="bar-fill" :style="{ height: `${item.percent}%` }"></div></div>
+                          <span class="bar-label">{{ item.label }}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div class="total-hours">共 <span>{{ totalWeeklyHours }}</span> 小时</div>
+                    </template>
+                    <EmptyState v-else text="暂无每日学习时长数据" />
+                    <div class="total-hours">累计学习 <span>{{ totalWeeklyHours }}</span> 小时</div>
                   </article>
 
                   <article class="card">
@@ -1171,6 +1174,17 @@
 
       <MaterialPreviewModal :open="!!materialPreviewItem" :item="materialPreviewItem" :detail="materialPreviewDetail" :loading="materialPreviewLoading" @download="downloadMaterial" @close="closeMaterialPreview" />
 
+      <ConfirmDialog
+        :open="leaveConfirmOpen"
+        title="退出课程"
+        :message="`确认退出课程《${leaveTargetCourse?.name || ''}》？退出后学习进度可能丢失。`"
+        confirm-text="确认退出"
+        cancel-text="再想想"
+        tone="danger"
+        @confirm="confirmLeaveCourse"
+        @cancel="cancelLeaveCourse"
+      />
+
       <transition name="modal-pop">
         <div v-if="joinOpen" class="modal-mask student-modal-scope">
           <article class="join-modal">
@@ -1209,7 +1223,7 @@ import {
   Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings,
   Shield, Sparkles, Square, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
 } from "../icons";
-import { api } from "../api/client";
+import { api, setToken } from "../api/client";
 import { routeByPage } from "../router";
 import type { Lesson, LessonDetail, LessonPage, Material, MaterialDetail, PageActivity, Quiz, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
@@ -1218,6 +1232,7 @@ import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
 import AppSlider from "../components/AppSlider.vue";
 import BrandLogo from "../components/BrandLogo.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
 import DocumentPreviewSurface from "../components/DocumentPreviewSurface.vue";
 import DropdownMenu from "../components/DropdownMenu";
 import LoadingMark from "../components/LoadingMark.vue";
@@ -1324,6 +1339,8 @@ const topActionsRef = ref<HTMLElement | null>(null);
 const noticePopRef = ref<HTMLElement | null>(null);
 const userPopRef = ref<HTMLElement | null>(null);
 const joinOpen = ref(false);
+const leaveConfirmOpen = ref(false);
+const leaveTargetCourse = ref<any | null>(null);
 const joinCode = ref("");
 const joinPreview = ref<any | null>(null);
 const joinChecking = ref(false);
@@ -1397,6 +1414,9 @@ const audioPlaying = ref(false);
 const playbackRate = ref(1);
 const audioProgress = ref(0);
 const studySeconds = ref(0);
+// #35：上报学习时长时使用真实停留秒数的增量，而不是写死的 +30 秒。
+// reportedStudySeconds 记录上次已上报到 studySeconds 的位置，每次上报真实差值。
+const reportedStudySeconds = ref(0);
 const completeOpen = ref(false);
 const pageNote = ref("");
 const pageNoteArea = ref<HTMLTextAreaElement | null>(null);
@@ -1582,6 +1602,12 @@ function updateTopNavIndicator() {
 }
 
 const stats = computed(() => dashboard.value.stats || profilePayload.value.stats || {});
+// #33：后端 stats 目前只返回当前连续天数(streak_days)，没有“历史最长连续”字段。
+// 仅当后端补上 longest_streak 才显示真实值，否则返回 null 由模板渲染占位符，不再把当前连续天数冒充成最长。
+const longestStreakDays = computed<number | null>(() => {
+  const raw = (stats.value as any).longest_streak ?? (stats.value as any).longest_streak_days;
+  return raw === undefined || raw === null ? null : Number(raw);
+});
 const planTodayTasks = computed(() => tasks.value.filter((task: any) => taskDateKey(task) === todayTaskKey()));
 const todayTasks = computed(() => {
   if (active.value === "studentPlans") return planTodayTasks.value;
@@ -1610,7 +1636,11 @@ const unreadCount = computed(() => notifications.value.filter((item) => item.unr
 const activities = computed(() => dashboard.value.activities || []);
 const greeting = computed(() => { const hour = new Date().getHours(); if (hour < 12) return "早上好"; if (hour < 18) return "下午好"; return "晚上好"; });
 const todayText = computed(() => new Date().toLocaleDateString("zh-CN", { weekday: "long", month: "long", day: "numeric" }));
-const termLeftDays = computed(() => Math.max(1, Math.ceil((new Date(new Date().getFullYear(), 6, 15).getTime() - Date.now()) / 86400000)));
+// 学期信息来源于后端课程的 term 字段，没有真实学期起止日期时只展示学期名，不再编造“距结束 X 天”的假倒计时。
+const currentTermLabel = computed(() => {
+  const terms = Array.from(new Set(courses.value.map((course) => String(course.term || "").trim()).filter(Boolean)));
+  return terms.length === 1 ? terms[0] : "";
+});
 const activeCourse = computed(() => courses.value.find((course) => course.id === selectedCourseId.value) || courses.value[0] || null);
 const courseScopeName = computed(() => activeCourse.value?.name || "当前课程");
 const currentAvatarUrl = computed(() => profileForm.avatar_url || props.user.avatar_url || "");
@@ -1760,7 +1790,17 @@ const quickPageQuestions = computed(() => {
 const studyClock = computed(() => `${String(Math.floor(studySeconds.value / 60)).padStart(2, "0")}:${String(studySeconds.value % 60).padStart(2, "0")}`);
 const audioTime = computed(() => timeLabel(audioRef.value?.currentTime || 0));
 const audioDuration = computed(() => timeLabel(audioRef.value?.duration || activePage.value?.audio_duration_seconds || 0));
-const completionSummary = computed(() => "本次学习完成度良好，建议继续完成配套练习并整理课时笔记。");
+// #66：此前是写死的“假 AI 总结”。后端没有按课时生成 AI 学情总结的接口，
+// 因此这里改为基于本次会话真实数据(学习时长/页数/提问数)的事实性小结，且不再冒充 AI 生成。
+const completionSummary = computed(() => {
+  const minutes = Math.max(1, Math.round(studySeconds.value / 60));
+  const pages = classroomLesson.value?.pages.length || 0;
+  const questions = classMessages.value.filter((m) => m.role === "user").length;
+  const parts = [`本次学习约 ${minutes} 分钟`];
+  if (pages) parts.push(`共 ${pages} 页`);
+  parts.push(questions ? `提问 ${questions} 次` : "本次没有提问");
+  return `${parts.join("，")}。建议继续完成配套练习并整理课时笔记。`;
+});
 const filteredQaHistory = computed<QaHistoryConversation[]>(() => {
   const keyword = qaKeyword.value.trim();
   return qaHistory.value
@@ -1772,13 +1812,21 @@ const filteredQaHistory = computed<QaHistoryConversation[]>(() => {
     .sort((left, right) => timestampMs(right.created_at) - timestampMs(left.created_at));
 });
 const selectedKnowledge = computed(() => knowledge.value.find((item) => item.id === selectedKnowledgeId.value) || knowledge.value[0] || null);
-const knowledgeMastery = computed(() => {
-  const weak = weakPoints.value.find((item) => item.knowledge_point === selectedKnowledge.value?.name);
-  const impact = Number(weak?.weak_score ?? weak?.wrong_count ?? 0);
-  return Math.max(35, 90 - impact * 12);
+// #34：后端没有“掌握度百分比”，此前用 `Math.max(35, 90 - impact*12)` 拍脑袋编了个数。
+// 改为只依据后端真实的薄弱点信号(weak_score / wrong_count)给出定性评估；
+// 知识点不在薄弱点列表中即代表暂无评估数据，不再编造百分比进度条。
+const selectedKnowledgeWeak = computed(() => weakPoints.value.find((item) => item.knowledge_point === selectedKnowledge.value?.name) || null);
+const knowledgeMasteryAssessed = computed(() => !!selectedKnowledgeWeak.value);
+const knowledgeMasteryText = computed(() => {
+  if (!knowledgeMasteryAssessed.value) return "暂无评估";
+  const impact = Number(selectedKnowledgeWeak.value?.weak_score ?? selectedKnowledgeWeak.value?.wrong_count ?? 0);
+  return impact >= 3 ? "薄弱" : "待加强";
 });
-const knowledgeMasteryText = computed(() => knowledgeMastery.value > 75 ? "已掌握" : knowledgeMastery.value > 55 ? "待加强" : "薄弱");
-const knowledgeMasteryClass = computed(() => knowledgeMastery.value > 75 ? "tag-success" : knowledgeMastery.value > 55 ? "tag-warning" : "tag-danger");
+const knowledgeMasteryClass = computed(() => {
+  if (!knowledgeMasteryAssessed.value) return "tag";
+  const impact = Number(selectedKnowledgeWeak.value?.weak_score ?? selectedKnowledgeWeak.value?.wrong_count ?? 0);
+  return impact >= 3 ? "tag-danger" : "tag-warning";
+});
 const knowledgeContent = computed(() => selectedKnowledge.value?.content_by_level?.[knowledgeLevel.value] || {});
 const courseQuizzes = computed(() => quizzes.value.filter((quiz) => quiz.quiz_type === "course"));
 const practiceQuizzes = computed(() => quizzes.value
@@ -1820,8 +1868,11 @@ const weeklyWrongCount = computed(() => wrongQuestions.value.filter((item) => {
   return timeMs > 0 && Date.now() - timeMs < 7 * 86400000;
 }).length);
 const monthlyCheckins = computed(() => checkinDays.value.filter((day) => day.slice(0, 7) === new Date().toISOString().slice(0, 7)).length);
-const weeklyHours = computed(() => [0.8, 1.2, 1.6, 1.1, 2.2, 0.7, 1.4]);
-const totalWeeklyHours = computed(() => Number(weeklyHours.value.reduce((sum, value) => sum + Number(value || 0), 0).toFixed(1)));
+// #32：后端暂无“每日学习时长”时间序列接口，不再用写死的假数组糊弄。
+// 仅展示真实存在的整体学习总时长，按天的柱状分布需后端补 daily 接口后再接入。
+const weeklyHours = computed<number[]>(() => []);
+const totalWeeklyHours = computed(() => Number((stats.value.study_hours || 0).toFixed(1)));
+const hasWeeklyChartData = computed(() => weeklyHours.value.some((value) => Number(value || 0) > 0));
 const weeklyChart = computed(() => {
   const labels = ["一", "二", "三", "四", "五", "六", "日"];
   const max = Math.max(1, ...weeklyHours.value.map((value) => Number(value || 0)));
@@ -2618,7 +2669,22 @@ function isOpeningLesson(id?: number | null) { return openingLessonId.value === 
 function formatJoinCode() { joinCode.value = joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12); joinPreview.value = null; joinError.value = ""; if (joinTimer) window.clearTimeout(joinTimer); if (joinCode.value.length >= 5) joinTimer = window.setTimeout(validateJoinCode, 350); }
 async function validateJoinCode() { joinChecking.value = true; joinError.value = ""; const data = await run<any>(() => api.get("/student/courses/preview", { course_code: joinCode.value })); joinChecking.value = false; if (!data) { joinError.value = "课程码不存在或已停用"; return; } joinPreview.value = data; if (data.already_joined) joinError.value = "你已加入该课程"; }
 async function confirmJoin() { if (!joinPreview.value) return; await run(() => api.post("/courses/join", { course_code: joinCode.value }), "已加入"); joinOpen.value = false; joinCode.value = ""; joinPreview.value = null; await loadDashboard(); }
-async function handleCourseMenu(action: string, course: any) { if (action === "detail") await openCourse(course.id); if (action === "qa") { selectedCourseId.value = course.id; await go("studentQa"); } if (action === "share") await copyText(course.course_code); if (action === "leave") await run(() => api.post(`/courses/${course.id}/leave`), "已退出"); await loadCourses(); }
+async function handleCourseMenu(action: string, course: any) {
+  if (action === "detail") { await openCourse(course.id); return; }
+  if (action === "qa") { selectedCourseId.value = course.id; await go("studentQa"); return; }
+  if (action === "share") { await copyText(course.course_code); return; }
+  // #12/#37：退课为不可逆操作，先弹二次确认，确认后才真正调用退课接口。
+  if (action === "leave") { leaveTargetCourse.value = course; leaveConfirmOpen.value = true; }
+}
+async function confirmLeaveCourse() {
+  const course = leaveTargetCourse.value;
+  leaveConfirmOpen.value = false;
+  if (!course) return;
+  const result = await run(() => api.post(`/courses/${course.id}/leave`), "已退出课程");
+  leaveTargetCourse.value = null;
+  if (result !== null) await loadCourses();
+}
+function cancelLeaveCourse() { leaveConfirmOpen.value = false; leaveTargetCourse.value = null; }
 function closeMaterialPreview() {
   materialPreviewItem.value = null;
   materialPreviewDetail.value = null;
@@ -2679,6 +2745,7 @@ function resetClassroomState() {
   thumbOpen.value = false;
   currentPage.value = 1;
   studySeconds.value = 0;
+  reportedStudySeconds.value = 0;
   pageNote.value = "";
   noteState.value = "已保存";
   noteSavedAt.value = "尚未保存";
@@ -2715,6 +2782,7 @@ async function loadLessonStudyRoute() {
     classroomOpen.value = true;
     completeOpen.value = false;
     studySeconds.value = 0;
+    reportedStudySeconds.value = 0;
     startStudyClock();
     try {
       const progress = await api.get<any>(`/lessons/${lessonId}/progress`);
@@ -3048,7 +3116,13 @@ watch(
 async function jumpPage(page: number) { pageDirection.value = page >= currentPage.value ? "next" : "prev"; currentPage.value = page; thumbOpen.value = false; await saveProgress(false, true); }
 async function prevPage() { await jumpPage(Math.max(1, currentPage.value - 1)); }
 async function nextPage() { await jumpPage(Math.min(classroomLesson.value?.pages.length || 1, currentPage.value + 1)); }
-async function saveProgress(completed: boolean, silent = false) { if (!classroomLesson.value) return; await run(() => api.post(`/lessons/${classroomLesson.value!.lesson.id}/progress`, { current_page: currentPage.value, added_seconds: 30, completed }), silent ? undefined : "已保存"); }
+async function saveProgress(completed: boolean, silent = false) {
+  if (!classroomLesson.value) return;
+  // 真实新增学习秒数 = 自上次上报以来计时器累计的差值（最小为 0，避免负数）。
+  const addedSeconds = Math.max(0, studySeconds.value - reportedStudySeconds.value);
+  const result = await run(() => api.post(`/lessons/${classroomLesson.value!.lesson.id}/progress`, { current_page: currentPage.value, added_seconds: addedSeconds, completed }), silent ? undefined : "已保存");
+  if (result !== null) reportedStudySeconds.value = studySeconds.value;
+}
 async function toggleAudio() { if (!audioRef.value) return; audioRef.value.playbackRate = playbackRate.value; if (audioRef.value.paused) await audioRef.value.play(); else audioRef.value.pause(); revealChrome(); }
 function setRate(value: string) { playbackRate.value = Number(value); if (audioRef.value) audioRef.value.playbackRate = playbackRate.value; }
 function updateAudio() { if (!audioRef.value) return; audioProgress.value = audioRef.value.duration ? Math.round(audioRef.value.currentTime / audioRef.value.duration * 100) : 0; }
@@ -3073,7 +3147,23 @@ function formatNote(kind: "bold" | "italic" | "mark") {
   queueNoteSave();
 }
 function confettiStyle(n: number) { return { left: `${(n * 37) % 100}%`, background: ["#00B8D4", "#00E5FF", "#2E7D32", "#D9A05B", "#D94925"][n % 5], animationDelay: `${(n % 8) * 0.05}s` }; }
-async function nextLessonAfterComplete() { const index = (courseHome.value.lessons || []).findIndex((item: any) => item.id === classroomLesson.value?.lesson.id); const next = (courseHome.value.lessons || [])[index + 1]; if (next) await openLesson(next.id); else await returnCourse(); }
+async function nextLessonAfterComplete() {
+  // #36：直接从课程的真实已发布课时列表里取下一课时。直接进入 /lessons/:id 时
+  // courseHome 可能为空或属于别的课程，因此按当前课时的 course_id 拉一次真实列表再定位。
+  const currentLesson = classroomLesson.value?.lesson;
+  if (!currentLesson) { await returnCourse(); return; }
+  const courseId = Number(currentLesson.course_id || selectedCourseId.value || 0);
+  let lessonList = (courseHome.value.lessons || []) as any[];
+  const loadedCourseId = Number(courseHome.value.course?.id || 0);
+  if (courseId && (loadedCourseId !== courseId || !lessonList.some((item: any) => item.id === currentLesson.id))) {
+    const home = await run<any>(() => api.get(`/student/courses/${courseId}/home`));
+    lessonList = (home?.lessons || []) as any[];
+  }
+  const index = lessonList.findIndex((item: any) => item.id === currentLesson.id);
+  const next = index >= 0 ? lessonList[index + 1] : null;
+  if (next?.id) { completeOpen.value = false; await openLesson(Number(next.id)); }
+  else await returnCourse();
+}
 async function returnCourse() { completeOpen.value = false; await closeClassroom(); }
 
 function patchChatMessage(messages: Ref<ChatMessage[]>, id: number, updater: (message: ChatMessage) => ChatMessage) {
@@ -3609,7 +3699,7 @@ async function submitQuiz() {
 function togglePracticeChapter(id: number) { selectedPracticeChapters.value = selectedPracticeChapters.value.includes(id) ? selectedPracticeChapters.value.filter((item) => item !== id) : [...selectedPracticeChapters.value, id]; }
 
 async function loadWrongBook() { if (!selectedCourseId.value) return; wrongQuestions.value = (await run<any[]>(() => api.get("/learning/wrong-questions", { course_id: selectedCourseId.value }))) || []; weakPoints.value = (await run<any[]>(() => api.get("/learning/weak-points", { course_id: selectedCourseId.value }))) || []; }
-async function loadWrongPractice() {
+async function loadWrongPractice(wrongQuestionId?: number) {
   if (!selectedCourseId.value || wrongPracticeGenerating.value) return;
   wrongPracticeGenerating.value = true;
   try {
@@ -3618,7 +3708,7 @@ async function loadWrongPractice() {
       emit("notice", "info", "暂无错题可重练");
       return;
     }
-    const quiz = await run<any>(() => api.post("/learning/wrong-questions/practice", undefined, { course_id: selectedCourseId.value }));
+    const quiz = await run<any>(() => api.post("/learning/wrong-questions/practice", undefined, { course_id: selectedCourseId.value, ...(wrongQuestionId ? { wrong_question_id: wrongQuestionId } : {}) }));
     if (quiz) emit("notice", quiz.id ? "success" : "info", queuedQuizMessage(quiz, "错题重练已加入生成队列，生成成功后会通知你") || "已生成");
     if (quiz) { await go("studentQuizzes"); await loadQuizPage(); if (quiz.id) await startQuiz(quiz.id); }
     if (quiz && !quiz.id) await loadNotifications(true);
@@ -3626,7 +3716,7 @@ async function loadWrongPractice() {
     wrongPracticeGenerating.value = false;
   }
 }
-function practiceWrong(_: any) { loadWrongPractice(); }
+function practiceWrong(item: any) { loadWrongPractice(item?.wrong_question_id); }
 function clearWrongFilters() { wrongKeyword.value = ""; wrongStatus.value = ""; selectedWrongKnowledge.value = ""; }
 
 async function loadPlans() {
@@ -3683,7 +3773,7 @@ async function uploadProfileAvatar(event: Event) {
   }
 }
 async function saveProfile() { const data = await run<any>(() => api.patch("/student/profile", { nickname: profileForm.nickname, avatar_url: profileForm.avatar_url, bio: profileForm.bio, school: profileForm.school }), "已保存"); if (data) applyStudentProfile(data); }
-async function changePassword() { if (passwordForm.new_password !== passwordConfirm.value) return emit("notice", "warning", "密码不一致"); await run(() => api.post("/auth/me/password", passwordForm), "已保存"); Object.assign(passwordForm, { old_password: "", new_password: "" }); passwordConfirm.value = ""; }
+async function changePassword() { if (passwordForm.new_password !== passwordConfirm.value) return emit("notice", "warning", "密码不一致"); const res = await run(() => api.post<{ access_token: string }>("/auth/me/password", passwordForm), "已保存"); if (res?.access_token) setToken(res.access_token); Object.assign(passwordForm, { old_password: "", new_password: "" }); passwordConfirm.value = ""; }
 async function saveNotices() {
   const settings = noticeSettings.map((item) => ({ key: item.key, enabled: Boolean(item.enabled) }));
   const data = await run<any[]>(() => api.put("/student/notifications", { settings }), "已保存");

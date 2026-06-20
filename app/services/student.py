@@ -38,6 +38,7 @@ from app.db.models import (
 )
 from app.services.ai import ai_service
 from app.services.avatar import upload_avatar_file
+from app.schemas.auth import _sanitize_bio, _validate_avatar_url
 from app.services.courses import _get_course_or_404
 from app.services.notifications import active_system_announcement, apply_user_notification_reads, list_user_notifications, mark_user_notifications_read
 from app.services.storage import storage_service
@@ -151,6 +152,10 @@ def _assert_student(user: User) -> None:
 def _assert_joined(db: Session, *, course_id: int, user: User) -> Course:
     _assert_student(user)
     course = _get_course_or_404(db, course_id)
+    # #11：课程下架(inactive)后对学生关闭，与 qa/tutoring/classroom 学生网关保持一致，
+    # 避免学生仍能经课程主页聚合视图/页面笔记访问已下架课程。
+    if course.status != CourseStatus.ACTIVE.value:
+        raise forbidden("课程已下架，暂时无法访问")
     membership = db.scalar(
         select(CourseMembership.id).where(CourseMembership.course_id == course_id, CourseMembership.user_id == user.id)
     )
@@ -630,6 +635,8 @@ def get_page_note(db: Session, *, page_id: int, user: User) -> dict:
     lesson = db.get(Lesson, page.lesson_id)
     if lesson is None:
         raise not_found("课时不存在")
+    if lesson.status != LessonStatus.PUBLISHED.value:
+        raise not_found("课时不存在")
     _assert_joined(db, course_id=lesson.course_id, user=user)
     note = db.scalar(select(PageNote).where(PageNote.user_id == user.id, PageNote.lesson_page_id == page_id))
     if note is None:
@@ -645,6 +652,8 @@ def save_page_note(db: Session, *, page_id: int, user: User, content: str) -> di
         raise not_found("页面不存在")
     lesson = db.get(Lesson, page.lesson_id)
     if lesson is None:
+        raise not_found("课时不存在")
+    if lesson.status != LessonStatus.PUBLISHED.value:
         raise not_found("课时不存在")
     _assert_joined(db, course_id=lesson.course_id, user=user)
     note = db.scalar(select(PageNote).where(PageNote.user_id == user.id, PageNote.lesson_page_id == page_id))
@@ -692,9 +701,10 @@ def update_student_profile(
     if nickname is not None:
         user.nickname = nickname
     if avatar_url is not None:
-        user.avatar_url = avatar_url
+        # #39：协议白名单校验，拒绝 javascript:/data:/file: 等危险 avatar_url。
+        user.avatar_url = _validate_avatar_url(avatar_url)
     if bio is not None:
-        user.bio = bio
+        user.bio = _sanitize_bio(bio)
     current = _preference(db, user_id=user.id, key=STUDENT_PROFILE_KEY) or {}
     if not isinstance(current, dict):
         current = {}

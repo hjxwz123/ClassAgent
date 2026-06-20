@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from io import StringIO
 
 from fastapi import UploadFile
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.enums import LessonStatus, ProcessStatus, UserRole
@@ -35,6 +35,7 @@ from app.db.models import (
 from app.services.analytics import get_course_analytics
 from app.services.audit import log_operation
 from app.services.avatar import upload_avatar_file
+from app.schemas.auth import _sanitize_bio, _validate_avatar_url
 from app.services.courses import _assert_course_owner, _get_course_or_404, list_teaching_courses
 from app.services.notifications import active_system_announcement, apply_user_notification_reads, list_user_notifications, mark_user_notifications_read
 from app.services.storage import storage_service
@@ -43,6 +44,10 @@ from app.services.storage import storage_service
 TEACHER_PROFILE_KEY = "teacher.profile"
 TEACHER_NOTIFICATION_KEY = "teacher.notifications"
 STUDENT_REMINDER_KEY = "student.teacher_reminders"
+# 每门课程保留的提醒上限（按 course_id 分桶，避免多课程互相挤占）。
+PER_COURSE_REMINDER_LIMIT = 20
+# 偏好键总条数上限（兜底，防止偏好值无限增长）。
+STUDENT_REMINDER_TOTAL_LIMIT = 100
 
 DEFAULT_NOTIFICATION_SETTINGS = [
     {"key": "join", "label": "学生加入课程", "enabled": True},
@@ -54,6 +59,18 @@ DEFAULT_NOTIFICATION_SETTINGS = [
     {"key": "peak", "label": "提问高峰", "enabled": True},
     {"key": "system", "label": "系统公告", "enabled": True},
 ]
+
+
+_CSV_INJECTION_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value):
+    """防 CSV 公式注入：以 = + - @ 制表符或回车开头的字符串前置单引号转义。"""
+    if not isinstance(value, str):
+        return value
+    if value and value[0] in _CSV_INJECTION_PREFIXES:
+        return "'" + value
+    return value
 
 
 def _aware_utc(value):
@@ -143,8 +160,17 @@ def _course_counts(db: Session, course_id: int) -> dict:
     }
 
 
-def _lesson_progress(db: Session, lesson: Lesson, student_total: int) -> dict:
-    progress_rows = list(db.scalars(select(LearningProgress).where(LearningProgress.lesson_id == lesson.id)))
+def _lesson_progress(db: Session, lesson: Lesson, student_total: int, student_ids: list[int] | None = None) -> dict:
+    # #21/#41：仅统计当前在册学生的进度，避免被移除/退课学生遗留的 LearningProgress
+    # 仍计入 learned/completed/average，并造成 completion_rate（分母为在册人数）虚高甚至 >100%。
+    statement = select(LearningProgress).where(LearningProgress.lesson_id == lesson.id)
+    if student_ids is not None:
+        if not student_ids:
+            progress_rows: list[LearningProgress] = []
+        else:
+            progress_rows = list(db.scalars(statement.where(LearningProgress.user_id.in_(student_ids))))
+    else:
+        progress_rows = list(db.scalars(statement))
     completed = len([item for item in progress_rows if item.completed_at is not None or item.progress_percent >= 100])
     learned = len(progress_rows)
     average = round(sum(item.progress_percent for item in progress_rows) / max(len(progress_rows), 1), 2) if progress_rows else 0
@@ -191,7 +217,7 @@ def _recent_activities(db: Session, course_id: int, limit: int = 8) -> list[dict
         }
         for item in db.scalars(
             select(OperationLog)
-            .where(OperationLog.target_id == course_id)
+            .where(OperationLog.target_id == course_id, OperationLog.target_type == "course")
             .order_by(OperationLog.created_at.desc())
             .limit(limit)
         )
@@ -318,9 +344,10 @@ def update_teacher_profile(
     if nickname is not None:
         user.nickname = nickname
     if avatar_url is not None:
-        user.avatar_url = avatar_url
+        # #39：协议白名单校验，拒绝 javascript:/data:/file: 等危险 avatar_url。
+        user.avatar_url = _validate_avatar_url(avatar_url)
     if bio is not None:
-        user.bio = bio
+        user.bio = _sanitize_bio(bio)
     current = _get_preference(db, user_id=user.id, key=TEACHER_PROFILE_KEY) or {}
     if not isinstance(current, dict):
         current = {}
@@ -389,9 +416,24 @@ def get_teacher_dashboard(db: Session, user: User) -> dict:
     ids = [course.id for course in courses]
     since_week = datetime.now(UTC) - timedelta(days=7)
     student_total = 0
+    course_student_ids: dict[int, list[int]] = {}
+    enrolled_student_ids: set[int] = set()
     for course_id in ids:
-        student_total += len(_student_ids(db, course_id))
-    weekly_qa = db.scalar(select(func.count(QARecord.id)).where(QARecord.course_id.in_(ids), QARecord.created_at >= since_week)) if ids else 0
+        course_member_ids = _student_ids(db, course_id)
+        course_student_ids[course_id] = course_member_ids
+        student_total += len(course_member_ids)
+        enrolled_student_ids.update(course_member_ids)
+    weekly_qa = (
+        db.scalar(
+            select(func.count(QARecord.id)).where(
+                QARecord.course_id.in_(ids),
+                QARecord.user_id.in_(enrolled_student_ids),
+                QARecord.created_at >= since_week,
+            )
+        )
+        if ids and enrolled_student_ids
+        else 0
+    )
     pending_scripts = (
         db.scalar(
             select(func.count(LessonPage.id))
@@ -427,13 +469,23 @@ def get_teacher_dashboard(db: Session, user: User) -> dict:
     week_start = (datetime.now(UTC) - timedelta(days=datetime.now(UTC).weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
     for course in courses[:6]:
         row = {"course_id": course.id, "course_name": course.name, "days": []}
+        course_member_ids = course_student_ids.get(course.id) or _student_ids(db, course.id)
         for index, day in enumerate(weekdays):
             start = week_start + timedelta(days=index)
             end = start + timedelta(days=1)
-            count = db.scalar(
-                select(func.count(LearningProgress.id))
-                .join(Lesson, Lesson.id == LearningProgress.lesson_id)
-                .where(Lesson.course_id == course.id, LearningProgress.updated_at >= start, LearningProgress.updated_at < end)
+            count = (
+                db.scalar(
+                    select(func.count(LearningProgress.id))
+                    .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+                    .where(
+                        Lesson.course_id == course.id,
+                        LearningProgress.user_id.in_(course_member_ids),
+                        LearningProgress.updated_at >= start,
+                        LearningProgress.updated_at < end,
+                    )
+                )
+                if course_member_ids
+                else 0
             ) or 0
             row["days"].append({"day": day, "count": int(count)})
         weekly_activity.append(row)
@@ -499,10 +551,11 @@ def get_teacher_course_home(db: Session, *, course_id: int, user: User) -> dict:
     course = _assert_course_access(db, course_id=course_id, user=user)
     counts = _course_counts(db, course_id)
     student_total = counts["student_count"]
+    student_ids = _student_ids(db, course_id)
     lessons = []
     for lesson in db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc()).limit(8)):
         data = _as_dict(lesson)
-        data.update(_lesson_progress(db, lesson, student_total))
+        data.update(_lesson_progress(db, lesson, student_total, student_ids))
         lessons.append(data)
     student_progress = get_teacher_students(db, course_id=course_id, user=user)["items"][:10]
     return {
@@ -521,10 +574,11 @@ def get_teacher_course_lessons(db: Session, *, course_id: int, user: User) -> di
     _assert_course_access(db, course_id=course_id, user=user)
     counts = _course_counts(db, course_id)
     student_total = counts["student_count"]
+    student_ids = _student_ids(db, course_id)
     items = []
     for lesson in db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc())):
         data = _as_dict(lesson)
-        data.update(_lesson_progress(db, lesson, student_total))
+        data.update(_lesson_progress(db, lesson, student_total, student_ids))
         items.append(data)
     return {"items": items, "total": len(items)}
 
@@ -553,8 +607,7 @@ def get_teacher_materials_summary(db: Session, *, course_id: int, user: User) ->
 
 def get_teacher_students(db: Session, *, course_id: int, user: User) -> dict:
     _assert_course_access(db, course_id=course_id, user=user)
-    lessons = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id)))
-    lesson_ids = [lesson.id for lesson in lessons]
+    lesson_count = int(db.scalar(select(func.count(Lesson.id)).where(Lesson.course_id == course_id)) or 0)
     rows = list(
         db.execute(
             select(CourseMembership, User)
@@ -563,19 +616,66 @@ def get_teacher_students(db: Session, *, course_id: int, user: User) -> dict:
             .order_by(CourseMembership.joined_at.asc())
         )
     )
+    student_ids = [student.id for _, student in rows]
+
+    # 仅统计在册学生（已 join 当前 CourseMembership），移除即不计入。一次 group-by 聚合，避免逐学生 N+1。
+    progress_by_user: dict[int, dict] = {}
+    if student_ids:
+        for user_id, total_percent, studied, last_at in db.execute(
+            select(
+                LearningProgress.user_id,
+                func.sum(LearningProgress.progress_percent),
+                func.sum(case((LearningProgress.progress_percent > 0, 1), else_=0)),
+                func.max(LearningProgress.updated_at),
+            )
+            .join(Lesson, Lesson.id == LearningProgress.lesson_id)
+            .where(Lesson.course_id == course_id, LearningProgress.user_id.in_(student_ids))
+            .group_by(LearningProgress.user_id)
+        ):
+            progress_by_user[int(user_id)] = {
+                "total_percent": float(total_percent or 0),
+                "studied_lessons": int(studied or 0),
+                "last_study_at": last_at,
+            }
+
+    qa_by_user: dict[int, int] = {}
+    wrong_by_user: dict[int, int] = {}
+    if student_ids:
+        qa_by_user = {
+            int(user_id): int(count or 0)
+            for user_id, count in db.execute(
+                select(QARecord.user_id, func.count(QARecord.id))
+                .where(QARecord.course_id == course_id, QARecord.user_id.in_(student_ids))
+                .group_by(QARecord.user_id)
+            )
+        }
+        wrong_by_user = {
+            int(user_id): int(count or 0)
+            for user_id, count in db.execute(
+                select(WrongQuestion.user_id, func.sum(WrongQuestion.wrong_count))
+                .where(WrongQuestion.course_id == course_id, WrongQuestion.user_id.in_(student_ids))
+                .group_by(WrongQuestion.user_id)
+            )
+        }
+
     items = []
     active_count = 0
     inactive_14 = 0
     since_7 = datetime.now(UTC) - timedelta(days=7)
     since_14 = datetime.now(UTC) - timedelta(days=14)
     for membership, student in rows:
-        progresses = list(db.scalars(select(LearningProgress).where(LearningProgress.user_id == student.id, LearningProgress.lesson_id.in_(lesson_ids)))) if lesson_ids else []
-        progress_percent = round(sum(item.progress_percent for item in progresses) / max(len(lessons), 1), 2) if lessons else 0
-        studied_lessons = len([item for item in progresses if item.progress_percent > 0])
-        last_progress = max([item.updated_at for item in progresses], default=None)
+        aggregate = progress_by_user.get(student.id)
+        if aggregate:
+            progress_percent = round(aggregate["total_percent"] / max(lesson_count, 1), 2) if lesson_count else 0
+            studied_lessons = aggregate["studied_lessons"]
+            last_progress = aggregate["last_study_at"]
+        else:
+            progress_percent = 0
+            studied_lessons = 0
+            last_progress = None
         last_progress_for_compare = _aware_utc(last_progress)
-        qa_count = db.scalar(select(func.count(QARecord.id)).where(QARecord.user_id == student.id, QARecord.course_id == course_id)) or 0
-        wrong_count = db.scalar(select(func.sum(WrongQuestion.wrong_count)).where(WrongQuestion.user_id == student.id, WrongQuestion.course_id == course_id)) or 0
+        qa_count = qa_by_user.get(student.id, 0)
+        wrong_count = wrong_by_user.get(student.id, 0)
         if last_progress_for_compare and last_progress_for_compare >= since_7:
             active_count += 1
         if not last_progress_for_compare or last_progress_for_compare < since_14:
@@ -587,7 +687,7 @@ def get_teacher_students(db: Session, *, course_id: int, user: User) -> dict:
                 "student": _as_dict(student),
                 "progress_percent": progress_percent,
                 "studied_lessons": studied_lessons,
-                "lesson_total": len(lessons),
+                "lesson_total": lesson_count,
                 "qa_count": int(qa_count),
                 "wrong_count": int(wrong_count or 0),
                 "last_study_at": last_progress,
@@ -611,7 +711,7 @@ def get_teacher_student_detail(db: Session, *, course_id: int, student_id: int, 
         select(CourseMembership).where(CourseMembership.course_id == course_id, CourseMembership.user_id == student_id)
     )
     student = db.get(User, student_id)
-    if membership is None or student is None:
+    if membership is None or membership.role != UserRole.STUDENT.value or student is None:
         raise not_found("学生不存在")
     lessons = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc())))
     lesson_progress = []
@@ -697,7 +797,22 @@ def remind_student(db: Session, *, course_id: int, student_id: int, user: User, 
     reminders = _get_preference(db, user_id=student_id, key=STUDENT_REMINDER_KEY)
     if not isinstance(reminders, list):
         reminders = []
-    _set_preference(db, user_id=student_id, key=STUDENT_REMINDER_KEY, value=[reminder, *reminders][:50])
+    # 按 course_id 分桶限额：每门课程最多保留 PER_COURSE_REMINDER_LIMIT 条，
+    # 避免多教师/多课程在单一偏好键上互相挤占。
+    updated = [reminder]
+    per_course_kept = 1
+    other_courses: list[dict] = []
+    for item in reminders:
+        if not isinstance(item, dict):
+            continue
+        if item.get("course_id") == course_id:
+            if per_course_kept < PER_COURSE_REMINDER_LIMIT:
+                updated.append(item)
+                per_course_kept += 1
+        else:
+            other_courses.append(item)
+    updated.extend(other_courses)
+    _set_preference(db, user_id=student_id, key=STUDENT_REMINDER_KEY, value=updated[:STUDENT_REMINDER_TOTAL_LIMIT])
     log_operation(
         db,
         user_id=user.id,
@@ -713,7 +828,7 @@ def remind_student(db: Session, *, course_id: int, student_id: int, user: User, 
 def remove_student(db: Session, *, course_id: int, student_id: int, user: User) -> None:
     _assert_course_access(db, course_id=course_id, user=user, require_active=True)
     membership = db.scalar(select(CourseMembership).where(CourseMembership.course_id == course_id, CourseMembership.user_id == student_id))
-    if membership is None:
+    if membership is None or membership.role != UserRole.STUDENT.value:
         raise not_found("学生不存在")
     db.delete(membership)
     log_operation(db, user_id=user.id, action="teacher.student.remove", target_type="student", target_id=student_id, detail={"course_id": course_id})
@@ -737,9 +852,9 @@ def export_teacher_students_csv(db: Session, *, course_id: int, user: User) -> s
         student = item["student"]
         writer.writerow(
             [
-                student.get("nickname", ""),
-                student.get("email", ""),
-                student.get("student_no", "") or "",
+                _csv_safe(student.get("nickname", "")),
+                _csv_safe(student.get("email", "")),
+                _csv_safe(student.get("student_no", "") or ""),
                 item["joined_at"].isoformat() if item.get("joined_at") else "",
                 item["progress_percent"],
                 item["studied_lessons"],
@@ -758,13 +873,13 @@ def export_teacher_analysis_csv(db: Session, *, course_id: int, user: User, days
     writer = csv.writer(output)
     writer.writerow(["类型", "名称", "数值"])
     for key, value in payload.get("metrics", {}).items():
-        writer.writerow(["指标", key, value])
+        writer.writerow(["指标", _csv_safe(key), _csv_safe(value)])
     for item in payload.get("lesson_completion", []):
-        writer.writerow(["课时完成率", item.get("title", ""), item.get("completion_rate", 0)])
+        writer.writerow(["课时完成率", _csv_safe(item.get("title", "")), item.get("completion_rate", 0)])
     for item in payload.get("weak_points", []):
-        writer.writerow(["薄弱点", item.get("knowledge_point", ""), item.get("wrong_count", 0)])
+        writer.writerow(["薄弱点", _csv_safe(item.get("knowledge_point", "")), item.get("wrong_count", 0)])
     for item in payload.get("high_frequency_questions", []):
-        writer.writerow(["高频问题", item.get("question", ""), item.get("count", 0)])
+        writer.writerow(["高频问题", _csv_safe(item.get("question", "")), item.get("count", 0)])
     return "\ufeff" + output.getvalue()
 
 
@@ -875,19 +990,53 @@ def duplicate_lesson(db: Session, *, lesson_id: int, user: User) -> Lesson:
     return clone
 
 
+def _student_layers(items: list[dict]) -> dict:
+    """学生分层：互斥且并集覆盖全体。先按活跃度（14天内无学习记为 inactive），
+    其余在册学生再按进度分到 high/normal/low，确保每名学生只落入一个桶。"""
+    since_14 = datetime.now(UTC) - timedelta(days=14)
+    layers = {"high": 0, "normal": 0, "low": 0, "inactive": 0}
+    for item in items:
+        last_study = _aware_utc(item.get("last_study_at"))
+        if not last_study or last_study < since_14:
+            layers["inactive"] += 1
+            continue
+        progress = item.get("progress_percent") or 0
+        if progress >= 70:
+            layers["high"] += 1
+        elif progress >= 30:
+            layers["normal"] += 1
+        else:
+            layers["low"] += 1
+    return layers
+
+
 def get_teacher_analysis(db: Session, *, course_id: int, user: User, days: int) -> dict:
     base = get_course_analytics(db, course_id=course_id, user=user, days=days)
     students = get_teacher_students(db, course_id=course_id, user=user)
+    student_ids = _student_ids(db, course_id)
     lessons = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.asc())))
     lesson_completion = []
     for lesson in lessons:
-        progress = _lesson_progress(db, lesson, students["stats"]["total"])
+        progress = _lesson_progress(db, lesson, students["stats"]["total"], student_ids)
         lesson_completion.append({"lesson_id": lesson.id, "title": lesson.title, **progress})
-    attempts = list(
-        db.scalars(select(QuizAttempt).join(Quiz, Quiz.id == QuizAttempt.quiz_id).where(Quiz.course_id == course_id))
+    # 仅统计在册学生：移除学生的测验记录与问答不再计入分析。
+    attempts = (
+        list(
+            db.scalars(
+                select(QuizAttempt)
+                .join(Quiz, Quiz.id == QuizAttempt.quiz_id)
+                .where(Quiz.course_id == course_id, QuizAttempt.user_id.in_(student_ids))
+            )
+        )
+        if student_ids
+        else []
     )
     average_score = round(sum(item.score for item in attempts) / max(len(attempts), 1), 2) if attempts else 0
-    qa_total = db.scalar(select(func.count(QARecord.id)).where(QARecord.course_id == course_id)) or 0
+    qa_total = (
+        db.scalar(select(func.count(QARecord.id)).where(QARecord.course_id == course_id, QARecord.user_id.in_(student_ids)))
+        if student_ids
+        else 0
+    ) or 0
     period_study_seconds = int(base.get("period_study_seconds") or base.get("study_seconds") or 0)
     total_study_seconds = int(base.get("study_seconds") or 0)
     return {
@@ -903,10 +1052,5 @@ def get_teacher_analysis(db: Session, *, course_id: int, user: User, days: int) 
             "avg_study_minutes": round(period_study_seconds / max(students["stats"]["total"], 1) / 60, 1) if students["stats"]["total"] else 0,
         },
         "lesson_completion": lesson_completion,
-        "student_layers": {
-            "high": len([item for item in students["items"] if item["last_study_at"] and item["progress_percent"] >= 70]),
-            "normal": len([item for item in students["items"] if 30 <= item["progress_percent"] < 70]),
-            "low": len([item for item in students["items"] if 5 <= item["progress_percent"] < 30]),
-            "inactive": students["stats"]["inactive_14d"],
-        },
+        "student_layers": _student_layers(students["items"]),
     }
