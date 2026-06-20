@@ -28,6 +28,8 @@ from app.services.student import (
 router = APIRouter()
 COURSE_CODE_RULE = RateLimitRule(limit=30, window_seconds=300)
 UPLOAD_RULE = RateLimitRule(limit=30, window_seconds=300)
+DASHBOARD_REFRESH_RULE = RateLimitRule(limit=3, window_seconds=60)
+NOTE_SAVE_RULE = RateLimitRule(limit=20, window_seconds=60)
 
 
 class PageNoteRequest(BaseModel):
@@ -62,6 +64,8 @@ def dashboard_endpoint(
     db: Annotated[Session, Depends(get_db)],
     refresh_recommendation: bool = Query(default=False),
 ):
+    if refresh_recommendation:
+        limit_request(request, "student-dashboard-refresh", user.id, rule=DASHBOARD_REFRESH_RULE)
     return success_response(
         data=get_student_dashboard(db, user, refresh_recommendation=refresh_recommendation),
         request_id=request.state.request_id,
@@ -116,6 +120,7 @@ def save_note_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "student-note-save", user.id, rule=NOTE_SAVE_RULE)
     return success_response(data=save_page_note(db, page_id=page_id, user=user, content=payload.content), request_id=request.state.request_id)
 
 
