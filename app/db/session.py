@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
@@ -88,6 +89,18 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
             statements.append("ALTER TABLE wrong_questions ADD COLUMN last_correct_at DATETIME")
     if target_engine.dialect.name == "mysql":
         _append_mysql_longtext_updates(inspector, table_names, statements)
+    if "quiz_attempts" in table_names:
+        # #14：为既有库补建 (quiz_id, user_id) 唯一约束，使并发重复提交时 IntegrityError 兜底生效。
+        # 自我隔离、crash-safe：单独事务执行，失败（如生产已存在重复行）仅告警不抛出，保证启动不崩。
+        existing_indexes = {index.get("name") for index in inspector.get_indexes("quiz_attempts")}
+        if "uq_quiz_attempt_user" not in existing_indexes:
+            try:
+                with target_engine.begin() as connection:
+                    connection.execute(
+                        text("CREATE UNIQUE INDEX uq_quiz_attempt_user ON quiz_attempts (quiz_id, user_id)")
+                    )
+            except Exception as exc:  # noqa: BLE001 - 迁移失败不应阻断应用启动
+                logging.warning("跳过创建 quiz_attempts 唯一索引 uq_quiz_attempt_user：%s", exc)
     if not statements:
         return
     with target_engine.begin() as connection:

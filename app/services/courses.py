@@ -1,11 +1,13 @@
 from datetime import UTC, datetime
 from random import choices
 from string import ascii_uppercase, digits
+from urllib.parse import urlsplit
 
 from fastapi import UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.enums import CourseStatus, UserRole
 from app.core.errors import bad_request, forbidden, not_found
 from app.core.upload_validation import validate_image_upload
@@ -41,6 +43,52 @@ def _get_course_or_404(db: Session, course_id: int) -> Course:
     if course is None or course.deleted_at is not None:
         raise not_found("课程不存在")
     return course
+
+
+def _assert_course_available_for_student(db: Session, course_id: int) -> Course:
+    course = _get_course_or_404(db, course_id)
+    if course.status != CourseStatus.ACTIVE.value:
+        raise forbidden("课程已下架，暂时无法访问")
+    return course
+
+
+def _trusted_cover_hosts(db: Session) -> set[str]:
+    # #42：可信封面 host = 本站对外地址 + 当前存储（本地/OSS/CDN）实际会产出的 host。
+    # 用一个探针相对路径让 storage_service 按当前配置生成真实 public_url，取其 host，
+    # 从而覆盖本地 public_base_url、OSS public_base_url/cdn_domain、bucket 虚拟主机等所有情况。
+    hosts: set[str] = set()
+    base_url = str(get_settings().public_base_url or "").strip()
+    if base_url:
+        host = urlsplit(base_url).hostname
+        if host:
+            hosts.add(host.lower())
+    try:
+        # 探针须带 public/ 前缀，否则 storage.public_url 对非 public 路径短路返回 ""（见 storage.py），
+        # 导致 OSS/CDN 实际 host 永远进不了白名单、误拒平台自有 https 封面。
+        probe = storage_service.public_url("public/course_covers/_cover_host_probe.png", db=db)
+    except Exception:
+        probe = None
+    if probe:
+        probe_host = urlsplit(probe).hostname
+        if probe_host:
+            hosts.add(probe_host.lower())
+    return hosts
+
+
+def _validate_cover_url(cover_url: str, db: Session) -> str:
+    candidate = cover_url.strip()
+    if candidate.startswith("//"):
+        raise bad_request("封面地址不合法")
+    if candidate.startswith("/"):
+        # 本站相对路径（如 /static/... 或 /api/v1/media/...）始终允许。
+        return candidate
+    if candidate.startswith("https://"):
+        # #42：仅允许指向本平台存储/CDN 的 https 封面，拒绝任意外部站点（防外链追踪/IP 泄露）。
+        host = (urlsplit(candidate).hostname or "").lower()
+        if host and host in _trusted_cover_hosts(db):
+            return candidate
+        raise bad_request("封面地址必须使用平台上传的封面，请通过上传封面功能设置")
+    raise bad_request("封面地址不合法")
 
 
 def _assert_course_active_for_teacher(course: Course, user: User, message: str = "课程已下架，无法执行该操作") -> None:
@@ -100,7 +148,7 @@ def update_course(db: Session, user: User, course_id: int, payload: CourseUpdate
             raise bad_request("课程状态不合法")
         course.status = payload.status
     if payload.cover_url is not None:
-        course.cover_url = payload.cover_url or None
+        course.cover_url = _validate_cover_url(payload.cover_url, db) if payload.cover_url else None
     if payload.cover_color is not None:
         course.cover_color = payload.cover_color or None
     if payload.allow_general_ai_answer is not None:

@@ -58,12 +58,16 @@ def register_request(
 
 @router.post("/link/validate")
 def link_validate(payload: AuthLinkValidateRequest, request: Request, db: Annotated[Session, Depends(get_db)]):
+    limit_request(request, "auth-link-validate-ip", rule=EMAIL_IP_RULE)
+    limit_key("auth-link-validate-email", payload.email, rule=EMAIL_ACCOUNT_RULE)
     result = validate_auth_link(db, email=payload.email, mode=payload.mode, token=payload.token)
     return success_response(data=result.model_dump(), request_id=request.state.request_id)
 
 
 @router.post("/register")
 def register(payload: RegisterRequest, request: Request, db: Annotated[Session, Depends(get_db)]):
+    limit_request(request, "auth-register-ip", rule=EMAIL_IP_RULE)
+    limit_key("auth-register-email", payload.email, rule=EMAIL_ACCOUNT_RULE)
     user = register_user(db, payload)
     return success_response(data=get_user_profile(user).model_dump(), request_id=request.state.request_id)
 
@@ -102,6 +106,8 @@ def password_reset_confirm(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "auth-reset-confirm-ip", rule=EMAIL_IP_RULE)
+    limit_key("auth-reset-confirm-email", payload.email, rule=EMAIL_ACCOUNT_RULE)
     reset_password(db, payload)
     return success_response(message="密码已重置", request_id=request.state.request_id)
 
@@ -129,5 +135,5 @@ def change_me_password(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    change_password(db, user, payload.old_password, payload.new_password)
-    return success_response(message="密码修改成功", request_id=request.state.request_id)
+    result = change_password(db, user, payload.old_password, payload.new_password)
+    return success_response(data=result.model_dump(), message="密码修改成功", request_id=request.state.request_id)
