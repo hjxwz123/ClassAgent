@@ -1,8 +1,9 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 from app.schemas.common import ORMModel
+from app.services.storage import storage_service
 
 
 class ProblemTextRequest(BaseModel):
@@ -27,6 +28,12 @@ class ProblemResponse(ORMModel):
     common_mistakes: list | None
     created_at: datetime
     updated_at: datetime
+
+    @field_serializer("image_path")
+    def serialize_image_path(self, value: str | None):
+        if value is None:
+            return None
+        return storage_service.normalize_public_url(value)
 
 
 class ProblemGuidanceResponse(ORMModel):

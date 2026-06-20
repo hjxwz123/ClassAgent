@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlsplit
 
+import logging
+
 import httpx
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,9 @@ from app.core.errors import bad_request
 from app.core.media import signed_media_url
 from app.services.runtime_config import get_enabled_service_config
 from app.services.storage import storage_service
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 SERVICE_TYPE = "doc_parser"
@@ -710,6 +715,38 @@ class DocParserService:
             return body.get("Data") or body.get("data") or body
         return {}
 
+    @staticmethod
+    def _is_retryable_query_error(exc: Exception) -> bool:
+        # #61: 仅把"瞬时网络/连接抖动"判为可重试；定性的 API 错误（task 不存在/失败，由
+        # _query_status 抛 bad_request）不在此列，避免把瞬时错误等同于需要重新提交付费任务。
+        if isinstance(exc, (httpx.TransportError, socket.error, ConnectionError, TimeoutError)):
+            return True
+        # 阿里云 Tea SDK 的网络层异常名通常含 Connection/Timeout/Throttling 等关键字。
+        text = f"{type(exc).__name__} {exc}".lower()
+        return any(token in text for token in ("connection", "timed out", "timeout", "temporarily", "throttl", "reset by peer", "network"))
+
+    def _query_status_with_retry(self, task_id: str, config: dict, *, attempts: int = 3, backoff_seconds: float = 1.5) -> dict:
+        # #61: 对可重试网络错误做有限重试；耗尽后向上抛出，由调用方决定（绝不静默重新提交）。
+        last_exc: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._query_status(task_id, config)
+            except Exception as exc:  # noqa: BLE001 - 需按可重试性区分处理
+                if not self._is_retryable_query_error(exc):
+                    raise
+                last_exc = exc
+                LOGGER.warning(
+                    "DocMind status query transient failure (task=%s attempt=%s/%s): %s",
+                    task_id,
+                    attempt,
+                    attempts,
+                    exc,
+                )
+                if attempt < attempts:
+                    time.sleep(backoff_seconds * attempt)
+        assert last_exc is not None
+        raise last_exc
+
     def _output_format_results(self, status: dict) -> list[dict]:
         items = status.get("OutputFormatResult") or status.get("outputFormatResult") or status.get("output_format_result") or []
         if not isinstance(items, list):
@@ -935,7 +972,8 @@ class DocParserService:
 
         if resume_task_id:
             try:
-                status = self._query_status(resume_task_id, service.config)
+                # #61: 带有限重试的状态查询，区分"任务确实不存在/已失败"与"瞬时网络抖动"。
+                status = self._query_status_with_retry(resume_task_id, service.config)
                 if str(status.get("Status") or status.get("status") or "").lower() == "success":
                     if on_progress:
                         on_progress({"stage": "resuming", "docmind_task_id": resume_task_id, "status": "success", "progress": 100})
@@ -964,6 +1002,21 @@ class DocParserService:
                             "message": str(exc),
                         }
                     )
+                # #61: 若耗尽重试后仍是可重试的瞬时网络错误，不能把它当成"任务不存在/失败"而
+                # 静默重新提交（会重复触发付费 DocMind 任务）。直接上抛友好错误，让上层稍后重试。
+                if self._is_retryable_query_error(exc):
+                    LOGGER.warning(
+                        "DocMind resume status query failed transiently after retries (task=%s): %s",
+                        resume_task_id,
+                        exc,
+                    )
+                    raise bad_request("文档解析状态查询暂时不可用，请稍后重试") from exc
+                # 其余（任务确实不存在/已失败等定性错误）：按原逻辑回退到重新提交。
+                LOGGER.info(
+                    "DocMind resume task unavailable, will resubmit (task=%s): %s",
+                    resume_task_id,
+                    exc,
+                )
 
         task_id = self._submit_job(path, filename or path.name, service.config)
         if on_progress:

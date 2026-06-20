@@ -191,7 +191,9 @@ def test_aliyun_oss_upload_failure_returns_bad_request(client, monkeypatch):
         storage_service.save_upload(upload, folder="storage_test", db=db)
 
     assert exc_info.value.status_code == 400
-    assert "OSS 上传失败" in exc_info.value.detail["message"]
+    # #60：对用户只返回统一友好文案，底层 SDK 异常细节仅写服务端日志。
+    assert exc_info.value.detail["message"] == "资料文件上传失败，请稍后重试或联系管理员"
+    assert "network down" not in exc_info.value.detail["message"]
 
 
 def test_aliyun_oss_read_failure_hides_provider_detail(client, monkeypatch):
@@ -233,7 +235,9 @@ def test_aliyun_oss_read_failure_hides_provider_detail(client, monkeypatch):
     assert "secret-request" not in message
 
 
-def test_aliyun_oss_deletes_disposable_local_upload_copy(client, monkeypatch):
+def test_aliyun_oss_keeps_disposable_local_upload_copy(client, monkeypatch):
+    # #30：OSS 仅作镜像，本地副本始终保留（read_bytes 先读本地、再回源 OSS），
+    # 二者至少一处可读，避免"本地删了但读不回"的不一致。
     _add_service_config(
         provider="aliyun",
         config={
@@ -257,7 +261,7 @@ def test_aliyun_oss_deletes_disposable_local_upload_copy(client, monkeypatch):
 
     assert size == 6
     assert uploaded == [(relative_path, b"avatar")]
-    assert not storage_service.absolute_path(relative_path).exists()
+    assert storage_service.absolute_path(relative_path).exists()
     assert public_url == f"https://bucket.oss-cn-hangzhou.aliyuncs.com/{relative_path}"
 
 
@@ -281,7 +285,8 @@ def test_aliyun_oss_keeps_material_source_local_copy(client, monkeypatch):
     assert storage_service.absolute_path(relative_path).exists()
 
 
-def test_aliyun_oss_deletes_generated_audio_local_copy(client, monkeypatch):
+def test_aliyun_oss_keeps_generated_audio_local_copy(client, monkeypatch):
+    # #30：生成音频同样保留本地镜像副本，签名媒体路由可从本地或 OSS 任一处读回。
     _add_service_config(
         provider="aliyun",
         config={
@@ -302,7 +307,7 @@ def test_aliyun_oss_deletes_generated_audio_local_copy(client, monkeypatch):
         relative_path = storage_service.save_bytes(b"audio", folder="generated/audio", filename="demo.wav", db=db, public=True)
 
     assert uploaded == [(relative_path, b"audio")]
-    assert not storage_service.absolute_path(relative_path).exists()
+    assert storage_service.absolute_path(relative_path).exists()
 
 
 def test_local_oss_service_config_drops_oss_credentials(client):

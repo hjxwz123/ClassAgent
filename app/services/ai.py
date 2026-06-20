@@ -520,6 +520,23 @@ def _select_quiz_questions_by_type_counts(
     return selected, missing
 
 
+# AI 出题分值的合理夹合区间。
+_QUIZ_SCORE_MIN = 1.0
+_QUIZ_SCORE_MAX = 100.0
+_QUIZ_SCORE_DEFAULT = 10.0
+
+
+def _coerce_quiz_score(value, *, default: float = _QUIZ_SCORE_DEFAULT) -> float:
+    """防御性解析模型返回的题目分值：非数字（如 "high"/"满分"/"10分"/list）回退默认值，并夹合到合理区间（#56）。"""
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        score = default
+    if score <= 0:
+        score = default
+    return max(_QUIZ_SCORE_MIN, min(_QUIZ_SCORE_MAX, score))
+
+
 def _normalize_quiz_questions_from_payload(payload: Any, *, count: int, seen_stems: set[str] | None = None) -> list[dict]:
     if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
         raise bad_request("AI 出题失败：模型未返回有效 JSON 题目")
@@ -579,7 +596,7 @@ def _normalize_quiz_questions_from_payload(payload: Any, *, count: int, seen_ste
                 "options": options,
                 "reference_answer": reference_answer,
                 "explanation": explanation,
-                "score": float(item.get("score") or 10),
+                "score": _coerce_quiz_score(item.get("score")),
                 "difficulty": item.get("difficulty") or "standard",
             }
         )
@@ -1380,26 +1397,20 @@ class AIService:
             "reason": str(payload.get("reason") or ""),
         }
 
-    def generate_page_script(self, *, title: str | None, content: str, db: Session | None = None) -> str:
+    def generate_page_script(self, *, title: str | None, content: str, db: Session | None = None) -> str | None:
         result = self._call_chat(
             db,
             purpose="script",
             system_prompt="你是高校课程 AI 讲解助手。根据单页课件内容生成自然、准确、适合课时讲解和语音播放的中文讲解稿。",
             user_prompt=f"页面标题：{title or '本页内容'}\n页面内容：{content}\n请输出讲解稿正文，不要输出额外说明。",
         )
-        if result:
+        if result and result.strip():
             return result.strip()
-        heading = title or "本页内容"
-        summary = _clean_text(content)
-        summary = summary[:220] if len(summary) > 220 else summary
-        return (
-            f"{heading}的核心内容如下：\n"
-            f"1. 先理解本页定义与背景：{summary or '本页暂无可提取文字。'}\n"
-            f"2. 再关注概念之间的联系与典型应用。\n"
-            f"3. 最后结合课程上下文总结本页重点并准备继续学习。"
-        )
+        # 模型未返回有效讲解稿：返回 None，由上层(materials.py)记入 warnings 并落降级稿，
+        # 不在此处用截断原文冒充真实讲解稿。
+        return None
 
-    def summarize_lesson(self, title: str, page_texts: Sequence[str], db: Session | None = None) -> str:
+    def summarize_lesson(self, title: str, page_texts: Sequence[str], db: Session | None = None) -> str | None:
         merged = " ".join(text.strip() for text in page_texts if text.strip())
         result = self._call_chat(
             db,
@@ -1407,10 +1418,11 @@ class AIService:
             system_prompt="你是课程内容摘要助手，请根据课件页面内容生成简洁准确的课时摘要。",
             user_prompt=f"课时标题：{title}\n页面内容：{merged[:6000]}\n请输出 100 字以内中文摘要。",
         )
-        if result:
+        if result and result.strip():
             return result.strip()
-        merged = merged[:200] if len(merged) > 200 else merged
-        return f"{title}：{merged or '该资料已生成课时页面，可继续补充讲解脚本。'}"
+        # 模型未返回有效摘要：返回 None，由上层(materials.py)记入 warnings 并落降级摘要，
+        # 不在此处用截断原文冒充真实摘要。
+        return None
 
     def generate_pedagogy_artifacts(
         self,
@@ -1461,16 +1473,23 @@ class AIService:
                     "}"
                 ),
             )
-        except Exception:
+            degraded_reason: str | None = None
+        except Exception as exc:
             payload = None
+            degraded_reason = str(exc) or "模型调用失败"
         if isinstance(payload, dict):
+            # 模型给出了真实判定（含 is_teaching_page=false 的非教学页），按真实 AI 产物返回。
             return payload
+        # 走到这里说明模型未配置 / 调用失败 / 返回非 JSON：不能用关键词模板冒充真实 AI 产物。
+        # 用 sentinel 字段把"降级"显式表达出来，由上层记入 warnings 并在落库 payload 标 degraded。
         keywords = [item for item in self.extract_keywords(clean_page or page_title or lesson_title, limit=8) if item != "课程内容"]
         if not keywords:
             keywords = [page_title or lesson_title or "当前页面"]
         main = keywords[0]
         summary = clean_page[:220] or f"{page_title or lesson_title} 的页面内容需要结合课堂讲解继续补充。"
         return {
+            "_degraded": True,
+            "_degraded_reason": degraded_reason or "未配置教学结构模型或模型未返回有效结构",
             "page_summary": summary,
             "learning_objectives": [f"理解 {main} 的含义、适用条件和应用步骤"],
             "key_points": keywords[:5],
@@ -1824,6 +1843,11 @@ class AIService:
         ]
 
     def generate_similar_questions(self, knowledge_points: Sequence[str], db: Session | None = None) -> list[str]:
+        valid_points = [str(point).strip() for point in (knowledge_points or []) if str(point).strip()]
+        if not valid_points:
+            # 无有效知识点时不造占位题干，返回空列表。
+            return []
+        knowledge_points = valid_points
         payload = self._call_json(
             db,
             purpose="tutoring",
@@ -2018,7 +2042,7 @@ class AIService:
         user_answer: str,
         full_score: float,
         db: Session | None = None,
-    ) -> tuple[float, str]:
+    ) -> tuple[float | None, str]:
         payload = self._call_json(
             db,
             purpose="quiz",
@@ -2029,12 +2053,18 @@ class AIService:
             ),
         )
         if isinstance(payload, dict) and "score" in payload:
-            score = max(0.0, min(float(full_score), float(payload["score"])))
-            return round(score, 2), str(payload.get("feedback") or "")
+            try:
+                raw_score = float(payload["score"])
+            except (TypeError, ValueError):
+                raw_score = None
+            if raw_score is not None:
+                score = max(0.0, min(float(full_score), raw_score))
+                return round(score, 2), str(payload.get("feedback") or "")
         tokens = set(self.extract_keywords(user_answer, limit=12))
         expected = {keyword.lower() for keyword in reference_keywords}
         if not expected:
-            return round(full_score * 0.6, 2), "答案已提交，当前采用通用评分策略。"
+            # 模型未给出可用分数且无参考关键词可兜底：不臆造分数，交人工批改。
+            return None, "该题需教师批改。"
         matched = len(tokens & expected)
         score = round(full_score * matched / len(expected), 2)
         score = min(full_score, max(score, full_score * 0.2 if user_answer.strip() else 0))
@@ -2048,15 +2078,29 @@ class AIService:
         available_days: int,
         daily_minutes: int,
         course_name: str,
+        knowledge_points: list[str] | None = None,
+        weak_points: list[str] | None = None,
         db: Session | None = None,
     ) -> list[dict]:
+        # #18：把课程真实知识点/学生薄弱点注入 prompt，让计划贴合课程内容而非空泛模板；无数据时优雅降级。
+        knowledge_lines = [str(point).strip() for point in (knowledge_points or []) if str(point).strip()]
+        weak_lines = [str(point).strip() for point in (weak_points or []) if str(point).strip()]
+        context_parts: list[str] = []
+        if knowledge_lines:
+            context_parts.append("课程知识点（请据此安排每天的学习内容，逐步覆盖）：\n" + "\n".join(f"- {line}" for line in knowledge_lines[:40]))
+        if weak_lines:
+            context_parts.append("该学生薄弱点（请优先安排复习与练习）：\n" + "\n".join(f"- {line}" for line in weak_lines[:20]))
+        context_block = ("\n".join(context_parts) + "\n") if context_parts else ""
         payload = self._call_json(
             db,
             purpose="study_plan",
             system_prompt="你是学习计划助手。请只返回 JSON。",
             user_prompt=(
                 f"课程：{course_name}\n目标：{goal}\n天数：{available_days}\n每天分钟：{daily_minutes}\n"
-                "返回格式：{\"items\":[{\"title\":\"\",\"task_type\":\"study_plan\",\"estimated_minutes\":30,\"summary\":\"\"}]}"
+                f"{context_block}"
+                "请结合上面给出的课程知识点与薄弱点，为每天安排具体、可执行的学习任务，避免空泛模板。\n"
+                "每个任务的 task_type 必须从 [\"听课\",\"复习\",\"练习\",\"测验\"] 中选择，并据当天内容合理区分。\n"
+                "返回格式：{\"items\":[{\"title\":\"\",\"task_type\":\"复习\",\"estimated_minutes\":30,\"summary\":\"\"}]}"
             ),
         )
         today = datetime.now(UTC).date()
@@ -2065,12 +2109,17 @@ class AIService:
             for index, item in enumerate(payload["items"][:available_days]):
                 if not isinstance(item, dict):
                     continue
+                try:
+                    estimated_minutes = int(float(item.get("estimated_minutes")))
+                except (TypeError, ValueError):
+                    estimated_minutes = daily_minutes
+                estimated_minutes = max(5, min(estimated_minutes, 1440))
                 tasks.append(
                     {
                         "title": str(item.get("title") or f"{course_name} 第{index + 1}天学习任务"),
                         "task_date": (today + timedelta(days=index)).isoformat(),
                         "task_type": str(item.get("task_type") or "study_plan"),
-                        "estimated_minutes": int(item.get("estimated_minutes") or daily_minutes),
+                        "estimated_minutes": estimated_minutes,
                         "summary": str(item.get("summary") or f"围绕目标“{goal}”完成学习。"),
                     }
                 )

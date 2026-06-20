@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.enums import ProcessStatus, QuizStatus, QuizType, QuestionType, TaskStatus, UserRole
@@ -668,12 +669,24 @@ def update_quiz_content(db: Session, *, quiz_id: int, user: User, payload: QuizE
     return quiz, questions
 
 
+# 错题重练 / 自助练习等学生私有练习类 quiz：即便 PUBLISHED 也仅创建者本人可见/访问。
+# #46：PRACTICE 是学生最常自建的练习类型，同样不得被同课程其他学生按 id 探知。
+_STUDENT_PRIVATE_QUIZ_TYPES = {QuizType.WRONG_BOOK.value, QuizType.PRACTICE.value}
+
+
+def _is_student_private_quiz(quiz: Quiz) -> bool:
+    return quiz.quiz_type in _STUDENT_PRIVATE_QUIZ_TYPES
+
+
 def list_quizzes(db: Session, *, course_id: int, user: User) -> list[Quiz]:
     statement = select(Quiz).where(Quiz.course_id == course_id)
     if user.role == UserRole.STUDENT.value:
         _assert_student_course_access(db, course_id=course_id, user=user)
         statement = statement.where(
-            (Quiz.status == QuizStatus.PUBLISHED.value)
+            (
+                (Quiz.status == QuizStatus.PUBLISHED.value)
+                & (Quiz.quiz_type.not_in(_STUDENT_PRIVATE_QUIZ_TYPES))
+            )
             | ((Quiz.creator_id == user.id) & (Quiz.quiz_type != QuizType.COURSE.value))
         )
     elif user.role == UserRole.TEACHER.value:
@@ -1002,7 +1015,10 @@ def get_quiz_detail(db: Session, *, quiz_id: int, user: User) -> tuple[Quiz, lis
         raise not_found("测验不存在")
     if user.role == UserRole.STUDENT.value:
         _assert_student_course_access(db, course_id=quiz.course_id, user=user)
-        if quiz.status != QuizStatus.PUBLISHED.value and quiz.creator_id != user.id:
+        if _is_student_private_quiz(quiz):
+            if quiz.creator_id != user.id:
+                raise forbidden("测验尚未发布")
+        elif quiz.status != QuizStatus.PUBLISHED.value and quiz.creator_id != user.id:
             raise forbidden("测验尚未发布")
     elif user.role == UserRole.TEACHER.value:
         course = _get_course_or_404(db, quiz.course_id)
@@ -1195,87 +1211,173 @@ def _record_answer_to_wrong_book(
     db.add(wrong)
 
 
+# 填空题达到该及格比例即视为通过，不计入错题。
+_BLANK_PASS_RATIO = 0.6
+
+
+def _grade_question(question: QuizQuestion, user_answer, *, db: Session) -> dict:
+    """对单题判分，返回 score/is_correct/feedback/count_as_wrong/pending。
+
+    任何会失败的判分（如 AI 主观题评分不可用）都在写库前完成，失败时直接抛出，
+    使整次提交不落库（见 #15）。
+    """
+    is_correct = False
+    score = 0.0
+    feedback = question.explanation
+    pending_review = False
+    count_as_wrong = True
+    has_answer = user_answer is not None and user_answer != "" and user_answer != []
+    if not has_answer:
+        feedback = "本题未作答。"
+    elif question.question_type in {QuestionType.SINGLE_CHOICE.value, QuestionType.JUDGE.value}:
+        expected = extract_reference_answer_value(question.reference_answer)
+        if question.question_type == QuestionType.JUDGE.value:
+            is_correct = _judge_equal(user_answer, expected, question.options)
+        else:
+            is_correct = _choice_equal(user_answer, expected, question.options)
+        score = question.score if is_correct else 0.0
+    elif question.question_type == QuestionType.MULTIPLE_CHOICE.value:
+        expected = extract_reference_answer_value(question.reference_answer)
+        expected_values = sorted(str(_option_index(item) if _option_index(item) is not None else item).lower() for item in _answer_values(expected))
+        actual_values = sorted(str(_option_index(item) if _option_index(item) is not None else item).lower() for item in _answer_values(user_answer))
+        is_correct = actual_values == expected_values
+        score = question.score if is_correct else 0.0
+    elif question.question_type == QuestionType.BLANK.value:
+        expected = question.reference_answer or {}
+        expected_values = []
+        if isinstance(expected, dict):
+            if "value" in expected:
+                expected_values = [str(expected["value"])]
+            else:
+                expected_values = [str(item) for item in expected.get("keywords", [])]
+        elif isinstance(expected, list):
+            expected_values = [str(item) for item in expected]
+        else:
+            expected_values = [str(expected)]
+        expected_values = [item for item in expected_values if item]
+        actual_text = str(user_answer or "").lower()
+        matched = sum(1 for item in expected_values if item.lower() in actual_text)
+        total = len(expected_values)
+        is_correct = bool(expected_values) and matched == total
+        score = question.score if is_correct else round(question.score * matched / max(total, 1), 2)
+        ratio = (matched / total) if total else 0.0
+        # #47：给出命中明细，并对达到及格比例的填空题不计入错题。
+        if total:
+            feedback = f"命中关键词 {matched}/{total}，得 {score}/{question.score} 分。"
+            if not is_correct and ratio >= _BLANK_PASS_RATIO:
+                feedback += "（达到及格比例，本题不计入错题。）"
+                count_as_wrong = False
+        else:
+            feedback = question.explanation
+    else:
+        expected_keywords = []
+        if isinstance(question.reference_answer, dict):
+            expected_keywords = question.reference_answer.get("keywords") or question.reference_answer.get("key_points") or []
+        # #28：score 可能为 None，表示无参考关键词且模型未给分，需人工批改。
+        raw_score, raw_feedback = ai_service.score_subjective_answer(
+            reference_keywords=expected_keywords,
+            user_answer=str(user_answer or ""),
+            full_score=question.score,
+            db=db,
+        )
+        if raw_score is None:
+            pending_review = True
+            count_as_wrong = False
+            score = 0.0
+            is_correct = False
+            feedback = (raw_feedback or "").strip() or "该题需教师批改，暂未计入自动总分。"
+        else:
+            score = float(raw_score)
+            feedback = raw_feedback
+            is_correct = score >= question.score * 0.6
+    return {
+        "score": score,
+        "is_correct": is_correct,
+        "feedback": feedback,
+        "pending_review": pending_review,
+        "count_as_wrong": count_as_wrong,
+    }
+
+
+def _attempt_ai_feedback(*, score: float, total_score: float, accuracy: float, wrong_count: int, pending_count: int) -> str:
+    parts: list[str] = [f"系统判分：本次得分 {score}/{total_score}（正确率 {accuracy}%）。"]
+    if total_score > 0 and score >= total_score:
+        parts.append("全部答对，表现优秀，可挑战更高难度的题目。")
+    elif accuracy >= 85:
+        parts.append("掌握情况良好，针对个别错题巩固即可。")
+    elif accuracy >= 60:
+        parts.append(f"还有 {wrong_count} 道错题，建议优先复盘并回看对应知识点。")
+    else:
+        parts.append(f"错题较多（{wrong_count} 道），建议系统性重学相关知识点后再练习。")
+    if pending_count:
+        parts.append(f"另有 {pending_count} 道主观题待教师批改，最终成绩以教师批改为准。")
+    return "".join(parts)
+
+
 def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -> QuizAttempt:
     quiz, questions = get_quiz_detail(db, quiz_id=quiz_id, user=user)
     if user.role != UserRole.STUDENT.value:
         raise forbidden("仅学生可提交测验")
+    # #14：创建 attempt 前查重拦截，避免 TOCTOU 重复提交、重复计入错题。
     existing_attempt = db.scalar(
         select(QuizAttempt)
         .where(QuizAttempt.quiz_id == quiz_id, QuizAttempt.user_id == user.id)
         .order_by(QuizAttempt.submitted_at.desc(), QuizAttempt.created_at.desc())
     )
     if existing_attempt is not None:
-        raise bad_request("这套练习你已提交过，每名学生只能作答一次，请在练习记录中查看解析。")
+        raise bad_request("该测验已提交，每名学生只能作答一次，请在练习记录中查看解析。")
     answer_map = _answer_map(answers)
+    # #15：先把全部判分（含 AI 主观题评分）算完，失败直接抛出，整次提交不落库、不留孤儿。
+    graded: list[tuple[QuizQuestion, object, dict]] = []
+    try:
+        for question in questions:
+            user_answer = answer_map.get(question.id)
+            graded.append((question, user_answer, _grade_question(question, user_answer, db=db)))
+    except Exception:
+        db.rollback()
+        raise
+    total_score = 0.0
+    wrong_count = 0
+    pending_count = 0
     attempt = QuizAttempt(quiz_id=quiz_id, user_id=user.id, total_score=quiz.total_score, submitted_at=datetime.now(UTC))
     db.add(attempt)
-    db.commit()
+    db.flush()
     db.refresh(attempt)
-    total_score = 0.0
-    for question in questions:
-        user_answer = answer_map.get(question.id)
-        is_correct = False
-        score = 0.0
-        feedback = question.explanation
-        has_answer = user_answer is not None and user_answer != "" and user_answer != []
-        if not has_answer:
-            feedback = "本题未作答。"
-        elif question.question_type in {QuestionType.SINGLE_CHOICE.value, QuestionType.JUDGE.value}:
-            expected = extract_reference_answer_value(question.reference_answer)
-            if question.question_type == QuestionType.JUDGE.value:
-                is_correct = _judge_equal(user_answer, expected, question.options)
-            else:
-                is_correct = _choice_equal(user_answer, expected, question.options)
-            score = question.score if is_correct else 0.0
-        elif question.question_type == QuestionType.MULTIPLE_CHOICE.value:
-            expected = extract_reference_answer_value(question.reference_answer)
-            expected_values = sorted(str(_option_index(item) if _option_index(item) is not None else item).lower() for item in _answer_values(expected))
-            actual_values = sorted(str(_option_index(item) if _option_index(item) is not None else item).lower() for item in _answer_values(user_answer))
-            is_correct = actual_values == expected_values
-            score = question.score if is_correct else 0.0
-        elif question.question_type == QuestionType.BLANK.value:
-            expected = question.reference_answer or {}
-            expected_values = []
-            if isinstance(expected, dict):
-                if "value" in expected:
-                    expected_values = [str(expected["value"])]
-                else:
-                    expected_values = [str(item) for item in expected.get("keywords", [])]
-            elif isinstance(expected, list):
-                expected_values = [str(item) for item in expected]
-            else:
-                expected_values = [str(expected)]
-            actual_text = str(user_answer or "").lower()
-            matched = sum(1 for item in expected_values if item and item.lower() in actual_text)
-            is_correct = bool(expected_values) and matched == len(expected_values)
-            score = question.score if is_correct else round(question.score * matched / max(len(expected_values), 1), 2)
-        else:
-            expected_keywords = []
-            if isinstance(question.reference_answer, dict):
-                expected_keywords = question.reference_answer.get("keywords") or question.reference_answer.get("key_points") or []
-            score, feedback = ai_service.score_subjective_answer(
-                reference_keywords=expected_keywords,
-                user_answer=str(user_answer or ""),
-                full_score=question.score,
-                db=db,
+    for question, user_answer, result in graded:
+        total_score += float(result["score"])
+        if result["pending_review"]:
+            pending_count += 1
+        db.add(
+            QuizAnswer(
+                attempt_id=attempt.id,
+                question_id=question.id,
+                user_answer=user_answer,
+                is_correct=result["is_correct"],
+                score=result["score"],
+                feedback=result["feedback"],
             )
-            is_correct = score >= question.score * 0.6
-        total_score += score
-        quiz_answer = QuizAnswer(
-            attempt_id=attempt.id,
-            question_id=question.id,
-            user_answer=user_answer,
-            is_correct=is_correct,
-            score=score,
-            feedback=feedback,
         )
-        db.add(quiz_answer)
-        _record_answer_to_wrong_book(db, user=user, quiz=quiz, question=question, attempt=attempt, is_correct=is_correct)
+        # #47/#28：达到及格比例的填空题、待人工批改的主观题不计入错题，也不进/出错题本。
+        if result["count_as_wrong"]:
+            if not result["is_correct"]:
+                wrong_count += 1
+            _record_answer_to_wrong_book(db, user=user, quiz=quiz, question=question, attempt=attempt, is_correct=result["is_correct"])
     attempt.score = round(total_score, 2)
     attempt.accuracy = round((total_score / max(quiz.total_score, 1)) * 100, 2)
-    attempt.ai_feedback = f"本次得分 {attempt.score}/{quiz.total_score}，建议优先复盘错题并回看对应知识点。"
+    attempt.ai_feedback = _attempt_ai_feedback(
+        score=attempt.score,
+        total_score=quiz.total_score,
+        accuracy=attempt.accuracy,
+        wrong_count=wrong_count,
+        pending_count=pending_count,
+    )
     db.add(attempt)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # #14 兜底：并发下唯一约束/竞态导致重复 attempt，回滚并提示已提交。
+        db.rollback()
+        raise bad_request("该测验已提交，每名学生只能作答一次，请在练习记录中查看解析。")
     db.refresh(attempt)
     return attempt
 
@@ -1297,12 +1399,17 @@ def list_wrong_questions(db: Session, *, course_id: int, user: User) -> list[tup
     return rows
 
 
-def generate_wrong_book_practice(db: Session, *, course_id: int, user: User) -> Quiz:
+def generate_wrong_book_practice(db: Session, *, course_id: int, user: User, wrong_question_id: int | None = None) -> Quiz:
     wrong_rows = list_wrong_questions(db, course_id=course_id, user=user)
     if not wrong_rows:
         raise bad_request("暂无错题可重练")
     active_wrong_rows = [(wrong, question) for wrong, question in wrong_rows if not wrong.is_resolved]
     practice_rows = active_wrong_rows or wrong_rows
+    # #64：若指定了 wrong_question_id 且属于本课程本人，则确保其被纳入并排在首位，其余按原逻辑补足到上限。
+    if wrong_question_id is not None:
+        targeted = next((row for row in wrong_rows if row[0].id == wrong_question_id), None)
+        if targeted is not None:
+            practice_rows = [targeted] + [row for row in practice_rows if row[0].id != targeted[0].id]
     quiz = Quiz(
         course_id=course_id,
         chapter_id=None,
@@ -1343,11 +1450,15 @@ def generate_wrong_book_practice(db: Session, *, course_id: int, user: User) -> 
     return quiz
 
 
-def enqueue_wrong_book_practice(db: Session, *, course_id: int, user: User) -> AsyncTaskLog:
+def enqueue_wrong_book_practice(db: Session, *, course_id: int, user: User, wrong_question_id: int | None = None) -> AsyncTaskLog:
     wrong_rows = list_wrong_questions(db, course_id=course_id, user=user)
     if not wrong_rows:
         raise bad_request("暂无错题可重练")
     course = _get_course_or_404(db, course_id)
+    # #64：把定向重练的 wrong_question_id 透传到异步任务 payload。
+    payload: dict = {"course_id": course_id}
+    if wrong_question_id is not None:
+        payload["wrong_question_id"] = wrong_question_id
     task = AsyncTaskLog(
         task_name="quiz.wrong_book.generate",
         target_type="quiz",
@@ -1356,7 +1467,7 @@ def enqueue_wrong_book_practice(db: Session, *, course_id: int, user: User) -> A
         detail=_quiz_generation_task_detail(
             user=user,
             course=course,
-            payload={"course_id": course_id},
+            payload=payload,
             kind="wrong_book_practice",
             title="错题重练",
         ),
@@ -1407,7 +1518,14 @@ def process_quiz_generation_task(db: Session, task_id: int) -> None:
         if kind == "teacher_weak_quiz":
             quiz = generate_teacher_weak_quiz(db, user=user, payload=WeakQuizGenerateRequest(**payload_data))
         elif kind == "wrong_book_practice":
-            quiz = generate_wrong_book_practice(db, course_id=int(payload_data.get("course_id") or detail.get("course_id")), user=user)
+            raw_wrong_question_id = payload_data.get("wrong_question_id")
+            wrong_question_id = int(raw_wrong_question_id) if raw_wrong_question_id is not None else None
+            quiz = generate_wrong_book_practice(
+                db,
+                course_id=int(payload_data.get("course_id") or detail.get("course_id")),
+                user=user,
+                wrong_question_id=wrong_question_id,
+            )
         else:
             quiz = generate_quiz(db, user=user, payload=QuizGenerateRequest(**payload_data))
         question_count = int(db.scalar(select(func.count(QuizQuestion.id)).where(QuizQuestion.quiz_id == quiz.id)) or 0)
@@ -1536,6 +1654,22 @@ def get_weak_points(db: Session, *, course_id: int, user: User) -> list[dict]:
     )[:10]
 
 
+# 学习任务单次预计时长的合理夹合区间（分钟）。
+_ESTIMATED_MINUTES_MIN = 5
+_ESTIMATED_MINUTES_MAX = 480
+
+
+def _coerce_estimated_minutes(value, *, default: int) -> int:
+    """防御性解析模型返回的预计分钟数：解析失败回退默认值，并夹合到合理区间（#56）。"""
+    try:
+        minutes = int(round(float(value)))
+    except (TypeError, ValueError):
+        minutes = default
+    if minutes <= 0:
+        minutes = default
+    return max(_ESTIMATED_MINUTES_MIN, min(_ESTIMATED_MINUTES_MAX, minutes))
+
+
 def create_study_plan(db: Session, *, user: User, payload: StudyPlanCreateRequest) -> tuple[StudyPlan, list[StudyPlanTask]]:
     _assert_student_course_access(db, course_id=payload.course_id, user=user)
     course = _get_course_or_404(db, payload.course_id)
@@ -1551,21 +1685,35 @@ def create_study_plan(db: Session, *, user: User, payload: StudyPlanCreateReques
     db.add(plan)
     db.commit()
     db.refresh(plan)
+    # #18：注入课程真实知识点与该生薄弱点，让 AI 据课程内容生成计划而非空泛模板。
+    knowledge_points = [
+        point.name
+        for point in ensure_knowledge_points(db, course_id=payload.course_id, chapter_id=None)
+        if getattr(point, "name", None)
+    ]
+    weak_points = [
+        str(item.get("knowledge_point"))
+        for item in get_weak_points(db, course_id=payload.course_id, user=user)
+        if item.get("knowledge_point")
+    ]
     task_payloads = ai_service.generate_study_plan(
         goal=payload.goal,
         available_days=payload.available_days,
         daily_minutes=payload.daily_minutes,
         course_name=course.name,
+        knowledge_points=knowledge_points,
+        weak_points=weak_points,
         db=db,
     )
     tasks: list[StudyPlanTask] = []
     for item in task_payloads:
+        estimated_minutes = _coerce_estimated_minutes(item.get("estimated_minutes"), default=payload.daily_minutes)
         task = StudyPlanTask(
             plan_id=plan.id,
             title=item["title"],
             task_date=item["task_date"],
             task_type=item["task_type"],
-            estimated_minutes=item["estimated_minutes"],
+            estimated_minutes=estimated_minutes,
             metadata_json={"summary": item["summary"]},
         )
         db.add(task)
@@ -1599,6 +1747,17 @@ def get_plan_tasks(db: Session, *, plan_id: int, user: User) -> list[StudyPlanTa
     return list(db.scalars(select(StudyPlanTask).where(StudyPlanTask.plan_id == plan_id).order_by(StudyPlanTask.task_date)))
 
 
+def _parse_task_date(value) -> date | None:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value.strip()[:10])
+        except ValueError:
+            return None
+    return None
+
+
 def checkin_task(db: Session, *, task_id: int, user: User, notes: str | None) -> StudyCheckin:
     task = db.get(StudyPlanTask, task_id)
     if task is None:
@@ -1607,16 +1766,24 @@ def checkin_task(db: Session, *, task_id: int, user: User, notes: str | None) ->
     if plan is None or plan.user_id != user.id:
         raise forbidden("无权限打卡该任务")
     _assert_student_course_access(db, course_id=plan.course_id, user=user)
+    # #48：不允许对未来日期的任务打卡。
+    task_date = _parse_task_date(task.task_date)
+    if task_date is not None and task_date > datetime.now(UTC).date():
+        raise bad_request("该任务尚未到打卡日期，不能提前打卡。")
     task.status = TaskStatus.DONE.value
     checkin = db.scalar(select(StudyCheckin).where(StudyCheckin.task_id == task_id, StudyCheckin.user_id == user.id))
+    already_checked_in = checkin is not None
     if checkin is None:
+        # #48：首次打卡，记录 checked_in_at（模型 default 写入）。
         checkin = StudyCheckin(task_id=task_id, user_id=user.id, notes=notes)
     else:
-        checkin.notes = notes
-        checkin.checked_in_at = datetime.now(UTC)
+        # #48：重复打卡保留首次 checked_in_at，仅在提供新备注时更新 notes。
+        if notes is not None:
+            checkin.notes = notes
     db.add_all([task, checkin])
     db.commit()
     db.refresh(checkin)
+    checkin.already_checked_in = already_checked_in
     return checkin
 
 

@@ -24,6 +24,11 @@ OSS_STRING_KEYS = (
     "cdn_domain",
 )
 
+# #30: 此前的"OSS 上传后删本地"前缀清单全部以 public/ 开头，但真实落盘相对路径
+# 是 generated/audio/、uploads/...、docmind_images/、public/... 等（见 tts.py / parser.py），
+# 二者并不匹配，删除优化形同虚设，且一旦匹配上还会埋下"本地删了但读不回"的不一致。
+# 现采用稳妥一致策略：OSS 仅作镜像，本地始终保留，read_bytes 先读本地、再回源 OSS，
+# 二者至少一处可读。故保留此清单仅作历史说明，下方删除逻辑已整体停用。
 OSS_DELETE_LOCAL_AFTER_UPLOAD_PREFIXES = (
     "public/avatars/",
     "public/course_covers/",
@@ -161,7 +166,9 @@ class StorageService:
                 bucket = oss2.Bucket(auth, endpoint, config["bucket"])
             bucket.put_object(relative_path, content)
         except Exception as exc:
-            raise bad_request(f"OSS 上传失败: {exc}") from exc
+            # #60: 原始 SDK 异常仅写服务端日志，对用户返回统一友好文案。
+            LOGGER.warning("OSS upload failed for %s", relative_path, exc_info=True)
+            raise bad_request("资料文件上传失败，请稍后重试或联系管理员") from exc
 
     def _oss_public_url(self, relative_path: str, service: RuntimeServiceConfig) -> str:
         config = self._clean_oss_config(service.config)
@@ -181,19 +188,9 @@ class StorageService:
         return any(normalized.startswith(prefix) for prefix in OSS_DELETE_LOCAL_AFTER_UPLOAD_PREFIXES)
 
     def _delete_local_after_oss_upload(self, target_path: Path, relative_path: str) -> None:
-        if not self._should_delete_local_after_oss_upload(relative_path):
-            return
-        try:
-            target_path.unlink(missing_ok=True)
-        except OSError:
-            return
-        current = target_path.parent
-        while current != STORAGE_DIR and STORAGE_DIR in current.parents:
-            try:
-                current.rmdir()
-            except OSError:
-                break
-            current = current.parent
+        # #30: 已停用。前缀清单与真实落盘路径不匹配，删除既无效又危险；现 OSS 仅作镜像，
+        # 本地始终保留以保证 read_bytes 至少有一处可读，避免线上文件不可读。
+        return
 
     def save_upload(
         self,
@@ -210,6 +207,9 @@ class StorageService:
         file_suffix = suffix if suffix is not None else Path(upload.filename or "").suffix.lower()
         filename = f"{uuid4().hex}{file_suffix}"
         target_path = target_dir / filename
+        # #62: 保持现状（整文件读入内存），不改为分块流式写盘。原因：下游 _write_content 仍需
+        # 完整字节用于 OSS put_object 镜像上传，分块写盘后还得重新读回全文，收益有限却会动到
+        # 上传 + OSS 核心路径，风险高于收益（max_bytes 读取已用 +1 上限做内存边界保护）。
         content = upload.file.read(max_bytes + 1 if max_bytes else -1)
         upload.file.seek(0)
         if max_bytes is not None and len(content) > max_bytes:

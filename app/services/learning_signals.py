@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.core.enums import LearningSignalSource
@@ -188,10 +188,15 @@ def learning_signal_point_stats(
     user_id: int | None = None,
     point_ids: list[int] | None = None,
 ) -> dict[int, dict[str, float | int]]:
+    # #49: qa_signal_count 应仅统计 source_type==QA 的信号，learning_signal_count 保留总数。
+    qa_count_expr = func.sum(
+        case((StudentLearningSignal.source_type == LEARNING_SIGNAL_SOURCE_QA, 1), else_=0)
+    )
     statement = (
         select(
             StudentLearningSignal.knowledge_point_id,
             func.count(StudentLearningSignal.id),
+            qa_count_expr,
             func.sum(StudentLearningSignal.score),
         )
         .where(StudentLearningSignal.course_id == course_id)
@@ -203,12 +208,12 @@ def learning_signal_point_stats(
         statement = statement.where(StudentLearningSignal.knowledge_point_id.in_(point_ids))
 
     stats: dict[int, dict[str, float | int]] = {}
-    for point_id, count, score in db.execute(statement):
+    for point_id, count, qa_count, score in db.execute(statement):
         if point_id is None:
             continue
         stats[int(point_id)] = {
             "learning_signal_count": int(count or 0),
-            "qa_signal_count": int(count or 0),
+            "qa_signal_count": int(qa_count or 0),
             "signal_score": round(float(score or 0), 2),
         }
     return stats
