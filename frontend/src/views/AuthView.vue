@@ -51,34 +51,34 @@
 
               <Transition name="page-switch" mode="out-in">
                 <form v-if="mode === 'login'" key="login" @submit.prevent="login">
-                  <label class="label">邮箱</label>
-                  <input v-model="loginForm.email" class="input" type="email" required :aria-invalid="formError.includes('邮箱')" />
-                  <label class="label">密码</label>
-                  <PasswordField v-model="loginForm.password" required :aria-invalid="formError.includes('密码')" />
+                  <label class="label" for="login-email">邮箱</label>
+                  <input id="login-email" v-model="loginForm.email" class="input" type="email" autocomplete="username" required :aria-invalid="formError.includes('邮箱')" />
+                  <label class="label" for="login-password">密码</label>
+                  <PasswordField id="login-password" v-model="loginForm.password" autocomplete="current-password" required :aria-invalid="formError.includes('密码')" />
                   <button class="auth-submit" :data-loading="loading" :disabled="loading"><LogIn :size="17" />{{ loading ? '正在进入...' : '登录' }}</button>
                 </form>
 
                 <form v-else-if="mode === 'register'" key="register" @submit.prevent="registerForm.token ? register() : sendRegistrationLink()">
-                  <label class="label">邮箱</label>
-                  <input v-model="registerForm.email" class="input" type="email" required :readonly="Boolean(registerForm.token)" :aria-invalid="formError.includes('邮箱')" />
+                  <label class="label" for="register-email">邮箱</label>
+                  <input id="register-email" v-model="registerForm.email" class="input" type="email" autocomplete="username" required :readonly="Boolean(registerForm.token)" :aria-invalid="formError.includes('邮箱')" />
                   <template v-if="registerForm.token">
-                    <label class="label">昵称</label>
-                    <input v-model="registerForm.nickname" class="input" required :aria-invalid="formError.includes('昵称')" />
-                    <label class="label">学号</label>
-                    <input v-model="studentNo" class="input" required :aria-invalid="formError.includes('学号')" />
-                    <label class="label">密码</label>
-                    <PasswordField v-model="registerForm.password" required :aria-invalid="formError.includes('密码')" />
+                    <label class="label" for="register-nickname">昵称</label>
+                    <input id="register-nickname" v-model="registerForm.nickname" class="input" autocomplete="nickname" required :aria-invalid="formError.includes('昵称')" />
+                    <label class="label" for="register-student-no">学号</label>
+                    <input id="register-student-no" v-model="studentNo" class="input" autocomplete="off" required :aria-invalid="formError.includes('学号')" />
+                    <label class="label" for="register-password">密码</label>
+                    <PasswordField id="register-password" v-model="registerForm.password" autocomplete="new-password" required :aria-invalid="formError.includes('密码')" />
                     <button class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />注册学生账号</button>
                   </template>
                   <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />发送注册链接</button>
                 </form>
 
                 <form v-else key="reset" @submit.prevent="resetForm.token ? resetPassword() : sendResetLink()">
-                  <label class="label">邮箱</label>
-                  <input v-model="resetForm.email" class="input" type="email" required :readonly="Boolean(resetForm.token)" :aria-invalid="formError.includes('邮箱')" />
+                  <label class="label" for="reset-email">邮箱</label>
+                  <input id="reset-email" v-model="resetForm.email" class="input" type="email" autocomplete="username" required :readonly="Boolean(resetForm.token)" :aria-invalid="formError.includes('邮箱')" />
                   <template v-if="resetForm.token">
-                    <label class="label">新密码</label>
-                    <PasswordField v-model="resetForm.new_password" required :aria-invalid="formError.includes('密码')" />
+                    <label class="label" for="reset-new-password">新密码</label>
+                    <PasswordField id="reset-new-password" v-model="resetForm.new_password" autocomplete="new-password" required :aria-invalid="formError.includes('密码')" />
                     <button class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />重置密码</button>
                   </template>
                   <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />发送找回链接</button>
@@ -94,7 +94,8 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { NavigationFailureType, isNavigationFailure, useRoute, useRouter } from "vue-router";
+import type { NavigationFailure } from "vue-router";
 import { AlertCircle, ArrowLeft, BookOpen, KeyRound, LogIn, UserPlus } from "../icons";
 import { api } from "../api/client";
 import { defaultRouteForRole } from "../router";
@@ -213,21 +214,44 @@ async function validateLinkedToken(modeValue: "register" | "reset", email: strin
   }
 }
 
+function isStuckNavigationFailure(failure: void | NavigationFailure) {
+  // 守卫返回 false / next(false)（aborted）或被更晚的导航打断（cancelled）时不会抛错，
+  // 而是 resolve 出 NavigationFailure，PageLoader 会卡死。守卫重定向会正常 resolve 到目标路由
+  // （不返回 failure），duplicated 表示已在目标路由——两者都不算卡死
+  return isNavigationFailure(failure, NavigationFailureType.aborted | NavigationFailureType.cancelled);
+}
+
+function recoverFromStuckRedirect() {
+  // 复位到可重试状态并提示，避免整屏卡在 PageLoader 需手动刷新
+  loginRedirecting.value = false;
+  formError.value = "登录已完成，但页面跳转失败，请重试或刷新页面";
+  emit("notice", "warning", "登录已完成，但页面跳转失败，请重试或刷新页面");
+}
+
 async function login() {
   formError.value = "";
   if (!validatePassword(loginForm.password)) return;
   loading.value = true;
   loginRedirecting.value = true;
+  // 兜底：若 N 秒内导航仍未完成（守卫挂起/静默失败），复位 loading，避免整屏卡死需手动刷新
+  const redirectTimeout = window.setTimeout(() => {
+    if (loginRedirecting.value) recoverFromStuckRedirect();
+  }, 8000);
   try {
     const data = await api.post<{ access_token: string; user: User }>("/auth/login", loginForm);
     session.setSession(data.access_token, data.user);
     emit("authed", data.user);
-    await router.replace(defaultRouteForRole(data.user.role));
+    // vue-router 在导航被取消/重定向时不抛错而是 resolve 出 NavigationFailure，需显式判断
+    const failure = await router.replace(defaultRouteForRole(data.user.role));
+    if (isStuckNavigationFailure(failure)) {
+      recoverFromStuckRedirect();
+    }
   } catch (error) {
     loginRedirecting.value = false;
     formError.value = loginFailedMessage;
     emit("notice", "error", loginFailedMessage);
   } finally {
+    window.clearTimeout(redirectTimeout);
     loading.value = false;
   }
 }

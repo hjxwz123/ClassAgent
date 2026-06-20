@@ -433,7 +433,7 @@
               </article>
               <article class="panel-card">
                 <div class="section-head"><h2><BarChart2 :size="18" />我的学习</h2><button @click="go('studentProfile')">学习报告</button></div>
-                <div class="rings"><RingBlock label="本周学习" :value="hourTargetRate" :text="`${stats.study_hours || 0}h`" sub="目标5h" /><RingBlock label="完成率" :value="stats.completion_rate || 0" :text="`${stats.completion_rate || 0}%`" sub="课时" tone="success" /><RingBlock label="正确率" :value="stats.accuracy || 0" :text="`${stats.accuracy || 0}%`" sub="练习" tone="ai" /></div>
+                <div class="rings"><RingBlock label="累计学习" :value="hourTargetRate" :text="`${stats.study_hours || 0}h`" sub="累计时长" /><RingBlock label="完成率" :value="stats.completion_rate || 0" :text="`${stats.completion_rate || 0}%`" sub="课时" tone="success" /><RingBlock label="正确率" :value="stats.accuracy || 0" :text="`${stats.accuracy || 0}%`" sub="练习" tone="ai" /></div>
                 <div class="week-check"><span v-for="item in weekDays" :key="item.label" :class="{ done: item.done, today: item.today }">{{ item.label }}</span></div>
                 <div class="streak"><Flame :size="16" />连续 {{ stats.streak_days || 0 }} 天</div>
               </article>
@@ -1047,8 +1047,8 @@
                         </div>
                       </section>
                       <aside class="profile-points-card">
-                        <strong>{{ learningPoints }}</strong>
-                        <span><Star :size="15" />学习积分</span>
+                        <strong>{{ stats.qa_count || 0 }}</strong>
+                        <span><MessageCircle :size="15" />累计提问数</span>
                       </aside>
                     </div>
                   </article>
@@ -1881,8 +1881,18 @@ const weeklyChart = computed(() => {
     return { label, value, percent: value <= 0 ? 0 : Math.max(12, Math.round(value / max * 100)) };
   });
 });
-const learningPoints = computed(() => Math.round((stats.value.study_hours || 0) * 10 + (stats.value.qa_count || 0) * 2 + (stats.value.completion_rate || 0)));
-const weekDays = computed(() => ["一", "二", "三", "四", "五", "六", "日"].map((label, index) => ({ label, done: index < Math.min(7, stats.value.streak_days || 0), today: index === new Date().getDay() - 1 })));
+const weekDays = computed(() => {
+  const now = new Date();
+  // Monday(0) .. Sunday(6) index of today; getDay() => 0=Sun..6=Sat
+  const todayIndex = (now.getDay() + 6) % 7;
+  // Date of this week's Monday at local midnight
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - todayIndex);
+  return ["一", "二", "三", "四", "五", "六", "日"].map((label, index) => {
+    const dayDate = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + index);
+    const iso = localDateKey(dayDate);
+    return { label, done: checkinDays.value.includes(iso), today: index === todayIndex };
+  });
+});
 const planWeekHeaders = ["一", "二", "三", "四", "五", "六", "日"];
 const planMonthLabel = computed(() => `${planCalendarDate.value.getFullYear()}年 ${planCalendarDate.value.getMonth() + 1}月`);
 const planCalendarCells = computed(() => {
@@ -3123,7 +3133,7 @@ async function saveProgress(completed: boolean, silent = false) {
   const result = await run(() => api.post(`/lessons/${classroomLesson.value!.lesson.id}/progress`, { current_page: currentPage.value, added_seconds: addedSeconds, completed }), silent ? undefined : "已保存");
   if (result !== null) reportedStudySeconds.value = studySeconds.value;
 }
-async function toggleAudio() { if (!audioRef.value) return; audioRef.value.playbackRate = playbackRate.value; if (audioRef.value.paused) await audioRef.value.play(); else audioRef.value.pause(); revealChrome(); }
+async function toggleAudio() { if (!audioRef.value) return; audioRef.value.playbackRate = playbackRate.value; if (audioRef.value.paused) { try { await audioRef.value.play(); } catch (error) { audioPlaying.value = false; emit("notice", "error", "音频无法播放，请检查音频文件或浏览器自动播放设置"); return; } } else audioRef.value.pause(); revealChrome(); }
 function setRate(value: string) { playbackRate.value = Number(value); if (audioRef.value) audioRef.value.playbackRate = playbackRate.value; }
 function updateAudio() { if (!audioRef.value) return; audioProgress.value = audioRef.value.duration ? Math.round(audioRef.value.currentTime / audioRef.value.duration * 100) : 0; }
 function seekAudio() { if (audioRef.value?.duration) audioRef.value.currentTime = audioRef.value.duration * audioProgress.value / 100; }
@@ -3499,11 +3509,11 @@ async function openQaConversation(item: any) {
 }
 function reuseHistory(item: any) { void openQaConversation(item); }
 function toggleThought(message: ChatMessage) { message.thoughtOpen = !message.thoughtOpen; }
-async function favoriteQaMessage(message: ChatMessage) { if (!message.record_id) return; await run(() => api.post(`/qa/${message.record_id}/favorite`, { is_favorite: !message.favorite }), "已收藏"); message.favorite = !message.favorite; }
+async function favoriteQaMessage(message: ChatMessage) { if (!message.record_id) return; const ok = await run(() => api.post(`/qa/${message.record_id}/favorite`, { is_favorite: !message.favorite }), "已收藏"); if (ok !== null) message.favorite = !message.favorite; }
 async function feedbackQaMessage(message: ChatMessage, feedback: "positive" | "negative" = "positive") {
   if (!message.record_id) return;
-  await run(() => api.post(`/qa/${message.record_id}/feedback`, { feedback }), feedback === "positive" ? "感谢反馈" : "已记录，会持续改进");
-  message.feedback = feedback;
+  const ok = await run(() => api.post(`/qa/${message.record_id}/feedback`, { feedback }), feedback === "positive" ? "感谢反馈" : "已记录，会持续改进");
+  if (ok !== null) message.feedback = feedback;
 }
 async function jumpToSource(source: any) {
   if (!source) return;
@@ -3578,6 +3588,7 @@ async function createTextProblem() {
   problemSubmitting.value = true;
   try {
     activeProblem.value = await run<any>(() => api.post("/tutoring/problems/text", { course_id: selectedCourseId.value, text: problemText.value }), "已提交");
+    resetGuidanceState();
     await loadProblemHistory();
     if (activeProblem.value) await loadGuidance(1);
   } finally {
@@ -3599,6 +3610,7 @@ async function createImageProblem(event: Event) {
   try {
     activeProblem.value = await run<any>(() => api.post("/tutoring/problems/image", form), "已识别");
     problemText.value = activeProblem.value?.ocr_text || "";
+    resetGuidanceState();
     await loadProblemHistory();
   } finally {
     ocrScanning.value = false;
@@ -3606,7 +3618,13 @@ async function createImageProblem(event: Event) {
   }
 }
 async function loadProblemHistory() { problemHistory.value = (await run<any[]>(() => api.get("/tutoring/history", { course_id: selectedCourseId.value || undefined }))) || []; }
-function selectProblem(item: any) { activeProblem.value = item; problemText.value = item.corrected_text || item.ocr_text || item.raw_text || ""; guideOpen[1] = true; }
+function resetGuidanceState() {
+  Object.keys(guidance).forEach((key) => delete guidance[Number(key)]);
+  guideOpen[1] = true;
+  guideOpen[2] = false;
+  guideOpen[3] = false;
+}
+function selectProblem(item: any) { activeProblem.value = item; problemText.value = item.corrected_text || item.ocr_text || item.raw_text || ""; resetGuidanceState(); }
 async function loadGuidance(level: number) { if (!activeProblem.value) return; guidance[level] = await run(() => api.get(`/tutoring/problems/${activeProblem.value.id}/guidance`, { level })); guideOpen[level] = true; }
 async function toggleGuide(level: number) { if (!guidance[level]) await loadGuidance(level); else guideOpen[level] = !guideOpen[level]; }
 

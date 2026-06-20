@@ -634,6 +634,24 @@
       @cancel="confirmRemoveStudentOpen = false"
       @confirm="confirmRemoveStudentAction"
     />
+    <ConfirmDialog
+      :open="confirmDeleteLessonOpen"
+      title="删除课时"
+      message="删除课时将同时不可恢复地删除该课时下所有学生的学习进度与讲解内容，确认删除？"
+      confirm-text="删除"
+      tone="danger"
+      @cancel="confirmDeleteLessonOpen = false"
+      @confirm="confirmDeleteLesson"
+    />
+    <ConfirmDialog
+      :open="confirmDeleteMaterialOpen"
+      title="删除资料"
+      message="删除资料将一并删除其解析内容与向量，不可恢复，确认删除？"
+      confirm-text="删除"
+      tone="danger"
+      @cancel="confirmDeleteMaterialOpen = false"
+      @confirm="confirmDeleteMaterial"
+    />
   </section>
 </template>
 
@@ -742,6 +760,10 @@ const editorPulse = ref("");
 const confirmDeleteCourseOpen = ref(false);
 const confirmRemoveStudentOpen = ref(false);
 const confirmRemoveStudent = reactive<{ id: number; name: string }>({ id: 0, name: "" });
+const confirmDeleteLessonOpen = ref(false);
+const confirmDeleteLessonId = ref(0);
+const confirmDeleteMaterialOpen = ref(false);
+const confirmDeleteMaterialId = ref(0);
 const helpOpen = ref(false);
 const reminderOpen = ref(false);
 const reminderTargetIds = ref<number[]>([]);
@@ -862,7 +884,7 @@ const uploadProgressText = computed(() => {
 const filteredCourses = computed(() => courses.value.filter((course) => (!courseFilter.keyword || course.name.includes(courseFilter.keyword)) && (!courseFilter.term || course.term === courseFilter.term) && (!courseFilter.status || course.status === courseFilter.status)));
 const filteredChapters = computed(() => (materialSummary.value.chapters || []).filter((chapter: any) => !chapterKeyword.value || chapter.title.includes(chapterKeyword.value)));
 const filteredMaterials = computed(() => {
-  let rows = materials.value.filter((item) => (!selectedChapterId.value || item.chapter_id === selectedChapterId.value) && (!materialFilter.keyword || item.title.includes(materialFilter.keyword)) && (!materialFilter.type || item.material_type === materialFilter.type) && (!materialFilter.status || item.parse_status === materialFilter.status));
+  let rows = materials.value.filter((item) => (!selectedChapterId.value || item.chapter_id === selectedChapterId.value) && (!materialFilter.keyword || item.title.includes(materialFilter.keyword)) && (!materialFilter.type || item.material_type === materialFilter.type) && (!materialFilter.status || materialRowStatus(item) === materialFilter.status));
   if (materialSort.value === "name") rows = [...rows].sort((a, b) => a.title.localeCompare(b.title));
   if (materialSort.value === "size") rows = [...rows].sort((a, b) => b.size_bytes - a.size_bytes);
   return rows;
@@ -1326,7 +1348,14 @@ function addEditorOption(question: any) { question.options.push(""); }
 function removeEditorOption(question: any, index: number) {
   if (question.options.length <= 2) return;
   question.options.splice(index, 1);
-  if (Number(question.reference_answer.value) >= question.options.length) question.reference_answer.value = 0;
+  if (Array.isArray(question.reference_answer.value)) {
+    question.reference_answer.value = question.reference_answer.value.filter((i: number) => i !== index).map((i: number) => (i > index ? i - 1 : i));
+  } else {
+    const cur = Number(question.reference_answer.value || 0);
+    if (index < cur) question.reference_answer.value = cur - 1;
+    else if (index === cur) question.reference_answer.value = 0;
+    if (Number(question.reference_answer.value) >= question.options.length) question.reference_answer.value = 0;
+  }
 }
 function toggleEditorMultiAnswer(question: any, index: number) {
   const values = Array.isArray(question.reference_answer.value) ? question.reference_answer.value : [];
@@ -1679,7 +1708,8 @@ async function uploadMaterials() {
     emit("notice", successCount ? "warning" : "error", successCount ? `已上传 ${successCount} 个文件，${failureCount} 个失败` : `上传失败，${failureCount} 个文件未提交`);
   });
 }
-async function deleteMaterial(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`delete-material-${id}`, async () => { await run(() => api.delete(`/materials/${id}`), "已删除"); await loadMaterials(); }); }
+function deleteMaterial(id: number) { if (!ensureCurrentCourseOperable()) return; confirmDeleteMaterialId.value = id; confirmDeleteMaterialOpen.value = true; }
+async function confirmDeleteMaterial() { const id = confirmDeleteMaterialId.value; confirmDeleteMaterialOpen.value = false; if (!id || !ensureCurrentCourseOperable()) return; await withAction(`delete-material-${id}`, async () => { await run(() => api.delete(`/materials/${id}`), "已删除"); await loadMaterials(); }); }
 async function reprocessMaterial(id: number) {
   if (!ensureCurrentCourseOperable()) return;
   await withAction(`reprocess-material-${id}`, async () => {
@@ -1844,7 +1874,8 @@ async function markAllReviewed() {
 async function publishLessonFromMaterial() { if (!ensureCurrentCourseOperable()) return; if (!materialDetail.value?.lesson_id) return emit("notice", "warning", "暂无可发布的课时"); await withAction("publish-lesson", async () => { await run(() => api.post(`/lessons/${materialDetail.value!.lesson_id}/publish`)); await Promise.all([loadCourseHome(), loadLessons()]); }, "已发布"); }
 async function toggleLessonPublish(lesson: any) { if (!ensureCurrentCourseOperable()) return; await withAction(`toggle-lesson-${lesson.id}`, async () => { await run(() => api.post(`/lessons/${lesson.id}/${lesson.status === 'published' ? 'unpublish' : 'publish'}`), "已更新"); await loadLessons(); }); }
 async function duplicateLesson(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`duplicate-lesson-${id}`, async () => { await run(() => api.post(`/teacher/lessons/${id}/duplicate`), "已复制"); await loadLessons(); }); }
-async function deleteLesson(id: number) { if (!ensureCurrentCourseOperable()) return; await withAction(`delete-lesson-${id}`, async () => { await run(() => api.delete(`/teacher/lessons/${id}`), "已删除"); await loadLessons(); }); }
+function deleteLesson(id: number) { if (!ensureCurrentCourseOperable()) return; confirmDeleteLessonId.value = id; confirmDeleteLessonOpen.value = true; }
+async function confirmDeleteLesson() { const id = confirmDeleteLessonId.value; confirmDeleteLessonOpen.value = false; if (!id || !ensureCurrentCourseOperable()) return; await withAction(`delete-lesson-${id}`, async () => { await run(() => api.delete(`/teacher/lessons/${id}`), "已删除"); await loadLessons(); }); }
 async function openLessonPreview(id: number) {
   const detail = await withAction<any>(`preview-lesson-${id}`, () => api.get(`/lessons/${id}`));
   if (!detail) return;
@@ -1891,14 +1922,26 @@ async function sendReminder() {
   const title = reminderForm.title.trim();
   const message = reminderForm.message.trim();
   if (!title || !message) return emit("notice", "warning", "提醒标题和内容不能为空");
+  const targetIds = [...reminderTargetIds.value];
   await withAction("send-reminder", async () => {
-    let sent = 0;
-    for (const studentId of reminderTargetIds.value) {
-      const data = await run<any>(() => api.post(`/teacher/courses/${currentCourse.value!.id}/students/${studentId}/remind`, { title, message }));
-      if (data?.sent) sent += 1;
+    if (targetIds.length === 1) {
+      const data = await run<any>(() => api.post(`/teacher/courses/${currentCourse.value!.id}/students/${targetIds[0]}/remind`, { title, message }));
+      if (!data?.sent) return;
+      emit("notice", "success", "已发送提醒");
+    } else {
+      const data = await run<any>(() => api.post(`/teacher/courses/${currentCourse.value!.id}/reminders/batch`, { student_ids: targetIds, message }));
+      if (!data) return;
+      const sent = Number(data?.sent || 0);
+      const skipped = Array.isArray(data?.skipped) ? data.skipped : [];
+      if (!sent && !skipped.length) return;
+      if (!skipped.length) {
+        emit("notice", "success", `已提醒 ${sent} 人`);
+      } else {
+        const reasons = Array.from(new Set(skipped.map((item: any) => item?.reason).filter(Boolean)));
+        const reasonText = reasons.length ? `（${reasons.join("、")}）` : "";
+        emit("notice", sent ? "success" : "warning", `已提醒 ${sent} 人，${skipped.length} 人跳过${reasonText}`);
+      }
     }
-    if (!sent) return;
-    emit("notice", "success", sent === reminderTargetIds.value.length ? "已发送提醒" : `已发送 ${sent}/${reminderTargetIds.value.length} 条提醒`);
     reminderOpen.value = false;
     reminderTargetIds.value = [];
     await loadStudents();

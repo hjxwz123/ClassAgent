@@ -1,8 +1,14 @@
 import { defineStore } from "pinia";
-import { api, ApiError, clearToken, getToken, setToken } from "../api/client";
+import { api, ApiError, clearToken, getToken, setToken, setUnauthorizedHandler } from "../api/client";
+import { router } from "../router";
 import type { User } from "../types";
 
 type NoticeType = "success" | "warning" | "error" | "info";
+
+const LOGIN_ROUTE = "/auth";
+
+// 只注册一次全局未授权回调，且避免在登录页重复跳转
+let unauthorizedHandlerInstalled = false;
 
 export const useSessionStore = defineStore("session", {
   state: () => ({
@@ -11,7 +17,27 @@ export const useSessionStore = defineStore("session", {
     toasts: [] as Array<{ id: number; type: NoticeType; text: string }>
   }),
   actions: {
+    // 注册 client.ts 的全局未授权回调：token 任意时刻失效(改密吊销/会话过期)
+    // → 清理本地会话并回到登录页。在 bootstrap 时安装一次即可覆盖整个应用生命周期。
+    installUnauthorizedHandler() {
+      if (unauthorizedHandlerInstalled) return;
+      unauthorizedHandlerInstalled = true;
+      setUnauthorizedHandler(() => {
+        // client.ts 已调用 clearToken()，这里再次调用保证幂等，并清空内存中的用户态
+        clearToken();
+        this.user = null;
+        this.initialized = true;
+        this.pushToast("warning", "登录状态已失效，请重新登录");
+        // 已经在登录页则不重复跳转；否则用 router 做 SPA 跳转，失败兜底 window.location
+        const current = router.currentRoute.value;
+        if (current.path === LOGIN_ROUTE) return;
+        router.replace(LOGIN_ROUTE).catch(() => {
+          if (window.location.pathname !== LOGIN_ROUTE) window.location.assign(LOGIN_ROUTE);
+        });
+      });
+    },
     async bootstrap() {
+      this.installUnauthorizedHandler();
       if (this.initialized) return;
       if (!getToken()) {
         this.initialized = true;

@@ -187,10 +187,12 @@
                     <button v-else class="icon-action" @click="activateCourse(item.id)"><CheckCircle :size="15" />上架</button>
                   </td>
                 </tr>
+                <tr v-if="!filteredCourses.length"><td colspan="9"><EmptyState text="暂无课程" /></td></tr>
               </tbody>
             </table>
           </article>
           <div v-else class="course-card-grid">
+            <EmptyState v-if="!filteredCourses.length" text="暂无课程" />
             <article v-for="item in filteredCourses" :key="item.id" class="course-admin-card" :class="{ inactive: item.status !== 'active' }">
               <div><strong>{{ item.name }}</strong><span class="tag mono">{{ item.course_code }}</span></div>
               <p>{{ item.teacher_name }} · {{ item.term }}</p>
@@ -239,6 +241,7 @@
                   <td><span class="tag" :class="statusClass(item.parse_status)">{{ statusText(item.parse_status) }}</span></td>
                   <td class="row-actions"><button class="icon-action" @click="previewMaterial(item)"><Eye :size="15" />预览</button><button class="icon-action" @click="downloadMaterial(item)"><Download :size="15" />下载</button><button class="icon-action danger" @click="deleteMaterial(item.id)"><Trash2 :size="15" />删除</button></td>
                 </tr>
+                <tr v-if="!materials.length"><td colspan="8"><EmptyState text="暂无资料" /></td></tr>
               </tbody>
             </table>
           </article>
@@ -262,7 +265,7 @@
                   <button v-for="item in usageOptions" :key="item" type="button" class="segment-btn" :class="{ active: usageUnit === item }" @click="usageUnit = item">{{ item }}</button>
                 </div>
               </div>
-              <div class="metric-grid four compact"><MetricCard :icon="Sparkles" label="调用次数" :value="usageTotal.calls" trend="累计" /><MetricCard :icon="BarChart2" label="Token" :value="usageTotal.tokens" trend="输入/输出" /><MetricCard :icon="Database" label="费用" :value="`$${usageTotal.cost}`" trend="估算" /><MetricCard :icon="Clock" label="响应" value="-" trend="待接入" /></div>
+              <div class="metric-grid three compact"><MetricCard :icon="Sparkles" label="调用次数" :value="usageTotal.calls" trend="累计" /><MetricCard :icon="BarChart2" label="Token" :value="usageTotal.tokens" trend="输入/输出" /><MetricCard :icon="Database" label="费用" :value="`$${usageTotal.cost}`" trend="估算" /></div>
               <AdminChart type="hbar" :labels="usageLabels" :series="usageSeries" />
             </article>
           </section>
@@ -702,7 +705,7 @@ import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, rea
 import { useRouter } from "vue-router";
 import {
   Activity, AlertCircle, AlertTriangle, Ban, BarChart2, Bell, BookOpen, CheckCircle, CheckSquare, ChevronDown,
-  ChevronLeft, ChevronRight, Clock, Cloud, Database, Download, Eye, File, FileCheck, FileText, GraduationCap, Grid2X2,
+  ChevronLeft, ChevronRight, Cloud, Database, Download, Eye, File, FileCheck, FileText, GraduationCap, Grid2X2,
   Inbox, KeyRound, Layers, LayoutDashboard, List, LogOut, MoreHorizontal, Pencil, Plus, RefreshCw,
   Save, Scan, Search, Server, Settings, Shield, ShieldCheck, Sparkles, Trash2, Upload, User, UserCheck,
   Users, Volume2, X, XCircle
@@ -1071,13 +1074,82 @@ function fileIcon(type: string) {
 function typeText(type: string) {
   return { ppt: "PPT", pptx: "PPT", pdf: "PDF", doc: "Word", docx: "Word", txt: "TXT" }[type] || type;
 }
+function categoryText(category: string) {
+  return { courseware: "课件", handout: "讲义", exercise: "练习", reference: "参考" }[category] || category || "-";
+}
 function toggleSelect(target: number[], id: number) {
   const index = target.indexOf(id);
   if (index >= 0) target.splice(index, 1);
   else target.push(id);
 }
+function csvCell(value: unknown) {
+  let text = value === null || value === undefined ? "" : String(value);
+  // 防 CSV 注入：以 = + - @ 开头的单元格前置单引号
+  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  // 含逗号、引号或换行时用双引号包裹并转义内部引号
+  if (/[",\n\r]/.test(text)) text = `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+function downloadCsv(filename: string, headers: string[], rows: unknown[][]) {
+  const lines = [headers, ...rows].map((row) => row.map(csvCell).join(","));
+  // 前置 BOM 以便 Excel 正确识别 UTF-8
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 function exportCurrent() {
-  emit("notice", "info", "已准备");
+  const stamp = new Date().toISOString().slice(0, 10);
+  if (active.value === "adminMaterials") {
+    if (!materials.value.length) return emit("notice", "warning", "暂无可导出的资料");
+    const headers = ["资料标题", "所属课程", "上传教师", "类型", "分类", "状态", "大小", "上传时间"];
+    const rows = materials.value.map((item: any) => [
+      item.title,
+      item.course_name || item.course_id,
+      item.teacher_name || item.uploader_id,
+      typeText(item.material_type),
+      categoryText(item.category),
+      statusText(item.parse_status),
+      item.size_label || sizeLabel(item.size_bytes),
+      shortDate(item.created_at),
+    ]);
+    downloadCsv(`资料列表-${stamp}.csv`, headers, rows);
+    return emit("notice", "success", `已导出 ${rows.length} 条资料`);
+  }
+  if (active.value === "adminUsers") {
+    if (!users.value.length) return emit("notice", "warning", "暂无可导出的用户");
+    const headers = ["昵称", "邮箱", "角色", "状态", "课程数", "注册时间", "最近登录"];
+    const rows = users.value.map((item: any) => [
+      item.nickname,
+      item.email,
+      roleText(item.role),
+      statusText(item.status),
+      item.course_count || 0,
+      shortDate(item.created_at),
+      formatTime(item.last_login_at),
+    ]);
+    downloadCsv(`用户列表-${stamp}.csv`, headers, rows);
+    return emit("notice", "success", `已导出 ${rows.length} 条用户`);
+  }
+  if (active.value === "adminLogs") {
+    if (!logs.value.length) return emit("notice", "warning", "暂无可导出的日志");
+    const headers = ["时间", "主体", "内容", "来源", "状态"];
+    const rows = logs.value.map((item: any) => [
+      formatTime(item.created_at),
+      logSubject(item),
+      logContent(item),
+      logMeta(item),
+      item.detail?.resolved ? "已处理" : "未处理",
+    ]);
+    downloadCsv(`日志-${logType.value}-${stamp}.csv`, headers, rows);
+    return emit("notice", "success", `已导出 ${rows.length} 条日志`);
+  }
+  emit("notice", "warning", "当前页面暂不支持导出");
 }
 function serviceStatus(type: ServiceKey) {
   return healthItems.value.find((item: any) => item.key === type)?.status || (serviceDrafts[type].config_id ? "configured" : "not_configured");
