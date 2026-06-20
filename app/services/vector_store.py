@@ -372,7 +372,31 @@ class VectorStoreService:
         embeddings = ai_service.embed_texts(db, [query])
         if not embeddings or not embeddings[0]:
             return []
-        dimension = len(embeddings[0])
+        return self.query_course_by_embedding(
+            db,
+            course_id=course_id,
+            embedding=embeddings[0],
+            chapter_id=chapter_id,
+            lesson_id=lesson_id,
+            lesson_page_id=lesson_page_id,
+            limit=limit,
+        )
+
+    def query_course_by_embedding(
+        self,
+        db: Session,
+        *,
+        course_id: int,
+        embedding: list[float],
+        chapter_id: int | None = None,
+        lesson_id: int | None = None,
+        lesson_page_id: int | None = None,
+        limit: int | None = None,
+    ) -> list[tuple[int, float | None]]:
+        """用预先算好的查询向量做检索——多查询变体批量嵌入后逐个检索，避免每变体各发一次嵌入请求。"""
+        if not embedding:
+            return []
+        dimension = len(embedding)
         collection = self._ensure_course_collection(db, course_id=course_id, dimension=dimension)
         filters: list[dict] = []
         if chapter_id is not None:
@@ -384,7 +408,7 @@ class VectorStoreService:
         if self.provider == "qdrant":
             return self._qdrant_query(
                 collection=collection,
-                query_embedding=embeddings[0],
+                query_embedding=embedding,
                 filters=filters,
                 limit=limit or self.settings.vector_query_limit,
             )
@@ -395,7 +419,7 @@ class VectorStoreService:
             where = {"$and": filters}
         try:
             result = collection.query(
-                query_embeddings=embeddings,
+                query_embeddings=[embedding],
                 n_results=limit or self.settings.vector_query_limit,
                 where=where,
                 include=["metadatas", "documents", "distances"],
@@ -406,7 +430,7 @@ class VectorStoreService:
             self._delete_collection(collection)
             collection = self._ensure_course_collection(db, course_id=course_id, dimension=dimension)
             result = collection.query(
-                query_embeddings=embeddings,
+                query_embeddings=[embedding],
                 n_results=limit or self.settings.vector_query_limit,
                 where=where,
                 include=["metadatas", "documents", "distances"],
