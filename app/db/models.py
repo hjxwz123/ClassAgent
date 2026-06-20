@@ -337,6 +337,7 @@ class QuizQuestion(TimestampMixin, Base):
 
 class QuizAttempt(TimestampMixin, Base):
     __tablename__ = "quiz_attempts"
+    __table_args__ = (UniqueConstraint("quiz_id", "user_id", name="uq_quiz_attempt_user"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     quiz_id: Mapped[int] = mapped_column(ForeignKey("quizzes.id"), index=True)

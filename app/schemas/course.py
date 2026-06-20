@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.common import ORMModel, UserSummary
 
@@ -21,6 +21,20 @@ class CourseUpdateRequest(BaseModel):
     cover_url: str | None = Field(default=None, max_length=500)
     cover_color: str | None = Field(default=None, max_length=32)
     allow_general_ai_answer: bool | None = None
+
+    @field_validator("cover_url")
+    @classmethod
+    def _validate_cover_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        if candidate == "":
+            return ""
+        if candidate.startswith("//"):
+            raise ValueError("封面地址不合法")
+        if candidate.startswith("/") or candidate.startswith("https://"):
+            return candidate
+        raise ValueError("封面地址不合法")
 
 
 class JoinCourseRequest(BaseModel):

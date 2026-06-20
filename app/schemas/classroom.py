@@ -28,7 +28,7 @@ class LessonDetailResponse(BaseModel):
 
 class ProgressUpdateRequest(BaseModel):
     current_page: int = Field(ge=1)
-    added_seconds: int = Field(default=0, ge=0)
+    added_seconds: int = Field(default=0, ge=0, le=3600)
     completed: bool = False
 
 

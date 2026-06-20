@@ -1,12 +1,17 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.enums import LessonStatus, UserRole
 from app.core.errors import forbidden, not_found
 from app.db.models import CourseMaterial, CourseMembership, LearningProgress, Lesson, LessonPage, User
-from app.services.courses import _assert_course_owner, _get_course_or_404
+from app.services.courses import (
+    _assert_course_available_for_student,
+    _assert_course_owner,
+    _get_course_or_404,
+)
 from app.services.storage import storage_service
 
 
@@ -16,6 +21,7 @@ def _assert_student_in_course(db: Session, *, course_id: int, user: User) -> Non
     )
     if membership is None:
         raise forbidden("仅可访问已加入课程的课时")
+    _assert_course_available_for_student(db, course_id)
 
 
 def list_lessons(db: Session, *, course_id: int, user: User) -> list[Lesson]:
@@ -77,6 +83,9 @@ def update_learning_progress(
     if lesson is None:
         raise not_found("课时不存在")
     _assert_student_in_course(db, course_id=lesson.course_id, user=user)
+    if lesson.status != LessonStatus.PUBLISHED.value:
+        raise forbidden("课时尚未发布")
+    safe_page = min(max(current_page, 1), max(lesson.page_count, 1))
     progress = db.scalar(
         select(LearningProgress).where(LearningProgress.lesson_id == lesson_id, LearningProgress.user_id == user.id)
     )
@@ -84,14 +93,26 @@ def update_learning_progress(
         progress = LearningProgress(
             lesson_id=lesson_id,
             user_id=user.id,
-            resumed_from_page=current_page,
+            resumed_from_page=safe_page,
             total_study_seconds=0,
             progress_percent=0,
         )
-    progress.current_page = current_page
+        db.add(progress)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            progress = db.scalar(
+                select(LearningProgress).where(
+                    LearningProgress.lesson_id == lesson_id, LearningProgress.user_id == user.id
+                )
+            )
+            if progress is None:
+                raise
+    progress.current_page = safe_page
     progress.total_study_seconds += added_seconds
-    progress.progress_percent = round(min(100.0, current_page / max(lesson.page_count, 1) * 100), 2)
-    if completed or current_page >= lesson.page_count:
+    progress.progress_percent = round(min(100.0, safe_page / max(lesson.page_count, 1) * 100), 2)
+    if safe_page >= lesson.page_count:
         progress.completed_at = datetime.now(UTC)
         progress.progress_percent = 100.0
     db.add(progress)
@@ -105,4 +126,6 @@ def get_learning_progress(db: Session, *, lesson_id: int, user: User) -> Learnin
     if lesson is None:
         raise not_found("课时不存在")
     _assert_student_in_course(db, course_id=lesson.course_id, user=user)
+    if lesson.status != LessonStatus.PUBLISHED.value:
+        raise forbidden("课时尚未发布")
     return db.scalar(select(LearningProgress).where(LearningProgress.lesson_id == lesson_id, LearningProgress.user_id == user.id))
