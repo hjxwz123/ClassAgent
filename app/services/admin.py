@@ -49,6 +49,7 @@ from app.services.parser import (
     DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS,
     DEFAULT_DOC_PARSER_TIMEOUT_SECONDS,
     MAX_DOC_PARSER_TIMEOUT_SECONDS,
+    _build_pinned_client,
     _url_host_allowed,
 )
 from app.services.provider_policy import is_supported_model_provider, is_supported_service_provider
@@ -308,6 +309,7 @@ def create_admin_user(
     role: str = UserRole.ADMIN.value,
     student_no: str | None = None,
     employee_no: str | None = None,
+    actor_id: int | None = None,
 ) -> User:
     if role not in {item.value for item in UserRole}:
         raise bad_request("角色不合法")
@@ -337,6 +339,16 @@ def create_admin_user(
         employee_no=employee_no,
     )
     db.add(created_user)
+    db.flush()
+    # 创建特权/用户账号属敏感操作，记入审计日志；detail 仅脱敏关键字段，绝不含密码
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.user.create",
+        target_type="user",
+        target_id=created_user.id,
+        detail={"email": created_user.email, "role": created_user.role, "nickname": created_user.nickname},
+    )
     db.commit()
     db.refresh(created_user)
     return created_user
@@ -875,11 +887,14 @@ def test_model_config(db: Session, *, config_id: int) -> dict:
     # 外发探测前对目标 endpoint 做主机校验，禁止私网/环回/链路本地/云元数据地址，防 SSRF
     if not _url_host_allowed(endpoint):
         return {"success": False, "message": "endpoint 主机不被允许（禁止私网或元数据地址）"}
+    # 复用 parser 的 pinned-IP 客户端：连接时把 host 锁定到已校验 IP 并再次拒绝私网/元数据，
+    # 消除“校验后再次 DNS 解析”的 TOCTOU 重绑定窗口（不再裸用域名连接）。
     try:
-        with httpx.Client(timeout=5.0) as client:
+        with _build_pinned_client(httpx.Timeout(5.0, connect=5.0)) as client:
             response = client.post(endpoint, headers=headers, json=payload)
         if response.status_code >= 400:
-            return {"success": False, "message": f"HTTP {response.status_code}: {response.text[:200]}"}
+            # 仅回显状态码，避免把（可能是内网）目标响应体片段当作侧信道外泄
+            return {"success": False, "message": f"HTTP {response.status_code}: 目标返回错误状态"}
         body = response.json()
         if config.purpose == "embedding":
             data = body.get("data") or []

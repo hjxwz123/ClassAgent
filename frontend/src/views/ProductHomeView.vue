@@ -275,7 +275,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { NavigationFailureType, isNavigationFailure, useRouter } from "vue-router";
 import BrandLogo from "../components/BrandLogo.vue";
 import PageLoader from "../components/PageLoader.vue";
 import { ArrowDown, ArrowRight, BookOpen, Check, GraduationCap, Moon, Presentation, SlidersHorizontal, Sun, WandSparkles } from "../icons";
@@ -608,12 +608,23 @@ function renderScrollScene() {
 async function openWorkbench() {
   if (enteringWorkbench.value) return;
   enteringWorkbench.value = true;
+  // 兜底：若 N 秒内导航仍未完成（守卫挂起/静默失败），复位状态，避免 PageLoader 卡死、按钮永久禁用
+  const navTimeout = window.setTimeout(() => {
+    enteringWorkbench.value = false;
+  }, 8000);
   try {
     await nextTick();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    await router.push(workbenchPath.value);
+    // 守卫 aborted / 被打断 cancelled 时不抛错而是 resolve 出 NavigationFailure，需显式判断；
+    // 守卫重定向会正常 resolve 到目标路由（不返回 failure），不算卡死
+    const failure = await router.push(workbenchPath.value);
+    if (isNavigationFailure(failure, NavigationFailureType.aborted | NavigationFailureType.cancelled)) {
+      enteringWorkbench.value = false;
+    }
   } catch {
     enteringWorkbench.value = false;
+  } finally {
+    window.clearTimeout(navTimeout);
   }
 }
 

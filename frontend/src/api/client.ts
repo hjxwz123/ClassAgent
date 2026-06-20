@@ -26,6 +26,43 @@ export function getToken() {
   return token;
 }
 
+// 全局未授权(401/鉴权失效 403)回调：token 中途失效(改密吊销/会话过期)时，
+// 已打开页面的请求会拿到 401，需要统一清理会话并跳转登录，避免界面"卡死"。
+// 由 session store 在应用初始化时通过 setUnauthorizedHandler 注册。
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn;
+}
+
+// 登录/引导自身的鉴权失败属正常业务流(密码错误、未登录探测 /auth/me)，
+// 不应触发全局登出跳转，否则会与调用方的局部处理冲突或造成重复跳转。
+const UNAUTHORIZED_EXEMPT_PATHS = ["/auth/login", "/auth/me"];
+
+function isUnauthorizedExempt(path: string) {
+  // path 形如 "/auth/login" 或带 query，取 pathname 前缀判断
+  const pathname = path.split("?")[0];
+  return UNAUTHORIZED_EXEMPT_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+// 防重入：多个并发请求同时 401 时只触发一次清理/跳转
+let handlingUnauthorized = false;
+
+function handleUnauthorized(status: number, path: string) {
+  // 仅对鉴权失效语义(401 未认证 / 403 已认证但权限不足/被吊销)触发全局登出；
+  // 业务层无权 401/403 也走登出语义，与"token 失效"保持一致(见任务说明)。
+  if (status !== 401 && status !== 403) return;
+  if (isUnauthorizedExempt(path)) return;
+  if (handlingUnauthorized) return;
+  handlingUnauthorized = true;
+  try {
+    clearToken();
+    onUnauthorized?.();
+  } finally {
+    // 跳转/清理在同一事件循环内完成后即解锁，后续真正的新会话不受影响
+    handlingUnauthorized = false;
+  }
+}
+
 function buildUrl(path: string, query?: Record<string, unknown>) {
   const url = new URL(`${API_BASE}${path}`, window.location.origin);
   Object.entries(query || {}).forEach(([key, value]) => {
@@ -114,6 +151,9 @@ async function request<T>(path: string, init: RequestInit = {}, query?: Record<s
   }
   const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
   if (!response.ok || !payload || payload.code !== 0) {
+    // 先触发全局未授权处理(清 token + 登出跳转)，再照常抛 ApiError，
+    // 这样调用方的局部 catch 仍能运行，但全局已确保回到登录页。
+    handleUnauthorized(response.status, path);
     throw new ApiError(errorMessage(payload as ApiResponse<unknown> | null), response.status);
   }
   return payload.data;
@@ -147,6 +187,7 @@ function upload<T>(
         resolve(payload.data);
         return;
       }
+      handleUnauthorized(xhr.status, path);
       reject(new Error(errorMessage(payload as ApiResponse<unknown> | null)));
     };
 
@@ -158,7 +199,10 @@ async function download(path: string, filename?: string, query?: Record<string, 
   const headers = new Headers();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(buildUrl(path, query), { headers });
-  if (!response.ok) throw new Error("下载失败");
+  if (!response.ok) {
+    handleUnauthorized(response.status, path);
+    throw new Error("下载失败");
+  }
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -184,6 +228,7 @@ async function streamPost(path: string, body: unknown, onEvent: StreamHandler, q
     signal,
   });
   if (!response.ok || !response.body) {
+    handleUnauthorized(response.status, path);
     const payload = (await response.json().catch(() => null)) as ApiResponse<unknown> | null;
     throw new Error(errorMessage(payload));
   }

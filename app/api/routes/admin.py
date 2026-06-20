@@ -150,6 +150,7 @@ def create_admin_user_endpoint(
         role=payload.role.value,
         student_no=payload.student_no,
         employee_no=payload.employee_no,
+        actor_id=user.id,
     )
     return success_response(data=UserSummary.model_validate(created_user).model_dump(mode="json"), request_id=request.state.request_id)
 

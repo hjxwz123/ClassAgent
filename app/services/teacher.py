@@ -10,7 +10,7 @@ from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.enums import LessonStatus, ProcessStatus, UserRole
-from app.core.errors import bad_request, forbidden, not_found
+from app.core.errors import AppError, bad_request, forbidden, not_found
 from app.db.models import (
     AsyncTaskLog,
     Chapter,
@@ -180,6 +180,65 @@ def _lesson_progress(db: Session, lesson: Lesson, student_total: int, student_id
         "completion_rate": round(completed / max(student_total, 1) * 100, 2) if student_total else 0,
         "average_progress": average,
     }
+
+
+def _lesson_progress_batch(
+    db: Session,
+    lessons: list[Lesson],
+    student_total: int,
+    student_ids: list[int] | None = None,
+) -> dict[int, dict]:
+    # #M12：一次 group-by 聚合求出每个课时的 learned/completed/average，
+    # 消除逐课时调用 _lesson_progress 造成的 N+1。返回 {lesson_id: {同 _lesson_progress 字段}}。
+    # 与 _lesson_progress 保持一致：当传入 student_ids 时仅统计在册学生，避免被移除/退课学生遗留进度污染。
+    def _empty() -> dict:
+        return {
+            "learned_count": 0,
+            "completed_count": 0,
+            "completion_rate": 0,
+            "average_progress": 0,
+        }
+
+    lesson_ids = [lesson.id for lesson in lessons]
+    result: dict[int, dict] = {lesson_id: _empty() for lesson_id in lesson_ids}
+    if not lesson_ids:
+        return result
+    # student_ids 为 None 表示不过滤；为空列表表示在册学生为 0，无任何进度可统计。
+    if student_ids is not None and not student_ids:
+        return result
+
+    statement = (
+        select(
+            LearningProgress.lesson_id,
+            func.count(LearningProgress.id),
+            func.sum(
+                case(
+                    (
+                        (LearningProgress.completed_at.is_not(None)) | (LearningProgress.progress_percent >= 100),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ),
+            func.sum(LearningProgress.progress_percent),
+        )
+        .where(LearningProgress.lesson_id.in_(lesson_ids))
+        .group_by(LearningProgress.lesson_id)
+    )
+    if student_ids is not None:
+        statement = statement.where(LearningProgress.user_id.in_(student_ids))
+
+    for lesson_id, learned, completed, total_percent in db.execute(statement):
+        learned = int(learned or 0)
+        completed = int(completed or 0)
+        average = round(float(total_percent or 0) / learned, 2) if learned else 0
+        result[int(lesson_id)] = {
+            "learned_count": learned,
+            "completed_count": completed,
+            "completion_rate": round(completed / max(student_total, 1) * 100, 2) if student_total else 0,
+            "average_progress": average,
+        }
+    return result
 
 
 def _material_status_counts(db: Session, course_id: int) -> dict:
@@ -509,12 +568,7 @@ def get_teacher_dashboard(db: Session, user: User) -> dict:
                 .limit(5)
             )
         ]
-    notifications = list_user_notifications(db, user_id=user.id, limit=8)
-    if _teacher_notice_enabled(db, user_id=user.id, key="system"):
-        announcement = active_system_announcement(db, role="teacher")
-        if announcement:
-            notifications = [announcement, *notifications][:8]
-    notifications = apply_user_notification_reads(db, user_id=user.id, notifications=notifications)
+    notifications = _teacher_notifications(db, user=user)
     return {
         "stats": {
             "course_total": len(courses),
@@ -532,19 +586,30 @@ def get_teacher_dashboard(db: Session, user: User) -> dict:
     }
 
 
+def _teacher_notifications(db: Session, *, user: User) -> list[dict]:
+    # #M11：复用 get_teacher_dashboard 里通知那段的底层调用，单独读取通知，
+    # 避免标记已读时触发整个 dashboard 重算（数十次 DB 查询）。
+    notifications = list_user_notifications(db, user_id=user.id, limit=8)
+    if _teacher_notice_enabled(db, user_id=user.id, key="system"):
+        announcement = active_system_announcement(db, role="teacher")
+        if announcement:
+            notifications = [announcement, *notifications][:8]
+    return apply_user_notification_reads(db, user_id=user.id, notifications=notifications)
+
+
 def mark_teacher_notifications_read(db: Session, *, user: User, notification_ids: list[str] | None = None) -> list[dict]:
     _assert_teacher(user)
     ids = [str(item).strip() for item in (notification_ids or []) if str(item).strip()]
     if not ids:
         ids = [
             str(item.get("id") or "").strip()
-            for item in get_teacher_dashboard(db, user).get("notifications", [])
+            for item in _teacher_notifications(db, user=user)
             if str(item.get("id") or "").strip()
         ]
     if ids:
         mark_user_notifications_read(db, user_id=user.id, notification_ids=ids)
         db.commit()
-    return get_teacher_dashboard(db, user).get("notifications", [])
+    return _teacher_notifications(db, user=user)
 
 
 def get_teacher_course_home(db: Session, *, course_id: int, user: User) -> dict:
@@ -553,9 +618,11 @@ def get_teacher_course_home(db: Session, *, course_id: int, user: User) -> dict:
     student_total = counts["student_count"]
     student_ids = _student_ids(db, course_id)
     lessons = []
-    for lesson in db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc()).limit(8)):
+    lesson_rows = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc()).limit(8)))
+    progress_by_lesson = _lesson_progress_batch(db, lesson_rows, student_total, student_ids)
+    for lesson in lesson_rows:
         data = _as_dict(lesson)
-        data.update(_lesson_progress(db, lesson, student_total, student_ids))
+        data.update(progress_by_lesson[lesson.id])
         lessons.append(data)
     student_progress = get_teacher_students(db, course_id=course_id, user=user)["items"][:10]
     return {
@@ -576,9 +643,11 @@ def get_teacher_course_lessons(db: Session, *, course_id: int, user: User) -> di
     student_total = counts["student_count"]
     student_ids = _student_ids(db, course_id)
     items = []
-    for lesson in db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc())):
+    lesson_rows = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc())))
+    progress_by_lesson = _lesson_progress_batch(db, lesson_rows, student_total, student_ids)
+    for lesson in lesson_rows:
         data = _as_dict(lesson)
-        data.update(_lesson_progress(db, lesson, student_total, student_ids))
+        data.update(progress_by_lesson[lesson.id])
         items.append(data)
     return {"items": items, "total": len(items)}
 
@@ -714,9 +783,22 @@ def get_teacher_student_detail(db: Session, *, course_id: int, student_id: int, 
     if membership is None or membership.role != UserRole.STUDENT.value or student is None:
         raise not_found("学生不存在")
     lessons = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.desc())))
+    # #M12：一次性取出该学生在本课所有课时的进度，按 lesson_id 索引，消除逐课时查询。
+    lesson_ids = [lesson.id for lesson in lessons]
+    progress_by_lesson_id = {}
+    if lesson_ids:
+        progress_by_lesson_id = {
+            int(progress.lesson_id): progress
+            for progress in db.scalars(
+                select(LearningProgress).where(
+                    LearningProgress.lesson_id.in_(lesson_ids),
+                    LearningProgress.user_id == student_id,
+                )
+            )
+        }
     lesson_progress = []
     for lesson in lessons:
-        progress = db.scalar(select(LearningProgress).where(LearningProgress.lesson_id == lesson.id, LearningProgress.user_id == student_id))
+        progress = progress_by_lesson_id.get(lesson.id)
         lesson_progress.append(
             {
                 "lesson": _as_dict(lesson),
@@ -765,8 +847,18 @@ def get_teacher_student_detail(db: Session, *, course_id: int, student_id: int, 
     }
 
 
-def remind_student(db: Session, *, course_id: int, student_id: int, user: User, title: str | None = None, message: str | None = None) -> dict:
-    course = _assert_course_access(db, course_id=course_id, user=user, require_active=True)
+def _remind_student_core(
+    db: Session,
+    *,
+    course: Course,
+    student_id: int,
+    user: User,
+    title: str | None = None,
+    message: str | None = None,
+) -> dict:
+    """单名学生提醒的核心逻辑（不含课程归属校验/commit），供 remind_student 与 batch_remind_students 复用。
+    含 role 校验、内容校验与按 course_id 分桶的 PER_COURSE/TOTAL 配额。"""
+    course_id = course.id
     student = db.get(User, student_id)
     membership = db.scalar(select(CourseMembership).where(CourseMembership.course_id == course_id, CourseMembership.user_id == student_id))
     if student is None or student.role != UserRole.STUDENT.value or membership is None:
@@ -821,8 +913,52 @@ def remind_student(db: Session, *, course_id: int, student_id: int, user: User, 
         target_id=student_id,
         detail={"course_id": course_id, "title": reminder_title, "message": reminder_message[:120]},
     )
+    return reminder
+
+
+def remind_student(db: Session, *, course_id: int, student_id: int, user: User, title: str | None = None, message: str | None = None) -> dict:
+    course = _assert_course_access(db, course_id=course_id, user=user, require_active=True)
+    reminder = _remind_student_core(db, course=course, student_id=student_id, user=user, title=title, message=message)
     db.commit()
     return {"sent": True, "student_id": student_id, "reminder": reminder}
+
+
+def batch_remind_students(
+    db: Session,
+    *,
+    course_id: int,
+    student_ids: list[int],
+    user: User,
+    message: str | None = None,
+) -> dict:
+    """#M13：批量提醒——一次请求处理多名学生，复用 remind_student 的核心逻辑。
+    对超配额/非法学生跳过并收集到 skipped，整批仅一次 commit。"""
+    course = _assert_course_access(db, course_id=course_id, user=user, require_active=True)
+    sent = 0
+    skipped: list[dict] = []
+    seen: set[int] = set()
+    for raw_id in student_ids or []:
+        try:
+            student_id = int(raw_id)
+        except (TypeError, ValueError):
+            skipped.append({"student_id": raw_id, "reason": "非法学生ID"})
+            continue
+        if student_id in seen:
+            skipped.append({"student_id": student_id, "reason": "重复"})
+            continue
+        seen.add(student_id)
+        try:
+            _remind_student_core(db, course=course, student_id=student_id, user=user, title=None, message=message)
+            sent += 1
+        except AppError as exc:
+            detail = exc.detail
+            reason = detail.get("message") if isinstance(detail, dict) else str(detail or "提醒失败")
+            skipped.append({"student_id": student_id, "reason": reason or "提醒失败"})
+    if sent:
+        db.commit()
+    else:
+        db.rollback()
+    return {"sent": sent, "skipped": skipped}
 
 
 def remove_student(db: Session, *, course_id: int, student_id: int, user: User) -> None:
@@ -921,7 +1057,9 @@ def delete_chapter(db: Session, *, course_id: int, chapter_id: int, user: User) 
     db.commit()
 
 
-def update_lesson(db: Session, *, lesson_id: int, user: User, title: str | None, chapter_id: int | None, status: str | None) -> Lesson:
+def update_lesson(db: Session, *, lesson_id: int, user: User, title: str | None, chapter_id: int | None) -> Lesson:
+    # #M9：通用 PATCH 不再接受 status——状态变更必须走专门的 publish/unpublish 端点，
+    # 避免经此把 status 写成 "published" 却不设 published_at（污染发布流程与统计）或写入非法值。
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
         raise not_found("课时不存在")
@@ -933,8 +1071,6 @@ def update_lesson(db: Session, *, lesson_id: int, user: User, title: str | None,
         if chapter is None or chapter.course_id != lesson.course_id:
             raise bad_request("章节不存在")
         lesson.chapter_id = chapter_id
-    if status is not None:
-        lesson.status = status
     db.add(lesson)
     db.commit()
     db.refresh(lesson)
@@ -1015,10 +1151,11 @@ def get_teacher_analysis(db: Session, *, course_id: int, user: User, days: int) 
     students = get_teacher_students(db, course_id=course_id, user=user)
     student_ids = _student_ids(db, course_id)
     lessons = list(db.scalars(select(Lesson).where(Lesson.course_id == course_id).order_by(Lesson.created_at.asc())))
-    lesson_completion = []
-    for lesson in lessons:
-        progress = _lesson_progress(db, lesson, students["stats"]["total"], student_ids)
-        lesson_completion.append({"lesson_id": lesson.id, "title": lesson.title, **progress})
+    progress_by_lesson = _lesson_progress_batch(db, lessons, students["stats"]["total"], student_ids)
+    lesson_completion = [
+        {"lesson_id": lesson.id, "title": lesson.title, **progress_by_lesson[lesson.id]}
+        for lesson in lessons
+    ]
     # 仅统计在册学生：移除学生的测验记录与问答不再计入分析。
     attempts = (
         list(

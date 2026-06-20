@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.schemas.classroom import LessonResponse
 from app.schemas.course import ChapterResponse
 from app.services.teacher import (
+    batch_remind_students,
     delete_teacher_course,
     delete_chapter,
     delete_lesson,
@@ -44,6 +45,8 @@ STUDENTS_RULE = RateLimitRule(limit=60, window_seconds=60)
 EXPORT_RULE = RateLimitRule(limit=10, window_seconds=60)
 ANALYSIS_RULE = RateLimitRule(limit=30, window_seconds=60)
 REMIND_RULE = RateLimitRule(limit=20, window_seconds=60)
+# 批量提醒：按 user.id + course_id 维度限流，单次请求只消耗一次额度（避免循环单发触发 IP 限流 429）。
+REMIND_BATCH_RULE = RateLimitRule(limit=10, window_seconds=60)
 
 
 class ChapterUpdateRequest(BaseModel):
@@ -55,7 +58,6 @@ class ChapterUpdateRequest(BaseModel):
 class LessonUpdateRequest(BaseModel):
     title: str | None = None
     chapter_id: int | None = None
-    status: str | None = None
 
 
 class TeacherProfileUpdateRequest(BaseModel):
@@ -81,6 +83,11 @@ class NotificationReadRequest(BaseModel):
 
 class StudentReminderRequest(BaseModel):
     title: str | None = Field(default=None, max_length=80)
+    message: str | None = Field(default=None, max_length=500)
+
+
+class BatchReminderRequest(BaseModel):
+    student_ids: list[int] = Field(min_length=1, max_length=200)
     message: str | None = Field(default=None, max_length=500)
 
 
@@ -264,6 +271,26 @@ def remind_student_endpoint(
     return success_response(data=data, request_id=request.state.request_id)
 
 
+@router.post("/courses/{course_id}/reminders/batch")
+def batch_remind_students_endpoint(
+    course_id: int,
+    payload: BatchReminderRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    # 单次批量请求只消耗一次 IP 限流额度（按 user.id + course_id 维度），避免前端循环单发触发 429。
+    limit_request(request, "teacher-remind-batch", user.id, course_id, rule=REMIND_BATCH_RULE)
+    data = batch_remind_students(
+        db,
+        course_id=course_id,
+        student_ids=payload.student_ids,
+        user=user,
+        message=payload.message,
+    )
+    return success_response(data=data, request_id=request.state.request_id)
+
+
 @router.delete("/courses/{course_id}/students/{student_id}")
 def remove_student_endpoint(
     course_id: int,
@@ -346,7 +373,7 @@ def update_lesson_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    lesson = update_lesson(db, lesson_id=lesson_id, user=user, title=payload.title, chapter_id=payload.chapter_id, status=payload.status)
+    lesson = update_lesson(db, lesson_id=lesson_id, user=user, title=payload.title, chapter_id=payload.chapter_id)
     return success_response(data=LessonResponse.model_validate(lesson).model_dump(mode="json"), request_id=request.state.request_id)
 
 
