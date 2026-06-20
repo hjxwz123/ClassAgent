@@ -65,6 +65,13 @@
 .qa-modern-page .history-row small{grid-column:2;min-width:0;color:var(--qa-hint);line-height:1.4}
 .qa-modern-page .history-row:hover{background:var(--qa-primary-50);color:var(--qa-primary-600);transform:translate(2px)}
 .qa-modern-page .history-row.active{border-color:var(--qa-primary-100);background:var(--qa-primary-50);color:var(--qa-primary-600)}
+.qa-modern-page .history-row-wrap{display:flex;align-items:center;gap:2px;border-radius:var(--qa-radius-md);border:1px solid transparent}
+.qa-modern-page .history-row-wrap:hover,.qa-modern-page .history-row-wrap.active{border-color:var(--qa-primary-100);background:var(--qa-primary-50)}
+.qa-modern-page .history-row-wrap .history-row{flex:1;min-width:0}
+.qa-modern-page .history-row-wrap .history-row:hover{background:transparent;transform:none}
+.qa-modern-page .history-del-btn{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;margin-right:4px;border:0;border-radius:8px;background:transparent;color:var(--qa-hint);cursor:pointer;opacity:.45;transition:opacity .15s,background .15s,color .15s}
+.qa-modern-page .history-row-wrap:hover .history-del-btn,.qa-modern-page .history-del-btn:hover,.qa-modern-page .history-del-btn:focus-visible{opacity:1}
+.qa-modern-page .history-del-btn:hover{background:rgba(217,73,37,.12);color:#D94925}
 .qa-modern-page .qa-welcome{min-height:280px;display:flex;align-items:center;flex-direction:column;justify-content:center;gap:12px;padding:32px 0 8px;text-align:center}
 .qa-modern-page .qa-welcome>svg{width:84px;height:84px;padding:20px;border:4px solid white;border-radius:50%;background:var(--qa-ai-gradient);color:#fff;box-shadow:0 16px 40px #00e5ff5c}
 .qa-modern-page .qa-welcome h2{margin:12px 0 0;color:var(--qa-text);font-size:30px;line-height:1.25;font-weight:800;letter-spacing:0}

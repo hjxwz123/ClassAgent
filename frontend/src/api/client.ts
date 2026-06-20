@@ -236,7 +236,19 @@ async function streamPost(path: string, body: unknown, onEvent: StreamHandler, q
   const reader = response.body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
-  const yieldToRenderer = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+  // 让出渲染：只在距上次绘制超过一帧(~16ms)时才真正让出，并用 requestAnimationFrame 在帧边界绘制。
+  // 旧实现对每个 SSE 事件都 await setTimeout(0)，而浏览器会把 setTimeout(0) 钳到 ~4ms（嵌套后更久），
+  // 于是即便后端/网络已把整段答案一次性送达，前端也被迫每 token 至少等 4ms，表现为"后端很快、前端逐字卡顿"。
+  const nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+  let lastPaint = nowMs();
+  const yieldToRenderer = async () => {
+    if (nowMs() - lastPaint < 16) return; // 同一帧内的多个 token 同步处理、合并为一次绘制
+    lastPaint = nowMs();
+    await new Promise<void>((resolve) => {
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => resolve());
+      else window.setTimeout(resolve, 0);
+    });
+  };
 
   const consume = async (block: string) => {
     const lines = block.split(/\r?\n/);

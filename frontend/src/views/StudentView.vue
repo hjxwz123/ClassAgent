@@ -1165,7 +1165,10 @@
               <div class="pretty-input"><Search :size="15" /><input v-model="qaKeyword" placeholder="搜索本课程历史问答" @keyup.enter="loadQaHistory" /></div>
             </div>
             <div class="history-drawer-list">
-              <button v-for="item in filteredQaHistory" :key="item.conversation_id" class="history-row" :class="{ active: routeQaConversationId() === Number(item.conversation_id) }" type="button" @click="openQaConversation(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}<template v-if="item.record_count > 1"> · {{ item.record_count }} 条</template></small></button>
+              <div v-for="item in filteredQaHistory" :key="item.conversation_id" class="history-row-wrap" :class="{ active: routeQaConversationId() === Number(item.conversation_id) }">
+                <button class="history-row" type="button" @click="openQaConversation(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}<template v-if="item.record_count > 1"> · {{ item.record_count }} 条</template></small></button>
+                <button class="history-del-btn" type="button" title="删除该问答历史" aria-label="删除该问答历史" @click.stop="requestDeleteQaHistory(item)"><Trash2 :size="14" /></button>
+              </div>
               <EmptyState v-if="!filteredQaHistory.length" text="本课程暂无问答记录" />
             </div>
           </aside>
@@ -1183,6 +1186,17 @@
         tone="danger"
         @confirm="confirmLeaveCourse"
         @cancel="cancelLeaveCourse"
+      />
+
+      <ConfirmDialog
+        :open="deleteQaHistoryConfirmOpen"
+        title="删除问答历史"
+        :message="`确认删除这条问答历史？该会话下的全部问答记录将被永久删除，不可恢复。`"
+        confirm-text="删除"
+        cancel-text="取消"
+        tone="danger"
+        @confirm="confirmDeleteQaHistory"
+        @cancel="deleteQaHistoryConfirmOpen = false"
       />
 
       <transition name="modal-pop">
@@ -1221,7 +1235,7 @@ import {
   CheckCircle, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Cpu, Download, FileText, Flame, FolderOpen, GitBranch, Grid2X2,
   Eye, History, IdCard, Info, Flag, Layers, ListChecks, LogOut, Mail, Maximize, MessageCircle, PanelRight,
   Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings,
-  Shield, Sparkles, Square, Star, Sun, Type, User, Users, Wifi, X, XCircle, Zap
+  Shield, Sparkles, Square, Star, Sun, Trash2, Type, User, Users, Wifi, X, XCircle, Zap
 } from "../icons";
 import { api, setToken } from "../api/client";
 import { routeByPage } from "../router";
@@ -1341,6 +1355,8 @@ const userPopRef = ref<HTMLElement | null>(null);
 const joinOpen = ref(false);
 const leaveConfirmOpen = ref(false);
 const leaveTargetCourse = ref<any | null>(null);
+const deleteQaHistoryConfirmOpen = ref(false);
+const deleteQaHistoryTarget = ref<any | null>(null);
 const joinCode = ref("");
 const joinPreview = ref<any | null>(null);
 const joinChecking = ref(false);
@@ -2695,6 +2711,27 @@ async function confirmLeaveCourse() {
   if (result !== null) await loadCourses();
 }
 function cancelLeaveCourse() { leaveConfirmOpen.value = false; leaveTargetCourse.value = null; }
+function requestDeleteQaHistory(item: any) {
+  deleteQaHistoryTarget.value = item;
+  deleteQaHistoryConfirmOpen.value = true;
+}
+async function confirmDeleteQaHistory() {
+  const item = deleteQaHistoryTarget.value;
+  deleteQaHistoryConfirmOpen.value = false;
+  if (!item) return;
+  const convId = Number(item.conversation_id || 0);
+  if (!convId) return;
+  const result = await run(() => api.delete(`/qa/conversations/${convId}`), "已删除");
+  deleteQaHistoryTarget.value = null;
+  if (result !== null) {
+    qaHistory.value = qaHistory.value.filter((c) => Number(c.conversation_id) !== convId);
+    // 若删除的是当前正在查看的会话，清空消息并回到 QA 主页，避免加载已删除会话
+    if (routeQaConversationId() === convId) {
+      globalMessages.value = [];
+      if (route.path !== "/qa") await router.push("/qa");
+    }
+  }
+}
 function closeMaterialPreview() {
   materialPreviewItem.value = null;
   materialPreviewDetail.value = null;
