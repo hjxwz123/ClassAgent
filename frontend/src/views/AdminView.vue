@@ -544,8 +544,7 @@
         <div class="drawer-head"><h2>{{ courseDrawer.course.name }}</h2><span class="tag" :class="statusClass(courseDrawer.course.status)">{{ statusText(courseDrawer.course.status) }}</span><button class="icon-action" @click="courseDrawer = null"><X :size="16" />关闭</button></div>
         <div class="drawer-body"><section><h3>基本信息</h3><InfoRow label="课程码" :value="courseDrawer.course.course_code" /><InfoRow label="教师" :value="String(courseDrawer.course.teacher_id)" /><InfoRow label="学生" :value="String(courseDrawer.student_count)" /><InfoRow label="资料" :value="String(courseDrawer.material_count)" /></section><section><h3>学生列表</h3><div v-for="item in courseDrawer.students" :key="item.membership_id" class="row-card"><span>{{ item.user.nickname }}</span><span class="tag">{{ item.user.email }}</span></div></section><section><h3>课程资料</h3><div v-for="item in courseDrawer.materials" :key="item.id" class="row-card"><span>{{ item.title }}</span><button class="link-btn" @click="deleteMaterial(item.id)">删除</button></div></section><section><h3>课时列表</h3><div v-for="item in courseDrawer.lessons" :key="item.id" class="row-card"><span>{{ item.title }}</span><span class="tag">{{ item.status }}</span></div></section></div>
         <div class="drawer-foot">
-          <input v-model.number="takeoverTeacherId" class="input" type="number" placeholder="教师ID" />
-          <button class="btn btn-secondary" @click="takeoverCourse(courseDrawer.course.id)">接管</button>
+          <button class="btn btn-secondary" @click="takeoverCourse(courseDrawer.course.id)"><UserCheck :size="16" />接管</button>
           <button v-if="courseDrawer.course.status === 'active'" class="btn btn-danger" @click="deactivateCourse(courseDrawer.course.id)">下架</button>
           <button v-else class="btn btn-primary" @click="activateCourse(courseDrawer.course.id)">上架</button>
         </div>
@@ -626,6 +625,75 @@
         <article class="modal"><div class="modal-head"><FileText :size="20" /><h2>日志详情</h2><button class="icon-action" @click="logDetail = null"><X :size="16" />关闭</button></div><pre>{{ JSON.stringify(logDetail, null, 2) }}</pre><footer><button class="btn btn-secondary" @click="logDetail = null">关闭</button></footer></article>
       </div>
     </Transition>
+
+    <Transition name="modal-pop">
+      <div v-if="takeoverModalOpen" class="modal-mask" @click.self="closeTakeoverModal">
+        <article class="modal takeover-modal">
+          <div class="modal-head"><UserCheck :size="20" /><h2>接管课程</h2><button class="icon-action" @click="closeTakeoverModal"><X :size="16" />关闭</button></div>
+          <p class="takeover-hint"><AlertTriangle :size="15" />接管后课程归属将变更为所选教师，原主讲教师将失去管理权限。</p>
+          <div class="form-grid">
+            <label class="wide-field">目标教师
+              <AppSelect v-model="takeoverTeacherId" :options="takeoverTeacherOptions" placeholder="选择接管教师" />
+            </label>
+          </div>
+          <p class="takeover-target">课程：<strong>{{ takeoverContext.courseName }}</strong></p>
+          <footer>
+            <button class="btn btn-secondary" @click="closeTakeoverModal">取消</button>
+            <button class="btn btn-primary" :disabled="!takeoverTeacherId" @click="submitTakeover"><UserCheck :size="16" />确认接管</button>
+          </footer>
+        </article>
+      </div>
+    </Transition>
+
+    <Transition name="modal-pop">
+      <div v-if="profilePanelOpen" class="modal-mask" @click.self="profilePanelOpen = false">
+        <article class="modal password-modal admin-profile-modal">
+          <div class="modal-head"><User :size="20" /><h2>个人资料</h2><button class="icon-action" @click="profilePanelOpen = false"><X :size="16" />关闭</button></div>
+          <div class="admin-profile-card">
+            <span class="avatar large">{{ firstChar(user.nickname) }}</span>
+            <div><strong>{{ user.nickname || '管理员' }}</strong><span>{{ roleText(user.role) }}</span></div>
+          </div>
+          <div class="admin-profile-rows">
+            <InfoRow label="昵称" :value="user.nickname || '管理员'" />
+            <InfoRow label="邮箱" :value="user.email || '-'" />
+            <InfoRow label="角色" :value="roleText(user.role)" />
+            <InfoRow label="账号ID" :value="String(user.id ?? '-')" />
+          </div>
+          <footer><button class="btn btn-secondary" @click="profilePanelOpen = false">关闭</button></footer>
+        </article>
+      </div>
+    </Transition>
+
+    <Transition name="modal-pop">
+      <div v-if="notificationsPanelOpen" class="modal-mask" @click.self="notificationsPanelOpen = false">
+        <article class="modal user-courses-modal admin-notifications-modal">
+          <div class="modal-head"><Bell :size="20" /><h2>通知</h2><button class="icon-action" @click="notificationsPanelOpen = false"><X :size="16" />关闭</button></div>
+          <div class="course-modal-list">
+            <div v-for="item in notificationItems" :key="item.key" class="course-modal-row">
+              <span class="course-modal-icon"><AlertTriangle :size="16" /></span>
+              <div><strong>{{ item.name }}</strong><small>{{ item.detail }}</small></div>
+              <span class="tag" :class="statusClass(item.status)">{{ statusText(item.status) }}</span>
+            </div>
+            <EmptyState v-if="!notificationItems.length" text="暂无通知" />
+          </div>
+          <footer>
+            <button v-if="notificationItems.length" class="btn btn-secondary" @click="notificationsPanelOpen = false; go('adminMonitor')">查看监控</button>
+            <button class="btn btn-secondary" @click="notificationsPanelOpen = false">关闭</button>
+          </footer>
+        </article>
+      </div>
+    </Transition>
+
+    <ConfirmDialog
+      :open="confirmState.open"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirm-text="confirmState.confirmText"
+      :cancel-text="confirmState.cancelText"
+      :tone="confirmState.tone"
+      @cancel="settleConfirm(false)"
+      @confirm="settleConfirm(true)"
+    />
   </section>
 </template>
 
@@ -646,6 +714,7 @@ import { copyToClipboard } from "../utils/clipboard";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppSelect from "../components/AppSelect.vue";
 import AppSlider from "../components/AppSlider.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
 import MaterialPreviewModal from "../components/MaterialPreviewModal.vue";
 import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
@@ -715,6 +784,41 @@ const lastUpdatedAt = ref<Date | null>(null);
 const takeoverTeacherId = ref<number | null>(null);
 const restoreBackupId = ref(0);
 const restoreConfirm = ref("");
+
+// 危险操作二次确认：单实例 ConfirmDialog + Promise 风格 confirmDanger()
+const confirmState = reactive({
+  open: false,
+  title: "",
+  message: "",
+  confirmText: "确认",
+  cancelText: "取消",
+  tone: "danger" as "primary" | "danger"
+});
+let confirmResolver: ((value: boolean) => void) | null = null;
+function confirmDanger(options: { title: string; message: string; confirmText?: string; cancelText?: string; tone?: "primary" | "danger" }) {
+  confirmState.title = options.title;
+  confirmState.message = options.message;
+  confirmState.confirmText = options.confirmText || "确认";
+  confirmState.cancelText = options.cancelText || "取消";
+  confirmState.tone = options.tone || "danger";
+  confirmState.open = true;
+  return new Promise<boolean>((resolve) => { confirmResolver = resolve; });
+}
+function settleConfirm(value: boolean) {
+  confirmState.open = false;
+  const resolver = confirmResolver;
+  confirmResolver = null;
+  resolver?.(value);
+}
+
+// 接管课程：选择目标教师
+const takeoverModalOpen = ref(false);
+const takeoverContext = reactive({ courseId: 0, courseName: "", courseTeacherId: 0 });
+const teacherOptions = ref<Array<{ label: string; value: number }>>([]);
+
+// 个人资料 / 通知 面板
+const profilePanelOpen = ref(false);
+const notificationsPanelOpen = ref(false);
 let refreshTimer: number | undefined;
 let sidebarResizeObserver: ResizeObserver | undefined;
 
@@ -856,6 +960,8 @@ const aiMonitorSeries = computed(() => [{ name: "AI", data: (monitorSeriesData.v
 const lastUpdatedText = computed(() => (lastUpdatedAt.value ? `${relativeTime(lastUpdatedAt.value.toISOString())}更新` : "未更新"));
 const todayErrors = computed(() => logs.value.filter((item) => String(item.level).toLowerCase() === "error").length);
 const restoreBackupOptions = computed(() => [{ label: "选择备份", value: 0 }, ...backups.value.map((item) => ({ label: item.backup_name, value: item.id }))]);
+const takeoverTeacherOptions = computed(() => teacherOptions.value.filter((item) => item.value !== takeoverContext.courseTeacherId));
+const notificationItems = computed(() => healthItems.value.filter((item: any) => ["down", "not_configured", "failed"].includes(item.status)));
 const resetPasswordTargetTitle = computed(() => {
   if (resetPasswordContext.mode === "batch") return `已选择 ${resetPasswordContext.ids.length} 个账号`;
   return resetPasswordContext.names[0] || "指定账号";
@@ -895,16 +1001,12 @@ function updateSidebarOverflow() {
   });
 }
 function openAdminNotifications() {
-  if (alertCount.value) {
-    emit("notice", "warning", `当前有 ${alertCount.value} 个服务状态需要关注`);
-    go("adminMonitor");
-    return;
-  }
-  emit("notice", "info", "暂无新通知");
+  userMenuOpen.value = false;
+  notificationsPanelOpen.value = true;
 }
 function openAdminProfile() {
   userMenuOpen.value = false;
-  emit("notice", "info", `${props.user.nickname || "管理员"} · ${props.user.email || "管理账号"}`);
+  profilePanelOpen.value = true;
 }
 async function go(key: string) {
   userMenuOpen.value = false;
@@ -1208,6 +1310,9 @@ async function submitResetPassword() {
   if (password.length < 8) return void (resetPasswordForm.error = "密码至少8位");
   if (password.length > 64) return void (resetPasswordForm.error = "密码不能超过64位");
   if (password !== resetPasswordForm.confirm.trim()) return void (resetPasswordForm.error = "两次密码不一致");
+  const target = resetPasswordContext.mode === "batch" ? `所选 ${resetPasswordContext.ids.length} 个账号` : `用户「${resetPasswordContext.names[0] || "指定账号"}」`;
+  const confirmed = await confirmDanger({ title: "重置用户密码", message: `确认将${target}的登录密码重置为新密码？原密码将立即失效，请妥善通知用户。`, confirmText: "重置密码", tone: "primary" });
+  if (!confirmed) return;
   let successCount = 0;
   await withPending("reset-password-modal", async () => {
     for (const id of resetPasswordContext.ids) {
@@ -1220,15 +1325,75 @@ async function submitResetPassword() {
   selectedUsers.value = [];
   emit("notice", "success", resetPasswordContext.mode === "batch" ? `已修改 ${successCount} 人密码` : "密码已修改");
 }
-async function deleteUser(id: number) { await withPending(`delete:${id}`, async () => { await run(() => api.delete(`/admin/users/${id}`), "已删除"); userDrawer.value = null; await loadUsers(); }); }
-async function batchDisableUsers() { for (const id of selectedUsers.value) await run(() => api.patch(`/admin/users/${id}`, { status: "disabled" })); selectedUsers.value = []; await loadUsers(); }
-async function batchDeleteUsers() { for (const id of selectedUsers.value) await run(() => api.delete(`/admin/users/${id}`)); selectedUsers.value = []; await loadUsers(); }
+function userLabel(id: number) {
+  const item = users.value.find((entry) => entry.id === id) || (userDrawer.value?.user?.id === id ? userDrawer.value.user : null);
+  return item ? (item.nickname || item.email || `用户 ${id}`) : `用户 ${id}`;
+}
+async function deleteUser(id: number) {
+  const confirmed = await confirmDanger({ title: "删除用户", message: `确认删除用户「${userLabel(id)}」？该操作不可恢复，用户的账号与关联数据将被永久移除。`, confirmText: "删除" });
+  if (!confirmed) return;
+  await withPending(`delete:${id}`, async () => { await run(() => api.delete(`/admin/users/${id}`), "已删除"); userDrawer.value = null; await loadUsers(); });
+}
+async function batchDisableUsers() {
+  if (!selectedUsers.value.length) return;
+  const confirmed = await confirmDanger({ title: "批量禁用用户", message: `确认禁用所选 ${selectedUsers.value.length} 个账号？被禁用的用户将无法登录，可稍后重新启用。`, confirmText: "禁用" });
+  if (!confirmed) return;
+  for (const id of selectedUsers.value) await run(() => api.patch(`/admin/users/${id}`, { status: "disabled" }));
+  selectedUsers.value = [];
+  await loadUsers();
+}
+async function batchDeleteUsers() {
+  if (!selectedUsers.value.length) return;
+  const confirmed = await confirmDanger({ title: "批量删除用户", message: `确认删除所选 ${selectedUsers.value.length} 个账号？该操作不可恢复，相关账号与数据将被永久移除。`, confirmText: "删除" });
+  if (!confirmed) return;
+  for (const id of selectedUsers.value) await run(() => api.delete(`/admin/users/${id}`));
+  selectedUsers.value = [];
+  await loadUsers();
+}
 function toggleAllUsers(value: boolean | Event) { selectedUsers.value = checkedValue(value) ? users.value.map((item) => item.id) : []; }
 function clearUserFilter() { Object.assign(userFilter, { keyword: "", role: "", status: "" }); loadUsers(); }
 async function openCourseDetail(id: number) { courseDrawer.value = await run(() => api.get(`/admin/courses/${id}`)); }
-function openTakeover(item: any) { courseDrawer.value = { course: item, student_count: item.student_count, material_count: item.material_count, students: [], materials: [], lessons: [] }; }
-async function takeoverCourse(id: number) { if (!takeoverTeacherId.value) return; await run(() => api.post(`/admin/courses/${id}/takeover`, { teacher_id: takeoverTeacherId.value }), "已接管"); await loadCourses(); }
-async function deactivateCourse(id: number) {
+async function loadTeacherOptions() {
+  // 接管目标教师下拉：复用用户列表接口按 role===teacher 过滤
+  const list = (await run<any[]>(() => api.get<any[]>("/admin/users", { role: "teacher", status: "active" }))) || [];
+  teacherOptions.value = list.map((item) => ({ label: `${item.nickname || item.email || `教师 ${item.id}`}${item.email ? ` (${item.email})` : ""}`, value: item.id }));
+}
+async function openTakeover(item: any) {
+  takeoverContext.courseId = item.id;
+  takeoverContext.courseName = item.name || `课程 ${item.id}`;
+  takeoverContext.courseTeacherId = Number(item.teacher_id || 0);
+  takeoverTeacherId.value = null;
+  takeoverModalOpen.value = true;
+  if (!teacherOptions.value.length) await loadTeacherOptions();
+}
+function closeTakeoverModal() {
+  takeoverModalOpen.value = false;
+  takeoverTeacherId.value = null;
+}
+async function submitTakeover() {
+  if (!takeoverTeacherId.value) return;
+  const teacherLabel = teacherOptions.value.find((item) => item.value === takeoverTeacherId.value)?.label || `教师 ${takeoverTeacherId.value}`;
+  const confirmed = await confirmDanger({ title: "确认接管课程", message: `确认将「${takeoverContext.courseName}」接管给 ${teacherLabel}？接管后课程归属将变更，原主讲教师将失去管理权限。`, confirmText: "确认接管", tone: "primary" });
+  if (!confirmed) return;
+  const ok = await run(() => api.post(`/admin/courses/${takeoverContext.courseId}/takeover`, { teacher_id: takeoverTeacherId.value }), "已接管");
+  if (ok !== null) {
+    closeTakeoverModal();
+    if (courseDrawer.value?.course?.id === takeoverContext.courseId) courseDrawer.value = null;
+    await loadCourses();
+  }
+}
+async function takeoverCourse(id: number) {
+  const course = courseDrawer.value?.course;
+  await openTakeover(course && course.id === id ? course : { id, name: courseLabel(id) });
+}
+function courseLabel(id: number) {
+  return courses.value.find((item) => item.id === id)?.name || courseDrawer.value?.course?.name || `课程 ${id}`;
+}
+async function deactivateCourse(id: number, skipConfirm = false) {
+  if (!skipConfirm) {
+    const confirmed = await confirmDanger({ title: "下架课程", message: `确认下架「${courseLabel(id)}」？下架后学生将无法访问该课程，可稍后重新上架。`, confirmText: "下架" });
+    if (!confirmed) return;
+  }
   await run(() => api.post(`/admin/courses/${id}/deactivate`), "已下架");
   if (courseDrawer.value?.course?.id === id) courseDrawer.value.course.status = "inactive";
   await loadCourses();
@@ -1238,7 +1403,13 @@ async function activateCourse(id: number) {
   if (courseDrawer.value?.course?.id === id) courseDrawer.value.course.status = "active";
   await loadCourses();
 }
-async function batchDeactivateCourses() { for (const id of selectedCourses.value) await deactivateCourse(id); selectedCourses.value = []; }
+async function batchDeactivateCourses() {
+  if (!selectedCourses.value.length) return;
+  const confirmed = await confirmDanger({ title: "批量下架课程", message: `确认下架所选 ${selectedCourses.value.length} 门课程？下架后学生将无法访问，可稍后重新上架。`, confirmText: "下架" });
+  if (!confirmed) return;
+  for (const id of selectedCourses.value) await deactivateCourse(id, true);
+  selectedCourses.value = [];
+}
 async function batchActivateCourses() { for (const id of selectedCourses.value) await activateCourse(id); selectedCourses.value = []; }
 function toggleAllCourses(value: boolean | Event) { selectedCourses.value = checkedValue(value) ? filteredCourses.value.map((item) => item.id) : []; }
 function clearCourseFilter() { Object.assign(courseFilter, { keyword: "", status: "" }); courseTerm.value = ""; loadCourses(); }
@@ -1262,8 +1433,24 @@ async function downloadMaterial(item: any) {
   if (!item?.id) return;
   await run(() => api.download(`/materials/${item.id}/content`, item.original_filename || item.title || `material-${item.id}`));
 }
-async function deleteMaterial(id: number) { await run(() => api.delete(`/admin/materials/${id}`), "已删除"); await loadMaterials(); }
-async function batchDeleteMaterials() { for (const id of selectedMaterials.value) await run(() => api.delete(`/admin/materials/${id}`)); selectedMaterials.value = []; await loadMaterials(); }
+function materialLabel(id: number) {
+  return materials.value.find((item) => item.id === id)?.title || courseDrawer.value?.materials?.find((item: any) => item.id === id)?.title || `资料 ${id}`;
+}
+async function deleteMaterial(id: number) {
+  const confirmed = await confirmDanger({ title: "删除资料", message: `确认删除资料「${materialLabel(id)}」？该操作不可恢复，相关解析数据与向量索引将一并清除。`, confirmText: "删除" });
+  if (!confirmed) return;
+  await run(() => api.delete(`/admin/materials/${id}`), "已删除");
+  if (courseDrawer.value?.materials) courseDrawer.value.materials = courseDrawer.value.materials.filter((item: any) => item.id !== id);
+  await loadMaterials();
+}
+async function batchDeleteMaterials() {
+  if (!selectedMaterials.value.length) return;
+  const confirmed = await confirmDanger({ title: "批量删除资料", message: `确认删除所选 ${selectedMaterials.value.length} 份资料？该操作不可恢复，相关解析数据与向量索引将一并清除。`, confirmText: "删除" });
+  if (!confirmed) return;
+  for (const id of selectedMaterials.value) await run(() => api.delete(`/admin/materials/${id}`));
+  selectedMaterials.value = [];
+  await loadMaterials();
+}
 function toggleAllMaterials(value: boolean | Event) { selectedMaterials.value = checkedValue(value) ? materials.value.map((item) => item.id) : []; }
 function clearMaterialFilter() { Object.assign(materialFilter, { keyword: "", category: "", material_type: "", teacher_id: null }); loadMaterials(); }
 async function saveAllModels() {
@@ -1313,14 +1500,27 @@ async function saveServiceType(type: ServiceKey) {
 }
 async function saveAllServices() { for (const key of cloudServiceKeys) await saveServiceType(key); }
 async function testServiceType(type: ServiceKey) { const id = serviceDrafts[type].config_id; if (!id) return emit("notice", "warning", "先保存"); const data = await run(() => api.post<any>(`/admin/service-configs/${id}/test`)); if (data) emit("notice", data.success ? "success" : "warning", data.message); }
-async function deleteServiceType(type: ServiceKey) { const id = serviceDrafts[type].config_id; if (!id) return; await run(() => api.delete(`/admin/service-configs/${id}`), "已删除"); serviceDrafts[type].config_id = null; await loadServices(); }
+async function deleteServiceType(type: ServiceKey) {
+  const id = serviceDrafts[type].config_id;
+  if (!id) return;
+  const confirmed = await confirmDanger({ title: "删除服务配置", message: `确认删除「${serviceDrafts[type].name || type}」服务配置？删除后依赖该服务的功能将不可用，需重新配置。`, confirmText: "删除" });
+  if (!confirmed) return;
+  await run(() => api.delete(`/admin/service-configs/${id}`), "已删除");
+  serviceDrafts[type].config_id = null;
+  await loadServices();
+}
 async function testAllServices() { const data = await run(() => api.post<any>("/admin/service-health/test-all")); if (data) emit("notice", data.success ? "success" : "warning", data.success ? "全部正常" : "存在异常"); await loadHealth(); }
 async function saveSettings() {
   for (const key of changedSettings.value) await run(() => api.put(`/admin/system-settings/${key}`, { value: settingDrafts[key] }));
   emit("notice", "success", "已保存");
   await loadSettings();
 }
-async function restoreSettings() { await run(() => api.post("/admin/system-settings/restore-defaults"), "已恢复"); await loadSettings(); }
+async function restoreSettings() {
+  const confirmed = await confirmDanger({ title: "恢复默认设置", message: "确认将当前系统设置全部恢复为默认值？你当前页面所有未保存及已保存的自定义参数都会被覆盖。", confirmText: "恢复默认" });
+  if (!confirmed) return;
+  await run(() => api.post("/admin/system-settings/restore-defaults"), "已恢复");
+  await loadSettings();
+}
 async function saveBackupPolicy() {
   settingDrafts["backup.schedule"] = { ...backupPolicy };
   settingDrafts["backup.notify_email"] = backupNotifyEmail.value;
@@ -1330,11 +1530,29 @@ function logSubject(item: any) { if (logType.value === "login") return `用户 $
 function logContent(item: any) { if (logType.value === "login") return item.success ? "登录成功" : "登录失败"; if (logType.value === "operations") return item.action || "-"; return item.message || "-"; }
 function logMeta(item: any) { if (logType.value === "login") return item.login_ip || "-"; if (logType.value === "operations") return item.user_id ? `用户 ${item.user_id}` : "-"; return item.source || "-"; }
 async function resolveError(id: number) { await run(() => api.post(`/admin/logs/errors/${id}/resolve`), "已处理"); await loadLogs(); }
-async function createBackup() { await run(() => api.post("/admin/backups"), "已备份"); await loadBackups(); }
+async function createBackup() {
+  const confirmed = await confirmDanger({ title: "创建数据备份", message: "确认立即创建一次全量数据备份？备份过程可能占用较多磁盘与系统资源，请避开业务高峰执行。", confirmText: "开始备份", tone: "primary" });
+  if (!confirmed) return;
+  await run(() => api.post("/admin/backups"), "已备份");
+  await loadBackups();
+}
 async function verifyBackup(id: number) { const data = await run(() => api.post<any>(`/admin/backups/${id}/verify`)); if (data) emit("notice", data.success ? "success" : "warning", data.message); await loadBackups(); }
 async function downloadBackup(item: any) { await run(() => api.download(`/admin/backups/${item.id}/download`, `${item.backup_name || `backup_${item.id}`}.zip`)); }
-async function deleteBackup(id: number) { await run(() => api.delete(`/admin/backups/${id}`), "已删除"); await loadBackups(); }
-async function restoreBackupAction() { if (restoreConfirm.value !== "CONFIRM" || !restoreBackupId.value) return; await run(() => api.post(`/admin/backups/${restoreBackupId.value}/restore`), "已恢复"); restoreConfirm.value = ""; }
+async function deleteBackup(id: number) {
+  const name = backups.value.find((item) => item.id === id)?.backup_name || `备份 ${id}`;
+  const confirmed = await confirmDanger({ title: "删除备份文件", message: `确认删除备份「${name}」？该操作不可恢复，删除后将无法用此备份还原数据。`, confirmText: "删除" });
+  if (!confirmed) return;
+  await run(() => api.delete(`/admin/backups/${id}`), "已删除");
+  await loadBackups();
+}
+async function restoreBackupAction() {
+  if (restoreConfirm.value !== "CONFIRM" || !restoreBackupId.value) return;
+  const name = backups.value.find((item) => item.id === restoreBackupId.value)?.backup_name || `备份 ${restoreBackupId.value}`;
+  const confirmed = await confirmDanger({ title: "恢复数据备份", message: `确认使用「${name}」恢复数据？此操作将覆盖当前全部数据且不可撤销，恢复后需重启服务方可生效。`, confirmText: "确认恢复" });
+  if (!confirmed) return;
+  await run(() => api.post(`/admin/backups/${restoreBackupId.value}/restore`), "已恢复，请重启服务以生效");
+  restoreConfirm.value = "";
+}
 
 watch(() => props.pageKey, (key) => { active.value = key || "adminDashboard"; loadActive(); updateSidebarOverflow(); });
 watch(collapsed, (value) => {
@@ -1353,12 +1571,16 @@ function onAdminDocumentPointerDown(event: PointerEvent) {
 function onAdminDocumentKeydown(event: KeyboardEvent) {
   if (event.key !== "Escape") return;
   userMenuOpen.value = false;
+  if (confirmState.open) { settleConfirm(false); return; }
   userDrawer.value = null;
   courseDrawer.value = null;
   userCoursesModal.value = null;
   adminModalOpen.value = false;
   resetPasswordModalOpen.value = false;
   resetPasswordResult.value = "";
+  takeoverModalOpen.value = false;
+  profilePanelOpen.value = false;
+  notificationsPanelOpen.value = false;
   closeMaterialPreview();
   logDetail.value = null;
 }
@@ -1393,3 +1615,55 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 </script>
 
 <style scoped src="../styles/admin-scoped.css"></style>
+
+<style scoped>
+.takeover-modal { width: 480px; }
+.takeover-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+  border: 1px solid var(--color-warning-200, var(--color-border-default));
+  border-radius: var(--radius-lg);
+  background: var(--color-warning-50, var(--ca-role-admin-light));
+  color: var(--color-warning-700, var(--admin-copper-deep));
+  padding: 10px 12px;
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+}
+.takeover-hint svg { flex: none; margin-top: 2px; }
+.takeover-target {
+  margin: 14px 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--text-body-sm);
+}
+.takeover-target strong { color: var(--color-text-primary); }
+
+.admin-profile-modal { width: 420px; }
+.admin-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--ca-role-admin-light);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.admin-profile-card .avatar.large {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  font-size: 20px;
+}
+.admin-profile-card strong {
+  display: block;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-serif);
+  font-weight: 800;
+  font-size: var(--text-h3);
+}
+.admin-profile-card span { color: var(--color-text-secondary); font-size: var(--text-caption); }
+.admin-profile-rows { display: grid; gap: 2px; }
+.admin-notifications-modal .course-modal-row small { color: var(--color-text-secondary); }
+</style>

@@ -40,6 +40,10 @@ from app.services.teacher import (
 
 router = APIRouter()
 UPLOAD_RULE = RateLimitRule(limit=30, window_seconds=300)
+STUDENTS_RULE = RateLimitRule(limit=60, window_seconds=60)
+EXPORT_RULE = RateLimitRule(limit=10, window_seconds=60)
+ANALYSIS_RULE = RateLimitRule(limit=30, window_seconds=60)
+REMIND_RULE = RateLimitRule(limit=20, window_seconds=60)
 
 
 class ChapterUpdateRequest(BaseModel):
@@ -208,15 +212,18 @@ def course_students_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "teacher-students", user.id, course_id, rule=STUDENTS_RULE)
     return success_response(data=get_teacher_students(db, course_id=course_id, user=user), request_id=request.state.request_id)
 
 
 @router.get("/courses/{course_id}/students/export")
 def export_students_endpoint(
     course_id: int,
+    request: Request,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "teacher-students-export", user.id, course_id, rule=EXPORT_RULE)
     csv_text = export_teacher_students_csv(db, course_id=course_id, user=user)
     return Response(
         content=csv_text,
@@ -245,6 +252,7 @@ def remind_student_endpoint(
     db: Annotated[Session, Depends(get_db)],
     payload: StudentReminderRequest | None = None,
 ):
+    limit_request(request, "teacher-remind", user.id, course_id, student_id, rule=REMIND_RULE)
     data = remind_student(
         db,
         course_id=course_id,
@@ -309,16 +317,19 @@ def analysis_endpoint(
     db: Annotated[Session, Depends(get_db)],
     days: int = Query(default=30, ge=1, le=365),
 ):
+    limit_request(request, "teacher-analysis", user.id, course_id, rule=ANALYSIS_RULE)
     return success_response(data=get_teacher_analysis(db, course_id=course_id, user=user, days=days), request_id=request.state.request_id)
 
 
 @router.get("/courses/{course_id}/analysis/export")
 def export_analysis_endpoint(
     course_id: int,
+    request: Request,
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     days: int = Query(default=30, ge=1, le=365),
 ):
+    limit_request(request, "teacher-analysis-export", user.id, course_id, rule=EXPORT_RULE)
     csv_text = export_teacher_analysis_csv(db, course_id=course_id, user=user, days=days)
     return Response(
         content=csv_text,
