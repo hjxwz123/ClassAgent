@@ -874,6 +874,7 @@ def test_model_config(db: Session, *, config_id: int) -> dict:
             query="极限的定义是什么",
             documents=["极限描述函数在某点附近的趋近行为。", "矩阵可以表示线性变换。"],
             top_n=2,
+            instruct=(config.extra_config or {}).get("rerank_instruct"),
         )
     else:
         if not endpoint.endswith("/chat/completions"):
