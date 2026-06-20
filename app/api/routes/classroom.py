@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.core.enums import LessonStatus
+from app.core.rate_limit import RateLimitRule, limit_request
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
@@ -16,6 +17,10 @@ from app.services.pedagogy import ensure_lesson_pedagogy_artifacts, page_activit
 
 
 router = APIRouter()
+
+# 学习进度上报为客户端自报，无法在不引入服务端浏览/心跳埋点的前提下彻底防伪；
+# 此处用 per-user 限流遏制刷学习时长（重复 added_seconds 累加 total_study_seconds）。
+PROGRESS_UPDATE_RULE = RateLimitRule(limit=30, window_seconds=60)
 
 
 @router.get("")
@@ -99,12 +104,12 @@ def update_progress_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    limit_request(request, "lesson-progress", user.id, rule=PROGRESS_UPDATE_RULE)
     progress = update_learning_progress(
         db,
         lesson_id=lesson_id,
         user=user,
         current_page=payload.current_page,
         added_seconds=payload.added_seconds,
-        completed=payload.completed,
     )
     return success_response(data=LearningProgressResponse.model_validate(progress).model_dump(mode="json"), request_id=request.state.request_id)

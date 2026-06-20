@@ -70,6 +70,13 @@ def publish_lesson(db: Session, *, lesson_id: int, user: User, status: str) -> L
     return lesson
 
 
+# 单课时单日累计学习时长软上限：遏制重复上报 added_seconds 无限刷 total_study_seconds。
+# 注意：这是务实硬化而非彻底防伪——精确防伪需服务端浏览/心跳埋点（按真实在线时长计时），
+# 当前仅在客户端自报模型下叠加“限流（路由层）+ 单次上界（schema le=3600）+ 本日累计软上限”三重约束。
+# 该软上限按 UTC 自然日统计：同一 (lesson, user) 当日累计新增不超过 MAX_DAILY_STUDY_SECONDS。
+MAX_DAILY_STUDY_SECONDS = 8 * 3600
+
+
 def update_learning_progress(
     db: Session,
     *,
@@ -77,7 +84,6 @@ def update_learning_progress(
     user: User,
     current_page: int,
     added_seconds: int,
-    completed: bool,
 ) -> LearningProgress:
     lesson = db.get(Lesson, lesson_id)
     if lesson is None:
@@ -109,11 +115,23 @@ def update_learning_progress(
             )
             if progress is None:
                 raise
+    # 本日累计软上限：以 updated_at 是否落在“今天(UTC)”判断今日已累计基线。
+    # 缺少独立的“当日累计”列，故采用保守近似——若上次更新发生在今天，则把已有的
+    # total_study_seconds 视为今日已计入的下界，确保叠加后不超过当日上限；跨日则重新放开。
+    now = datetime.now(UTC)
+    last_updated = progress.updated_at
+    if last_updated is not None and last_updated.tzinfo is None:
+        last_updated = last_updated.replace(tzinfo=UTC)
+    same_utc_day = last_updated is not None and last_updated.date() == now.date()
+    today_baseline = progress.total_study_seconds if same_utc_day else 0
+    allowed_today = max(0, MAX_DAILY_STUDY_SECONDS - today_baseline)
+    bounded_added = max(0, min(added_seconds, allowed_today))
+
     progress.current_page = safe_page
-    progress.total_study_seconds += added_seconds
+    progress.total_study_seconds += bounded_added
     progress.progress_percent = round(min(100.0, safe_page / max(lesson.page_count, 1) * 100), 2)
     if safe_page >= lesson.page_count:
-        progress.completed_at = datetime.now(UTC)
+        progress.completed_at = now
         progress.progress_percent = 100.0
     db.add(progress)
     db.commit()

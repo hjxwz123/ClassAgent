@@ -359,6 +359,9 @@ class QuizAnswer(TimestampMixin, Base):
     is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
     score: Mapped[float] = mapped_column(Float, default=0)
     feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 待人工批改的主观题：以 is_correct=False/score=0 落库但并非真正答错，需持久化标记，
+    # 以便学情分析(薄弱点错误计数)与正确率统计将其排除，避免把"待批改"误计为"答错"。
+    pending_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class WrongQuestion(TimestampMixin, Base):
