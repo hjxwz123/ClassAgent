@@ -87,6 +87,11 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
             statements.append("ALTER TABLE wrong_questions ADD COLUMN last_wrong_at DATETIME")
         if "last_correct_at" not in wrong_columns:
             statements.append("ALTER TABLE wrong_questions ADD COLUMN last_correct_at DATETIME")
+    if "quiz_answers" in table_names:
+        # 待人工批改主观题标记：用于学情分析/正确率把 pending 与真正答错区分开。
+        quiz_answer_columns = {column["name"] for column in inspector.get_columns("quiz_answers")}
+        if "pending_review" not in quiz_answer_columns:
+            statements.append("ALTER TABLE quiz_answers ADD COLUMN pending_review BOOLEAN NOT NULL DEFAULT 0")
     if target_engine.dialect.name == "mysql":
         _append_mysql_longtext_updates(inspector, table_names, statements)
     if "quiz_attempts" in table_names:
