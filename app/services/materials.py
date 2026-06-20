@@ -533,6 +533,10 @@ def update_material(
     _assert_material_owner(db, material, user, require_active=True)
     metadata_changed = title is not None or chapter_id_provided
     if title is not None:
+        # 与 create_material 对齐：strip 后校验非空，避免纯空白脏数据写入标题及 chunk/artifact 元数据
+        title = title.strip()
+        if not title:
+            raise bad_request("资料标题不能为空")
         material.title = title
     if category is not None:
         if category not in {item.value for item in MaterialCategory}:

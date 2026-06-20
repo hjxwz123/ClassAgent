@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
@@ -7,15 +8,17 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
+from app.core.errors import AppError
 from app.core.rate_limit import RateLimitRule, limit_request
 from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.qa import QAAskRequest, QAFeedbackRequest, QAFavoriteRequest, QAHistoryConversation, QAHistoryItem, QAResponse
-from app.services.qa import ask_question, ask_question_stream, list_conversation_records, list_history, update_favorite, update_feedback, upload_qa_image
+from app.services.qa import _resign_attachments, ask_question, ask_question_stream, list_conversation_records, list_history, update_favorite, update_feedback, upload_qa_image
 
 
 router = APIRouter()
+LOGGER = logging.getLogger(__name__)
 QA_ASK_RULE = RateLimitRule(limit=60, window_seconds=300)
 QA_UPLOAD_RULE = RateLimitRule(limit=30, window_seconds=300)
 
@@ -41,7 +44,7 @@ def ask_question_endpoint(
         thinking_process=record.thinking_process,
         is_out_of_scope=record.is_out_of_scope,
         sources=record.sources or [],
-        attachments=record.attachments or [],
+        attachments=_resign_attachments(record.attachments),
     )
     return success_response(data=response.model_dump(mode="json"), request_id=request.state.request_id)
 
@@ -60,7 +63,13 @@ def ask_question_stream_endpoint(
             for item in ask_question_stream(db, user=user, payload=payload):
                 yield _sse(item["event"], item["data"])
         except Exception as exc:
-            yield _sse("error", {"message": str(exc)})
+            # 服务端记录完整堆栈，客户端只收到脱敏文案，避免原始异常字符串绕过全局异常处理器外泄。
+            LOGGER.warning("qa stream failed", exc_info=True)
+            if isinstance(exc, AppError) and isinstance(exc.detail, dict):
+                message = exc.detail.get("message") or "服务暂时不可用，请稍后重试"
+            else:
+                message = "服务暂时不可用，请稍后重试"
+            yield _sse("error", {"message": message})
 
     return StreamingResponse(
         event_stream(),
@@ -106,7 +115,13 @@ def get_conversation_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     records = list_conversation_records(db, user=user, conversation_id=conversation_id)
-    items = [QAHistoryItem.model_validate(item).model_dump(mode="json") for item in records]
+    items = []
+    for item in records:
+        # QARecord -> QAHistoryItem 序列化后，附件 url 仍是存库的旧签名链接；这里现签现给，
+        # 避免历史会话里图片附件 1 小时后失效裂图。
+        serialized = QAHistoryItem.model_validate(item).model_dump(mode="json")
+        serialized["attachments"] = _resign_attachments(serialized.get("attachments"))
+        items.append(serialized)
     return success_response(data=items, request_id=request.state.request_id)
 
 

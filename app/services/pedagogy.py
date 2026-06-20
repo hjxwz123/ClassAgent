@@ -234,6 +234,15 @@ def _payload_is_degraded(payload: Any) -> bool:
     return isinstance(payload, dict) and bool(payload.get("_degraded"))
 
 
+def _is_degraded(artifact: PedagogyArtifact) -> bool:
+    """持久化后的降级/模板制品在 payload 写入 degraded=true / source="template"。
+
+    消费侧据此判断：模板降级内容不是真实 AI 教学产物，不应冒充权威结构化教学对象。
+    """
+    payload = artifact.payload if isinstance(artifact.payload, dict) else {}
+    return bool(payload.get("degraded"))
+
+
 def _is_teachable_page(page: LessonPage, lesson: Lesson, payload: Any | None = None) -> bool:
     if _payload_says_non_teaching(payload):
         return False
@@ -743,12 +752,13 @@ def search_pedagogy_artifacts(
     )
     if not candidates:
         return []
-    ranked: list[tuple[int, int, PedagogyArtifact]] = []
+    ranked: list[tuple[int, int, int, PedagogyArtifact]] = []
     page_numbers = page_numbers_from_query(query)
     terms = query_terms(query, stopwords=_ARTIFACT_QUERY_STOPWORDS, limit=24)
     problem_intent = bool(_PROBLEM_INTENT_PATTERN.search(query))
     for artifact in candidates:
         payload = artifact.payload if isinstance(artifact.payload, dict) else {}
+        degraded = _is_degraded(artifact)
         try:
             page_number = int(payload.get("page_number") or 0) or None
         except (TypeError, ValueError):
@@ -785,9 +795,13 @@ def search_pedagogy_artifacts(
         if page_number is not None and page_number in page_numbers:
             score += 80
         if score > 0:
-            ranked.append((score, -artifact.order_index, artifact))
-    ranked.sort(key=lambda item: (item[0], item[1], -item[2].id), reverse=True)
-    return [artifact for _, _, artifact in ranked[:limit]]
+            # 模板降级制品不是真实 AI 教学产物：用一个独立的次序键把它们整体排到真实制品之后，
+            # 既不会静默冒充权威结构化教学对象，又能在真实制品不足时兜底提供上下文（优先降权而非硬过滤，
+            # 避免 QA 出现无上下文回答）。
+            authority_rank = 0 if degraded else 1
+            ranked.append((authority_rank, score, -artifact.order_index, artifact))
+    ranked.sort(key=lambda item: (item[0], item[1], item[2], -item[3].id), reverse=True)
+    return [artifact for _, _, _, artifact in ranked[:limit]]
 
 
 def artifact_context(artifact: PedagogyArtifact, *, limit: int = 1600) -> str:
@@ -795,10 +809,12 @@ def artifact_context(artifact: PedagogyArtifact, *, limit: int = 1600) -> str:
     payload = artifact.payload if isinstance(artifact.payload, dict) else {}
     page_part = f"第{payload.get('page_number')}页" if payload.get("page_number") else "课件整体"
     payload_text = _flatten_payload(payload, limit=700)
+    # 模板降级制品不是真实 AI 教学产物：显式标注，避免作为权威结构化教学对象静默冒充。
+    object_label = f"模板降级内容（非真实 AI 教学产物，仅供参考）：{label}" if _is_degraded(artifact) else f"结构化教学对象：{label}"
     text = "\n".join(
         part
         for part in [
-            f"结构化教学对象：{label}",
+            object_label,
             f"来源：{payload.get('material_title') or ''} {page_part}".strip(),
             f"标题：{artifact.title}",
             f"摘要：{artifact.summary}" if artifact.summary else "",
@@ -855,6 +871,8 @@ def activity_from_artifact(artifact: PedagogyArtifact) -> dict[str, Any]:
         "keywords": artifact.keywords or [],
         "payload": payload,
         "order_index": artifact.order_index,
+        # 显式标注模板降级制品，避免课堂活动把模板内容当真实 AI 教学产物静默冒充。
+        "degraded": _is_degraded(artifact),
     }
 
 
@@ -907,5 +925,7 @@ def quiz_artifact_source_text(
             ).limit(limit)
         )
     )
+    # 出题源绝不能用模板降级内容冒充真实教学源：硬排除 degraded 制品。
+    artifacts = [artifact for artifact in artifacts if not _is_degraded(artifact)]
     contexts = artifact_contexts(artifacts, limit=1200)
     return "\n\n".join(contexts), len(artifacts)
