@@ -4,7 +4,7 @@ import html
 import logging
 from pathlib import Path
 import re
-from time import sleep
+from time import monotonic, sleep
 from typing import Any
 
 from fastapi import UploadFile
@@ -1256,6 +1256,18 @@ def _page_keyword_context(
         statement = statement.where(Lesson.id == lesson_id)
     elif chapter_id is not None:
         statement = statement.where(Lesson.chapter_id == chapter_id)
+    # 关键词下推到 SQL：只取标题/正文/讲稿命中查询词的页，避免把整门课最多 240 页的完整大文本
+    # （page_text/script_text 均为 LONGTEXT）整批拉过隧道（数 MB → 数十秒）。命中为空时本兜底返回空，
+    # 由向量检索结果兜底；命中过宽则仍受 limit 截断。仅在 lesson/全局范围(无 lesson_id 精确页)时下推。
+    terms = [t for t in query_terms(query, limit=8) if len(t) >= 2][:8] if lesson_id is None else []
+    if terms:
+        like_clauses = []
+        for term in terms:
+            pattern = f"%{term}%"
+            like_clauses.append(LessonPage.page_title.like(pattern))
+            like_clauses.append(LessonPage.page_text.like(pattern))
+            like_clauses.append(LessonPage.script_text.like(pattern))
+        statement = statement.where(or_(*like_clauses))
     rows = list(db.execute(statement.order_by(Lesson.id, LessonPage.page_number).limit(_QA_FALLBACK_PAGE_SCAN_LIMIT)))
     scored: list[tuple[int, LessonPage, Lesson, CourseMaterial | None]] = []
     for page, lesson, material in rows:
@@ -2167,7 +2179,7 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
                 yield from _stream_text_delta("answer", answer, answer_parts, thought_parts)
         else:
             try:
-                deltas_since_flush = 0
+                last_flush_at = monotonic()
                 for delta in ai_service.stream_answer_question(
                     question=question_for_ai,
                     contexts=contexts,
@@ -2179,10 +2191,12 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
                     else:
                         for kind, text in _split_thinking_tags(tag_state, delta.text):
                             yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
-                    deltas_since_flush += 1
-                    if deltas_since_flush >= 8:
-                        persist(final=False)  # 增量落库（更勤），刷新/断流时尽量少丢已生成内容
-                        deltas_since_flush = 0
+                    # 增量落库按"时间"节流（最多每 ~3s 提交一次），不再按 token 数。
+                    # 否则在流式热路径里每 N 个 token 就同步提交一次远程数据库（走 SSH 隧道，单次往返较慢），
+                    # 会让流式"吐几个字就卡一下"。改为时间节流后单 token 的下发不再被 DB 提交阻塞。
+                    if monotonic() - last_flush_at >= 3.0:
+                        persist(final=False)  # 增量落库：断流/刷新时最多丢 ~3s 内容
+                        last_flush_at = monotonic()
             except Exception as exc:
                 answer_parts.clear()
                 thought_parts.clear()
