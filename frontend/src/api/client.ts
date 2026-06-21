@@ -145,7 +145,9 @@ async function request<T>(path: string, init: RequestInit = {}, query?: Record<s
   if (token) headers.set("Authorization", `Bearer ${token}`);
   let response: Response;
   try {
-    response = await fetch(buildUrl(path, query), { ...init, headers });
+    // cache:"no-store"：API 返回的是按用户鉴权的私有数据，禁止浏览器缓存/复用，
+    // 避免切换账号后从缓存读到上一个用户的数据（如问答历史）。
+    response = await fetch(buildUrl(path, query), { ...init, headers, cache: "no-store" });
   } catch {
     throw new ApiError("网络连接失败，请稍后重试", 0);
   }
