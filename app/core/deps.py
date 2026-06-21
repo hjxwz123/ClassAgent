@@ -4,7 +4,7 @@ from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from app.core.enums import UserRole, UserStatus
 from app.core.errors import forbidden, unauthorized
@@ -34,9 +34,16 @@ def get_current_user(
         raise unauthorized()
     if user.status != UserStatus.ACTIVE.value:
         raise unauthorized("账号已被禁用")
-    user.last_seen_at = datetime.now(UTC)
-    db.add(user)
-    db.commit()
+    # last_seen_at 仅用于"最近活跃"展示，节流到最多每 5 分钟写一次：避免每个鉴权请求都对远程库
+    # （走 SSH 隧道）做一次同步 COMMIT，单次往返延迟会叠加到每个请求（含问答热路径）上。
+    now = datetime.now(UTC)
+    last_seen = user.last_seen_at
+    if last_seen is not None and last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=UTC)
+    if last_seen is None or now - last_seen > timedelta(minutes=5):
+        user.last_seen_at = now
+        db.add(user)
+        db.commit()
     return user
 
 
