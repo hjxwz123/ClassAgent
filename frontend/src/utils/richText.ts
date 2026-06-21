@@ -117,15 +117,21 @@ export function extractStructuredText(value: unknown): string {
     try {
       return extractStructuredText(JSON.parse(text));
     } catch {
-      text = extractSerializedTextValues(text) || text;
+      const extracted = extractSerializedTextValues(text);
+      if (extracted) {
+        // 仅对"从序列化 JSON 文本里手工抽取"出来的内容反转义 \n/\t/引号——此处它们确为 JSON 转义序列。
+        // 普通文本(如问答正文)绝不反转义，否则会把 LaTeX 命令 \to \theta \nu \times \neq 等
+        // 误当成 \t(制表符)/\n(换行)，导致 \(T \to T/F\) 渲染成 "ToT/F"。
+        return extracted
+          .replace(/\\n/g, "\n")
+          .replace(/\\t/g, "\t")
+          .replace(/\\'/g, "'")
+          .replace(/\\"/g, "\"")
+          .trim();
+      }
     }
   }
-  return text
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, "\t")
-    .replace(/\\'/g, "'")
-    .replace(/\\"/g, "\"")
-    .trim();
+  return text.trim();
 }
 
 function normalizeLatexEscapes(value: string) {
