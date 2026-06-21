@@ -99,6 +99,11 @@ def create_app() -> FastAPI:
             if settings.app_env == "production":
                 response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         if request.url.path.startswith(settings.api_v1_prefix):
+            # 默认禁止缓存 API 响应：这些是按 token 鉴权的用户私有数据（如问答历史/会话），
+            # 同一 URL(/qa/history 等)对不同用户内容不同。若无 no-store，浏览器可能把用户 A 的
+            # 响应缓存后又喂给用户 B，导致"看到别人的聊天记录"。用 setdefault 不覆盖
+            # 媒体/资料等显式设置了可缓存 Cache-Control 的接口。
+            response.headers.setdefault("Cache-Control", "no-store")
             user_id = None
             auth_header = request.headers.get("Authorization")
             if auth_header and auth_header.startswith("Bearer "):
