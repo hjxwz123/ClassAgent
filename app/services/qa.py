@@ -4,7 +4,7 @@ import html
 import logging
 from pathlib import Path
 import re
-from time import monotonic, sleep
+from time import sleep
 from typing import Any
 
 from fastapi import UploadFile
@@ -2179,7 +2179,9 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
                 yield from _stream_text_delta("answer", answer, answer_parts, thought_parts)
         else:
             try:
-                last_flush_at = monotonic()
+                # 流式过程中不做任何同步落库：远程 DB(走 SSH 隧道)的每次 commit 都会阻塞生成器，
+                # 表现为"输出一段就停一下"。占位记录已在流式前落库，最终内容由 finally 统一保存，
+                # 因此热路径上零 DB 提交，token 之间不再被打断。
                 for delta in ai_service.stream_answer_question(
                     question=question_for_ai,
                     contexts=contexts,
@@ -2191,12 +2193,6 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
                     else:
                         for kind, text in _split_thinking_tags(tag_state, delta.text):
                             yield from _stream_text_delta(kind, text, answer_parts, thought_parts)
-                    # 增量落库按"时间"节流（最多每 ~3s 提交一次），不再按 token 数。
-                    # 否则在流式热路径里每 N 个 token 就同步提交一次远程数据库（走 SSH 隧道，单次往返较慢），
-                    # 会让流式"吐几个字就卡一下"。改为时间节流后单 token 的下发不再被 DB 提交阻塞。
-                    if monotonic() - last_flush_at >= 3.0:
-                        persist(final=False)  # 增量落库：断流/刷新时最多丢 ~3s 内容
-                        last_flush_at = monotonic()
             except Exception as exc:
                 answer_parts.clear()
                 thought_parts.clear()
