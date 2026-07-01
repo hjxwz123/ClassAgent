@@ -555,25 +555,53 @@ def _normalize_quiz_questions_from_payload(payload: Any, *, count: int, seen_ste
             continue
         question_type = _normalize_quiz_question_type(_quiz_item_value(item, "question_type", "type", "题型"))
         options = _quiz_item_value(item, "options", "choices", "选项")
-        if question_type in {"single_choice", "multiple_choice", "judge"}:
-            if question_type == "judge":
-                clean_options = ["正确", "错误"]
-            else:
-                if not isinstance(options, list):
+        if question_type == "judge":
+            options = ["正确", "错误"]
+            reference_answer = _normalize_quiz_reference_answer(item, options=options, question_type=question_type)
+        elif question_type in {"single_choice", "multiple_choice"}:
+            if not isinstance(options, list):
+                continue
+            # #错位：逐项清洗但保持原始位置(与 LLM 返回下标同坐标系)，记录 old->new 下标映射。
+            # 过滤无效/重复选项会使后续选项前移；若不据此重映射正确答案下标，原下标虽仍落在合法范围
+            # 却指向错误选项——坏题落库并永久判错。故先在原坐标系解析答案，再按映射折算到过滤后下标。
+            raw_options = [_clean_text(str(option))[:90] for option in options]
+            clean_options: list[str] = []
+            index_remap: dict[int, int] = {}
+            for old_index, clean_option in enumerate(raw_options):
+                if not clean_option or not _valid_quiz_option(clean_option) or clean_option in clean_options:
                     continue
-                clean_options = []
-                for option in options:
-                    clean_option = _clean_text(str(option))[:90]
-                    if clean_option and _valid_quiz_option(clean_option) and clean_option not in clean_options:
-                        clean_options.append(clean_option)
-                if question_type == "single_choice" and len(clean_options) < 4:
-                    continue
-                if len(clean_options) < 2:
-                    continue
+                index_remap[old_index] = len(clean_options)
+                clean_options.append(clean_option)
+            if question_type == "single_choice" and len(clean_options) < 4:
+                continue
+            if len(clean_options) < 2:
+                continue
             options = clean_options[:4]
+            raw_reference = _normalize_quiz_reference_answer(item, options=raw_options, question_type=question_type)
+            raw_value = raw_reference.get("value") if isinstance(raw_reference, dict) else None
+            if isinstance(raw_value, int) and not isinstance(raw_value, bool):
+                old_correct = [raw_value]
+            elif isinstance(raw_value, list):
+                old_correct = raw_value
+            else:
+                old_correct = []
+            new_correct: list[int] = []
+            dropped = False
+            for old in old_correct:
+                new_index = index_remap.get(old) if isinstance(old, int) else None
+                if new_index is None or new_index >= len(options):
+                    # 正确答案对应的选项被判无效丢弃或被 [:4] 截断掉——整题丢弃，绝不留悬空错位下标。
+                    dropped = True
+                    break
+                if new_index not in new_correct:
+                    new_correct.append(new_index)
+            if dropped or not new_correct:
+                continue
+            new_correct.sort()
+            reference_answer = {"value": new_correct[0]} if question_type == "single_choice" else {"value": new_correct}
         else:
             options = None
-        reference_answer = _normalize_quiz_reference_answer(item, options=options, question_type=question_type)
+            reference_answer = _normalize_quiz_reference_answer(item, options=options, question_type=question_type)
         if question_type in {"single_choice", "judge"} and "value" not in reference_answer:
             continue
         if question_type == "multiple_choice":
