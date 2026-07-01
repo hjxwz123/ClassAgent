@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from datetime import UTC, date, datetime
 
 from sqlalchemy import func, or_, select
@@ -464,8 +466,34 @@ def _mark_quiz_task_dispatch_failed(db: Session, task: AsyncTaskLog) -> None:
     db.refresh(task)
 
 
+def _find_reusable_quiz_task(db: Session, *, user: User, course_id: int, kind: str, title: str) -> AsyncTaskLog | None:
+    """幂等：同一用户在同一课程、同种类、同标题的出题任务若仍 PENDING/PROCESSING，直接复用，
+    避免连点/请求重放触发 N 次完整 AI 出题与 N 份近同 Quiz 落库(#幂等)。"""
+    candidates = db.scalars(
+        select(AsyncTaskLog)
+        .where(
+            AsyncTaskLog.target_type == "quiz",
+            AsyncTaskLog.status.in_([ProcessStatus.PENDING.value, ProcessStatus.PROCESSING.value]),
+        )
+        .order_by(AsyncTaskLog.created_at.desc())
+    )
+    for task in candidates:
+        detail = task.detail if isinstance(task.detail, dict) else {}
+        if (
+            detail.get("user_id") == user.id
+            and detail.get("course_id") == course_id
+            and str(detail.get("kind") or "") == kind
+            and str(detail.get("title") or "") == (title or "")
+        ):
+            return task
+    return None
+
+
 def enqueue_quiz_generation(db: Session, *, user: User, payload: QuizGenerateRequest) -> AsyncTaskLog:
     course, question_type_counts = _validate_quiz_generation_request(db, user=user, payload=payload)
+    reusable = _find_reusable_quiz_task(db, user=user, course_id=course.id, kind="quiz", title=payload.title)
+    if reusable is not None:
+        return reusable
     task = AsyncTaskLog(
         task_name="quiz.generate",
         target_type="quiz",
@@ -506,6 +534,12 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
     source_text = _course_source_text_for_quiz(db, course_id=payload.course_id, chapter_ids=chapter_ids, points=points)
     _artifact_text, pedagogy_artifact_count = quiz_artifact_source_text(db, course_id=payload.course_id, chapter_ids=chapter_ids)
     if not source_text.strip():
+        # #幻觉出题：真实出题源(课件/知识点正文)为空时，退化文本只剩课程元信息。若连课程简介都没有，
+        # 就只剩"课程名称：X"，等于让 LLM 凭课程名凭空编题并冒充本课程测验；此时直接拒绝。
+        # 若课程有简介(最小主题接地)，仍保留"按课程上下文出题"的既有能力。
+        has_description = bool(getattr(course, "description", None) and str(course.description).strip())
+        if not has_description:
+            raise bad_request("该课程暂无可用于出题的课件内容，请先上传并解析课件或生成知识点后再出题")
         source_text = _course_context_text_for_quiz(course=course, points=points)
     quiz_topic = _quiz_topic_for_generation(course_name=course.name, points=points, source_text=source_text)
     question_kwargs = {
@@ -577,6 +611,10 @@ def publish_quiz(db: Session, *, quiz_id: int, user: User) -> Quiz:
     quiz = db.get(Quiz, quiz_id)
     if quiz is None:
         raise not_found("测验不存在")
+    if _is_student_private_quiz(quiz):
+        # #越权：学生私有练习(错题重练/自助练习)创建即为 PUBLISHED，无需也不允许教师经发布接口
+        # 改动其状态/元数据。读路径已隔离，写路径同样禁止。
+        raise forbidden("学生私有练习不支持发布操作")
     course = _get_course_or_404(db, quiz.course_id)
     _assert_course_owner(course, user, require_active=True)
     quiz.status = QuizStatus.PUBLISHED.value
@@ -621,6 +659,10 @@ def update_quiz_content(db: Session, *, quiz_id: int, user: User, payload: QuizE
     quiz = db.get(Quiz, quiz_id)
     if quiz is None:
         raise not_found("测验不存在")
+    if _is_student_private_quiz(quiz):
+        # #越权：错题重练/自助练习属学生私有内容，读路径已隔离；写路径同样禁止教师(或任何非创建者)
+        # 经此测验管理接口改写题干/参考答案或删题。这类 quiz 不走教师审核/编辑流程。
+        raise forbidden("学生私有练习不支持通过测验管理接口编辑")
     _assert_quiz_teacher_access(db, quiz=quiz, user=user, require_active=True)
     existing_questions = list(db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id).order_by(QuizQuestion.id)))
     existing_by_id = {item.id: item for item in existing_questions}
@@ -912,6 +954,9 @@ def enqueue_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGener
     if type_counts and sum(type_counts.values()) != payload.question_count:
         raise bad_request("题型数量合计必须等于总题量")
     title = payload.title or ("薄弱知识点综合测验" if payload.all_weak_points else "薄弱点专项测验")
+    reusable = _find_reusable_quiz_task(db, user=user, course_id=course.id, kind="teacher_weak_quiz", title=title)
+    if reusable is not None:
+        return reusable
     task = AsyncTaskLog(
         task_name="quiz.teacher_weak.generate",
         target_type="quiz",
@@ -1059,6 +1104,10 @@ def _string_equal(left, right) -> bool:
 
 
 def _option_index(value) -> int | None:
+    if isinstance(value, bool):
+        # bool 是 int 子类，True 会被误当作下标 1、False 当作 0。判断题布尔作答另行归一，
+        # 不能在这里按下标解析(否则 True 恒等于下标 1=错误)。
+        return None
     if isinstance(value, int):
         return value
     if isinstance(value, str):
@@ -1075,6 +1124,40 @@ def _option_value(value, options: list | None = None):
     if index is not None and options and 0 <= index < len(options):
         return options[index]
     return value
+
+
+def _normalize_choice_token(value, options: list | None = None) -> str:
+    # 选择题作答项归一为规范键：能解析为下标(整数/单字母)则用下标字符串；否则若与某选项文本相等
+    # 则折算为该选项下标；再否则用小写文本。使单选/多选无论提交下标、字母还是选项文本都能一致比对。
+    index = _option_index(value)
+    if index is not None:
+        return str(index)
+    if options:
+        for position, option in enumerate(options):
+            if _string_equal(value, option):
+                return str(position)
+    return str(value).strip().lower()
+
+
+def _normalize_blank_text(text: object) -> str:
+    # 全角转半角(NFKC)、去所有空白、casefold，用于填空题精确比对。
+    normalized = unicodedata.normalize("NFKC", str(text if text is not None else ""))
+    return re.sub(r"\s+", "", normalized).casefold()
+
+
+def _blank_matched_count(user_answer: object, expected_values: list[str]) -> int:
+    # 逐关键词做"规范化后精确相等"匹配(对整段答案及按分隔符/空白切分出的各片段)，不再用子串包含，
+    # 避免 "5" 命中 "15"、"对" 命中 "反对"，以及多空位置错配仍判满分。
+    raw = str(user_answer if user_answer is not None else "")
+    candidates = {_normalize_blank_text(part) for part in re.split(r"[\s,，、;；/\n]+", raw) if part.strip()}
+    candidates.add(_normalize_blank_text(raw))
+    candidates.discard("")
+    matched = 0
+    for item in expected_values:
+        key = _normalize_blank_text(item)
+        if key and key in candidates:
+            matched += 1
+    return matched
 
 
 def _answer_values(value) -> list:
@@ -1125,18 +1208,30 @@ def _choice_equal(user_answer, expected, options: list | None = None) -> bool:
     return False
 
 
+def _judge_normalize(value) -> bool | None:
+    # 把判断题作答/参考答案的多种形式归一为 True(正确)/False(错误)/None(无法判定)。
+    # 下标约定与前端提交、AI 参考答案一致：0=正确, 1=错误。
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value == 0 if value in (0, 1) else None
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in {"true", "正确", "对", "yes", "是"}:
+            return True
+        if text in {"false", "错误", "错", "no", "否"}:
+            return False
+    return None
+
+
 def _judge_equal(user_answer, expected, options: list | None = None) -> bool:
-    if isinstance(expected, bool):
-        normalized_user = user_answer
-        if isinstance(user_answer, str):
-            normalized_user = user_answer.strip().lower()
-            if normalized_user in {"true", "正确", "对", "yes", "1"}:
-                normalized_user = True
-            elif normalized_user in {"false", "错误", "错", "no", "0"}:
-                normalized_user = False
-        elif isinstance(user_answer, int) and options:
-            normalized_user = user_answer == 0
-        return normalized_user is expected
+    # 参考答案在库中通常是整数下标({"value":0}=正确)，作答可能是下标/布尔/字符串。
+    # 先把两侧统一归一为布尔语义再比较，避免"参考=下标、作答=布尔"被判错。
+    user_norm = _judge_normalize(user_answer)
+    expected_norm = _judge_normalize(expected)
+    if user_norm is not None and expected_norm is not None:
+        return user_norm == expected_norm
+    # 任一侧无法归一(如自定义判断题选项文本)时，退回通用选择题比较。
     return _choice_equal(user_answer, expected, options)
 
 
@@ -1238,8 +1333,8 @@ def _grade_question(question: QuizQuestion, user_answer, *, db: Session) -> dict
         score = question.score if is_correct else 0.0
     elif question.question_type == QuestionType.MULTIPLE_CHOICE.value:
         expected = extract_reference_answer_value(question.reference_answer)
-        expected_values = sorted(str(_option_index(item) if _option_index(item) is not None else item).lower() for item in _answer_values(expected))
-        actual_values = sorted(str(_option_index(item) if _option_index(item) is not None else item).lower() for item in _answer_values(user_answer))
+        expected_values = sorted(_normalize_choice_token(item, question.options) for item in _answer_values(expected))
+        actual_values = sorted(_normalize_choice_token(item, question.options) for item in _answer_values(user_answer))
         is_correct = actual_values == expected_values
         score = question.score if is_correct else 0.0
     elif question.question_type == QuestionType.BLANK.value:
@@ -1255,8 +1350,7 @@ def _grade_question(question: QuizQuestion, user_answer, *, db: Session) -> dict
         else:
             expected_values = [str(expected)]
         expected_values = [item for item in expected_values if item]
-        actual_text = str(user_answer or "").lower()
-        matched = sum(1 for item in expected_values if item.lower() in actual_text)
+        matched = _blank_matched_count(user_answer, expected_values)
         total = len(expected_values)
         is_correct = bool(expected_values) and matched == total
         score = question.score if is_correct else round(question.score * matched / max(total, 1), 2)
@@ -1437,7 +1531,9 @@ def generate_wrong_book_practice(db: Session, *, course_id: int, user: User, wro
         metadata_json={"generated": True, "source": "wrong_book", "source_question_map": {}},
     )
     db.add(quiz)
-    db.commit()
+    # #事务：先前这里提前 commit 了空 PUBLISHED quiz，克隆题目中途异常时上层 rollback 撤不掉，
+    # 会残留 0 题的错题重练测验。改为 flush 拿 id、全程单事务，末尾统一 commit，异常可整体回滚。
+    db.flush()
     db.refresh(quiz)
     total_score = 0.0
     source_question_map: dict[str, int] = {}
@@ -1471,6 +1567,9 @@ def enqueue_wrong_book_practice(db: Session, *, course_id: int, user: User, wron
     if not wrong_rows:
         raise bad_request("暂无错题可重练")
     course = _get_course_or_404(db, course_id)
+    reusable = _find_reusable_quiz_task(db, user=user, course_id=course_id, kind="wrong_book_practice", title="错题重练")
+    if reusable is not None:
+        return reusable
     # #64：把定向重练的 wrong_question_id 透传到异步任务 payload。
     payload: dict = {"course_id": course_id}
     if wrong_question_id is not None:
