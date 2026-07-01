@@ -209,7 +209,8 @@ def _query_course_variants(
     per_query_limit = candidate_limit
     # 管理端「召回相似度阈值」：余弦相似度低于阈值的召回直接丢弃（distance = 1 - 相似度）。
     # vector_store 内部的 vector_max_distance(默认 0.9) 只是兜底粗筛，这里才是业务阈值。
-    min_similarity = runtime_setting_float(db, "qa.retrieval.min_similarity", 0.35, minimum=0.0, maximum=0.99)
+    # 默认与 bootstrap 种子(0.28)保持一致；缺行兜底也用同一值，避免"种子/兜底"两处不一致。
+    min_similarity = runtime_setting_float(db, "qa.retrieval.min_similarity", 0.28, minimum=0.0, maximum=0.99)
     max_distance = 1.0 - min_similarity
     # 一次性批量嵌入全部查询变体（单次 embedding 请求），再用预算向量逐个检索；
     # 避免旧实现对每个变体各发一次嵌入请求——慢/多变体时会把检索阶段拖到数十秒甚至数分钟。
