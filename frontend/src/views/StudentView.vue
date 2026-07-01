@@ -3160,10 +3160,18 @@ watch(
   },
   { immediate: true }
 );
-async function jumpPage(page: number) { pageDirection.value = page >= currentPage.value ? "next" : "prev"; currentPage.value = page; thumbOpen.value = false; await saveProgress(false, true); }
+// 翻页进度上报防抖：快速连续翻页只在停下来后上报一次，避免每翻一页发一次请求触发限流。
+let progressSaveTimer: ReturnType<typeof setTimeout> | undefined;
+function queueSaveProgress() {
+  if (progressSaveTimer) clearTimeout(progressSaveTimer);
+  progressSaveTimer = setTimeout(() => { progressSaveTimer = undefined; void saveProgress(false, true); }, 900);
+}
+async function jumpPage(page: number) { pageDirection.value = page >= currentPage.value ? "next" : "prev"; currentPage.value = page; thumbOpen.value = false; queueSaveProgress(); }
 async function prevPage() { await jumpPage(Math.max(1, currentPage.value - 1)); }
 async function nextPage() { await jumpPage(Math.min(classroomLesson.value?.pages.length || 1, currentPage.value + 1)); }
 async function saveProgress(completed: boolean, silent = false) {
+  // 立即上报（关闭/完成/切音频结束等）时取消待发的防抖上报，避免重复请求。
+  if (progressSaveTimer) { clearTimeout(progressSaveTimer); progressSaveTimer = undefined; }
   if (!classroomLesson.value) return;
   // 真实新增学习秒数 = 自上次上报以来计时器累计的差值（最小为 0，避免负数）。
   const addedSeconds = Math.max(0, studySeconds.value - reportedStudySeconds.value);
