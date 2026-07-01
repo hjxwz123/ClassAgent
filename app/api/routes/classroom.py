@@ -20,7 +20,8 @@ router = APIRouter()
 
 # 学习进度上报为客户端自报，无法在不引入服务端浏览/心跳埋点的前提下彻底防伪；
 # 此处用 per-user 限流遏制刷学习时长（重复 added_seconds 累加 total_study_seconds）。
-PROGRESS_UPDATE_RULE = RateLimitRule(limit=30, window_seconds=60)
+# 前端翻页进度上报已做防抖（快速翻页合并为一次），这里给较宽额度，避免正常快速翻页误触限流。
+PROGRESS_UPDATE_RULE = RateLimitRule(limit=120, window_seconds=60)
 
 
 @router.get("")
