@@ -911,8 +911,8 @@ const settingRows = [
   { key: "qa.out_of_scope_policy", category: "ai", label: "超范围策略", desc: "课程外回答方式", type: "select", options: ["reject", "answer_with_notice"] },
   { key: "qa.max_answer_tokens", category: "ai", label: "回答 Token", desc: "问答最大长度", type: "number" },
   { key: "qa.source_limit", category: "ai", label: "引用条数", desc: "最多来源数量", type: "number" },
-  { key: "qa.retrieval.min_similarity", category: "ai", label: "召回相似度阈值", desc: "低于此余弦相似度的向量召回丢弃（0 不过滤）", type: "number" },
-  { key: "qa.rerank.min_score", category: "ai", label: "重排分数下限", desc: "低于此相关性的重排结果丢弃（0 不过滤）", type: "number" },
+  { key: "qa.retrieval.min_similarity", category: "ai", label: "召回相似度阈值", desc: "低于此余弦相似度的向量召回丢弃（0-0.99，0 不过滤；越高越严、越少幻觉但更易判资料不足）", type: "number", min: 0, max: 0.99, step: 0.01 },
+  { key: "qa.rerank.min_score", category: "ai", label: "重排分数下限", desc: "低于此相关性的重排结果丢弃（0-1，0 不过滤；越高越严、越少幻觉）", type: "number", min: 0, max: 1, step: 0.01 },
   { key: "lesson.script.max_length", category: "classroom", label: "脚本字数", desc: "每页最大长度", type: "number" },
   { key: "tts.default_rate", category: "classroom", label: "TTS 语速", desc: "默认语速", type: "range", min: -500, max: 500 },
   { key: "tts.default_volume", category: "classroom", label: "TTS 音量", desc: "默认音量", type: "range", min: 0, max: 100 },
@@ -1166,7 +1166,15 @@ const SettingControl = defineComponent({
       const item = innerProps.item as any;
       const drafts = innerProps.drafts as Record<string, any>;
       const update = (event: Event) => { drafts[key] = (event.target as HTMLInputElement).value; };
-      if (item.type === "number") return h("input", { class: "input form-control", type: "number", value: drafts[key], onInput: (event: Event) => { drafts[key] = Number((event.target as HTMLInputElement).value); } });
+      if (item.type === "number") {
+        const clampNumber = (raw: number) => {
+          let value = Number.isFinite(raw) ? raw : 0;
+          if (typeof item.min === "number" && value < item.min) value = item.min;
+          if (typeof item.max === "number" && value > item.max) value = item.max;
+          return value;
+        };
+        return h("input", { class: "input form-control", type: "number", min: item.min, max: item.max, step: item.step, value: drafts[key], onInput: (event: Event) => { drafts[key] = clampNumber(Number((event.target as HTMLInputElement).value)); } });
+      }
       if (item.type === "range") return h(AppSlider, { modelValue: Number(drafts[key] || 0), min: item.min, max: item.max, "onUpdate:modelValue": (value: number) => { drafts[key] = value; } });
       if (item.type === "toggle") return h(AppCheckbox, { modelValue: !!drafts[key], label: "启用", variant: "switch", "onUpdate:modelValue": (value: boolean) => { drafts[key] = value; } });
       if (item.type === "textarea") return h("textarea", { class: "textarea form-control", value: drafts[key], onInput: update });
