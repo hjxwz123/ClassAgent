@@ -805,6 +805,11 @@
                     </button>
                   </div>
 
+                  <div class="practice-difficulty-row">
+                    <strong>难度</strong>
+                    <AppSelect v-model="practiceDifficulty" :options="quizDifficultyOptions" />
+                  </div>
+
                   <button
                     type="button"
                     class="practice-generate-btn"
@@ -1244,6 +1249,7 @@ import { copyToClipboard } from "../utils/clipboard";
 import { extractStructuredText, renderRichText } from "../utils/richText";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
+import AppSelect from "../components/AppSelect.vue";
 import AppSlider from "../components/AppSlider.vue";
 import BrandLogo from "../components/BrandLogo.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
@@ -1489,6 +1495,7 @@ const attempt = ref<any | null>(null);
 const answeringQuiz = ref(false);
 const selectedPracticeChapters = ref<number[]>([]);
 const quizQuestionCount = ref("10题");
+const practiceDifficulty = ref("mixed");
 const smartQuiz = ref(true);
 const quizGenerating = ref(false);
 const wrongPracticeGenerating = ref(false);
@@ -1532,6 +1539,12 @@ const topNavTabs = [
 const speedItems = ["0.5", "0.75", "1", "1.25", "1.5", "2"].map((value) => ({ label: `${value}x`, value }));
 const levelItems = [{ label: "入门", value: "beginner" }, { label: "标准", value: "standard" }, { label: "进阶", value: "advanced" }];
 const quizCountOptions = ["5题", "10题", "15题", "20题"];
+const quizDifficultyOptions = [
+  { label: "混合（易中难梯度）", value: "mixed" },
+  { label: "基础", value: "easy" },
+  { label: "标准", value: "standard" },
+  { label: "较难", value: "hard" },
+];
 const wrongStatusOptions = [{ label: "全部状态", value: "" }, { label: "待重练", value: "todo" }, { label: "已掌握", value: "resolved" }, { label: "多次错误", value: "repeat" }];
 const courseMenuItems = [{ label: "课程详情", value: "detail" }, { label: "问答记录", value: "qa" }, { label: "分享课程码", value: "share" }, { label: "退出课程", value: "leave", danger: true }];
 const studentSearchTypeMeta: Record<StudentSearchResultType, { label: string; icon: any }> = {
@@ -3699,6 +3712,7 @@ async function generateQuiz() {
       quiz_type: "practice",
       question_count: count,
       prefer_weak_points: smartQuiz.value,
+      difficulty: practiceDifficulty.value || "mixed",
     }));
     if (quiz) emit("notice", quiz.id ? "success" : "info", queuedQuizMessage(quiz) || "已生成");
     await loadQuizPage();

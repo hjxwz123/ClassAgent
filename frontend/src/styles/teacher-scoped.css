@@ -724,6 +724,8 @@ code { font-family: var(--font-family-mono); color: var(--color-text-muted); }
 .quiz-edit-card { display: grid; gap: 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: white; box-shadow: var(--shadow-sm); padding: 16px; }
 .quiz-edit-card header { display: grid; grid-template-columns: 34px 160px 86px auto; gap: 10px; align-items: center; }
 .quiz-edit-card header b { display: inline-grid; width: 32px; height: 32px; place-items: center; border-radius: 50%; background: var(--color-primary-50); color: var(--color-primary-700); font-family: var(--font-family-mono); }
+.quiz-edit-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.quiz-edit-meta .quiz-regenerate-btn { margin-left: auto; white-space: nowrap; }
 .score-input { text-align: center; }
 .option-editor { display: grid; gap: 8px; }
 .option-edit-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 72px 34px; gap: 8px; align-items: center; }
