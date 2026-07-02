@@ -54,6 +54,7 @@ from app.services.admin import (
     list_system_settings,
     material_summary_admin,
     mark_error_log_resolved,
+    qa_quality_overview,
     remove_material_admin,
     reset_user_password,
     restore_default_system_settings,
@@ -89,6 +90,18 @@ def get_dashboard_endpoint(
 ):
     assert_admin(user)
     return success_response(data=get_admin_dashboard(db, activity_days=int(activity_days)), request_id=request.state.request_id)
+
+
+@router.get("/qa-quality")
+def get_qa_quality_endpoint(
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    days: Annotated[int, Query(description="统计窗口天数，1-365，服务端夹取")] = 30,
+    course_id: Annotated[int | None, Query(description="可选课程过滤")] = None,
+):
+    assert_admin(user)
+    return success_response(data=qa_quality_overview(db, days=days, course_id=course_id), request_id=request.state.request_id)
 
 
 @router.get("/service-health")
