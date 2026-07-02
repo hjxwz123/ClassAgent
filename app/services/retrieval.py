@@ -43,6 +43,18 @@ def focused_query_text(query: str) -> str:
     return text
 
 
+def defocused_query_text(query: str) -> str:
+    """去掉"前序对话/当前问题"标签，保留完整对话文本参与分词打分。
+
+    focused_query_text 对指代型追问（如"这个能再举个例子吗"）聚焦后只剩代词，
+    词法打分必然零命中；零命中兜底重打分时用本函数让上一轮话题词作为锚点。
+    """
+    text = str(query or "")
+    if "当前问题：" not in text:
+        return text
+    return " ".join(text.replace("当前问题：", " ").replace("前序对话：", " ").split())
+
+
 def page_numbers_from_query(query: str) -> set[int]:
     text = focused_query_text(query)
     numbers: set[int] = set()

@@ -18,14 +18,14 @@ from app.core.media import signed_media_url
 from app.core.upload_validation import validate_image_upload
 from app.db.models import Chapter, Course, CourseMaterial, CourseMembership, KnowledgeChunk, Lesson, LessonPage, QAConversation, QARecord, StudentLearningSignal, User
 from app.schemas.qa import QAAskRequest
-from app.services.ai import ai_service
+from app.services.ai import ai_service, answer_claims_insufficient_context
 from app.services.courses import _assert_course_available_for_student
 from app.services.knowledge import search_course_knowledge
 from app.services.learning_signals import record_qa_learning_signals
 from app.services.parser import _extract_text_payload
 from app.services.ocr import ocr_service
 from app.services.pedagogy import QA_ARTIFACT_TYPES, artifact_context, artifact_source, search_pedagogy_artifacts
-from app.services.retrieval import page_numbers_from_query, query_terms, score_text_for_query
+from app.services.retrieval import defocused_query_text, page_numbers_from_query, query_terms, score_text_for_query
 from app.services.runtime_settings import runtime_setting_float, runtime_setting_int, runtime_setting_value
 from app.services.storage import storage_service
 from app.services.usage import log_ai_usage
@@ -46,8 +46,8 @@ _QA_VECTOR_CONTEXT_LIMIT = 8
 _QA_DETAIL_VECTOR_CONTEXT_LIMIT = 10
 _QA_RELATED_PAGE_CONTEXT_LIMIT = 6
 _QA_CHAPTER_RANGE_MAX = 8
-_QA_RERANK_MIN_POOL = 5
-_QA_RERANK_KEEP_FLOOR = 0.06
+_QA_RERANK_MIN_POOL = 2
+_QA_RERANK_KEEP_FLOOR = 0.10
 _QA_HISTORY_MESSAGE_LIMIT = 1600
 _QA_HISTORY_TOTAL_BUDGET = 8000
 _QA_FAST_PATH_MAX_LEN = 40
@@ -88,6 +88,12 @@ _QA_QUERY_STOPWORDS = {
     "如何",
     "为什么",
 }
+# 历史注入时应整轮跳过的失败占位答案：这些不是真实回答，进入多轮 prompt 只会污染后续生成
+# （模型可能把"服务不可用"当成上一轮的结论续写）。前缀匹配，需与生成侧占位文案保持一致。
+_QA_HISTORY_SKIP_ANSWER_PREFIXES = (
+    "AI 服务暂时不可用",
+    "当前没有生成有效回答",
+)
 _GENERAL_AI_NOTICE = "提示：以下回答未在当前课程资料中检索到直接依据，属于通用知识说明，请结合老师要求和课程内容自行核对。"
 _GENERAL_AI_DISABLED_NOTICE = "当前课程资料中没有检索到可直接支撑该问题的内容，且本课程未开启“资料外也可回答”。请换一种问法，或联系老师开启该开关。"
 _GENERAL_AI_REJECTED_NOTICE = "当前课程资料中没有检索到可直接支撑该问题的内容，且管理员已关闭课程资料范围外的回答。请围绕课程内容换一种问法。"
@@ -734,6 +740,9 @@ def _history_messages(records: list[QARecord]) -> list[dict[str, str]]:
         turn: list[dict[str, str]] = []
         question = _trim_context(str(record.question or "").strip(), limit=_QA_HISTORY_MESSAGE_LIMIT)
         answer = _trim_context(_strip_agent_answer_suffix(record.answer), limit=_QA_HISTORY_MESSAGE_LIMIT)
+        if answer and any(answer.startswith(prefix) for prefix in _QA_HISTORY_SKIP_ANSWER_PREFIXES):
+            # 失败占位答案整轮跳过，避免污染多轮上下文
+            continue
         if question:
             turn.append({"role": "user", "content": question})
         if answer:
@@ -911,6 +920,13 @@ def _classroom_agent_plan(
         page_numbers=page_numbers,
         section_numbers=section_numbers,
     ) if not retrieval_query else retrieval_query[:3600]
+    plan_reason = str(plan_payload.get("reason") or "") if isinstance(plan_payload, dict) else ""
+    if (not plan_payload or plan_reason == "task_planner_unavailable" or plan_reason.startswith("heuristic")) and question_for_ai:
+        # 规划器降级时 retrieval_query 只含裸问题："帮我看图"式图片题的 OCR 文本、
+        # 指代追问依赖的前序对话话题词全部丢失，检索必然零命中。附上完整问题文本
+        # （含 OCR 围栏与历史锚点）参与检索打分；LLM 规划成功的路径不受影响。
+        if question_for_ai not in retrieval_query:
+            retrieval_query = f"{retrieval_query}\n{question_for_ai}".strip()[:3600]
     quiz_payload = plan_payload.get("quiz") if isinstance(plan_payload, dict) and isinstance(plan_payload.get("quiz"), dict) else {}
     try:
         quiz_count = int(quiz_payload.get("count")) if quiz_payload.get("count") is not None else None
@@ -1534,7 +1550,7 @@ def _rerank_retrieval_pool(db: Session, *, query: str, pool: list[tuple[str, dic
         return None
     if not results:
         return None
-    min_score = runtime_setting_float(db, "qa.rerank.min_score", 0.15, minimum=0.0, maximum=1.0)
+    min_score = runtime_setting_float(db, "qa.rerank.min_score", 0.30, minimum=0.0, maximum=1.0)
     passed = [pool[index] for index, score in results if score >= min_score]
     # 可观测性：把 query 摘要、池大小、top-k 命中与分数落日志，便于复盘"召回了什么/被阈值砍了什么"
     top_preview = ", ".join(f"{_source_identity(pool[i][1])[:1] or pool[i][1].get('title','?')}:{s:.3f}" for i, s in results[:5])
@@ -1544,11 +1560,18 @@ def _rerank_retrieval_pool(db: Session, *, query: str, pool: list[tuple[str, dic
     )
     if passed:
         return passed
-    # 全部未达阈值：保留最高分的一条（若它还不算完全无关），给模型一次作答机会
+    # 全部未达阈值：保留最高分的一条（若它还不算完全无关），给模型一次作答机会。
+    # 但这条在 cross-encoder 语义下已属低相关，必须显式标注：告知模型可如实说"资料未涉及"，
+    # 而不是被系统提示逼着基于弱资料强答（低置信标注 + 资料不足自述检测联动兜底）。
     best_index, best_score = results[0]
     if best_score >= _QA_RERANK_KEEP_FLOOR and 0 <= best_index < len(pool):
-        logger.info("QA rerank: 全部低于阈值，保留最佳项 best=%.3f", best_score)
-        return [pool[best_index]]
+        logger.info("QA rerank: 全部低于阈值，保留最佳项 best=%.3f（低置信标注）", best_score)
+        text, source = pool[best_index]
+        flagged = (
+            "（系统提示：以下资料与当前问题的相关性较低。若它不足以支撑回答，"
+            "请明确说明课程资料未涉及该问题，不要强行关联作答。）\n" + text
+        )
+        return [(flagged, source)]
     logger.info("QA rerank: 全部低于阈值且最佳 %.3f < keep-floor %.2f，判定资料外", best_score, _QA_RERANK_KEEP_FLOOR)
     return []
 
@@ -1785,6 +1808,21 @@ def _qa_contexts_and_sources(
             lesson_page_id=None,
             limit=_QA_DETAIL_VECTOR_CONTEXT_LIMIT if lesson_id is not None else _QA_VECTOR_CONTEXT_LIMIT,
         )
+        if lesson_id is not None:
+            # 课时页提问不硬锁本课时：本课时只要有弱相关命中，改写重查就不会触发，
+            # 学生问"其他课时讲过的概念"时上下文会来自错误课时。追加一次课程级检索
+            # 并入同一 rerank 池，由重排交叉打分裁决哪个范围的资料更相关。
+            course_level_chunks = search_course_knowledge(
+                db,
+                course_id=course_id,
+                query=retrieval_query,
+                chapter_id=None,
+                lesson_id=None,
+                lesson_page_id=None,
+                limit=max(_QA_VECTOR_CONTEXT_LIMIT // 2, 4),
+            )
+            seen_chunk_ids = {chunk.id for chunk in chunks}
+            chunks = [*chunks, *(chunk for chunk in course_level_chunks if chunk.id not in seen_chunk_ids)]
     page_contexts, page_sources = _lesson_page_context(db, course_id=course_id, lesson_page_id=payload.lesson_page_id)
     if agent_plan.page_numbers:
         specified_contexts, specified_sources = _specified_page_context(
@@ -1930,16 +1968,38 @@ def _qa_contexts_and_sources(
     pool_pairs.extend(zip(tool_contexts, tool_sources))
     pool_pairs.extend(zip(related_page_contexts, related_page_sources))
     pool_pairs.extend(zip(material_contexts, material_sources))
+    # 记录"已过语义门槛"的池下标：向量 chunk 已通过 min_similarity 过滤，rerank 降级时
+    # 不应再被词法分数误杀（语义相关但措辞不同恰是向量检索的价值场景）。
+    semantic_gated_indexes: set[int] = set()
     for chunk in chunks:
         text = _chunk_context(chunk)
         if text:
+            semantic_gated_indexes.add(len(pool_pairs))
             pool_pairs.append((text, _chunk_source(chunk)))
 
     # rerank 用消解指代后的自然语言问句(standalone_question)而非关键词拼接串：
     # cross-encoder 对自然问句的"问题-段落"相关性判别更准
     rerank_query = (agent_plan.standalone_question or "").strip() or retrieval_query
     reranked = _rerank_retrieval_pool(db, query=rerank_query, pool=pool_pairs)
-    ordered_pairs = reranked if reranked is not None else pool_pairs
+    if reranked is not None:
+        ordered_pairs = reranked
+    else:
+        # rerank 降级(未配置/超时/池过小)时不再零过滤直通：泛词碰巧 LIKE 命中的片段会把
+        # 资料外问题伪标为 in-scope、诱导模型强答。对未过语义门槛的项做词法兜底过滤，
+        # 与问题零词面交集的直接丢弃；已过 min_similarity 的向量 chunk 保留。
+        # 打分用去聚焦的完整检索文本：指代型追问聚焦后只剩代词，会把话题相关项全部误杀。
+        filter_query = defocused_query_text(retrieval_query) or rerank_query
+        ordered_pairs = [
+            pair
+            for index, pair in enumerate(pool_pairs)
+            if index in semantic_gated_indexes
+            or score_text_for_query(title=str(pair[1].get("title") or ""), text=pair[0], page_number=None, query=filter_query) > 0
+        ]
+        if pool_pairs and len(ordered_pairs) < len(pool_pairs):
+            logger.info(
+                "QA rerank 降级，词法兜底过滤：%d → %d（丢弃零词面交集项）",
+                len(pool_pairs), len(ordered_pairs),
+            )
     pool_contexts = [text for text, _ in ordered_pairs]
     pool_source_list = [source for _, source in ordered_pairs]
 
@@ -2223,6 +2283,10 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
             answer = "当前没有生成有效回答，请换一种问法或稍后重试。"
             answer_parts.append(answer)
             yield {"event": "delta", "data": {"type": "answer", "text": answer}}
+        if not out_of_scope and ai_error_message is None and answer_claims_insufficient_context(answer):
+            # 模型自述"资料不足/未提及"：同步 out_of_scope 标记，使落库、usage 统计、
+            # final 事件与前端提示口径一致，不再把"没答上"记成一次成功的课内回答。
+            out_of_scope = True
         suffix = _answer_suffix(answer, sources=sources, plan=agent_plan, out_of_scope=out_of_scope, source_limit=_qa_source_limit(db))
         if suffix:
             yield from _stream_text_delta("answer", f"\n\n{suffix}", answer_parts, thought_parts)
