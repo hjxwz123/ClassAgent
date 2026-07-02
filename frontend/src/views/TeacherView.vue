@@ -325,6 +325,7 @@
               <div class="panel-head rich-head"><div><h2><Settings :size="18" />生成设置</h2><small>一次生成一套测验，可重复生成多套</small></div></div>
               <div class="weak-config-body">
                 <label>题目总数<input v-model.number="weakQuizForm.question_count" class="input" type="number" min="1" max="20" /></label>
+                <label>难度<AppSelect v-model="weakQuizForm.difficulty" :options="quizDifficultyOptions" /></label>
                 <div class="weak-type-grid">
                   <label v-for="item in weakQuestionTypes" :key="item.value">{{ item.label }}<input v-model.number="weakQuizForm.question_type_counts[item.value]" class="input" type="number" min="0" max="20" /></label>
                 </div>
@@ -591,6 +592,11 @@
                   <input v-model.number="question.score" class="input score-input" type="number" min="1" max="100" />
                   <button class="icon-action danger" type="button" :disabled="quizEditor.questions.length <= 1" @click="removeEditorQuestion(qIndex)"><Trash2 :size="15" />删除</button>
                 </header>
+                <div v-if="question.knowledge_point_name || question.difficulty || (quizEditor.generated && question.id)" class="quiz-edit-meta">
+                  <span v-if="question.knowledge_point_name" class="tag tag-primary">{{ question.knowledge_point_name }}</span>
+                  <span v-if="question.difficulty" class="tag" :class="difficultyTagClass(question.difficulty)">{{ difficultyText(question.difficulty) }}</span>
+                  <button v-if="quizEditor.generated && question.id" class="btn btn-secondary btn-sm quiz-regenerate-btn" type="button" :data-loading="isPending(`regen-question-${question.id}`)" :disabled="isPending(`regen-question-${question.id}`) || quizEditorSaving || quizEditorPublishing" @click="regenerateEditorQuestion(question)"><RefreshCw :size="14" />{{ isPending(`regen-question-${question.id}`) ? '生成中…' : '换一题' }}</button>
+                </div>
                 <label>题干<textarea v-model="question.stem" class="textarea" maxlength="2000"></textarea></label>
                 <div v-if="question.question_type === 'single_choice' || question.question_type === 'multiple_choice'" class="option-editor">
                   <div v-for="(option, index) in question.options" :key="index" class="option-edit-row">
@@ -781,7 +787,7 @@ const weakQuizData = ref<any>({ stats: {}, weak_points: [], all_sets: [] });
 const weakQuizSelectedSetId = ref(0);
 const weakQuizPointIndex = ref(0);
 const weakQuizAttemptDetail = ref<any | null>(null);
-const quizEditor = reactive({ id: 0, status: "", title: "", description: "", questions: [] as any[] });
+const quizEditor = reactive({ id: 0, status: "", title: "", description: "", generated: false, questions: [] as any[] });
 let freshChapterTimer = 0;
 let freshMaterialChapterTimer = 0;
 let editorPulseTimer = 0;
@@ -798,6 +804,7 @@ const studentFilter = reactive({ keyword: "", progress: "", active: "" });
 const courseForm = reactive({ id: 0, name: "", description: "", term: "2026春", cover_url: "", cover_color: "#121614", allow_leave: true, ai_qa: true, quiz_enabled: true, allow_general_ai_answer: false, chapters: [{ local_id: Date.now(), id: 0, title: "第一章", order_index: 1 }] as any[] });
 const weakQuizForm = reactive({
   question_count: 5,
+  difficulty: "mixed",
   question_type_counts: {
     single_choice: 2,
     multiple_choice: 1,
@@ -831,6 +838,13 @@ const weakQuestionTypes = [
   { label: "填空题", value: "blank" },
   { label: "简答题", value: "short_answer" },
 ];
+const quizDifficultyOptions = [
+  { label: "混合（易中难梯度）", value: "mixed" },
+  { label: "基础", value: "easy" },
+  { label: "标准", value: "standard" },
+  { label: "较难", value: "hard" },
+];
+const questionDifficultyTextMap: Record<string, string> = { easy: "基础", standard: "标准", hard: "较难" };
 const courseOperationPages = new Set(["teacherMaterials", "teacherPpt", "teacherLessons", "teacherStudents", "teacherAnalytics", "teacherWeakQuizzes"]);
 
 const currentCourse = computed(() => courses.value.find((course) => course.id === currentCourseId.value) || courses.value[0] || null);
@@ -1321,6 +1335,7 @@ function normalizeEditorQuestion(item: any = {}) {
     id: item.id || 0,
     chapter_id: item.chapter_id || null,
     knowledge_point_id: item.knowledge_point_id || null,
+    knowledge_point_name: item.knowledge_point_name || null,
     question_type: type,
     stem: item.stem || "",
     options,
@@ -1336,8 +1351,30 @@ function openQuizEditor(detail: any) {
   quizEditor.status = detail.quiz.status;
   quizEditor.title = detail.quiz.title || "";
   quizEditor.description = detail.quiz.description || "";
+  quizEditor.generated = Boolean(detail.quiz.metadata_json?.generated);
   quizEditor.questions = (detail.questions || []).map((item: any) => normalizeEditorQuestion(item));
   quizEditorOpen.value = true;
+}
+function difficultyText(value?: string) {
+  const key = String(value || "").toLowerCase();
+  return questionDifficultyTextMap[key] || String(value || "");
+}
+function difficultyTagClass(value?: string) {
+  const key = String(value || "").toLowerCase();
+  if (key === "easy") return "tag-success";
+  if (key === "hard") return "tag-warning";
+  return "";
+}
+async function regenerateEditorQuestion(question: any) {
+  if (!quizEditor.id || !question?.id) return;
+  await withAction(`regen-question-${question.id}`, async () => {
+    const data = await api.post<any>(`/learning/quizzes/${quizEditor.id}/questions/${question.id}/regenerate`);
+    if (!data) return;
+    // 用 indexOf 而非渲染时下标：请求期间题目可能被删除/移动，避免替换错位。
+    const index = quizEditor.questions.indexOf(question);
+    if (index < 0) return;
+    quizEditor.questions.splice(index, 1, normalizeEditorQuestion(data));
+  }, "已为该题生成新题目");
 }
 function addEditorQuestion() { quizEditor.questions.push(normalizeEditorQuestion()); }
 function removeEditorQuestion(index: number) {
@@ -1523,6 +1560,7 @@ async function generateTeacherWeakQuiz(point?: any) {
       title,
       question_count: Number(weakQuizForm.question_count || 0),
       question_type_counts: weakQuizTypeCountsPayload(),
+      difficulty: weakQuizForm.difficulty || "mixed",
     }));
     if (!quiz) return;
     const generatedQuiz = await waitForGeneratedQuiz(quiz);
