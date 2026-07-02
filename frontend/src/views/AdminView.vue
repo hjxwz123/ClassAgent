@@ -107,6 +107,50 @@
               </article>
             </aside>
           </div>
+          <!-- 问答质量面板：学生「有用/没用」反馈与超范围回答的聚合视图（只读） -->
+          <article class="panel-card">
+            <div class="panel-head">
+              <div><h2><BarChart2 :size="18" />问答质量</h2><span>学生反馈与超范围回答 · 近 {{ qaQualityDays }} 天</span></div>
+              <div class="segmented-control">
+                <button v-for="item in qaQualityDayOptions" :key="item" type="button" class="segment-btn" :class="{ active: qaQualityDays === item }" @click="setQaQualityDays(item)">{{ item }}天</button>
+              </div>
+            </div>
+            <div class="metric-grid four compact">
+              <MetricCard :icon="FileText" label="问答总数" :value="qaOverview.total || 0" :trend="`近 ${qaQualityDays} 天`" />
+              <MetricCard :icon="XCircle" label="负反馈" :value="qaOverview.negative || 0" :trend="`负反馈率 ${percentText(qaOverview.negative_rate)}`" :danger="(qaOverview.negative || 0) > 0" />
+              <MetricCard :icon="CheckCircle" label="正反馈" :value="qaOverview.positive || 0" :trend="`正反馈率 ${percentText(qaOverview.positive_rate)}`" tone="success" />
+              <MetricCard :icon="AlertTriangle" label="超范围回答" :value="qaOverview.out_of_scope || 0" :trend="`占比 ${percentText(qaOverview.out_of_scope_rate)}`" tone="info" />
+            </div>
+            <table class="admin-table compact-table">
+              <thead><tr><th>课程</th><th>问答数</th><th>负反馈</th><th>负反馈率</th><th>超范围</th><th>超范围率</th></tr></thead>
+              <tbody>
+                <tr v-for="item in qaCourseRows" :key="item.course_id">
+                  <td><strong>{{ item.course_name }}</strong></td>
+                  <td class="cell-num">{{ item.total }}</td>
+                  <td class="cell-num">{{ item.negative }}</td>
+                  <td><span class="tag" :class="item.negative_rate > 0 ? 'tag-warning' : 'tag-success'">{{ percentText(item.negative_rate) }}</span></td>
+                  <td class="cell-num">{{ item.out_of_scope }}</td>
+                  <td>{{ percentText(item.out_of_scope_rate) }}</td>
+                </tr>
+                <tr v-if="!qaCourseRows.length"><td colspan="6"><EmptyState text="窗口期内暂无问答数据" /></td></tr>
+              </tbody>
+            </table>
+          </article>
+          <article class="panel-card">
+            <div class="panel-head"><div><h2><XCircle :size="18" />最近负反馈</h2><span>按时间倒序，最多展示 20 条</span></div></div>
+            <table class="admin-table compact-table">
+              <thead><tr><th>问题</th><th>课程</th><th>时间</th><th>答案摘要</th></tr></thead>
+              <tbody>
+                <tr v-for="item in qaRecentNegative" :key="item.id">
+                  <td class="qa-question-cell"><strong>{{ item.question }}</strong><span v-if="item.feedback_comment" class="qa-feedback-comment">备注：{{ item.feedback_comment }}</span></td>
+                  <td>{{ item.course_name }}</td>
+                  <td class="cell-time">{{ formatTime(item.created_at) }}</td>
+                  <td class="qa-answer-excerpt">{{ item.answer_excerpt || '-' }}</td>
+                </tr>
+                <tr v-if="!qaRecentNegative.length"><td colspan="4"><EmptyState text="窗口期内暂无负反馈" /></td></tr>
+              </tbody>
+            </table>
+          </article>
         </section>
 
         <section v-if="active === 'adminUsers'" key="adminUsers" class="admin-page">
@@ -742,6 +786,10 @@ const pageLoading = ref(false);
 const trendOptions = ["7天", "30天", "90天"];
 const trendRange = ref("30天");
 const usageOptions = ["次数", "Token", "费用"];
+// 问答质量面板：统计窗口天数与聚合数据（overview/courses/recent_negative）
+const qaQualityDayOptions = [7, 30, 90];
+const qaQualityDays = ref(30);
+const qaQuality = ref<any>({});
 const dashboard = ref<any>({});
 const health = ref<any>(null);
 const overview = ref<any>({});
@@ -938,6 +986,9 @@ const trendSubtitle = computed(() => `过去 ${trendDays.value} 天`);
 const activityLabels = computed(() => (dashboard.value.activity_trend || []).map((item: any) => item.date));
 const activitySeries = computed(() => [{ name: "活跃用户", data: (dashboard.value.activity_trend || []).map((item: any) => item.active_users), color: "#D9A05B" }, { name: "AI 调用", data: (dashboard.value.activity_trend || []).map((item: any) => item.ai_calls), color: "#00B8D4" }]);
 const filteredCourses = computed(() => courses.value.filter((item) => !courseTerm.value || String(item.term || "").includes(courseTerm.value)));
+const qaOverview = computed(() => qaQuality.value.overview || {});
+const qaCourseRows = computed(() => qaQuality.value.courses || []);
+const qaRecentNegative = computed(() => qaQuality.value.recent_negative || []);
 const storagePercent = computed(() => Math.round(((materialStats.value.storage_used_bytes || 0) / (materialStats.value.storage_quota_bytes || 1)) * 100));
 const modelWarning = computed(() => models.value.some((item) => item.purpose !== "embedding" && item.purpose !== "rerank") ? "" : "大语言模型未配置");
 const usageTotal = computed(() => {
@@ -1055,6 +1106,10 @@ function relativeTime(value?: string | null) {
 function isStale(value?: string | null) {
   if (!value) return true;
   return Date.now() - new Date(value).getTime() > 7 * 86400 * 1000;
+}
+function percentText(value?: number) {
+  // 比率转百分比展示：后端给的是 0-1 小数，空值按 0 处理
+  return `${((Number(value) || 0) * 100).toFixed(1)}%`;
 }
 function sizeLabel(size?: number) {
   const value = Number(size || 0);
@@ -1201,6 +1256,14 @@ async function setTrendRange(value: string) {
 async function loadHealth() {
   health.value = await run(() => api.get("/admin/service-health"));
 }
+async function loadQaQuality() {
+  qaQuality.value = (await run(() => api.get("/admin/qa-quality", { days: qaQualityDays.value }))) || {};
+}
+async function setQaQualityDays(value: number) {
+  if (qaQualityDays.value === value) return;
+  qaQualityDays.value = value;
+  await loadQaQuality();
+}
 async function loadUsers() {
   users.value = (await run(() => api.get<any[]>("/admin/users", userFilter))) || [];
   userStats.value = (await run(() => api.get("/admin/users/stats"))) || {};
@@ -1264,7 +1327,7 @@ async function loadBackups() {
 async function loadActive() {
   pageLoading.value = !initialPageLoading.value;
   try {
-    if (active.value === "adminDashboard") await loadDashboard();
+    if (active.value === "adminDashboard") { await loadDashboard(); await loadQaQuality(); }
     if (active.value === "adminUsers") await loadUsers();
     if (active.value === "adminCourses") await loadCourses();
     if (active.value === "adminMaterials") await loadMaterials();
@@ -1746,4 +1809,20 @@ const InfoRow = defineComponent({ props: { label: { type: String, required: true
 .admin-profile-card span { color: var(--color-text-secondary); font-size: var(--text-caption); }
 .admin-profile-rows { display: grid; gap: 2px; }
 .admin-notifications-modal .course-modal-row small { color: var(--color-text-secondary); }
+
+/* 问答质量面板：问题/备注/答案摘要的排版约束 */
+.qa-question-cell strong { display: block; }
+.qa-feedback-comment {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+}
+.qa-answer-excerpt {
+  max-width: 320px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-body-sm);
+  line-height: 1.5;
+  word-break: break-all;
+}
 </style>
