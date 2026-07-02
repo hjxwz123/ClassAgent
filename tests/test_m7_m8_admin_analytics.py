@@ -6,7 +6,7 @@ from app.services.ai import ai_service
 from tests.auth_helpers import request_registration_token
 
 
-def fake_quiz_questions(*, topic, source_text, count, db=None):
+def fake_quiz_questions(*, topic, source_text, count, db=None, **kwargs):
     items = [
         {
             "question_type": "single_choice",
