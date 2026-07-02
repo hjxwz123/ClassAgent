@@ -1,0 +1,47 @@
+{
+  "_说明": [
+    "QA golden 回归评估示例集。复制本文件为 scripts/qa_golden_cases.json 后按自己的课程填写。",
+    "以 _ 开头的字段是给人看的注释，脚本会忽略；cases 数组里才是真正参与评估的用例。",
+    "字段含义：name=用例名；course_id=课程 ID（管理端课程列表可查）；question=学生的自然问法；",
+    "chapter_id=可选，模拟章节内提问的过滤（不需要就填 null 或删除该字段）；",
+    "expect_context_keywords=必填，资料原文里 1~3 个有区分度的短语，断言检索片段包含它们；",
+    "expect_answer_keywords=可选，仅 --with-llm 模式使用，断言模型回答包含这些词。",
+    "建议每门课维护 10~20 条，覆盖：概念定义、公式/定理、例题步骤、易混淆点、指定页码/表格类提问。",
+    "下面的 course_id=1 与关键词均为占位示例，直接实跑大概率 FAIL，属预期现象。"
+  ],
+  "cases": [
+    {
+      "_说明": "概念定义类：问『X 是什么』，关键词取资料里定义句的核心短语。",
+      "name": "示例-概念定义",
+      "course_id": 1,
+      "question": "什么是函数的极限？",
+      "chapter_id": null,
+      "expect_context_keywords": ["极限", "任意给定"],
+      "expect_answer_keywords": ["极限"]
+    },
+    {
+      "_说明": "公式/定理类：问某个定理内容，关键词取定理名与结论中的关键词。",
+      "name": "示例-定理内容",
+      "course_id": 1,
+      "question": "洛必达法则的使用条件是什么？",
+      "expect_context_keywords": ["洛必达", "未定式"],
+      "expect_answer_keywords": ["0/0", "导数"]
+    },
+    {
+      "_说明": "章节内提问：带 chapter_id 验证章节过滤后目标资料仍能召回。",
+      "name": "示例-章节内提问",
+      "course_id": 1,
+      "question": "这一章里连续和可导是什么关系？",
+      "chapter_id": 1,
+      "expect_context_keywords": ["连续", "可导"]
+    },
+    {
+      "_说明": "易混淆点类：问两个概念的区别，关键词各取一个概念的标志性表述。",
+      "name": "示例-易混淆点",
+      "course_id": 1,
+      "question": "定积分和不定积分有什么区别？",
+      "expect_context_keywords": ["定积分", "原函数"],
+      "expect_answer_keywords": ["数值", "函数族"]
+    }
+  ]
+}
