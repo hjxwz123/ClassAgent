@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Chapter, KnowledgeChunk, KnowledgePoint, LessonPage
 from app.services.ai import ai_service
-from app.services.retrieval import build_retrieval_query_variants, page_numbers_from_query, query_terms, score_text_for_query
+from app.services.retrieval import build_retrieval_query_variants, defocused_query_text, page_numbers_from_query, query_terms, score_text_for_query
 from app.services.runtime_settings import runtime_setting_float
 from app.services.vector_store import vector_store
 
@@ -37,6 +37,38 @@ def _local_knowledge_explanation(*, name: str, difficulty: str, source_text: str
     }
 
 
+# 向量索引"部分缺失"体检的每课程节流间隔：体检需要向向量库拉全量已索引 id，不宜每次查询都做。
+_VECTOR_INDEX_CHECK_INTERVAL_SECONDS = 600.0
+_vector_index_last_check: dict[int, float] = {}
+
+
+def _backfill_missing_chunks(db: Session, *, course_id: int, scope_statement) -> int:
+    """差集增量回填：只重嵌入向量库缺失的 chunk，而非整课重建。返回回填数量。
+
+    覆盖两类场景：向量库整体丢失（缺失=全部，等价旧的整课回填）；以及 ingest 阶段
+    个别资料嵌入失败留下的"部分缺失"（旧逻辑永不自愈）。同步执行、带耗时打点。
+    """
+    chunks = list(db.scalars(scope_statement))
+    if not chunks:
+        return 0
+    try:
+        indexed = vector_store.indexed_chunk_ids(db, course_id=course_id)
+    except Exception:
+        indexed = set()
+    missing = [chunk for chunk in chunks if chunk.id not in indexed]
+    if not missing:
+        return 0
+    LOGGER.warning(
+        "QA 检索触发向量增量回填：course_id=%s 缺失 chunk=%s/%s（同步重嵌入，可能较慢）",
+        course_id, len(missing), len(chunks),
+    )
+    backfill_started = time.monotonic()
+    vector_store.upsert_chunks(db, chunks=missing)
+    db.commit()
+    LOGGER.warning("QA 检索向量增量回填完成：course_id=%s 耗时=%.1fs", course_id, time.monotonic() - backfill_started)
+    return len(missing)
+
+
 def search_course_knowledge(
     db: Session,
     *,
@@ -58,7 +90,8 @@ def search_course_knowledge(
             lesson_page_id=lesson_page_id,
             limit=limit,
         )
-    except Exception:
+    except Exception as exc:
+        LOGGER.warning("QA 向量检索失败，退化为关键词兜底：course_id=%s err=%s", course_id, exc)
         rows = []
     if not rows:
         backfill_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
@@ -70,16 +103,8 @@ def search_course_knowledge(
             )
         if lesson_page_id is not None:
             backfill_statement = backfill_statement.where(KnowledgeChunk.lesson_page_id == lesson_page_id)
-        chunks_to_index = list(db.scalars(backfill_statement))
-        if chunks_to_index:
-            # 向量索引缺失时的自愈回填：会同步重嵌入整门课程的全部 chunk，是问答"卡在检索阶段
-            # 数分钟"的常见原因。打点记录数量与耗时，便于定位；若频繁触发应排查向量库持久化。
-            LOGGER.warning("QA 检索触发向量回填：course_id=%s 待重嵌入 chunk 数=%s（同步重建索引，可能较慢）", course_id, len(chunks_to_index))
-            backfill_started = time.monotonic()
-            try:
-                vector_store.upsert_chunks(db, chunks=chunks_to_index)
-                db.commit()
-                LOGGER.warning("QA 检索向量回填完成：course_id=%s 耗时=%.1fs", course_id, time.monotonic() - backfill_started)
+        try:
+            if _backfill_missing_chunks(db, course_id=course_id, scope_statement=backfill_statement):
                 rows = _query_course_variants(
                     db,
                     course_id=course_id,
@@ -89,9 +114,32 @@ def search_course_knowledge(
                     lesson_page_id=lesson_page_id,
                     limit=limit,
                 )
-            except Exception:
+        except Exception as exc:
+            db.rollback()
+            LOGGER.warning("QA 检索向量回填失败：course_id=%s err=%s", course_id, exc)
+            rows = []
+    else:
+        # 部分缺失自愈：旧逻辑只在"查询全空"时回填，老资料已有索引时新资料嵌入失败
+        # 便永远不可语义召回且无人知道。这里按课程做节流的差集体检（每 10 分钟至多一次），
+        # 发现缺失 chunk 就增量回填并重查一次，让新资料立即可召回。
+        now = time.monotonic()
+        if now - _vector_index_last_check.get(course_id, 0.0) >= _VECTOR_INDEX_CHECK_INTERVAL_SECONDS:
+            _vector_index_last_check[course_id] = now
+            try:
+                course_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
+                if _backfill_missing_chunks(db, course_id=course_id, scope_statement=course_statement):
+                    rows = _query_course_variants(
+                        db,
+                        course_id=course_id,
+                        queries=query_variants,
+                        chapter_id=chapter_id,
+                        lesson_id=lesson_id,
+                        lesson_page_id=lesson_page_id,
+                        limit=limit,
+                    )
+            except Exception as exc:
                 db.rollback()
-                rows = []
+                LOGGER.warning("QA 检索向量增量回填失败：course_id=%s err=%s", course_id, exc)
     chunk_ids = [chunk_id for chunk_id, _ in rows]
     if not chunk_ids:
         return _relational_chunk_fallback(
@@ -191,7 +239,27 @@ def _relational_chunk_fallback(
         return keyword_score + token_score + page_score, -int(chunk.id)
 
     ranked = sorted(chunks, key=score, reverse=True)
-    return [chunk for chunk in ranked if score(chunk)[0] > 0][:limit] or ranked[:limit]
+    positive = [chunk for chunk in ranked if score(chunk)[0] > 0][:limit]
+    if positive:
+        return positive
+    # 指代型追问("这个能再举个例子吗")经 focused_query_text 聚焦后只剩代词，词法必然
+    # 零命中：退回含前序对话的完整文本重打分，让上一轮话题词(如"矩阵")作为真实锚点。
+    defocused = defocused_query_text(query)
+    if defocused and defocused != query:
+        history_keywords = query_terms(defocused)
+
+        def defocused_score(chunk: KnowledgeChunk) -> tuple[int, int]:
+            keyword_score = score_text_for_query(title=chunk.title, text=chunk.content, page_number=None, query=defocused)
+            token_score = sum(3 for token in chunk.tokens or [] if str(token).lower() in history_keywords)
+            return keyword_score + token_score, -int(chunk.id)
+
+        ranked = sorted(chunks, key=defocused_score, reverse=True)
+        positive = [chunk for chunk in ranked if defocused_score(chunk)[0] > 0][:limit]
+        if positive:
+            return positive
+    # 仍零命中：不再返回按 id 排序的头部 chunk 冒充相关资料——那会让上游 contexts 非空、
+    # 误判 in-scope，迫使模型"依据"无关内容强答。返回空，让上游走资料外/通用回答分支。
+    return []
 
 
 def _query_course_variants(
@@ -209,14 +277,17 @@ def _query_course_variants(
     per_query_limit = candidate_limit
     # 管理端「召回相似度阈值」：余弦相似度低于阈值的召回直接丢弃（distance = 1 - 相似度）。
     # vector_store 内部的 vector_max_distance(默认 0.9) 只是兜底粗筛，这里才是业务阈值。
-    # 默认与 bootstrap 种子(0.28)保持一致；缺行兜底也用同一值，避免"种子/兜底"两处不一致。
-    min_similarity = runtime_setting_float(db, "qa.retrieval.min_similarity", 0.28, minimum=0.0, maximum=0.99)
+    # 默认与 bootstrap 种子(0.40)保持一致；0.28 对中文嵌入模型偏松，弱相关片段易过线诱发错答。
+    min_similarity = runtime_setting_float(db, "qa.retrieval.min_similarity", 0.40, minimum=0.0, maximum=0.99)
     max_distance = 1.0 - min_similarity
     # 一次性批量嵌入全部查询变体（单次 embedding 请求），再用预算向量逐个检索；
     # 避免旧实现对每个变体各发一次嵌入请求——慢/多变体时会把检索阶段拖到数十秒甚至数分钟。
     try:
         variant_embeddings = ai_service.embed_texts(db, list(queries))
-    except Exception:
+    except Exception as exc:
+        # 嵌入失败会让全部变体被跳过、语义检索无声退化为关键词兜底——必须留痕，否则
+        # 嵌入服务故障期间"答案频繁跑偏"无从排障。
+        LOGGER.warning("QA 查询嵌入失败，语义检索退化为关键词兜底：course_id=%s err=%s", course_id, exc)
         variant_embeddings = []
     for query_index, variant in enumerate(queries):
         embedding = variant_embeddings[query_index] if query_index < len(variant_embeddings) else None
