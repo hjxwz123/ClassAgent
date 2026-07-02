@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from datetime import UTC, date, datetime
@@ -37,8 +38,11 @@ from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.knowledge import ensure_knowledge_points
 from app.services.learning_signals import learning_signal_point_stats
 from app.services.notifications import push_user_notification
-from app.services.pedagogy import quiz_artifact_source_text
+from app.services.pedagogy import quiz_artifact_contexts
+from app.services.retrieval import score_text_for_query
 from app.services.usage import log_ai_usage
+
+logger = logging.getLogger("app.services.learning")
 
 
 def _assert_student_course_access(db: Session, *, course_id: int, user: User) -> None:
@@ -108,7 +112,10 @@ def _append_source_piece(pieces: list[str], seen: set[str], value, *, limit: int
             continue
         if len(compact) > limit:
             compact = _truncate_source_piece(compact, limit)
-        fingerprint = compact[:220]
+        # 指纹取正文（跳过首行标题头）：同一页文本经 chunk 和 LessonPage 两路进来时标题行不同、
+        # 前 220 字符必然互异，按含标题指纹去重必然失效，导致每页正文双份灌入、体积翻倍。
+        body = compact.split("\n", 1)[-1] if "\n" in compact else compact
+        fingerprint = re.sub(r"\s+", "", body)[:220]
         if fingerprint in seen:
             continue
         seen.add(fingerprint)
@@ -135,17 +142,41 @@ def _append_long_source_pieces(
         _append_source_piece(pieces, seen, f"{title}（全文片段{index}/{total}）\n{excerpt}", limit=window + 260)
 
 
-def _join_source_pieces_for_quiz(pieces: list[str]) -> str:
+def _join_source_pieces_for_quiz(pieces: list[str], *, focus_terms: list[str] | None = None) -> str:
     pieces = [piece for piece in pieces if piece.strip()]
     if not pieces:
         return ""
     joined = "\n\n".join(pieces)
     if len(joined) <= QUIZ_SOURCE_CONTEXT_HARD_LIMIT:
         return joined
-    separator_chars = 2 * max(len(pieces) - 1, 0)
-    per_piece_limit = max(1, (QUIZ_SOURCE_CONTEXT_HARD_LIMIT - separator_chars) // len(pieces))
-    compressed = [_truncate_source_piece(piece, per_piece_limit) for piece in pieces]
-    return "\n\n".join(compressed)
+    # 超限时按"目标知识点相关性整片取舍"，绝不对片段内部做头/中/尾采样——采样会把定义、
+    # 公式推导、例题的条件-步骤-结论拦腰剪断，LLM 只剩半句话碎片，被迫出概念复述/挖空题。
+    focus_query = " ".join(term for term in (focus_terms or []) if term)
+    if focus_query:
+        def piece_score(indexed: tuple[int, str]) -> tuple[float, int]:
+            index, piece = indexed
+            header, _, body = piece.partition("\n")
+            score = float(score_text_for_query(title=header, text=body or piece, page_number=None, query=focus_query))
+            return (-score, index)
+
+        ordered = sorted(enumerate(pieces), key=piece_score)
+    else:
+        ordered = list(enumerate(pieces))
+    kept_indexes: list[int] = []
+    used = 0
+    for index, piece in ordered:
+        cost = len(piece) + (2 if kept_indexes else 0)
+        if used + cost > QUIZ_SOURCE_CONTEXT_HARD_LIMIT:
+            continue
+        kept_indexes.append(index)
+        used += cost
+    if not kept_indexes:
+        kept_indexes = [ordered[0][0]]
+    dropped = len(pieces) - len(kept_indexes)
+    if dropped:
+        logger.info("出题源超限，按相关性整片取舍：保留 %d/%d 片段（focus=%s）", len(kept_indexes), len(pieces), bool(focus_query))
+    kept_indexes.sort()
+    return "\n\n".join(pieces[index] for index in kept_indexes)
 
 
 def _truncate_source_piece(piece: str, limit: int) -> str:
@@ -208,15 +239,25 @@ def _course_source_text_for_quiz(
 ) -> str:
     pieces: list[str] = []
     seen: set[str] = set()
-    artifact_text, _artifact_count = quiz_artifact_source_text(db, course_id=course_id, chapter_ids=chapter_ids)
-    if artifact_text:
-        _append_long_source_pieces(pieces, seen, "结构化教学对象", artifact_text, window=QUIZ_SOURCE_PIECE_LIMIT)
+    # 知识点分节放最前：它是本次出题的考查蓝图，不能垫底被稀释在几万字页文本之后
+    _knowledge_text_for_quiz(points, pieces=pieces, seen=seen)
+
+    # 制品逐片注入（每个 ≤1200 字符，远低于窗口，绝不 join 后切窗）：例题模板的
+    # 条件→步骤→槽位→迁移提示保持完整，才能支撑变式题/错误诊断题。
+    artifact_context_list, _artifact_count, _misconceptions = quiz_artifact_contexts(
+        db, course_id=course_id, chapter_ids=chapter_ids
+    )
+    for artifact_context_text in artifact_context_list:
+        _append_source_piece(pieces, seen, f"结构化教学对象\n{artifact_context_text}", limit=1500)
 
     chunk_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
     if chapter_ids:
         chunk_statement = chunk_statement.where(KnowledgeChunk.chapter_id.in_(chapter_ids))
     chunks = list(db.scalars(chunk_statement.order_by(KnowledgeChunk.id)))
+    chunked_page_ids: set[int] = set()
     for chunk in chunks:
+        if chunk.lesson_page_id is not None:
+            chunked_page_ids.add(int(chunk.lesson_page_id))
         _append_source_piece(pieces, seen, f"{chunk.title}\n{chunk.content}", limit=QUIZ_SOURCE_PIECE_LIMIT)
 
     page_statement = (
@@ -234,6 +275,10 @@ def _course_source_text_for_quiz(
     for page, lesson, material in pages:
         if lesson.material_id is not None:
             material_ids_with_pages.add(lesson.material_id)
+        # 已被切成 KnowledgeChunk 的页不再从 LessonPage 路重复灌入：chunk 含页文本+讲稿，
+        # 信息是超集，双份灌入只会翻倍体积、提前触发硬限并抬高原句注意力权重。
+        if page.id in chunked_page_ids:
+            continue
         material_prefix = f"{material.title} - " if material is not None and material.title != lesson.title else ""
         title = page.page_title or f"{lesson.title} 第{page.page_number}页"
         _append_source_piece(
@@ -254,8 +299,9 @@ def _course_source_text_for_quiz(
             continue
         _append_long_source_pieces(pieces, seen, material.title, material.extracted_text, window=QUIZ_SOURCE_PIECE_LIMIT)
 
-    _knowledge_text_for_quiz(points, pieces=pieces, seen=seen)
-    return _join_source_pieces_for_quiz(pieces)
+    # 超限取舍以目标知识点为锚：教师选了知识点，就该优先保留与之相关的整片资料
+    focus_terms = [point.name for point in points if point.name][:12]
+    return _join_source_pieces_for_quiz(pieces, focus_terms=focus_terms)
 
 
 def _course_context_text_for_quiz(*, course, points: list[KnowledgePoint]) -> str:
@@ -271,7 +317,9 @@ def _course_context_text_for_quiz(*, course, points: list[KnowledgePoint]) -> st
 def _quiz_topic_for_generation(*, course_name: str, points: list[KnowledgePoint], source_text: str) -> str:
     names = [point.name for point in points if point.name and "练习" not in point.name and "测验" not in point.name]
     if names:
-        return "、".join(dict.fromkeys(names[:4]))
+        # 列全知识点（上限 12）而非只取前 4：配合提示词"不得偏离考查主题"，
+        # 旧的 4 个名字会让整章测验的题目扎堆在头部知识点、其余零覆盖。
+        return "、".join(dict.fromkeys(names[:12]))
     if source_text.startswith("课程名称："):
         return course_name
     keywords = [item for item in ai_service.extract_keywords(source_text, limit=6) if item not in {"课程内容", "章节练习", "薄弱点章节练习"}]
@@ -416,10 +464,15 @@ def _prioritize_weak_points(db: Session, *, points: list[KnowledgePoint], course
     return sorted(points, key=lambda point: (weak_rank.get(point.id, len(weak_rank)), point.id))
 
 
+_QUIZ_DIFFICULTY_CHOICES = {"mixed", "easy", "standard", "hard"}
+
+
 def _validate_quiz_generation_request(db: Session, *, user: User, payload: QuizGenerateRequest):
     course = _get_course_or_404(db, payload.course_id)
     if payload.quiz_type not in {item.value for item in QuizType}:
         raise bad_request("测验类型不合法")
+    if (payload.difficulty or "mixed") not in _QUIZ_DIFFICULTY_CHOICES:
+        raise bad_request("难度参数不合法，可选 mixed/easy/standard/hard")
     question_type_counts = _normalize_question_type_counts(payload.question_type_counts)
     if question_type_counts and sum(question_type_counts.values()) != payload.question_count:
         raise bad_request("题型数量合计必须等于总题量")
@@ -516,6 +569,50 @@ def enqueue_quiz_generation(db: Session, *, user: User, payload: QuizGenerateReq
     return task
 
 
+# 按题型/难度定分值：判断题不该与简答题同分。基础分 × 难度系数后按目标总分 100 等比归一，
+# 教师无需逐题手改分值，成绩权重也能反映题目难度与区分度。
+_QUIZ_TYPE_BASE_SCORE = {
+    QuestionType.JUDGE.value: 2.0,
+    QuestionType.SINGLE_CHOICE.value: 4.0,
+    QuestionType.MULTIPLE_CHOICE.value: 6.0,
+    QuestionType.BLANK.value: 6.0,
+    QuestionType.SHORT_ANSWER.value: 10.0,
+}
+_QUIZ_DIFFICULTY_SCORE_MULTIPLIER = {"easy": 1.0, "standard": 1.0, "hard": 1.5}
+_QUIZ_TARGET_TOTAL_SCORE = 100.0
+
+
+def _assign_quiz_scores(question_dicts: list[dict]) -> None:
+    if not question_dicts:
+        return
+    raw_scores = [
+        _QUIZ_TYPE_BASE_SCORE.get(str(item.get("question_type")), 5.0)
+        * _QUIZ_DIFFICULTY_SCORE_MULTIPLIER.get(str(item.get("difficulty")), 1.0)
+        for item in question_dicts
+    ]
+    total = sum(raw_scores) or 1.0
+    scaled = [round(score / total * _QUIZ_TARGET_TOTAL_SCORE, 1) for score in raw_scores]
+    # 归一后余差补到最后一题，保证总分恰为 100
+    drift = round(_QUIZ_TARGET_TOTAL_SCORE - sum(scaled), 1)
+    scaled[-1] = round(max(0.5, scaled[-1] + drift), 1)
+    for item, score in zip(question_dicts, scaled):
+        item["score"] = score
+
+
+def _match_knowledge_point(points: list[KnowledgePoint], name) -> KnowledgePoint | None:
+    """按名称把题目归属到真实知识点：精确 > 包含；匹配不到返回 None（诚实缺失优于随机错配）。"""
+    clean = str(name or "").strip()
+    if not clean or not points:
+        return None
+    for point in points:
+        if point.name and point.name == clean:
+            return point
+    for point in points:
+        if point.name and (point.name in clean or clean in point.name):
+            return point
+    return None
+
+
 def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Quiz:
     course, question_type_counts = _validate_quiz_generation_request(db, user=user, payload=payload)
     chapter_ids = _chapter_ids_for_quiz(payload)
@@ -532,7 +629,9 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         enabled=payload.prefer_weak_points,
     )
     source_text = _course_source_text_for_quiz(db, course_id=payload.course_id, chapter_ids=chapter_ids, points=points)
-    _artifact_text, pedagogy_artifact_count = quiz_artifact_source_text(db, course_id=payload.course_id, chapter_ids=chapter_ids)
+    _artifact_contexts, pedagogy_artifact_count, misconception_contexts = quiz_artifact_contexts(
+        db, course_id=payload.course_id, chapter_ids=chapter_ids
+    )
     if not source_text.strip():
         # #幻觉出题：真实出题源(课件/知识点正文)为空时，退化文本只剩课程元信息。若连课程简介都没有，
         # 就只剩"课程名称：X"，等于让 LLM 凭课程名凭空编题并冒充本课程测验；此时直接拒绝。
@@ -542,15 +641,31 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
             raise bad_request("该课程暂无可用于出题的课件内容，请先上传并解析课件或生成知识点后再出题")
         source_text = _course_context_text_for_quiz(course=course, points=points)
     quiz_topic = _quiz_topic_for_generation(course_name=course.name, points=points, source_text=source_text)
+    # 跨卷题干去重：把本课程近期已出题干注入提示词避开清单并预置进 seen_stems，
+    # 否则同章节反复出题几乎逐字重复，练习退化为背答案。
+    recent_stems = list(
+        db.scalars(
+            select(QuizQuestion.stem)
+            .join(Quiz, Quiz.id == QuizQuestion.quiz_id)
+            .where(Quiz.course_id == payload.course_id)
+            .order_by(QuizQuestion.id.desc())
+            .limit(60)
+        )
+    )
     question_kwargs = {
         "topic": quiz_topic,
         "source_text": source_text,
         "count": payload.question_count,
         "db": db,
+        "difficulty": payload.difficulty or "mixed",
+        "knowledge_point_names": [point.name for point in points if point.name],
+        "misconception_text": "\n\n".join(misconception_contexts) if misconception_contexts else None,
+        "avoid_stems": recent_stems,
     }
     if question_type_counts:
         question_kwargs["type_counts"] = question_type_counts
     question_dicts = ai_service.generate_quiz_questions(**question_kwargs)
+    _assign_quiz_scores(question_dicts)
     quiz = Quiz(
         course_id=payload.course_id,
         chapter_id=chapter_ids[0] if len(chapter_ids) == 1 else None,
@@ -577,7 +692,12 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
     db.refresh(quiz)
     total_score = 0.0
     for index, question_dict in enumerate(question_dicts):
-        point = points[index % len(points)] if points else None
+        # 知识点真实绑定：按模型返回的 knowledge_point 名称匹配，而非下标轮询——
+        # 轮询是随机标签，会污染错题本/薄弱点统计/自适应组卷整条下游链路。
+        # 仅当模型完全未返回该字段(旧模型/降级)时才退回轮询保底，给了名字但匹配不上则诚实置空。
+        point = _match_knowledge_point(points, question_dict.get("knowledge_point"))
+        if point is None and not question_dict.get("knowledge_point") and points:
+            point = points[index % len(points)]
         question = QuizQuestion(
             quiz_id=quiz.id,
             course_id=payload.course_id,
@@ -628,6 +748,96 @@ def publish_quiz(db: Session, *, quiz_id: int, user: User) -> Quiz:
 def _assert_quiz_teacher_access(db: Session, *, quiz: Quiz, user: User, require_active: bool = False) -> None:
     course = _get_course_or_404(db, quiz.course_id)
     _assert_course_owner(course, user, require_active=require_active)
+
+
+def knowledge_point_name_map(db: Session, questions) -> dict[int, str]:
+    """题目知识点 id→名称映射，供接口层给审核界面补知识点徽标。"""
+    point_ids = {question.knowledge_point_id for question in questions if question.knowledge_point_id}
+    if not point_ids:
+        return {}
+    rows = db.scalars(select(KnowledgePoint).where(KnowledgePoint.id.in_(point_ids)))
+    return {row.id: row.name for row in rows}
+
+
+def regenerate_quiz_question(db: Session, *, quiz_id: int, question_id: int, user: User) -> QuizQuestion:
+    """单题重新生成：教师审核发现坏题时"换一题"，避免整卷重摇把好题一起换掉。
+
+    用该题绑定的知识点(缺失则整卷知识点)重建出题上下文，题型/分值保持不变，
+    全卷现有题干进避开清单防重复。"""
+    quiz = db.get(Quiz, quiz_id)
+    if quiz is None:
+        raise not_found("测验不存在")
+    question = db.get(QuizQuestion, question_id)
+    if question is None or question.quiz_id != quiz_id:
+        raise not_found("题目不存在或不属于该测验")
+    if _is_student_private_quiz(quiz):
+        if quiz.creator_id != user.id:
+            raise forbidden("学生私有练习仅创建者可重新生成题目")
+    else:
+        _assert_quiz_teacher_access(db, quiz=quiz, user=user, require_active=True)
+    metadata = quiz.metadata_json if isinstance(quiz.metadata_json, dict) else {}
+    if not metadata.get("generated"):
+        raise bad_request("仅 AI 生成的测验支持单题重新生成")
+    course = _get_course_or_404(db, quiz.course_id)
+    raw_chapter_ids = metadata.get("chapter_ids") or []
+    chapter_ids = [int(value) for value in raw_chapter_ids if value] or (
+        [question.chapter_id] if question.chapter_id else []
+    )
+    # 知识点上下文：优先该题真实绑定的知识点；缺失时退回整卷知识点清单（容忍陈旧 id）
+    points: list[KnowledgePoint] = []
+    if question.knowledge_point_id:
+        primary = db.get(KnowledgePoint, question.knowledge_point_id)
+        if primary is not None and primary.course_id == quiz.course_id:
+            points = [primary]
+    if not points:
+        raw_point_ids = [int(value) for value in (metadata.get("knowledge_point_ids") or []) if value]
+        if raw_point_ids:
+            points = list(
+                db.scalars(
+                    select(KnowledgePoint).where(
+                        KnowledgePoint.course_id == quiz.course_id, KnowledgePoint.id.in_(raw_point_ids)
+                    )
+                )
+            )
+    source_text = _course_source_text_for_quiz(db, course_id=quiz.course_id, chapter_ids=chapter_ids, points=points)
+    if not source_text.strip():
+        raise bad_request("该课程暂无可用于出题的课件内容，无法重新生成题目")
+    topic = _quiz_topic_for_generation(course_name=course.name, points=points, source_text=source_text)
+    sibling_stems = list(
+        db.scalars(select(QuizQuestion.stem).where(QuizQuestion.quiz_id == quiz_id))
+    )
+    _artifact_contexts, _artifact_count, misconception_contexts = quiz_artifact_contexts(
+        db, course_id=quiz.course_id, chapter_ids=chapter_ids
+    )
+    generated = ai_service.generate_quiz_questions(
+        topic=topic,
+        source_text=source_text,
+        count=1,
+        type_counts={question.question_type: 1},
+        db=db,
+        difficulty=question.difficulty if question.difficulty in {"easy", "standard", "hard"} else "mixed",
+        knowledge_point_names=[point.name for point in points if point.name],
+        misconception_text="\n\n".join(misconception_contexts) if misconception_contexts else None,
+        avoid_stems=sibling_stems,
+    )
+    if not generated:
+        raise bad_request("重新生成失败，请稍后重试")
+    replacement = generated[0]
+    question.stem = replacement["stem"]
+    question.options = replacement["options"]
+    question.reference_answer = replacement["reference_answer"]
+    question.explanation = replacement["explanation"]
+    question.difficulty = replacement["difficulty"]
+    matched_point = _match_knowledge_point(points, replacement.get("knowledge_point"))
+    if matched_point is not None:
+        question.knowledge_point_id = matched_point.id
+        if matched_point.chapter_id:
+            question.chapter_id = matched_point.chapter_id
+    # 分值保持原题不变，避免破坏整卷总分
+    db.add(question)
+    db.commit()
+    db.refresh(question)
+    return question
 
 
 def _validate_reference_answer(question_type: str, reference_answer) -> None:
@@ -931,6 +1141,7 @@ def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGene
             question_type_counts=type_counts,
             prefer_weak_points=True,
             knowledge_point_ids=[point.id for point in points],
+            difficulty=payload.difficulty or "mixed",
         ),
     )
     metadata = quiz.metadata_json if isinstance(quiz.metadata_json, dict) else {}
@@ -1520,6 +1731,24 @@ def generate_wrong_book_practice(db: Session, *, course_id: int, user: User, wro
         targeted = next((row for row in wrong_rows if row[0].id == wrong_question_id), None)
         if targeted is not None:
             practice_rows = [targeted] + [row for row in practice_rows if row[0].id != targeted[0].id]
+    # 错题变式：先用 LLM 为每道错题生成"同知识点同题型、换数值/换情境"的变式题——
+    # 逐字克隆原题时学生记住"上次选 C"就能通过并把错题标记 resolved，测不出真实掌握。
+    # 变式生成失败的题回退克隆原题；LLM 调用放在建 quiz 之前，保持单事务可整体回滚。
+    selected_rows = practice_rows[:10]
+    originals = [
+        {
+            "question_type": question.question_type,
+            "stem": question.stem,
+            "options": question.options,
+            "reference_answer": question.reference_answer,
+            "explanation": question.explanation,
+        }
+        for _wrong, question in selected_rows
+    ]
+    try:
+        variants = ai_service.generate_variant_questions(originals=originals, db=db)
+    except Exception:
+        variants = [None] * len(selected_rows)
     quiz = Quiz(
         course_id=course_id,
         chapter_id=None,
@@ -1537,17 +1766,21 @@ def generate_wrong_book_practice(db: Session, *, course_id: int, user: User, wro
     db.refresh(quiz)
     total_score = 0.0
     source_question_map: dict[str, int] = {}
-    for wrong, question in practice_rows[:10]:
+    variant_count = 0
+    for row_index, (wrong, question) in enumerate(selected_rows):
+        variant = variants[row_index] if row_index < len(variants) else None
+        if variant is not None:
+            variant_count += 1
         clone = QuizQuestion(
             quiz_id=quiz.id,
             course_id=question.course_id,
             chapter_id=question.chapter_id,
             knowledge_point_id=question.knowledge_point_id,
             question_type=question.question_type,
-            stem=question.stem,
-            options=question.options,
-            reference_answer=question.reference_answer,
-            explanation=question.explanation,
+            stem=variant["stem"] if variant else question.stem,
+            options=variant["options"] if variant else question.options,
+            reference_answer=variant["reference_answer"] if variant else question.reference_answer,
+            explanation=(variant.get("explanation") or question.explanation) if variant else question.explanation,
             score=question.score,
             difficulty=question.difficulty,
         )
@@ -1556,7 +1789,12 @@ def generate_wrong_book_practice(db: Session, *, course_id: int, user: User, wro
         db.flush()
         source_question_map[str(clone.id)] = question.id
     quiz.total_score = total_score
-    quiz.metadata_json = {"generated": True, "source": "wrong_book", "source_question_map": source_question_map}
+    quiz.metadata_json = {
+        "generated": True,
+        "source": "wrong_book",
+        "source_question_map": source_question_map,
+        "variant_count": variant_count,
+    }
     db.add(quiz)
     db.commit()
     return quiz

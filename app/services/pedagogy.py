@@ -902,6 +902,73 @@ def page_activity_payload(db: Session, *, lesson_page_ids: Sequence[int]) -> dic
     return dict(grouped)
 
 
+# 出题制品配额：例题模板与易错点卡是支撑"变式题/错误诊断题"的最佳素材，必须优先保障名额，
+# 不能被页序靠前的 page_summary/concept_card 挤占（旧逻辑纯页序截断 80 条，只覆盖前几页）。
+_QUIZ_ARTIFACT_TYPE_QUOTAS: tuple[tuple[str, int], ...] = (
+    (ARTIFACT_PROBLEM_TEMPLATE, 30),
+    (ARTIFACT_MISCONCEPTION_CARD, 30),
+)
+
+
+def quiz_artifact_contexts(
+    db: Session,
+    *,
+    course_id: int,
+    chapter_ids: Sequence[int] | None = None,
+    limit: int = 80,
+) -> tuple[list[str], int, list[str]]:
+    """返回 (全部出题制品上下文列表, 制品数, 易错点卡上下文列表)。
+
+    - 列表形式返回：每个制品是完整独立片段，调用方不得再 join 后按窗口硬切（会把
+      例题模板的条件/步骤/槽位切到不同片段，教学价值被输送环节抵消）。
+    - degraded 过滤先于配额与截断执行。
+    - 易错点卡单独返回一份，供出题提示词做"干扰项取材于常见误解"的专项注入。
+    """
+    statement = select(PedagogyArtifact).where(
+        PedagogyArtifact.course_id == course_id,
+        PedagogyArtifact.artifact_type.in_(QUIZ_ARTIFACT_TYPES),
+    )
+    if chapter_ids:
+        statement = statement.where(or_(PedagogyArtifact.chapter_id.in_(list(chapter_ids)), PedagogyArtifact.chapter_id.is_(None)))
+    all_artifacts = list(
+        db.scalars(
+            statement.order_by(
+                PedagogyArtifact.artifact_type == ARTIFACT_CHAPTER_OUTLINE,
+                PedagogyArtifact.lesson_id,
+                PedagogyArtifact.lesson_page_id,
+                PedagogyArtifact.order_index,
+            )
+        )
+    )
+    # 出题源绝不能用模板降级内容冒充真实教学源：硬排除 degraded 制品（先过滤再配额）。
+    all_artifacts = [artifact for artifact in all_artifacts if not _is_degraded(artifact)]
+    picked: list[PedagogyArtifact] = []
+    picked_ids: set[int] = set()
+    for artifact_type, quota in _QUIZ_ARTIFACT_TYPE_QUOTAS:
+        taken = 0
+        for artifact in all_artifacts:
+            if artifact.id in picked_ids or artifact.artifact_type != artifact_type:
+                continue
+            picked.append(artifact)
+            picked_ids.add(artifact.id)
+            taken += 1
+            if taken >= quota:
+                break
+    for artifact in all_artifacts:
+        if len(picked) >= limit:
+            break
+        if artifact.id not in picked_ids:
+            picked.append(artifact)
+            picked_ids.add(artifact.id)
+    picked = picked[:limit]
+    contexts = artifact_contexts(picked, limit=1200)
+    misconception_contexts = artifact_contexts(
+        [artifact for artifact in picked if artifact.artifact_type == ARTIFACT_MISCONCEPTION_CARD],
+        limit=600,
+    )
+    return contexts, len(picked), misconception_contexts
+
+
 def quiz_artifact_source_text(
     db: Session,
     *,
@@ -909,23 +976,5 @@ def quiz_artifact_source_text(
     chapter_ids: Sequence[int] | None = None,
     limit: int = 80,
 ) -> tuple[str, int]:
-    statement = select(PedagogyArtifact).where(
-        PedagogyArtifact.course_id == course_id,
-        PedagogyArtifact.artifact_type.in_(QUIZ_ARTIFACT_TYPES),
-    )
-    if chapter_ids:
-        statement = statement.where(or_(PedagogyArtifact.chapter_id.in_(list(chapter_ids)), PedagogyArtifact.chapter_id.is_(None)))
-    artifacts = list(
-        db.scalars(
-            statement.order_by(
-                PedagogyArtifact.artifact_type == ARTIFACT_CHAPTER_OUTLINE,
-                PedagogyArtifact.lesson_id,
-                PedagogyArtifact.lesson_page_id,
-                PedagogyArtifact.order_index,
-            ).limit(limit)
-        )
-    )
-    # 出题源绝不能用模板降级内容冒充真实教学源：硬排除 degraded 制品。
-    artifacts = [artifact for artifact in artifacts if not _is_degraded(artifact)]
-    contexts = artifact_contexts(artifacts, limit=1200)
-    return "\n\n".join(contexts), len(artifacts)
+    contexts, count, _misconceptions = quiz_artifact_contexts(db, course_id=course_id, chapter_ids=chapter_ids, limit=limit)
+    return "\n\n".join(contexts), count

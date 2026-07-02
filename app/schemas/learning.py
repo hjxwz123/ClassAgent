@@ -26,6 +26,8 @@ class QuizGenerateRequest(BaseModel):
     question_count: int = Field(default=5, ge=1, le=20)
     question_type_counts: dict[str, int] | None = None
     prefer_weak_points: bool = False
+    # mixed=易:中:难≈3:5:2 梯度组卷；easy/standard/hard 为整卷单一难度
+    difficulty: str = "mixed"
 
 
 class WeakQuizGenerateRequest(BaseModel):
@@ -36,6 +38,7 @@ class WeakQuizGenerateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=255)
     question_count: int = Field(default=5, ge=1, le=20)
     question_type_counts: dict[str, int] | None = None
+    difficulty: str = "mixed"
 
 
 class QuizQuestionPayload(ORMModel):
@@ -44,6 +47,8 @@ class QuizQuestionPayload(ORMModel):
     course_id: int
     chapter_id: int | None
     knowledge_point_id: int | None
+    # 由接口层按 knowledge_point_id 补名称，供教师审核界面展示知识点徽标
+    knowledge_point_name: str | None = None
     question_type: str
     stem: str
     options: list | None
