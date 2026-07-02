@@ -114,7 +114,8 @@ def test_rerank_retrieval_pool_keeps_best_when_all_below_threshold(monkeypatch):
     from app.services import qa as qa_module
 
     pool = [_pair(name) for name in ("a", "b", "c", "d", "e")]
-    # 全部低于阈值但最佳项 0.2 ≥ keep-floor(0.06) → 保留最佳一条，避免误判"资料外"
+    # 全部低于阈值但最佳项 0.2 ≥ keep-floor(0.10) → 保留最佳一条并加低置信标注，
+    # 告知模型可如实说"资料未涉及"，避免基于弱资料强答
     monkeypatch.setattr(
         qa_module.ai_service,
         "rerank_documents",
@@ -122,7 +123,11 @@ def test_rerank_retrieval_pool_keeps_best_when_all_below_threshold(monkeypatch):
     )
     monkeypatch.setattr(qa_module, "runtime_setting_float", lambda db, key, default, **kwargs: 0.25)
     result = qa_module._rerank_retrieval_pool(object(), query="q", pool=pool)
-    assert [text for text, _ in result] == ["c"]
+    assert len(result) == 1
+    kept_text, kept_source = result[0]
+    assert kept_text.endswith("c")
+    assert "相关性较低" in kept_text
+    assert kept_source == pool[2][1]
 
 
 def test_rerank_retrieval_pool_returns_empty_when_best_near_zero(monkeypatch):
