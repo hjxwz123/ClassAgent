@@ -13,11 +13,11 @@ from pathlib import Path
 
 import httpx
 import redis
-from sqlalchemy import delete, distinct, func, or_, select, text, update
+from sqlalchemy import case, delete, distinct, func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from app.core.config import BACKUP_DIR, VECTOR_DIR, get_settings
-from app.core.enums import BackupStatus, ConfigScope, CourseStatus, LessonStatus, UserRole, UserStatus
+from app.core.enums import BackupStatus, ConfigScope, CourseStatus, LessonStatus, QAFeedback, UserRole, UserStatus
 from app.core.errors import AppError, bad_request, forbidden, not_found
 from app.core.security import decrypt_secret, encrypt_secret, hash_password, mask_secret
 from app.db.models import (
@@ -35,6 +35,7 @@ from app.db.models import (
     LoginLog,
     ModelConfig,
     OperationLog,
+    QARecord,
     ServiceConfig,
     SystemErrorLog,
     SystemSetting,
@@ -1446,6 +1447,103 @@ def get_admin_dashboard(db: Session, activity_days: int = 30) -> dict:
         "recent_users": recent_users,
         "pending_tasks": pending_tasks,
     }
+
+
+def _truncate_text(value: str | None, limit: int) -> str:
+    """明细摘要截断：超过 limit 字符时截断并追加省略号，避免长答案撑爆响应。"""
+    text_value = (value or "").strip()
+    if len(text_value) <= limit:
+        return text_value
+    return text_value[:limit] + "…"
+
+
+def qa_quality_overview(db: Session, *, days: int = 30, course_id: int | None = None) -> dict:
+    """QA 质量/反馈聚合：总体指标、按课程分组统计与最近负反馈明细（纯读查询，聚合走 SQL）。"""
+    days = min(max(int(days), 1), 365)
+    since = datetime.now(UTC) - timedelta(days=days)
+
+    filters = [QARecord.created_at >= since]
+    if course_id is not None:
+        filters.append(QARecord.course_id == course_id)
+
+    # 用 sum(case) 在数据库侧一次算出各类计数，避免把全表记录拉到内存
+    negative_case = case((QARecord.feedback == QAFeedback.NEGATIVE.value, 1), else_=0)
+    positive_case = case((QARecord.feedback == QAFeedback.POSITIVE.value, 1), else_=0)
+    out_of_scope_case = case((QARecord.is_out_of_scope.is_(True), 1), else_=0)
+
+    def _rate(part: int, whole: int) -> float:
+        return round(part / whole, 4) if whole else 0.0
+
+    total, negative, positive, out_of_scope = db.execute(
+        select(
+            func.count(QARecord.id),
+            func.coalesce(func.sum(negative_case), 0),
+            func.coalesce(func.sum(positive_case), 0),
+            func.coalesce(func.sum(out_of_scope_case), 0),
+        ).where(*filters)
+    ).one()
+
+    overview = {
+        "days": days,
+        "total": int(total),
+        "negative": int(negative),
+        "negative_rate": _rate(int(negative), int(total)),
+        "positive": int(positive),
+        "positive_rate": _rate(int(positive), int(total)),
+        "out_of_scope": int(out_of_scope),
+        "out_of_scope_rate": _rate(int(out_of_scope), int(total)),
+    }
+
+    # 按课程分组统计（负反馈率降序）；组数受课程数上限约束，排序放内存即可
+    course_rows = db.execute(
+        select(
+            QARecord.course_id,
+            Course.name,
+            func.count(QARecord.id),
+            func.coalesce(func.sum(negative_case), 0),
+            func.coalesce(func.sum(out_of_scope_case), 0),
+        )
+        .join(Course, Course.id == QARecord.course_id)
+        .where(*filters)
+        .group_by(QARecord.course_id, Course.name)
+    ).all()
+    courses = [
+        {
+            "course_id": int(row_course_id),
+            "course_name": course_name,
+            "total": int(row_total),
+            "negative": int(row_negative),
+            "negative_rate": _rate(int(row_negative), int(row_total)),
+            "out_of_scope": int(row_out_of_scope),
+            "out_of_scope_rate": _rate(int(row_out_of_scope), int(row_total)),
+        }
+        for row_course_id, course_name, row_total, row_negative, row_out_of_scope in course_rows
+    ]
+    courses.sort(key=lambda item: (item["negative_rate"], item["total"]), reverse=True)
+
+    # 最近负反馈明细（最多 20 条）：问题/答案做截断，附带课程名与反馈备注
+    recent_rows = db.execute(
+        select(QARecord, Course.name)
+        .join(Course, Course.id == QARecord.course_id)
+        .where(*filters, QARecord.feedback == QAFeedback.NEGATIVE.value)
+        .order_by(QARecord.created_at.desc())
+        .limit(20)
+    ).all()
+    recent_negative = [
+        {
+            "id": record.id,
+            "course_id": record.course_id,
+            "course_name": course_name,
+            "question": _truncate_text(record.question, 120),
+            "answer_excerpt": _truncate_text(record.answer, 160),
+            "feedback_comment": _truncate_text(record.feedback_comment, 160) or None,
+            "is_out_of_scope": bool(record.is_out_of_scope),
+            "created_at": record.created_at.isoformat() if record.created_at else None,
+        }
+        for record, course_name in recent_rows
+    ]
+
+    return {"overview": overview, "courses": courses, "recent_negative": recent_negative}
 
 
 def list_login_logs(
