@@ -34,7 +34,7 @@ PNG_BYTES = (
 )
 
 
-def fake_quiz_questions(*, topic, source_text, count, db=None):
+def fake_quiz_questions(*, topic, source_text, count, db=None, **kwargs):
     items = [
         {
             "question_type": "single_choice",
@@ -67,7 +67,7 @@ def fake_quiz_questions(*, topic, source_text, count, db=None):
     return items[:count]
 
 
-def fake_quiz_questions_with_types(*, topic, source_text, count, type_counts=None, db=None):
+def fake_quiz_questions_with_types(*, topic, source_text, count, type_counts=None, db=None, **kwargs):
     typed_items = {
         "single_choice": {
             "question_type": "single_choice",
@@ -246,7 +246,7 @@ def test_quiz_generation_calls_ai_with_course_context_without_material(client, m
     course = course_resp.json()["data"]
     captured = {}
 
-    def fake_ai_quiz_questions(*, topic, source_text, count, db=None):
+    def fake_ai_quiz_questions(*, topic, source_text, count, db=None, **kwargs):
         captured["topic"] = topic
         captured["source_text"] = source_text
         return fake_quiz_questions(topic=topic, source_text=source_text, count=count, db=db)
@@ -358,9 +358,18 @@ def test_quiz_source_context_covers_many_pages_without_oversized_prompt(client):
         source_text = _course_source_text_for_quiz(db, course_id=course["id"], chapter_ids=[chapter["id"]], points=[])
 
     assert len(source_text) <= QUIZ_SOURCE_CONTEXT_HARD_LIMIT
-    for index in range(1, page_count + 1):
-        assert f"属性文法页首覆盖标记{index:03d}" in source_text
-        assert f"属性文法页尾覆盖标记{index:03d}" in source_text
+    # 新语义：超限时按相关性整片取舍——保留的页必须【完整】(页首/页尾标记成对出现，
+    # 不再被头/中/尾采样拦腰打碎)，未入选的页整片舍弃。这里断言：入选页均完整、
+    # 且在 80k 预算内覆盖了足量页面。
+    kept_pages = [
+        index
+        for index in range(1, page_count + 1)
+        if f"属性文法页首覆盖标记{index:03d}" in source_text
+    ]
+    assert len(kept_pages) >= 40, f"仅保留 {len(kept_pages)} 页，预算内应能容纳更多完整页"
+    for index in kept_pages:
+        assert f"属性文法页尾覆盖标记{index:03d}" in source_text, f"第{index}页被截断，整片取舍语义被破坏"
+    assert " ... " not in source_text, "出现头/中/尾采样分隔符，片段被打碎"
 
 
 def test_learning_core_flow(client, monkeypatch):

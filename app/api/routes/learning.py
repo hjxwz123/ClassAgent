@@ -42,6 +42,7 @@ from app.services.learning import (
     get_student_quiz_attempt,
     get_teacher_quiz_attempts,
     get_weak_points,
+    knowledge_point_name_map,
     list_student_quiz_attempts,
     list_teacher_weak_quizzes,
     list_quizzes,
@@ -49,6 +50,7 @@ from app.services.learning import (
     list_wrong_questions,
     publish_quiz,
     quiz_attempt_summary,
+    regenerate_quiz_question,
     submit_quiz,
     update_quiz_content,
 )
@@ -226,9 +228,11 @@ def get_quiz_detail_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     quiz, questions = get_quiz_detail(db, quiz_id=quiz_id, user=user)
+    point_names = knowledge_point_name_map(db, questions)
     serialized_questions = []
     for item in questions:
         payload = QuizQuestionPayload.model_validate(item).model_dump(mode="json")
+        payload["knowledge_point_name"] = point_names.get(item.knowledge_point_id)
         if user.role == "student":
             # #3：作答前对学生统一剥离正确答案与解析，避免提前泄露答案。
             payload["reference_answer"] = None
@@ -239,6 +243,21 @@ def get_quiz_detail_endpoint(
         questions=[QuizQuestionPayload(**item) for item in serialized_questions],
     )
     return success_response(data=payload.model_dump(mode="json"), request_id=request.state.request_id)
+
+
+@router.post("/quizzes/{quiz_id}/questions/{question_id}/regenerate")
+def regenerate_quiz_question_endpoint(
+    quiz_id: int,
+    question_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    question = regenerate_quiz_question(db, quiz_id=quiz_id, question_id=question_id, user=user)
+    point_names = knowledge_point_name_map(db, [question])
+    payload = QuizQuestionPayload.model_validate(question).model_dump(mode="json")
+    payload["knowledge_point_name"] = point_names.get(question.knowledge_point_id)
+    return success_response(data=payload, request_id=request.state.request_id)
 
 
 @router.get("/quizzes/{quiz_id}/attempts")
