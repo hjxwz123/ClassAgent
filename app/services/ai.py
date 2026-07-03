@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import re
+import time
 from dataclasses import dataclass
 from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime, timedelta
@@ -20,6 +21,10 @@ from app.services.runtime_settings import runtime_setting_int
 
 
 logger = logging.getLogger(__name__)
+
+
+class _RetryableStreamStart(Exception):
+    """流式建连阶段遇到可重试状态(429/5xx)——在首个 delta 产出前可安全重连。"""
 
 
 def _clean_text(value: str) -> str:
@@ -985,6 +990,52 @@ class AIService:
     def _fallback_allowed(self) -> bool:
         return False
 
+    # —— 模型调用瞬时错误重试 ——
+    # 连接重置/网络抖动/连接超时/429/5xx 都属"可恢复"错误：生产环境的模型网关偶发这些是常态，
+    # 一次抖动就把已生成内容丢弃、甩出"服务暂时不可用"是很差的体验。这里对可恢复错误做指数退避重试。
+    # 注意：读超时(ReadTimeout)不在重试之列——那是模型生成本身太慢，重试只会把长等待翻倍。
+    _MODEL_RETRY_ATTEMPTS = 3
+    _MODEL_RETRY_BACKOFF_SECONDS = (0.6, 1.5, 3.0)
+    _RETRYABLE_EXCEPTIONS = (
+        httpx.ConnectError,
+        httpx.ConnectTimeout,
+        httpx.PoolTimeout,
+        httpx.RemoteProtocolError,
+        httpx.ReadError,
+        httpx.WriteError,
+    )
+    _RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+
+    def _retry_backoff_seconds(self, attempt: int) -> float:
+        idx = min(attempt, len(self._MODEL_RETRY_BACKOFF_SECONDS) - 1)
+        return self._MODEL_RETRY_BACKOFF_SECONDS[idx]
+
+    def _request_chat_with_retry(self, make_request: Any) -> httpx.Response:
+        """执行一次非流式模型请求，遇到可恢复错误(连接抖动/429/5xx)按退避重试。
+
+        make_request() 每次调用都应新建 client 发一次请求并返回 httpx.Response。
+        返回最终响应（可能仍是 >=400 的不可重试状态，交由调用方按原逻辑处理）。
+        """
+        last_response: httpx.Response | None = None
+        for attempt in range(self._MODEL_RETRY_ATTEMPTS):
+            try:
+                response = make_request()
+            except self._RETRYABLE_EXCEPTIONS as exc:
+                if attempt < self._MODEL_RETRY_ATTEMPTS - 1:
+                    logger.warning("模型请求瞬时错误，%.1fs 后第 %s 次重试：%s", self._retry_backoff_seconds(attempt), attempt + 1, exc)
+                    time.sleep(self._retry_backoff_seconds(attempt))
+                    continue
+                raise
+            if response.status_code in self._RETRYABLE_STATUS and attempt < self._MODEL_RETRY_ATTEMPTS - 1:
+                logger.warning("模型返回可重试状态 %s，%.1fs 后第 %s 次重试", response.status_code, self._retry_backoff_seconds(attempt), attempt + 1)
+                response.close()
+                last_response = response
+                time.sleep(self._retry_backoff_seconds(attempt))
+                continue
+            return response
+        assert last_response is not None
+        return last_response
+
     def _chat_endpoint(self, endpoint: str) -> str:
         endpoint = endpoint.rstrip("/")
         if endpoint.endswith("/chat/completions"):
@@ -1107,12 +1158,18 @@ class AIService:
         try:
             request_timeout = timeout_seconds or self.settings.external_service_timeout_seconds
             timeout = httpx.Timeout(request_timeout, connect=min(15.0, request_timeout), read=request_timeout, write=request_timeout)
-            with httpx.Client(timeout=timeout) as client:
-                response = client.post(self._chat_endpoint(config.endpoint), headers=headers, json=payload)
-                if response.status_code >= 400 and json_mode and "response_format" in payload:
-                    retry_payload = dict(payload)
-                    retry_payload.pop("response_format", None)
-                    response = client.post(self._chat_endpoint(config.endpoint), headers=headers, json=retry_payload)
+            endpoint = self._chat_endpoint(config.endpoint)
+
+            def _do_request() -> httpx.Response:
+                with httpx.Client(timeout=timeout) as client:
+                    resp = client.post(endpoint, headers=headers, json=payload)
+                    if resp.status_code >= 400 and json_mode and "response_format" in payload:
+                        retry_payload = dict(payload)
+                        retry_payload.pop("response_format", None)
+                        resp = client.post(endpoint, headers=headers, json=retry_payload)
+                    return resp
+
+            response = self._request_chat_with_retry(_do_request)
             if response.status_code >= 400:
                 raise bad_request(f"模型调用失败: HTTP {response.status_code} {response.text[:300]}")
             body = response.json()
@@ -1187,15 +1244,20 @@ class AIService:
         if json_mode and config.extra_config.get("enable_response_format", True):
             payload["response_format"] = {"type": "json_object"}
 
-        try:
-            # 流式生成用更长的读超时：思考型模型首 token 前可能停顿数十秒，沿用 30s 通用超时会
-            # 在首 token 前就 ReadTimeout，导致回退非流式并拖长响应。连接超时仍保持短。
-            gen_timeout = self._generation_timeout(db)
-            stream_timeout = httpx.Timeout(gen_timeout, connect=min(15.0, gen_timeout), read=gen_timeout, write=min(30.0, gen_timeout))
+        # 流式生成用更长的读超时：思考型模型首 token 前可能停顿数十秒，沿用 30s 通用超时会
+        # 在首 token 前就 ReadTimeout，导致回退非流式并拖长响应。连接超时仍保持短。
+        gen_timeout = self._generation_timeout(db)
+        stream_timeout = httpx.Timeout(gen_timeout, connect=min(15.0, gen_timeout), read=gen_timeout, write=min(30.0, gen_timeout))
+        endpoint = self._chat_endpoint(config.endpoint)
+
+        def _attempt() -> Iterator[ChatDelta]:
             with httpx.Client(timeout=stream_timeout) as client:
-                with client.stream("POST", self._chat_endpoint(config.endpoint), headers=headers, json=payload) as response:
+                with client.stream("POST", endpoint, headers=headers, json=payload) as response:
                     if response.status_code >= 400:
                         error_text = response.read().decode("utf-8", errors="ignore")
+                        # 429/5xx 属可恢复：尚未产出任何 token，交由外层退避重连。
+                        if response.status_code in self._RETRYABLE_STATUS:
+                            raise _RetryableStreamStart(f"HTTP {response.status_code} {error_text[:200]}")
                         raise bad_request(f"模型调用失败: HTTP {response.status_code} {error_text[:300]}")
                     content_type = response.headers.get("content-type", "")
                     if "text/event-stream" not in content_type:
@@ -1242,10 +1304,36 @@ class AIService:
                             content = self._text_from_content_part(output.get("text") or output.get("content"))
                             if content:
                                 yield ChatDelta("content", content)
-        except Exception:
-            if self._fallback_allowed():
+
+        # 首个 delta 产出「前」遇到可恢复错误(连接抖动/429/5xx)则退避重连，避免一次瞬断就判死；
+        # 一旦已向调用方产出过内容，就不能重连(会重复输出)，交由上层的非流式兜底(同样带重试)接管。
+        emitted = False
+        for attempt in range(self._MODEL_RETRY_ATTEMPTS):
+            try:
+                for delta in _attempt():
+                    emitted = True
+                    yield delta
                 return
-            raise
+            except _RetryableStreamStart as exc:
+                if not emitted and attempt < self._MODEL_RETRY_ATTEMPTS - 1:
+                    logger.warning("流式模型可重试(%s)，%.1fs 后第 %s 次重连", exc, self._retry_backoff_seconds(attempt), attempt + 1)
+                    time.sleep(self._retry_backoff_seconds(attempt))
+                    continue
+                if self._fallback_allowed():
+                    return
+                raise bad_request(f"模型调用失败: {exc}")
+            except self._RETRYABLE_EXCEPTIONS as exc:
+                if not emitted and attempt < self._MODEL_RETRY_ATTEMPTS - 1:
+                    logger.warning("流式模型瞬时错误(%s)，%.1fs 后第 %s 次重连", exc, self._retry_backoff_seconds(attempt), attempt + 1)
+                    time.sleep(self._retry_backoff_seconds(attempt))
+                    continue
+                if self._fallback_allowed():
+                    return
+                raise
+            except Exception:
+                if self._fallback_allowed():
+                    return
+                raise
 
     def _local_embedding(self, text: str, *, dimension: int) -> list[float]:
         features = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]", text.lower())
