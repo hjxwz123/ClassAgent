@@ -41,9 +41,8 @@ _THINK_END_TAGS = ("</think>", "</thinking>")
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 _QA_IMAGE_LIMIT_BYTES = 10 * 1024 * 1024
 _STREAM_CHUNK_SIZE = 36
-# 仅用于"整段文本一次性下发"(通用回答/兜底/后缀)的渐进式分块，真实流式 token 路径单 token 单块不触发。
-# 取很小的值即可，过大会让前端逐块等待、表现为"逐字卡顿"。
-_STREAM_CHUNK_DELAY_SECONDS = 0.004
+# 零延迟：不再对分块下发做任何人为 sleep。后端产出多快就下发多快，前端逐字即时渲染。
+_STREAM_CHUNK_DELAY_SECONDS = 0.0
 _QA_FALLBACK_PAGE_SCAN_LIMIT = 240
 _QA_VECTOR_CONTEXT_LIMIT = 8
 _QA_DETAIL_VECTOR_CONTEXT_LIMIT = 10
