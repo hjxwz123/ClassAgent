@@ -248,3 +248,209 @@ def test_rerank_documents_orders_and_limits(monkeypatch):
 def test_rerank_documents_returns_none_without_config(monkeypatch):
     monkeypatch.setattr("app.services.ai.get_default_model_config", lambda db, purpose, fallback_to_general=True: None)
     assert ai_service.rerank_documents(query="极限", documents=["a", "b", "c"], db=object()) is None
+
+
+# —— 模型调用瞬时错误重试 ——
+
+import httpx
+import pytest
+
+
+def _qa_config():
+    return RuntimeModelConfig(
+        id=1,
+        provider="qwen",
+        model_name="qwen-plus",
+        purpose="qa",
+        endpoint="https://example.com/v1",
+        api_key="k",
+        extra_config={},
+    )
+
+
+class _JsonResponse:
+    def __init__(self, status_code=200, payload=None, text=""):
+        self.status_code = status_code
+        self._payload = payload or {"choices": [{"message": {"content": "已恢复"}}]}
+        self.text = text
+
+    def json(self):
+        return self._payload
+
+    def close(self):
+        pass
+
+
+def test_call_chat_retries_transient_connect_error(monkeypatch):
+    """非流式：连接抖动前两次失败，第三次成功——应重试并返回正常内容。"""
+    monkeypatch.setattr("app.services.ai.time.sleep", lambda _s: None)
+    monkeypatch.setattr("app.services.ai.get_default_model_config", lambda db, purpose: _qa_config())
+    calls = {"n": 0}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise httpx.ConnectError("connection reset")
+            return _JsonResponse()
+
+    monkeypatch.setattr("app.services.ai.httpx.Client", FakeClient)
+    result = ai_service._call_chat_with_meta(None, purpose="qa", system_prompt="s", user_prompt="u")
+    assert result is not None and result.content == "已恢复"
+    assert calls["n"] == 3
+
+
+def test_call_chat_retries_on_503_status(monkeypatch):
+    """非流式：先返回 503(可重试状态)，重试后 200 成功。"""
+    monkeypatch.setattr("app.services.ai.time.sleep", lambda _s: None)
+    monkeypatch.setattr("app.services.ai.get_default_model_config", lambda db, purpose: _qa_config())
+    calls = {"n": 0}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _JsonResponse(status_code=503, text="overloaded")
+            return _JsonResponse()
+
+    monkeypatch.setattr("app.services.ai.httpx.Client", FakeClient)
+    result = ai_service._call_chat_with_meta(None, purpose="qa", system_prompt="s", user_prompt="u")
+    assert result is not None and result.content == "已恢复"
+    assert calls["n"] == 2
+
+
+def test_call_chat_gives_up_after_max_retries(monkeypatch):
+    """非流式：持续连接失败，重试耗尽后抛出(fallback 关闭时)。"""
+    monkeypatch.setattr("app.services.ai.time.sleep", lambda _s: None)
+    monkeypatch.setattr("app.services.ai.get_default_model_config", lambda db, purpose: _qa_config())
+    calls = {"n": 0}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            calls["n"] += 1
+            raise httpx.ConnectError("down")
+
+    monkeypatch.setattr("app.services.ai.httpx.Client", FakeClient)
+    with pytest.raises(Exception):
+        ai_service._call_chat_with_meta(None, purpose="qa", system_prompt="s", user_prompt="u")
+    assert calls["n"] == ai_service._MODEL_RETRY_ATTEMPTS
+
+
+class _FakeStream:
+    def __init__(self, lines, status_code=200, content_type="text/event-stream"):
+        self._lines = lines
+        self.status_code = status_code
+        self.headers = {"content-type": content_type}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return b"error body"
+
+    def iter_lines(self):
+        yield from self._lines
+
+
+def _sse_lines(*contents):
+    out = []
+    for c in contents:
+        out.append('data: {"choices":[{"delta":{"content":"%s"}}]}' % c)
+    out.append("data: [DONE]")
+    return out
+
+
+def test_stream_retries_before_first_delta(monkeypatch):
+    """流式：首个 delta 产出前连接抖动，应重连并最终流出内容。"""
+    monkeypatch.setattr("app.services.ai.time.sleep", lambda _s: None)
+    monkeypatch.setattr("app.services.ai.get_default_model_config", lambda db, purpose: _qa_config())
+    monkeypatch.setattr(ai_service, "_generation_timeout", lambda db: 60.0)
+    calls = {"n": 0}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def stream(self, method, url, headers=None, json=None):
+            calls["n"] += 1
+            if calls["n"] < 2:
+                raise httpx.ConnectError("reset before first token")
+            return _FakeStream(_sse_lines("你好", "世界"))
+
+    monkeypatch.setattr("app.services.ai.httpx.Client", FakeClient)
+    deltas = list(ai_service._stream_chat_with_meta(None, purpose="qa", system_prompt="s", user_prompt="u"))
+    text = "".join(d.text for d in deltas if d.kind == "content")
+    assert text == "你好世界"
+    assert calls["n"] == 2
+
+
+def test_stream_does_not_retry_after_emitting(monkeypatch):
+    """流式：已产出内容后再断连，不能重连(否则重复输出)，应向上抛出。"""
+    monkeypatch.setattr("app.services.ai.time.sleep", lambda _s: None)
+    monkeypatch.setattr("app.services.ai.get_default_model_config", lambda db, purpose: _qa_config())
+    monkeypatch.setattr(ai_service, "_generation_timeout", lambda db: 60.0)
+    calls = {"n": 0}
+
+    class _BreakingStream(_FakeStream):
+        def iter_lines(self):
+            yield 'data: {"choices":[{"delta":{"content":"半句"}}]}'
+            raise httpx.RemoteProtocolError("peer closed mid-stream")
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def stream(self, method, url, headers=None, json=None):
+            calls["n"] += 1
+            return _BreakingStream([])
+
+    monkeypatch.setattr("app.services.ai.httpx.Client", FakeClient)
+    got = []
+    with pytest.raises(Exception):
+        for d in ai_service._stream_chat_with_meta(None, purpose="qa", system_prompt="s", user_prompt="u"):
+            got.append(d)
+    # 只连了一次(未重连)，且把已产出的"半句"透传给了调用方
+    assert calls["n"] == 1
+    assert "".join(d.text for d in got if d.kind == "content") == "半句"
