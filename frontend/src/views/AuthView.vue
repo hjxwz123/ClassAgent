@@ -1,28 +1,36 @@
 <template>
   <PageLoader v-if="loginRedirecting" />
-  <main v-else class="auth" :class="[authThemeClass, { 'auth-link-invalid': linkValidationStatus === 'invalid', 'entered-from-home': enteredFromHome }]">
-    <div class="auth-toolbar">
-      <RouterLink to="/" class="auth-home-link"><ArrowLeft :size="17" />返回首页</RouterLink>
-      <ThemeToggle class="auth-theme-toggle" />
+  <main v-else class="auth" :class="{ 'auth-link-invalid': linkValidationStatus === 'invalid' }">
+    <div class="auth-bg">
+      <AuroraBackground :color-stops="['#00E5FF', '#FF5722', '#FFD54F']" :amplitude="1" :blend="0.55" :speed="0.75" />
     </div>
-    <div class="auth-accent" aria-hidden="true"></div>
-    <div class="auth-formulas" aria-hidden="true">
-      <span class="auth-formula formula-force">F = m · a</span>
-      <span class="auth-formula formula-integral">∫ f(x) dx = F(x) + C</span>
-      <span class="auth-formula formula-limit">lim(x→0) sin x / x = 1</span>
-      <span class="auth-formula formula-energy">E = hν = mc²</span>
-      <span class="auth-formula formula-gas">pV = nRT</span>
+    <div class="auth-bg auth-bg-soft">
+      <ParticleField :count="90" :colors="['#00E5FF', '#FFD54F', '#FF5722']" :speed="0.3" :parallax="0.05" />
     </div>
-    <section class="auth-board">
-      <div class="auth-copy">
-        <h1>智学黑板</h1>
-        <p>欢迎来到你的学习黑板。加入课程、继续课时、向 AI 提问，把每天的学习进度稳稳记录下来。</p>
-        <div class="chalk-line"><i></i><span>ClassAgent Learning Console</span></div>
-      </div>
+    <div class="auth-veil" aria-hidden="true"></div>
+    <ClickSpark spark-color="#00E5FF" :spark-count="10" :spark-radius="24" />
 
-      <section class="auth-card">
-        <div class="auth-card-edge" aria-hidden="true"></div>
-        <div class="auth-card-body">
+    <RouterLink to="/" class="auth-back"><ArrowLeft :size="17" />返回首页</RouterLink>
+
+    <div class="auth-stage">
+      <aside class="auth-brand-side">
+        <div class="auth-brand-logo"><BookOpen :size="22" /><span>智学黑板</span></div>
+        <div class="auth-brand-eyebrow"><DecryptedText text="WELCOME BACK" trigger="view" :speed="46" /></div>
+        <h1 class="auth-brand-title"><GradientText :animation-speed="7">欢迎回到你的黑板</GradientText></h1>
+        <p class="auth-brand-rotate">
+          继续你的
+          <RotatingText class="auth-rotate-word" :texts="['课时', '错题本', '伴学问答', '复习卷']" :interval="2000" :duration="500" />
+        </p>
+        <p class="auth-brand-sub">
+          加入课程、继续课时、向 AI 提问，把每天的学习进度稳稳记录下来。
+        </p>
+        <div class="auth-brand-foot"><ShinyText text="ClassAgent Learning Console" :speed="5" /></div>
+      </aside>
+
+      <div class="auth-card-wrap">
+        <div class="auth-card-glow" aria-hidden="true"></div>
+        <section class="auth-card">
+          <div class="auth-card-body">
           <template v-if="linkValidationStatus === 'invalid'">
             <div class="link-result link-result--error">
               <AlertCircle :size="22" />
@@ -86,9 +94,10 @@
               </Transition>
             </template>
           </template>
-        </div>
-      </section>
-    </section>
+          </div>
+        </section>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -105,6 +114,15 @@ import PasswordField from "../components/PasswordField.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import { readStoredTheme, subscribeAppTheme, type AppTheme } from "../theme";
 import type { User } from "../types";
+// React Bits 特效（已移植为 Vue）
+import AuroraBackground from "../components/reactbits/AuroraBackground.vue";
+import ParticleField from "../components/reactbits/ParticleField.vue";
+import ClickSpark from "../components/reactbits/ClickSpark.vue";
+import GradientText from "../components/reactbits/GradientText.vue";
+import SplitText from "../components/reactbits/SplitText.vue";
+import ShinyText from "../components/reactbits/ShinyText.vue";
+import RotatingText from "../components/reactbits/RotatingText.vue";
+import DecryptedText from "../components/reactbits/DecryptedText.vue";
 
 const emit = defineEmits<{ authed: [user: User]; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
 
@@ -331,1125 +349,359 @@ async function resetPassword() {
 </script>
 
 <style scoped>
-@font-face {
-  font-family: "ClassAgent Chalk";
-  src: url("../assets/fonts/home/classagent-chalk.woff") format("woff");
-  font-style: normal;
-  font-weight: 400;
-  font-display: block;
-}
-
-@font-face {
-  font-family: "ClassAgent Serif";
-  src: url("../assets/fonts/home/classagent-serif.woff") format("woff");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: block;
-}
-
-@font-face {
-  font-family: "ClassAgent Sans";
-  src: url("../assets/fonts/home/classagent-sans.woff") format("woff");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: block;
-}
-
-@font-face {
-  font-family: "ClassAgent Mono";
-  src: url("../assets/fonts/home/classagent-mono.woff") format("woff");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: block;
-}
-
 .auth {
-  --ca-font-chalk: "ClassAgent Chalk", "ClassAgent Sans", sans-serif;
-  --ca-font-serif: "ClassAgent Serif", serif;
-  --ca-font-sans: "ClassAgent Sans", -apple-system, BlinkMacSystemFont, "PingFang SC",
-    "Microsoft YaHei", "Helvetica Neue", sans-serif;
-  --ca-font-mono: "ClassAgent Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo,
-    monospace;
-  --shared-title-left: max(24px, calc((100vw - 1040px) / 2));
-  --shared-title-top: clamp(190px, calc(50vh - 190px), 290px);
-  --shared-title-size: clamp(64px, 10vw, 128px);
-  --home-logo-left: max(24px, calc((100vw - 1280px) / 2 + 24px));
-  /* 首页品牌字静止时的真实视口坐标（nav 上内边距 12px + (44 − 18)/2 = 25px）。
-     与 ProductHomeView.vue 同名变量保持同步 */
-  --home-logo-text-top: 25px;
-  --home-logo-text-offset: 68px;
-  --brand-flight-glow: 0 0 2px rgba(244, 244, 240, 0.7), 0 0 18px rgba(244, 244, 240, 0.18);
-  --title-to-logo-x: calc(var(--home-logo-left) + var(--home-logo-text-offset) - var(--shared-title-left));
-  --title-to-logo-y: calc(var(--home-logo-text-top) - var(--shared-title-top));
-
-  min-height: 100vh;
+  --a-ink: #eef2f5;
+  --a-muted: #93a0aa;
+  --a-cyan: #00e5ff;
+  --a-orange: #ff5722;
+  --a-gold: #ffd54f;
   position: relative;
-  isolation: isolate;
-  display: grid;
-  place-items: center;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  background: #060809;
+  color: var(--a-ink);
   overflow: hidden;
-  padding: 56px 24px;
-  /* 底色与噪点纹理同 ProductHomeView 的黑板逐像素一致，转场穿透/揭幕才无缝；
-     青/铜辉光移入 .auth-accent 单独淡入，不参与底色交接 */
-  background: radial-gradient(ellipse 100% 80% at 50% 38%, #1B211D 0%, #121614 56%, #0A0D0B 100%);
-  background-attachment: fixed;
-  color: var(--ca-color-chalk);
+  font-family: var(--ca-font-sans, -apple-system, "PingFang SC", sans-serif);
 }
-/* 与 ProductHomeView .board-texture 完全同款（同 SVG、同混合、同透明度、拉伸非平铺） */
-.auth::before {
-  content: "";
+
+/* 背景层 */
+.auth-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.auth-bg-soft { opacity: 0.6; }
+.auth-veil {
   position: absolute;
   inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background-image:
-    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" opacity="0.12"/%3E%3C/svg%3E'),
-    url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="grain"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.4" numOctaves="2" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23grain)" opacity="0.08"/%3E%3C/svg%3E');
-  background-blend-mode: overlay, soft-light;
-  mix-blend-mode: overlay;
-  opacity: 0.85;
-}
-/* 与 ProductHomeView .board-smudge 完全同款（擦拭高光/粉笔灰痕/暗角/擦痕条纹） */
-.auth::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
+  z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 70% 50% at 50% 45%, rgba(220, 230, 215, 0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 30% 25% at 22% 28%, rgba(244, 244, 240, 0.05) 0%, transparent 65%),
-    radial-gradient(ellipse 35% 30% at 78% 72%, rgba(244, 244, 240, 0.04) 0%, transparent 60%),
-    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 55%, rgba(0, 0, 0, 0.22) 100%),
-    repeating-linear-gradient(90deg, rgba(244, 244, 240, 0.012) 0px, rgba(244, 244, 240, 0.012) 1px, transparent 1px, transparent 3px),
-    repeating-linear-gradient(88deg, transparent 0px, transparent 60px, rgba(244, 244, 240, 0.018) 60px, rgba(244, 244, 240, 0.018) 62px, transparent 62px, transparent 140px);
+    radial-gradient(60% 55% at 50% 45%, transparent 45%, rgba(6, 8, 9, 0.7) 100%),
+    linear-gradient(to bottom, rgba(6, 8, 9, 0.4), transparent 40%, rgba(6, 8, 9, 0.85));
 }
-/* 登录页专属的青/铜环境光：垫在纹理之下，入场时单独淡入 */
-.auth-accent {
+
+/* 返回首页 */
+.auth-back {
   position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 16% 18%, rgba(0, 229, 255, .1), transparent 30%),
-    radial-gradient(circle at 84% 78%, rgba(217, 160, 91, .1), transparent 32%);
-  animation: auth-formula-mount 1100ms ease-out 120ms both;
-}
-.auth-formulas {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.auth-formula {
-  --o: .055;
-  --r: -4deg;
-  position: absolute;
-  display: block;
-  color: rgba(244,244,240,var(--o));
-  font-family: var(--ca-font-chalk);
-  line-height: 1;
-  text-shadow: 0 0 1px rgba(244,244,240,.12);
-  transform: rotate(var(--r));
-  white-space: nowrap;
-  animation: auth-formula-mount 1100ms ease-out both;
-}
-.formula-force { animation-delay: 160ms; }
-.formula-integral { animation-delay: 280ms; }
-.formula-limit { animation-delay: 400ms; }
-.formula-energy { animation-delay: 520ms; }
-.formula-gas { animation-delay: 640ms; }
-@keyframes auth-formula-mount {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes auth-rise {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes auth-card-pop {
-  from { opacity: 0; transform: translateY(20px) scale(.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-.formula-force {
-  top: 18%;
-  left: 5%;
-  --o: .042;
-  --r: -5deg;
-  font-size: clamp(24px, 4vw, 48px);
-}
-.formula-integral {
-  right: 6%;
-  bottom: 9%;
-  --o: .052;
-  --r: -4deg;
-  font-size: clamp(24px, 4vw, 48px);
-}
-.formula-limit {
-  top: 12%;
-  right: 12%;
-  --o: .038;
-  --r: 3deg;
-  font-size: clamp(18px, 2.4vw, 30px);
-}
-.formula-energy {
-  top: 66%;
-  left: 4%;
-  --o: .04;
-  --r: 5deg;
-  font-size: clamp(18px, 2.6vw, 32px);
-  color: rgba(0, 229, 255, calc(var(--o) * 1.7));
-  text-shadow: 0 0 10px rgba(0, 229, 255, .1);
-}
-.formula-gas {
-  top: 46%;
-  right: 30%;
-  --o: .036;
-  --r: -2deg;
-  font-size: clamp(17px, 2.2vw, 28px);
-}
-.auth-toolbar {
-  position: fixed;
   top: 24px;
   left: 28px;
-  right: 28px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  pointer-events: none;
-}
-.auth-home-link {
+  z-index: 10;
   display: inline-flex;
-  min-height: 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  color: var(--a-ink);
+  font-size: 14px;
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s, transform 0.18s;
+}
+.auth-back:hover { border-color: var(--a-cyan); color: var(--a-cyan); transform: translateX(-2px); }
+
+/* 舞台：左品牌 + 右卡片 */
+.auth-stage {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 980px;
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 56px;
+  align-items: center;
+}
+
+/* 左侧品牌区 */
+.auth-brand-side { padding: 12px 0; }
+.auth-brand-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--a-cyan);
+  margin-bottom: 26px;
+}
+.auth-brand-logo span { color: var(--a-ink); }
+.auth-brand-eyebrow {
+  font-family: var(--ca-font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  color: var(--a-cyan);
+  margin-bottom: 14px;
+}
+.auth-brand-title {
+  font-size: clamp(2.2rem, 4.6vw, 3.3rem);
+  font-weight: 900;
+  line-height: 1.15;
+  margin: 0 0 16px;
+}
+.auth-brand-rotate {
+  font-size: clamp(1.05rem, 2.4vw, 1.4rem);
+  font-weight: 600;
+  color: #d7dee3;
+  margin: 0 0 18px;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(244,244,240,.14);
-  border-radius: var(--ca-radius-full);
-  background: rgba(244,244,240,.08);
-  color: var(--ca-color-chalk);
-  padding: 0 16px;
-  font-size: 13px;
-  text-decoration: none;
-  backdrop-filter: blur(10px);
-  pointer-events: auto;
-  transition: border-color 200ms var(--ease-out), background-color 200ms var(--ease-out),
-    transform 200ms var(--ease-out);
 }
-.auth-home-link:hover {
-  border-color: rgba(244,244,240,.3);
-  background: rgba(244,244,240,.13);
-  transform: translateY(-1px);
-}
-.auth-home-link:active {
-  transform: translateY(0) scale(.97);
-}
-.auth-theme-toggle {
-  color: var(--ca-color-chalk);
-  pointer-events: auto;
-}
-.auth-board {
-  position: relative;
-  z-index: 1;
-  width: min(1040px, 100%);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  align-items: center;
-  gap: 48px;
-}
-.auth-link-invalid .auth-toolbar,
-.auth-link-invalid .auth-formulas,
-.auth-link-invalid .auth-copy {
-  display: none;
-}
-.auth-link-invalid .auth-board {
-  width: min(420px, 100%);
-  grid-template-columns: 1fr;
-}
-.auth-link-invalid .auth-card {
-  grid-column: auto;
-  justify-self: stretch;
-}
-.auth-copy {
-  position: fixed;
-  top: var(--shared-title-top);
-  left: var(--shared-title-left);
-  z-index: 1;
-  width: min(560px, calc(100vw - var(--shared-title-left) - 520px));
-  min-width: 0;
-}
-.auth-copy h1 {
-  margin: 0 0 20px;
-  color: var(--ca-color-chalk);
-  font-family: var(--ca-font-chalk);
-  font-size: var(--shared-title-size);
-  font-weight: 500;
-  font-synthesis: none;
-  letter-spacing: 0;
-  line-height: .9;
-  text-shadow: 0 0 2px rgba(244,244,240,.7), 0 0 18px rgba(244,244,240,.18);
-  animation: auth-rise 640ms var(--ease-out) both;
-}
-.auth-copy p {
-  max-width: 30em;
-  margin: 0;
-  color: rgba(244,244,240,.82);
-  font-size: 17px;
+.auth-rotate-word { color: var(--a-cyan); font-weight: 800; }
+.auth-brand-sub {
+  font-size: 15px;
   line-height: 1.9;
-  letter-spacing: 0.02em;
-  animation: auth-rise 640ms var(--ease-out) 90ms both;
+  color: var(--a-muted);
+  margin: 0 0 28px;
+  max-width: 420px;
 }
-.chalk-line {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 36px;
-  color: rgba(244,244,240,.55);
-  font-family: var(--ca-font-mono);
+.auth-brand-foot {
+  font-family: var(--ca-font-mono, monospace);
   font-size: 12px;
-  letter-spacing: .08em;
-  animation: auth-rise 640ms var(--ease-out) 170ms both;
+  letter-spacing: 0.14em;
 }
-.chalk-line i {
-  width: 120px;
-  height: 2px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, rgba(0,229,255,.75), rgba(244,244,240,.4) 55%, rgba(244,244,240,.06));
-  box-shadow: 0 0 8px rgba(0,229,255,.25);
+
+/* 右侧卡片 */
+.auth-card-wrap { position: relative; }
+.auth-card-glow {
+  position: absolute;
+  inset: -1px;
+  border-radius: 24px;
+  padding: 1px;
+  background: linear-gradient(130deg, var(--a-cyan), transparent 30%, transparent 70%, var(--a-orange));
+  background-size: 300% 300%;
+  animation: auth-glow-move 8s ease infinite;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.8;
+  pointer-events: none;
+}
+@keyframes auth-glow-move {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 .auth-card {
-  grid-column: 2;
-  justify-self: end;
-  width: 420px;
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  border: 1px solid rgba(244,244,240,.22);
-  border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.97), rgba(248,244,232,.95)),
-    var(--ca-color-paper-card);
-  box-shadow:
-    0 30px 80px rgba(0,0,0,.4),
-    0 8px 24px rgba(0,0,0,.24),
-    inset 0 1px 0 rgba(255,255,255,.6);
-  padding: 0;
-  overflow: hidden;
-  animation: auth-card-pop 680ms var(--ease-out) 120ms both;
-}
-.auth-card-edge {
   position: relative;
-  height: 10px;
-  background: linear-gradient(90deg, #121614, #1d231f 50%, #121614);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(18, 24, 27, 0.86), rgba(10, 14, 16, 0.92));
+  backdrop-filter: blur(20px);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 60px rgba(0, 229, 255, 0.06);
+  overflow: hidden;
 }
-.auth-card-edge::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent 4%, rgba(0,229,255,.65) 32%, rgba(0,229,255,.65) 68%, transparent 96%);
-  box-shadow: 0 0 12px rgba(0,229,255,.4);
-}
-.auth-card-body {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  padding: 32px;
-}
+.auth-card-body { padding: 38px 34px 34px; }
+
+/* 卡片内标题 */
 .brand {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 24px;
-  color: var(--ca-color-paper-ink);
+  gap: 12px;
+  margin-bottom: 22px;
 }
 .brand span {
-  display: inline-flex;
-  width: 44px;
-  height: 44px;
-  align-items: center;
-  justify-content: center;
-  color: #00E5FF;
-  border-radius: 10px;
-  background: var(--ca-color-slate);
-  box-shadow: 0 4px 10px rgba(18,22,20,.24), 0 0 14px rgba(0,229,255,.16);
-}
-.brand div {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
   display: grid;
-  gap: 3px;
+  place-items: center;
+  color: var(--a-cyan);
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.28);
 }
-.brand strong {
-  color: var(--ca-color-paper-ink);
-  font-family: var(--ca-font-serif);
-  font-size: 23px;
-  font-weight: 800;
-  font-synthesis: none;
-  letter-spacing: -0.01em;
-  line-height: 1.18;
-}
-.brand small {
-  color: var(--ca-color-paper-sub);
-  font-size: 13px;
-}
+.brand strong { font-size: 21px; font-weight: 800; }
+
+/* Tab 切换 */
 .tabs {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
   gap: 4px;
-  margin-bottom: 20px;
-  border: 1px solid var(--ca-color-paper-border);
-  border-radius: 8px;
-  background: #F4F1EA;
   padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 22px;
 }
 .tabs button {
-  min-height: 38px;
-  border: 0;
-  border-radius: 6px;
+  flex: 1;
+  padding: 9px 0;
+  border: none;
+  border-radius: 9px;
   background: transparent;
-  color: var(--ca-color-paper-sub);
+  color: var(--a-muted);
   font-size: 14px;
-  font-weight: 700;
-  letter-spacing: .04em;
+  font-weight: 600;
   cursor: pointer;
-  transition: color 180ms var(--ease-out), background-color 180ms var(--ease-out),
-    box-shadow 180ms var(--ease-out);
+  transition: color 0.2s, background 0.2s;
 }
-.tabs button:hover:not(.active) {
-  color: var(--ca-color-paper-ink);
-}
+.tabs button:hover { color: var(--a-ink); }
 .tabs button.active {
-  background: var(--ca-color-slate);
-  color: var(--ca-color-chalk);
-  box-shadow: 0 4px 12px rgba(18,22,20,.2);
+  color: #041014;
+  background: linear-gradient(120deg, var(--a-cyan), #7ff0ff);
+  box-shadow: 0 4px 16px rgba(0, 229, 255, 0.3);
 }
+
+/* 表单错误 */
 .form-error {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 40px;
-  border: 1px solid var(--color-danger-100);
-  border-left: 3px solid var(--color-danger-500);
-  border-radius: 6px;
-  background: var(--color-danger-50);
-  color: var(--color-danger-700);
-  padding: 8px 12px;
-  font-size: var(--text-body-sm);
-  line-height: 1.5;
-}
-.form-error svg {
-  flex: 0 0 auto;
-}
-.link-result {
-  display: grid;
-  min-height: 168px;
-  place-items: center;
-  gap: 12px;
-  color: var(--ca-color-paper-sub);
-  text-align: center;
-}
-.link-result strong {
-  color: var(--ca-color-paper-ink);
-  font-size: 17px;
-  line-height: 1.45;
-}
-.link-result--error {
-  color: var(--color-danger-600);
-}
-.link-result--error strong {
-  color: var(--color-danger-700);
-}
-.label {
-  display: block;
-  margin-top: 18px;
-  color: var(--ca-color-paper-sub);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .06em;
-}
-.inline { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; }
-.inline .input {
-  margin-top: 0;
+  gap: 7px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(198, 40, 40, 0.14);
+  border: 1px solid rgba(239, 154, 154, 0.3);
+  color: #ff9a9a;
+  font-size: 13px;
+  margin-bottom: 16px;
 }
 
-form {
-  display: grid;
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
+/* 表单字段 */
+form { display: flex; flex-direction: column; }
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a-muted);
+  margin: 14px 0 7px;
 }
-.input {
-  display: block;
+.label:first-child { margin-top: 0; }
+.input,
+.auth-card-body :deep(input) {
   width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  height: 44px;
-  margin-top: 8px;
   box-sizing: border-box;
-  border: 1px solid var(--ca-color-paper-border);
-  border-radius: 6px;
-  background: rgba(255,255,255,.92);
-  color: var(--ca-color-paper-ink);
-  padding: 0 12px;
-  font-size: 14px;
-  -webkit-appearance: none;
-  appearance: none;
-  transition: border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out),
-    background-color 160ms var(--ease-out);
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--a-ink);
+  font-size: 15px;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
-.input:hover {
-  border-color: var(--ca-color-paper-border-strong);
-}
-.input:focus {
+.input::placeholder,
+.auth-card-body :deep(input)::placeholder { color: rgba(147, 160, 170, 0.55); }
+.input:focus,
+.auth-card-body :deep(input:focus) {
   outline: none;
-  border-color: #00B8D4;
-  box-shadow: 0 0 0 3px rgba(0,184,212,.16), 0 0 14px rgba(0,229,255,.12);
+  border-color: var(--a-cyan);
+  background: rgba(0, 229, 255, 0.05);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.14);
 }
-.input[aria-invalid="true"] {
-  border-color: var(--color-danger-500);
+.input[aria-invalid="true"],
+.auth-card-body :deep(input[aria-invalid="true"]) {
+  border-color: rgba(239, 83, 80, 0.7);
+  box-shadow: 0 0 0 3px rgba(239, 83, 80, 0.14);
 }
-.input[aria-invalid="true"]:focus {
-  box-shadow: var(--shadow-focus-danger);
-}
-.input[readonly] {
-  color: var(--ca-color-paper-sub);
-  background: rgba(244,241,234,.85);
-}
-:deep(.password-field) {
-  margin-top: 8px;
+/* PasswordField 组件容器：覆盖其默认浅色底(--color-bg-surface)，统一为暗色玻璃 */
+.auth-card-body :deep(.password-field) {
+  width: 100%;
   box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  min-height: 44px;
-  border-color: var(--ca-color-paper-border);
-  border-radius: 6px;
-  background: rgba(255,255,255,.92);
-  color: var(--ca-color-paper-ink);
-  transition: border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out);
-}
-:deep(.password-field:hover) {
-  border-color: var(--ca-color-paper-border-strong);
-}
-:deep(.password-field:focus-within) {
-  border-color: #00B8D4;
-  box-shadow: 0 0 0 3px rgba(0,184,212,.16), 0 0 14px rgba(0,229,255,.12);
-}
-:deep(.password-field.invalid) {
-  border-color: var(--color-danger-500);
-  box-shadow: var(--shadow-focus-danger);
-}
-:deep(.password-field input) {
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ca-color-paper-ink);
-  box-shadow: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-:deep(.password-field input:focus),
-:deep(.password-field input:focus-visible) {
-  outline: 0;
-  border: 0;
-  box-shadow: none;
-}
-:deep(.password-tool) {
-  color: var(--ca-color-paper-muted);
-}
-:deep(.password-tool:hover) {
-  background: transparent;
-  color: var(--ca-color-paper-ink);
-}
-.auth-submit,
-.send-code-btn {
-  display: inline-flex;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
   min-height: 46px;
+  padding: 0 6px 0 14px;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.auth-card-body :deep(.password-field:focus-within) {
+  border-color: var(--a-cyan);
+  background: rgba(0, 229, 255, 0.05);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.14);
+}
+.auth-card-body :deep(.password-field.invalid) {
+  border-color: rgba(239, 83, 80, 0.7);
+  box-shadow: 0 0 0 3px rgba(239, 83, 80, 0.14);
+}
+/* 容器内的 input 保持透明，去掉通用 :deep(input) 给它加的填充底与边框 */
+.auth-card-body :deep(.password-field input) {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: var(--a-ink);
+}
+.auth-card-body :deep(.password-field input:focus) {
+  background: transparent;
+  box-shadow: none;
+}
+.auth-card-body :deep(.password-tool) { color: var(--a-muted); }
+.auth-card-body :deep(.password-tool:hover) { color: var(--a-ink); background: rgba(255, 255, 255, 0.06); }
+
+/* 提交按钮 */
+.auth-submit {
+  margin-top: 24px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--ca-color-slate);
-  color: var(--ca-color-chalk);
-  padding: 0 16px;
+  width: 100%;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  color: #041014;
   font-size: 15px;
   font-weight: 800;
-  letter-spacing: .04em;
-  cursor: pointer;
-  transition: background-color 200ms var(--ease-out), transform 200ms var(--ease-out),
-    box-shadow 200ms var(--ease-out);
+  background: linear-gradient(120deg, var(--a-cyan), #58ecff 55%, var(--a-gold));
+  background-size: 180% 100%;
+  box-shadow: 0 10px 30px rgba(0, 229, 255, 0.28);
+  transition: transform 0.18s, box-shadow 0.2s, background-position 0.4s, opacity 0.2s;
 }
-.auth-submit {
-  width: 100%;
-  margin-top: 26px;
-}
-.auth-submit:hover:not(:disabled),
-.send-code-btn:hover:not(:disabled) {
-  background: #1d231f;
-  transform: translateY(-1px);
-  box-shadow: 0 10px 24px rgba(18,22,20,.22), 0 0 16px rgba(0,229,255,.14);
-}
-.auth-submit:active:not(:disabled),
-.send-code-btn:active:not(:disabled) {
-  transform: translateY(0) scale(.98);
-}
-.auth-submit:disabled,
-.send-code-btn:disabled {
-  opacity: .72;
-  cursor: wait;
-}
-.auth-submit[data-loading="true"] :deep(svg) {
-  display: none;
-}
-.auth-submit[data-loading="true"]::before {
+.auth-submit:hover { transform: translateY(-2px); background-position: 100% 0; box-shadow: 0 14px 40px rgba(0, 229, 255, 0.4); }
+.auth-submit:active { transform: translateY(0); }
+.auth-submit:disabled { opacity: 0.7; cursor: default; transform: none; }
+.auth-submit[data-loading="true"] { position: relative; color: transparent; }
+.auth-submit[data-loading="true"]::after {
   content: "";
-  width: 15px;
-  height: 15px;
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(4, 16, 20, 0.35);
+  border-top-color: #041014;
   border-radius: 50%;
-  border: 2px solid rgba(244,244,240,.32);
-  border-top-color: var(--ca-color-chalk);
-  animation: auth-spin 720ms linear infinite;
+  animation: auth-spin 0.7s linear infinite;
 }
-@keyframes auth-spin {
-  to { transform: rotate(360deg); }
+@keyframes auth-spin { to { transform: rotate(360deg); } }
+
+/* 链接校验结果 */
+.link-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 30px 10px;
+  color: var(--a-muted);
+}
+.link-result strong { color: var(--a-ink); font-size: 16px; }
+.link-result--error { color: #ff9a9a; }
+.link-result--error strong { color: #ff9a9a; }
+
+/* 过渡动画 */
+.fade-slide-enter-active, .fade-slide-leave-active { transition: opacity 0.25s, transform 0.25s; }
+.fade-slide-enter-from, .fade-slide-leave-to { opacity: 0; transform: translateY(-6px); }
+.page-switch-enter-active, .page-switch-leave-active { transition: opacity 0.28s ease, transform 0.28s ease; }
+.page-switch-enter-from { opacity: 0; transform: translateX(16px); }
+.page-switch-leave-to { opacity: 0; transform: translateX(-16px); }
+.input-error-shake { animation: auth-shake 0.4s; }
+@keyframes auth-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
 }
 
-@media (max-width: 860px) {
-  .auth-copy {
-    position: relative;
-    top: auto;
-    left: auto;
-    width: auto;
-  }
-  .auth-board {
-    grid-template-columns: 1fr;
-    gap: 28px;
-  }
-  .auth-card {
-    grid-column: auto;
-    justify-self: stretch;
-  }
-  .auth-copy h1 {
-    font-size: 64px;
-  }
+/* 响应式 */
+@media (max-width: 820px) {
+  .auth-stage { grid-template-columns: 1fr; gap: 30px; max-width: 460px; }
+  .auth-brand-side { text-align: center; padding: 0; }
+  .auth-brand-logo, .auth-brand-rotate { justify-content: center; }
+  .auth-brand-sub { margin-left: auto; margin-right: auto; }
+  .auth-brand-rotate { display: flex; }
 }
-
 @media (max-width: 520px) {
-  .auth { padding: 78px 18px 24px; }
-  .auth-toolbar {
-    top: 18px;
-    left: 18px;
-    right: 18px;
-  }
-  .auth-card-body {
-    padding: 24px;
-  }
-  .inline {
-    grid-template-columns: 1fr;
-  }
-  .auth-copy p {
-    font-size: 15px;
-  }
+  .auth { padding: 20px 16px; }
+  .auth-card-body { padding: 30px 24px 26px; }
+  .auth-back { top: 16px; left: 16px; }
 }
 
-.auth.auth-light {
-  /* 浅色 h1 无粉笔辉光（下方有 text-shadow:none!important），飞行字同步关掉 */
-  --brand-flight-glow: 0 0 2px rgba(44, 43, 41, 0), 0 0 18px rgba(44, 43, 41, 0);
-  /* 与 ProductHomeView 浅色世界同底：纯暖纸 + 同款纹理/顶部柔光 */
-  background: #F9F8F6 !important;
-  color: #2C2B29 !important;
-}
-
-.auth.auth-light::before {
-  mix-blend-mode: multiply !important;
-  background-blend-mode: normal !important;
-  opacity: .4 !important;
-}
-
-.auth.auth-light::after {
-  background:
-    radial-gradient(ellipse 90% 60% at 50% 0%, rgba(255, 255, 255, 0.85) 0%, transparent 55%),
-    radial-gradient(ellipse 130% 110% at 50% 50%, transparent 64%, rgba(44, 43, 41, 0.05) 100%) !important;
-}
-
-.auth.auth-light .auth-accent {
-  background:
-    radial-gradient(circle at 14% 16%, rgba(0, 184, 212, .06), transparent 30%),
-    radial-gradient(circle at 86% 80%, rgba(217, 160, 91, .08), transparent 34%);
-}
-
-.auth.auth-light .auth-formula {
-  color: rgba(44,43,41, calc(var(--o) * 1.6)) !important;
-  text-shadow: none !important;
-}
-
-.auth.auth-light .formula-energy {
-  color: rgba(0,151,167, calc(var(--o) * 2)) !important;
-}
-
-.auth.auth-light .auth-home-link {
-  border-color: #E6E4DD !important;
-  background: #FFFFFF !important;
-  color: #444440 !important;
-  backdrop-filter: none !important;
-  box-shadow: 0 8px 20px rgba(18,22,20,.05) !important;
-}
-
-.auth.auth-light .auth-home-link:hover {
-  border-color: #D1CBB5 !important;
-  background: #FDFCFA !important;
-}
-
-.auth.auth-light .auth-theme-toggle {
-  color: #444440 !important;
-}
-
-.auth.auth-light .auth-copy h1 {
-  color: #2C2B29 !important;
-  text-shadow: none !important;
-}
-
-.auth.auth-light .brand strong {
-  color: #2C2B29 !important;
-  text-shadow: none !important;
-}
-
-.auth.auth-light .auth-copy p,
-.auth.auth-light .label,
-.auth.auth-light .brand small,
-.auth.auth-light .tabs button,
-.auth.auth-light :deep(.password-tool) {
-  color: #666560 !important;
-}
-
-.auth.auth-light .auth-copy p {
-  color: #444440 !important;
-}
-
-.auth.auth-light .chalk-line {
-  color: #999990 !important;
-}
-
-.auth.auth-light .chalk-line i {
-  background: linear-gradient(90deg, rgba(0,151,167,.6), #D1CBB5 60%, rgba(209,203,181,.2)) !important;
-  box-shadow: none !important;
-}
-
-.auth.auth-light .auth-card {
-  border-color: #E6E4DD !important;
-  background: #FFFFFF !important;
-  box-shadow: 0 24px 58px rgba(18,22,20,.09), 0 2px 8px rgba(18,22,20,.04) !important;
-}
-
-.auth.auth-light .auth-card-edge {
-  background: linear-gradient(90deg, #121614, #1d231f 50%, #121614) !important;
-}
-
-.auth.auth-light .brand,
-.auth.auth-light .brand span {
-  color: #00E5FF !important;
-}
-
-.auth.auth-light .brand span {
-  background: #121614 !important;
-}
-
-.auth.auth-light .tabs {
-  border-color: #E6E4DD !important;
-  background: #F4F1EA !important;
-}
-
-.auth.auth-light .tabs button:hover:not(.active) {
-  color: #2C2B29 !important;
-}
-
-.auth.auth-light .tabs button.active {
-  background: #2C2B29 !important;
-  color: #F9F8F6 !important;
-  box-shadow: 0 4px 12px rgba(18,22,20,.16) !important;
-  text-shadow: none !important;
-}
-
-.auth.auth-light .input,
-.auth.auth-light :deep(.password-field) {
-  border-color: #D1CBB5 !important;
-  background: #FFFFFF !important;
-  color: #2C2B29 !important;
-}
-
-.auth.auth-light .input::placeholder,
-.auth.auth-light :deep(.password-field input)::placeholder {
-  color: #999990 !important;
-}
-
-.auth.auth-light :deep(.password-field input) {
-  color: #2C2B29 !important;
-}
-
-.auth.auth-light .input:hover,
-.auth.auth-light :deep(.password-field:hover) {
-  border-color: #999990 !important;
-}
-
-.auth.auth-light .input:focus,
-.auth.auth-light :deep(.password-field:focus-within) {
-  border-color: #0097A7 !important;
-  box-shadow: 0 0 0 3px rgba(0,151,167,.15) !important;
-}
-
-.auth.auth-light :deep(.password-tool:hover) {
-  background: transparent !important;
-  color: #2C2B29 !important;
-}
-
-.auth.auth-light .form-error {
-  border-color: var(--color-danger-100) !important;
-  background: var(--color-danger-50) !important;
-  color: var(--color-danger-700) !important;
-}
-
-.auth.auth-light .auth-submit,
-.auth.auth-light .send-code-btn {
-  background: #121614 !important;
-  color: #F4F4F0 !important;
-}
-
-.auth.auth-light .auth-submit:hover:not(:disabled),
-.auth.auth-light .send-code-btn:hover:not(:disabled) {
-  background: #2C2B29 !important;
-  box-shadow: 0 10px 24px rgba(18,22,20,.18), 0 0 16px rgba(0,184,212,.14) !important;
-}
-
-.auth.auth-dark {
-  background: radial-gradient(ellipse 100% 80% at 50% 38%, #1B211D 0%, #121614 56%, #0A0D0B 100%);
-  background-attachment: fixed;
-  color: #F4F4F0;
-}
-
-.auth.auth-dark .auth-accent {
-  background:
-    radial-gradient(circle at 16% 18%, rgba(0, 229, 255, .09), transparent 32%),
-    radial-gradient(circle at 84% 78%, rgba(217, 160, 91, .07), transparent 36%);
-}
-
-.auth.auth-dark .auth-card {
-  border-color: rgba(244, 244, 240, .24) !important;
-  background: linear-gradient(180deg, rgba(255,254,248,.98), rgba(247,242,228,.96)) !important;
-  color: #2C2B29 !important;
-  box-shadow:
-    0 30px 80px rgba(0,0,0,.46),
-    0 8px 24px rgba(0,0,0,.3),
-    0 0 28px rgba(0,229,255,.05);
-}
-
-.auth.auth-dark .auth-home-link {
-  border-color: rgba(244,244,240,.16);
-  background: rgba(18,22,20,.6);
-  color: #E9EBE7;
-}
-
-.auth.auth-dark .auth-home-link:hover {
-  border-color: rgba(244,244,240,.3);
-  background: rgba(244,244,240,.1);
-}
-
-.auth.auth-dark .auth-theme-toggle {
-  color: #C6CCC7;
-}
-
-.auth.auth-dark .auth-copy h1 {
-  color: #F4F4F0;
-}
-
-.auth.auth-dark .auth-copy p {
-  color: rgba(244,244,240,.82);
-}
-
-.auth.auth-dark .chalk-line {
-  color: rgba(244,244,240,.55);
-}
-
-.auth.auth-dark .brand strong,
-.auth.auth-dark .label {
-  color: #2C2B29 !important;
-}
-
-.auth.auth-dark .label {
-  color: #666560 !important;
-}
-
-.auth.auth-dark .brand small {
-  color: #666560 !important;
-}
-
-.auth.auth-dark .brand,
-.auth.auth-dark .brand span {
-  color: #00E5FF !important;
-}
-
-.auth.auth-dark .brand span {
-  background: #121614 !important;
-}
-
-.auth.auth-dark .tabs {
-  border-color: rgba(44,43,41,.14) !important;
-  background: #EFEAD9 !important;
-}
-
-.auth.auth-dark .tabs button {
-  color: #666560 !important;
-}
-
-.auth.auth-dark .tabs button:hover:not(.active) {
-  color: #2C2B29 !important;
-}
-
-.auth.auth-dark .tabs button.active {
-  background: #121614 !important;
-  color: #F4F4F0 !important;
-  box-shadow: 0 4px 12px rgba(18,22,20,.24);
-}
-
-.auth.auth-dark .input,
-.auth.auth-dark :deep(.password-field) {
-  border-color: rgba(44,43,41,.2) !important;
-  background: #FFFEF8 !important;
-  color: #2C2B29 !important;
-}
-
-.auth.auth-dark :deep(.password-field input) {
-  background: #FFFEF8 !important;
-  color: #2C2B29 !important;
-}
-
-.auth.auth-dark .input::placeholder,
-.auth.auth-dark :deep(.password-field input)::placeholder {
-  color: #999990 !important;
-}
-
-.auth.auth-dark .input:hover,
-.auth.auth-dark :deep(.password-field:hover) {
-  border-color: rgba(44,43,41,.38) !important;
-}
-
-.auth.auth-dark .input:focus,
-.auth.auth-dark :deep(.password-field:focus-within) {
-  border-color: #00B8D4 !important;
-  box-shadow: 0 0 0 3px rgba(0,184,212,.18), 0 0 14px rgba(0,229,255,.14) !important;
-}
-
-.auth.auth-dark :deep(.password-tool) {
-  color: #666560 !important;
-}
-
-.auth.auth-dark :deep(.password-tool:hover) {
-  background: rgba(44,43,41,.06) !important;
-  color: #2C2B29 !important;
-}
-
-.auth.auth-dark .form-error {
-  border-color: var(--color-danger-100);
-  background: var(--color-danger-50);
-  color: var(--color-danger-700);
-}
-
-.auth.auth-dark .auth-submit,
-.auth.auth-dark .send-code-btn {
-  background: #121614 !important;
-  color: #F4F4F0 !important;
-}
-
-.auth.auth-dark .auth-submit:hover:not(:disabled),
-.auth.auth-dark .send-code-btn:hover:not(:disabled) {
-  background: #1d231f !important;
-  box-shadow: 0 10px 24px rgba(0,0,0,.32), 0 0 16px rgba(0,229,255,.16) !important;
-}
-
-/* ====== 页面进入：黑板底色常驻，标题从左上承接，登录卡右侧滑入 ====== */
-/* 转场类移除瞬间禁止直载入场动画重播（动画名切换会从第 0 帧重来 = 全员闪烁消失再淡入），
-   entered-from-home 由脚本在挂载时打上并永久保留。
-   注意必须同时排除离场类：本规则特异性高于离场规则，不排除会禁掉返程的离场动画 */
-.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-formula,
-.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-copy h1,
-.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-copy p,
-.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .chalk-line,
-.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-card,
-.auth.entered-from-home:not(.route-home-auth-enter-active):not(.route-auth-home-leave-active) .auth-accent {
-  animation: none;
-}
-.auth.route-home-auth-enter-active {
-  transition: opacity 980ms linear;
-}
-.auth.route-home-auth-enter-from {
-  opacity: .999;
-  filter: none;
-  transform: none;
-}
-.auth.route-home-auth-enter-active .auth-toolbar {
-  animation: auth-link-in 620ms cubic-bezier(.22, .61, .36, 1) 260ms both;
-}
-.auth.route-home-auth-enter-active .auth-accent {
-  animation: auth-formula-mount 560ms cubic-bezier(.22, .61, .36, 1) 380ms both;
-}
-.auth.route-home-auth-enter-active .auth-formula {
-  /* 所有入场动画必须在 980ms 转场窗口内收尾，否则类移除时被截断产生跳变 */
-  animation: auth-formula-in 700ms cubic-bezier(.22, .61, .36, 1) both;
-}
-.auth.route-home-auth-enter-active .formula-force {
-  animation-delay: 60ms;
-}
-.auth.route-home-auth-enter-active .formula-integral {
-  animation-delay: 120ms;
-}
-.auth.route-home-auth-enter-active .formula-limit {
-  animation-delay: 180ms;
-}
-.auth.route-home-auth-enter-active .formula-energy {
-  animation-delay: 220ms;
-}
-.auth.route-home-auth-enter-active .formula-gas {
-  animation-delay: 260ms;
-}
-.auth.route-home-auth-enter-active .auth-copy h1 {
-  transform-origin: left top;
-  will-change: opacity;
-  animation: auth-h1-takeover 980ms linear both;
-}
-.auth.route-home-auth-enter-active .auth-copy p {
-  animation: auth-copy-in 620ms cubic-bezier(.22, .61, .36, 1) 240ms both;
-}
-.auth.route-home-auth-enter-active .chalk-line {
-  animation: auth-copy-in 620ms cubic-bezier(.22, .61, .36, 1) 320ms both;
-}
-.auth.route-home-auth-enter-active .auth-card {
-  animation: auth-card-in 740ms cubic-bezier(.22, .61, .36, 1) 200ms both;
-}
-/* 返程离场层转透明：下方首页同款黑板从第一帧接管底色，主页内容随转场逐步显形，
-   不再在 980ms 揭幕时整页突现（!important 用于压过 .auth-light 的 !important 底色） */
-.auth.route-auth-home-leave-active {
-  background: transparent !important;
-  transition: opacity 980ms linear;
-}
-/* 透明底上的噪点层失去可混合底色会泛白成磨砂——立即隐藏，由下层首页同款纹理接管 */
-.auth.route-auth-home-leave-active::before,
-.auth.route-auth-home-leave-active::after {
-  opacity: 0 !important;
-}
-.auth.route-auth-home-leave-active .auth-accent {
-  animation: auth-accent-out 420ms cubic-bezier(.55, .06, .68, .19) forwards;
-}
-.auth.route-auth-home-leave-active .auth-toolbar {
-  animation: auth-link-out 620ms cubic-bezier(.55, .06, .68, .19) both;
-}
-.auth.route-auth-home-leave-active .auth-formula {
-  animation: auth-formula-out 760ms cubic-bezier(.55, .06, .68, .19) both;
-}
-.auth.route-auth-home-leave-active .auth-copy h1 {
-  transform-origin: left top;
-  will-change: transform, opacity;
-  animation: auth-h1-to-home-logo 940ms cubic-bezier(.45, .05, .22, 1) both;
-}
-.auth.route-auth-home-leave-active .auth-copy p,
-.auth.route-auth-home-leave-active .chalk-line {
-  animation: auth-copy-out 760ms cubic-bezier(.55, .06, .68, .19) both;
-}
-.auth.route-auth-home-leave-active .auth-card {
-  animation: auth-card-out 900ms cubic-bezier(.55, .06, .68, .19) both;
-}
-
-@keyframes auth-link-in {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes auth-link-out {
-  to { opacity: 0; transform: translateY(-10px); }
-}
-@keyframes auth-accent-out {
-  to { opacity: 0; }
-}
-@keyframes auth-formula-in {
-  from { opacity: 0; transform: rotate(var(--r)); }
-  to { opacity: 1; transform: translateX(0) rotate(var(--r)); }
-}
-@keyframes auth-formula-out {
-  to { opacity: 0; transform: rotate(var(--r)); }
-}
-/* 去程承接：上层飞行字 76% 抵达后，本体在 80→93% 同位淡入，与其 84→96% 的淡出交叉，
-   字体/字号/行高/辉光完全一致，交接不可见 */
-@keyframes auth-h1-takeover {
-  0%, 80% { opacity: 0; transform: translate3d(0, 0, 0); }
-  93%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-/* 返程：减速飞抵 nav 角落、停笔落定，再与下层首页品牌字（72→90% 同位淡入）交叉淡出；
-   辉光在途中归零，与 nav 文字的无光状态对齐 */
-@keyframes auth-h1-to-home-logo {
-  0% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    font-size: var(--shared-title-size);
-    text-shadow: var(--brand-flight-glow);
-  }
-  76%, 84% {
-    opacity: 1;
-    transform: translate3d(var(--title-to-logo-x), var(--title-to-logo-y), 0);
-    font-size: 20px;
-    text-shadow: 0 0 2px rgba(244, 244, 240, 0), 0 0 18px rgba(244, 244, 240, 0);
-  }
-  96%, 100% {
-    opacity: 0;
-    transform: translate3d(var(--title-to-logo-x), var(--title-to-logo-y), 0);
-    font-size: 20px;
-    text-shadow: 0 0 2px rgba(244, 244, 240, 0), 0 0 18px rgba(244, 244, 240, 0);
-  }
-}
-@keyframes auth-copy-in {
-  from { opacity: 0; transform: translateX(-26px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-@keyframes auth-copy-out {
-  to { opacity: 0; transform: translateX(-26px); }
-}
-@keyframes auth-card-in {
-  from {
-    opacity: 0;
-    transform: translate3d(min(32vw, 360px), 0, 0);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0);
-  }
-  60% {
-    opacity: 1;
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .24);
-  }
-}
-@keyframes auth-card-out {
-  from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    box-shadow: 0 30px 80px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .24);
-  }
-  to {
-    opacity: 0;
-    transform: translate3d(min(32vw, 360px), 0, 0);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0);
-  }
-}
-
-/* 窄屏下 .auth-copy 回到流式布局，共享坐标失效——标题退化为柔和淡入/淡出 */
-@media (max-width: 860px) {
-  .auth.route-home-auth-enter-active .auth-copy h1 {
-    animation: auth-copy-in 620ms cubic-bezier(.22, .61, .36, 1) 200ms both;
-  }
-  .auth.route-auth-home-leave-active .auth-copy h1 {
-    animation: auth-copy-out 620ms cubic-bezier(.55, .06, .68, .19) both;
-  }
+@media (prefers-reduced-motion: reduce) {
+  .auth-card-glow, .auth-submit[data-loading="true"]::after { animation: none; }
 }
 </style>
