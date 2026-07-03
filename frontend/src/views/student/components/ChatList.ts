@@ -171,6 +171,22 @@ export default defineComponent({
         }, 720));
       });
     }
+    // 富文本渲染缓存 + 流式节流：每来一个 token 就把整段 markdown+KaTeX+DOMPurify 从头重解析一遍
+    // 是 O(n²)、且历史消息也被每 token 连带重渲——这是"输出一段卡很久才出下一段、越往后越卡"的元凶。
+    // 按 message.id 缓存渲染结果；流式期间至多每 120ms 重算一次；文本未变直接复用缓存，
+    // 非流式的历史消息渲染一次即锁定。Map 在 setup 作用域内跨渲染持久。
+    type RichCacheEntry = { text: string; html: string; at: number };
+    const richCache = new Map<number, RichCacheEntry>();
+    const thoughtCache = new Map<number, RichCacheEntry>();
+    function renderCached(cache: Map<number, RichCacheEntry>, message: ChatMessage, text: string) {
+      if (!text) return "";
+      const cached = cache.get(message.id);
+      if (cached && cached.text === text) return cached.html;
+      if (message.streaming && cached && performance.now() - cached.at < 120) return cached.html;
+      const html = renderRichText(text);
+      cache.set(message.id, { text, html, at: performance.now() });
+      return html;
+    }
     function streamingIndicator(message: ChatMessage) {
       // 发送后、首 token 前展示动画化的加载指示（波动圆点 + 渐变流光的阶段文案），取代静态"正在生成"文字
       if (!message.streaming) return h("div", { class: "ai-text streaming-placeholder" }, "");
@@ -186,11 +202,11 @@ export default defineComponent({
       if (p.large && message.role === "ai") {
         return h("div", { class: "chat-bubble bubble-ai" }, [
           message.thought ? h("button", { type: "button", class: "thought-toggle thinking-process", onClick: () => emit("toggle-thought", message) }, [h(Sparkles, { size: 13 }), "思考过程", h(ChevronDown, { size: 13, class: { rotate: message.thoughtOpen } })]) : null,
-          h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought markdown-body", innerHTML: renderRichText(message.thought) }) : null }),
+          h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought markdown-body", innerHTML: renderCached(thoughtCache, message, message.thought) }) : null }),
           h("div", { class: "ai-content-card" }, [
             message.outOfScope ? h("span", { class: "tag tag-warning" }, "可能超纲") : null,
             message.text
-              ? h("div", { class: "ai-text markdown-body", innerHTML: renderRichText(message.text) })
+              ? h("div", { class: "ai-text markdown-body", innerHTML: renderCached(richCache, message, message.text) })
               : streamingIndicator(message),
             sourceSection(message, "source-tags references-area", "source-label ref-label", "tag ref-tag"),
             h("div", { class: "msg-actions ai-action-bar" }, [
@@ -204,10 +220,10 @@ export default defineComponent({
       }
       const body = [
         message.thought ? h("button", { type: "button", class: "thought-toggle", onClick: () => emit("toggle-thought", message) }, [h(Sparkles, { size: 13 }), "思考过程", h(ChevronDown, { size: 13, class: { rotate: message.thoughtOpen } })]) : null,
-        h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought markdown-body", innerHTML: renderRichText(message.thought) }) : null }),
+        h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought markdown-body", innerHTML: renderCached(thoughtCache, message, message.thought) }) : null }),
         message.outOfScope ? h("span", { class: "tag tag-warning" }, "可能超纲") : null,
         message.role === "ai"
-          ? (message.text ? h("div", { class: "ai-text markdown-body", innerHTML: renderRichText(message.text) }) : streamingIndicator(message))
+          ? (message.text ? h("div", { class: "ai-text markdown-body", innerHTML: renderCached(richCache, message, message.text) }) : streamingIndicator(message))
           : [h("p", message.text), attachmentNodes(message)],
         sourceSection(message, "source-tags", "source-label"),
         h("div", { class: "msg-actions" }, [
