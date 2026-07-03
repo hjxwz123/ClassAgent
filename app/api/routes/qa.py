@@ -14,7 +14,7 @@ from app.core.responses import success_response
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.qa import QAAskRequest, QAFeedbackRequest, QAFavoriteRequest, QAHistoryConversation, QAHistoryItem, QAResponse
-from app.services.qa import _resign_attachments, ask_question, ask_question_stream, delete_conversation, list_conversation_records, list_history, update_favorite, update_feedback, upload_qa_image
+from app.services.qa import _resign_attachments, ask_question, delete_conversation, list_conversation_records, list_history, run_qa_generation_streaming, update_favorite, update_feedback, upload_qa_image
 
 
 router = APIRouter()
@@ -54,22 +54,19 @@ def ask_question_stream_endpoint(
     payload: QAAskRequest,
     request: Request,
     user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[Session, Depends(get_db)],
 ):
+    # 不再持有请求级 DB 连接：生成在后台 worker 线程(自带 Session)跑到完成并落库，
+    # SSE 断开也不影响落库。这样占位/生成/最终落库全由后端负责，前端只负责展示。
     limit_request(request, "qa-ask-stream", user.id, payload.course_id, rule=QA_ASK_RULE)
     def event_stream():
         yield _sse("ready", {"request_id": request.state.request_id})
         try:
-            for item in ask_question_stream(db, user=user, payload=payload):
+            for item in run_qa_generation_streaming(user=user, payload=payload):
                 yield _sse(item["event"], item["data"])
-        except Exception as exc:
-            # 服务端记录完整堆栈，客户端只收到脱敏文案，避免原始异常字符串绕过全局异常处理器外泄。
+        except Exception:
+            # worker 已把生成异常转成 error 事件；这里仅兜底 queue/线程级异常。
             LOGGER.warning("qa stream failed", exc_info=True)
-            if isinstance(exc, AppError) and isinstance(exc.detail, dict):
-                message = exc.detail.get("message") or "服务暂时不可用，请稍后重试"
-            else:
-                message = "服务暂时不可用，请稍后重试"
-            yield _sse("error", {"message": message})
+            yield _sse("error", {"message": "服务暂时不可用，请稍后重试"})
 
     return StreamingResponse(
         event_stream(),
