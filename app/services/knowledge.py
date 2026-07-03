@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections import Counter
 
@@ -8,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Chapter, KnowledgeChunk, KnowledgePoint, LessonPage
+from app.db import session as db_session
 from app.services.ai import ai_service
 from app.services.retrieval import build_retrieval_query_variants, defocused_query_text, page_numbers_from_query, query_terms, score_text_for_query
 from app.services.runtime_settings import runtime_setting_float
@@ -42,31 +44,61 @@ _VECTOR_INDEX_CHECK_INTERVAL_SECONDS = 600.0
 _vector_index_last_check: dict[int, float] = {}
 
 
-def _backfill_missing_chunks(db: Session, *, course_id: int, scope_statement) -> int:
+def _backfill_missing_chunks(db: Session, *, course_id: int, scope_statement, id_statement=None) -> int:
     """差集增量回填：只重嵌入向量库缺失的 chunk，而非整课重建。返回回填数量。
 
     覆盖两类场景：向量库整体丢失（缺失=全部，等价旧的整课回填）；以及 ingest 阶段
-    个别资料嵌入失败留下的"部分缺失"（旧逻辑永不自愈）。同步执行、带耗时打点。
+    个别资料嵌入失败留下的"部分缺失"（旧逻辑永不自愈）。
+    先做 IDs-only 差集（不拉 LONGTEXT），只对确认缺失的 chunk 才取全行重嵌入——
+    旧实现体检时把全课 chunk 正文拉过隧道，一次体检就是十几秒的热路径灾难。
     """
-    chunks = list(db.scalars(scope_statement))
-    if not chunks:
+    from sqlalchemy import select as _select
+
+    if id_statement is not None:
+        scope_ids = set(db.scalars(id_statement))
+    else:
+        scope_ids = {chunk.id for chunk in db.scalars(scope_statement)}
+    if not scope_ids:
         return 0
     try:
         indexed = vector_store.indexed_chunk_ids(db, course_id=course_id)
     except Exception:
         indexed = set()
-    missing = [chunk for chunk in chunks if chunk.id not in indexed]
+    missing_ids = [chunk_id for chunk_id in scope_ids if chunk_id not in indexed]
+    if not missing_ids:
+        return 0
+    missing = list(db.scalars(_select(KnowledgeChunk).where(KnowledgeChunk.id.in_(missing_ids))))
     if not missing:
         return 0
     LOGGER.warning(
-        "QA 检索触发向量增量回填：course_id=%s 缺失 chunk=%s/%s（同步重嵌入，可能较慢）",
-        course_id, len(missing), len(chunks),
+        "QA 检索触发向量增量回填：course_id=%s 缺失 chunk=%s/%s（重嵌入缺失部分）",
+        course_id, len(missing), len(scope_ids),
     )
     backfill_started = time.monotonic()
     vector_store.upsert_chunks(db, chunks=missing)
     db.commit()
     LOGGER.warning("QA 检索向量增量回填完成：course_id=%s 耗时=%.1fs", course_id, time.monotonic() - backfill_started)
     return len(missing)
+
+
+def _spawn_background_index_check(course_id: int) -> None:
+    """后台线程做"部分缺失体检"：热路径零成本。自带独立 Session，异常只记日志。"""
+    def _run() -> None:
+        session = db_session.SessionLocal()
+        try:
+            id_statement = select(KnowledgeChunk.id).where(KnowledgeChunk.course_id == course_id)
+            _backfill_missing_chunks(
+                session,
+                course_id=course_id,
+                scope_statement=select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id),
+                id_statement=id_statement,
+            )
+        except Exception as exc:
+            LOGGER.warning("后台向量索引体检失败：course_id=%s err=%s", course_id, exc)
+        finally:
+            session.close()
+
+    threading.Thread(target=_run, name=f"vector-index-check-{course_id}", daemon=True).start()
 
 
 def search_course_knowledge(
@@ -93,53 +125,14 @@ def search_course_knowledge(
     except Exception as exc:
         LOGGER.warning("QA 向量检索失败，退化为关键词兜底：course_id=%s err=%s", course_id, exc)
         rows = []
-    if not rows:
-        backfill_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
-        if chapter_id is not None:
-            backfill_statement = backfill_statement.where(KnowledgeChunk.chapter_id == chapter_id)
-        if lesson_id is not None:
-            backfill_statement = backfill_statement.where(
-                KnowledgeChunk.lesson_page_id.in_(select(LessonPage.id).where(LessonPage.lesson_id == lesson_id))
-            )
-        if lesson_page_id is not None:
-            backfill_statement = backfill_statement.where(KnowledgeChunk.lesson_page_id == lesson_page_id)
-        try:
-            if _backfill_missing_chunks(db, course_id=course_id, scope_statement=backfill_statement):
-                rows = _query_course_variants(
-                    db,
-                    course_id=course_id,
-                    queries=query_variants,
-                    chapter_id=chapter_id,
-                    lesson_id=lesson_id,
-                    lesson_page_id=lesson_page_id,
-                    limit=limit,
-                )
-        except Exception as exc:
-            db.rollback()
-            LOGGER.warning("QA 检索向量回填失败：course_id=%s err=%s", course_id, exc)
-            rows = []
-    else:
-        # 部分缺失自愈：旧逻辑只在"查询全空"时回填，老资料已有索引时新资料嵌入失败
-        # 便永远不可语义召回且无人知道。这里按课程做节流的差集体检（每 10 分钟至多一次），
-        # 发现缺失 chunk 就增量回填并重查一次，让新资料立即可召回。
-        now = time.monotonic()
-        if now - _vector_index_last_check.get(course_id, 0.0) >= _VECTOR_INDEX_CHECK_INTERVAL_SECONDS:
-            _vector_index_last_check[course_id] = now
-            try:
-                course_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
-                if _backfill_missing_chunks(db, course_id=course_id, scope_statement=course_statement):
-                    rows = _query_course_variants(
-                        db,
-                        course_id=course_id,
-                        queries=query_variants,
-                        chapter_id=chapter_id,
-                        lesson_id=lesson_id,
-                        lesson_page_id=lesson_page_id,
-                        limit=limit,
-                    )
-            except Exception as exc:
-                db.rollback()
-                LOGGER.warning("QA 检索向量增量回填失败：course_id=%s err=%s", course_id, exc)
+    # 向量索引自愈一律走【后台线程】节流触发（每 10 分钟至多一次/课程），热路径零成本：
+    # 无论向量结果空不空都不在热路径同步重建索引。旧实现在召回为空时同步重嵌入整课
+    # (拉全课 LONGTEXT + 逐块嵌入)，把问答首字硬拖 20-30s，且索引缺失时【每次提问都重来】；
+    # 现在召回为空立即走关系/关键词兜底(快)返回，后台补建完成后下次提问即可用向量召回。
+    now = time.monotonic()
+    if now - _vector_index_last_check.get(course_id, 0.0) >= _VECTOR_INDEX_CHECK_INTERVAL_SECONDS:
+        _vector_index_last_check[course_id] = now
+        _spawn_background_index_check(course_id)
     chunk_ids = [chunk_id for chunk_id, _ in rows]
     if not chunk_ids:
         return _relational_chunk_fallback(
