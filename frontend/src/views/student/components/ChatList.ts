@@ -171,21 +171,33 @@ export default defineComponent({
         }, 720));
       });
     }
-    // 富文本渲染缓存 + 流式节流：每来一个 token 就把整段 markdown+KaTeX+DOMPurify 从头重解析一遍
-    // 是 O(n²)、且历史消息也被每 token 连带重渲——这是"输出一段卡很久才出下一段、越往后越卡"的元凶。
-    // 按 message.id 缓存渲染结果；流式期间至多每 120ms 重算一次；文本未变直接复用缓存，
-    // 非流式的历史消息渲染一次即锁定。Map 在 setup 作用域内跨渲染持久。
-    type RichCacheEntry = { text: string; html: string; at: number };
-    const richCache = new Map<number, RichCacheEntry>();
-    const thoughtCache = new Map<number, RichCacheEntry>();
-    function renderCached(cache: Map<number, RichCacheEntry>, message: ChatMessage, text: string) {
-      if (!text) return "";
+    // 流式渲染策略（零延迟 + 无卡顿）：
+    // - 流式期间：后端来一个字就立刻显示一个字——直接把纯文本作为文本子节点渲染(pre-wrap)，
+    //   O(1)、不解析 markdown/KaTeX、不节流、不批处理。杜绝"每 token 全量重解析整段(O(n²))"造成的
+    //   "渲染一段卡很久才继续下一段、越往后越卡"。
+    // - 流结束(streaming=false)：再做【一次】完整 markdown+KaTeX 排版并按 text 缓存。
+    // - 非流式(历史/已完成)消息：按 text 缓存，渲染一次即锁定，其它消息刷新时不被连带重解析。
+    const streamStyle = { whiteSpace: "pre-wrap", wordBreak: "break-word" } as const;
+    const richCache = new Map<number, { text: string; html: string }>();
+    const thoughtCache = new Map<number, { text: string; html: string }>();
+    function renderFinal(cache: Map<number, { text: string; html: string }>, message: ChatMessage, text: string) {
       const cached = cache.get(message.id);
       if (cached && cached.text === text) return cached.html;
-      if (message.streaming && cached && performance.now() - cached.at < 120) return cached.html;
       const html = renderRichText(text);
-      cache.set(message.id, { text, html, at: performance.now() });
+      cache.set(message.id, { text, html });
       return html;
+    }
+    function answerNode(message: ChatMessage) {
+      if (!message.text) return streamingIndicator(message);
+      return message.streaming
+        ? h("div", { class: "ai-text markdown-body", style: streamStyle }, message.text)
+        : h("div", { class: "ai-text markdown-body", innerHTML: renderFinal(richCache, message, message.text) });
+    }
+    function thoughtNode(message: ChatMessage) {
+      if (!(message.thought && message.thoughtOpen)) return null;
+      return message.streaming
+        ? h("div", { class: "thought markdown-body", style: streamStyle }, message.thought)
+        : h("div", { class: "thought markdown-body", innerHTML: renderFinal(thoughtCache, message, message.thought) });
     }
     function streamingIndicator(message: ChatMessage) {
       // 发送后、首 token 前展示动画化的加载指示（波动圆点 + 渐变流光的阶段文案），取代静态"正在生成"文字
@@ -202,12 +214,10 @@ export default defineComponent({
       if (p.large && message.role === "ai") {
         return h("div", { class: "chat-bubble bubble-ai" }, [
           message.thought ? h("button", { type: "button", class: "thought-toggle thinking-process", onClick: () => emit("toggle-thought", message) }, [h(Sparkles, { size: 13 }), "思考过程", h(ChevronDown, { size: 13, class: { rotate: message.thoughtOpen } })]) : null,
-          h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought markdown-body", innerHTML: renderCached(thoughtCache, message, message.thought) }) : null }),
+          h(Transition, { name: "thought-roll" }, { default: () => thoughtNode(message) }),
           h("div", { class: "ai-content-card" }, [
             message.outOfScope ? h("span", { class: "tag tag-warning" }, "可能超纲") : null,
-            message.text
-              ? h("div", { class: "ai-text markdown-body", innerHTML: renderCached(richCache, message, message.text) })
-              : streamingIndicator(message),
+            answerNode(message),
             sourceSection(message, "source-tags references-area", "source-label ref-label", "tag ref-tag"),
             h("div", { class: "msg-actions ai-action-bar" }, [
               h("button", { type: "button", title: "复制", class: "ai-action-btn", disabled: !message.text, onClick: () => emit("copy", message.text) }, [h(Copy, { size: 16 }), "复制"]),
@@ -220,10 +230,10 @@ export default defineComponent({
       }
       const body = [
         message.thought ? h("button", { type: "button", class: "thought-toggle", onClick: () => emit("toggle-thought", message) }, [h(Sparkles, { size: 13 }), "思考过程", h(ChevronDown, { size: 13, class: { rotate: message.thoughtOpen } })]) : null,
-        h(Transition, { name: "thought-roll" }, { default: () => message.thought && message.thoughtOpen ? h("div", { class: "thought markdown-body", innerHTML: renderCached(thoughtCache, message, message.thought) }) : null }),
+        h(Transition, { name: "thought-roll" }, { default: () => thoughtNode(message) }),
         message.outOfScope ? h("span", { class: "tag tag-warning" }, "可能超纲") : null,
         message.role === "ai"
-          ? (message.text ? h("div", { class: "ai-text markdown-body", innerHTML: renderCached(richCache, message, message.text) }) : streamingIndicator(message))
+          ? answerNode(message)
           : [h("p", message.text), attachmentNodes(message)],
         sourceSection(message, "source-tags", "source-label"),
         h("div", { class: "msg-actions" }, [
