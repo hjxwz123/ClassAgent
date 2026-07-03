@@ -3,7 +3,9 @@ from dataclasses import dataclass
 import html
 import logging
 from pathlib import Path
+from queue import Queue
 import re
+import threading
 from time import sleep
 from typing import Any
 
@@ -13,7 +15,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.enums import LearningSignalSource, MaterialType, QAFeedback, QuestionType, UserRole
-from app.core.errors import bad_request, forbidden, not_found
+from app.core.errors import AppError, bad_request, forbidden, not_found
+from app.db import session as db_session
 from app.core.media import signed_media_url
 from app.core.upload_validation import validate_image_upload
 from app.db.models import Chapter, Course, CourseMaterial, CourseMembership, KnowledgeChunk, Lesson, LessonPage, QAConversation, QARecord, StudentLearningSignal, User
@@ -2137,6 +2140,35 @@ def ask_question(db: Session, *, user: User, payload: QAAskRequest) -> QARecord:
     return record
 
 
+def _save_qa_answer_fresh(record_id: int, *, answer: str, thinking: str | None, out_of_scope: bool, attempts: int = 3) -> None:
+    """用全新数据库连接把最终回答落库（兜底）。
+
+    长时间生成后主连接可能已失效，此时 db.commit() 抛错会被吞掉、回答永久丢失，
+    刷新后只剩来源标签。这里换新连接按 record_id 重写，带指数退避重试，杜绝该丢失。
+    """
+    for attempt in range(attempts):
+        session = db_session.SessionLocal()
+        try:
+            record = session.get(QARecord, record_id)
+            if record is None:
+                return
+            record.answer = answer
+            record.thinking_process = thinking
+            record.is_out_of_scope = out_of_scope
+            session.add(record)
+            session.commit()
+            logger.warning("QA 最终落库经新连接重试成功：record_id=%s", record_id)
+            return
+        except Exception:
+            session.rollback()
+            if attempt == attempts - 1:
+                logger.error("QA 最终落库彻底失败，回答可能丢失：record_id=%s", record_id, exc_info=True)
+            else:
+                sleep(0.6 * (attempt + 1))
+        finally:
+            session.close()
+
+
 def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> Iterator[dict]:
     _assert_student_course_access(db, course_id=payload.course_id, user=user)
     # 进度事件：规划+检索在首 token 前串行执行，先给用户"检索中"的即时反馈，避免空白干等
@@ -2292,13 +2324,18 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
             yield from _stream_text_delta("answer", f"\n\n{suffix}", answer_parts, thought_parts)
         completed = True
     finally:
-        # 正常收尾或客户端断开（GeneratorExit）都会到这里，把已生成内容落库
+        # 收尾落库。worker 线程独立于客户端连接，即使用户已关闭浏览器也会执行到这里，
+        # 保证完整回答落库；若当前连接落库失败（连接失效等），换新连接重试，杜绝"刷新后答案消失"。
+        answer_text = "".join(answer_parts).strip()
+        thinking_text = "".join(thought_parts).strip() or None
         try:
             persist(final=True)
             if completed and not out_of_scope and ai_error_message is None:
                 record_qa_learning_signals(db, user=user, record=record)
         except Exception:
             db.rollback()
+            logger.warning("QA 最终落库失败，改用新连接重试：record_id=%s", record_id, exc_info=True)
+            _save_qa_answer_fresh(record_id, answer=answer_text, thinking=thinking_text, out_of_scope=out_of_scope)
 
     yield {
         "event": "final",
@@ -2313,6 +2350,41 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
             "attachments": _resign_attachments(attachments),
         },
     }
+
+
+_QA_STREAM_SENTINEL: object = object()
+
+
+def run_qa_generation_streaming(*, user: User, payload: QAAskRequest) -> Iterator[dict]:
+    """把问答生成放到独立后台线程跑到完成并落库，SSE 仅作旁路观察。
+
+    要点：客户端断开时本生成器被 GeneratorExit 关闭，但 worker 线程与请求连接彻底解耦，
+    仍会把回答生成完并落库。因此用户发完消息立即关闭浏览器，稍后回来也能看到完整回答——
+    回复由后端负责落库，不再依赖前端保持 SSE 连接。worker 自带独立 Session，不占用请求连接。
+    """
+    queue: Queue = Queue()
+
+    def worker() -> None:
+        session = db_session.SessionLocal()
+        try:
+            for event in ask_question_stream(session, user=user, payload=payload):
+                queue.put(event)
+        except Exception as exc:
+            logger.warning("QA 后台生成线程异常", exc_info=True)
+            message = "服务暂时不可用，请稍后重试"
+            if isinstance(exc, AppError) and isinstance(exc.detail, dict):
+                message = exc.detail.get("message") or message
+            queue.put({"event": "error", "data": {"message": message}})
+        finally:
+            queue.put(_QA_STREAM_SENTINEL)
+            session.close()
+
+    threading.Thread(target=worker, name="qa-generation", daemon=True).start()
+    while True:
+        event = queue.get()
+        if event is _QA_STREAM_SENTINEL:
+            break
+        yield event
 
 
 def list_history(db: Session, *, user: User, course_id: int | None = None, lesson_id: int | None = None, keyword: str | None = None) -> list[dict]:
