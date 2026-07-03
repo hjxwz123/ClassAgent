@@ -388,9 +388,8 @@ svg { display: block; flex-shrink: 0; }
   transform: translateY(8px);
 }
 
-.route-zoom-enter-active,
-.route-home-auth-enter-active,
-.route-auth-home-enter-active {
+/* 旧的 route-zoom（其它场景保留原样，不动） */
+.route-zoom-enter-active {
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -403,9 +402,7 @@ svg { display: block; flex-shrink: 0; }
   filter: none;
   will-change: opacity;
 }
-.route-zoom-leave-active,
-.route-home-auth-leave-active,
-.route-auth-home-leave-active {
+.route-zoom-leave-active {
   position: fixed;
   inset: 0;
   z-index: 101;
@@ -419,20 +416,34 @@ svg { display: block; flex-shrink: 0; }
   filter: none;
   will-change: opacity;
 }
-.route-zoom-enter-from,
+.route-zoom-enter-from { opacity: .999; filter: none; transform: none; }
+.route-zoom-leave-to { opacity: .999; filter: none; transform: none; }
+
+/* ============ 首页 ⇄ 登录页 转场（重写） ============
+   深色影院级交叉淡入 + 轻微缩放。要点：
+   - 两页根节点(.ph / .auth)自带 scoped position:relative，specificity 高于普通转场类，
+     故用 !important 强制 fixed 叠放，避免转场期两页落入文档流纵向堆叠导致的跳动；
+   - 底色统一 #060809，杜绝旧的 --route-transition-bg 纸白闪；
+   - opacity 真正从 0↔1 过渡（旧版是 .999↔1 的伪动画，表现为旧页冻结约 1 秒再硬切）。 */
+.route-home-auth-enter-active,
+.route-auth-home-enter-active,
+.route-home-auth-leave-active,
+.route-auth-home-leave-active {
+  position: fixed !important;
+  inset: 0 !important;
+  overflow: hidden;
+  background: #060809;
+  transition: opacity 560ms cubic-bezier(0.22, 1, 0.36, 1), transform 560ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.route-home-auth-enter-active,
+.route-auth-home-enter-active { z-index: 3000 !important; }
+.route-home-auth-leave-active,
+.route-auth-home-leave-active { z-index: 2000 !important; pointer-events: none; }
 .route-home-auth-enter-from,
-.route-auth-home-enter-from {
-  opacity: .999;
-  filter: none;
-  transform: none;
-}
-.route-zoom-leave-to,
+.route-auth-home-enter-from { opacity: 0; transform: scale(1.04); }
 .route-home-auth-leave-to,
-.route-auth-home-leave-to {
-  opacity: .999;
-  filter: none;
-  transform: none;
-}
+.route-auth-home-leave-to { opacity: 0; transform: scale(0.985); }
 
 .select-popover,
 .menu-popover,
