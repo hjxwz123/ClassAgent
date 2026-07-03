@@ -46,3 +46,4 @@ readmedocs/
 !.github/workflows/*.yml
 !.env.example
 !.env.production.example
+node_modules
