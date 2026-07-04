@@ -2,25 +2,34 @@
   <!-- 顶部栏 -->
   <view class="study__nav" style="padding-top:{{statusBar}}px">
     <view class="study__nav-bar">
-      <view class="study__back" bindtap="back">‹</view>
+      <view class="study__back" hover-class="hover-dim" bindtap="back">‹</view>
       <view class="study__title">
         <view class="ellipsis">{{lesson.title || '课时学习'}}</view>
         <view class="study__sub" wx:if="{{pages.length}}">第 {{current + 1}}/{{pages.length}} 页</view>
       </view>
-      <view class="study__set" bindtap="cycleSubtitle">字幕</view>
+      <!-- 定位到胶囊左侧，避免被胶囊遮挡 -->
+      <view class="study__set" style="right:{{navRightPx}}px" hover-class="hover-dim" bindtap="toggleSubtitle">字幕</view>
     </view>
   </view>
 
   <view wx:if="{{loading}}" class="study__loading">正在打开课时…</view>
+
+  <!-- 加载失败（与真空态区分） -->
+  <view wx:elif="{{error}}" class="study__error">
+    <view class="study__error-text">{{error}}</view>
+    <view class="study__error-btn" hover-class="hover-dim" bindtap="load">重新加载</view>
+  </view>
 
   <block wx:elif="{{pages.length}}">
     <!-- 主舞台 -->
     <swiper class="stage" current="{{current}}" bindchange="onSwiperChange" duration="240">
       <swiper-item wx:for="{{pages}}" wx:key="id">
         <scroll-view scroll-y class="stage__scroll">
+          <!-- 课件卡片：黑板暗底上的白色幻灯片，Markdown 排版渲染（对齐网页端 slide-card） -->
           <view class="slide">
+            <view class="slide__badge">P{{index + 1}}</view>
             <view wx:if="{{item.page_title}}" class="slide__title">{{item.page_title}}</view>
-            <view class="slide__body">{{item.page_text}}</view>
+            <rich-text class="slide__body" nodes="{{item.nodes}}" user-select></rich-text>
           </view>
         </scroll-view>
       </swiper-item>
@@ -33,16 +42,17 @@
 
     <!-- 播放控制条 -->
     <view class="controls">
-      <view class="controls__btn" bindtap="prevPage">‹ 上一页</view>
+      <view class="controls__btn" hover-class="hover-dim" bindtap="prevPage">‹ 上一页</view>
       <view class="controls__center">
-        <view class="controls__icon" data-tab="script" bindtap="openDrawer">AI</view>
-        <view class="controls__icon" bindtap="toggleThumb"><icon name="grid" size="36rpx" color="#00E5FF" /></view>
+        <view class="controls__icon" hover-class="hover-dim" data-tab="script" bindtap="openDrawer">AI</view>
+        <view class="controls__icon" hover-class="hover-dim" bindtap="toggleThumb"><icon name="grid" size="36rpx" color="#00E5FF" /></view>
+        <view wx:if="{{materialOpenable}}" class="controls__icon controls__icon--doc" hover-class="hover-dim" bindtap="openOriginal">原件</view>
       </view>
-      <view class="controls__btn controls__btn--primary" bindtap="nextPage">{{current === pages.length - 1 ? '完成' : '下一页 ›'}}</view>
+      <view class="controls__btn controls__btn--primary" hover-class="hover-dim" bindtap="nextPage">{{current === pages.length - 1 ? '完成' : '下一页 ›'}}</view>
     </view>
 
     <!-- 底部 AI 把手 -->
-    <view class="handle" data-tab="script" bindtap="openDrawer">
+    <view class="handle" hover-class="hover-dim" data-tab="script" bindtap="openDrawer">
       <view class="handle__bar"></view>
       <text>上滑展开 文稿 · 活动 · 问答 · 笔记</text>
     </view>
@@ -56,10 +66,10 @@
 <view wx:if="{{drawerOpen}}" class="drawer" catchtap="">
   <view class="sheet__handle"></view>
   <view class="drawer__tabs">
-    <view class="drawer__tab {{drawerTab === 'script' ? 'drawer__tab--on' : ''}}" data-tab="script" bindtap="switchDrawerTab">文稿</view>
-    <view class="drawer__tab {{drawerTab === 'activity' ? 'drawer__tab--on' : ''}}" data-tab="activity" bindtap="switchDrawerTab">活动</view>
-    <view class="drawer__tab {{drawerTab === 'qa' ? 'drawer__tab--on' : ''}}" data-tab="qa" bindtap="switchDrawerTab">问答</view>
-    <view class="drawer__tab {{drawerTab === 'note' ? 'drawer__tab--on' : ''}}" data-tab="note" bindtap="switchDrawerTab">笔记</view>
+    <view class="drawer__tab {{drawerTab === 'script' ? 'drawer__tab--on' : ''}}" hover-class="hover-dim" data-tab="script" bindtap="switchDrawerTab">文稿</view>
+    <view class="drawer__tab {{drawerTab === 'activity' ? 'drawer__tab--on' : ''}}" hover-class="hover-dim" data-tab="activity" bindtap="switchDrawerTab">活动</view>
+    <view class="drawer__tab {{drawerTab === 'qa' ? 'drawer__tab--on' : ''}}" hover-class="hover-dim" data-tab="qa" bindtap="switchDrawerTab">问答</view>
+    <view class="drawer__tab {{drawerTab === 'note' ? 'drawer__tab--on' : ''}}" hover-class="hover-dim" data-tab="note" bindtap="switchDrawerTab">笔记</view>
   </view>
 
   <scroll-view scroll-y class="drawer__body">
@@ -87,7 +97,7 @@
       <view wx:for="{{qaMessages}}" wx:key="index" class="dqa dqa--{{item.role}}">
         <view class="dqa__bubble dqa__bubble--{{item.role}} {{item.error ? 'dqa__bubble--err' : ''}}">
           <view wx:if="{{item.pending}}" class="typing"><text></text><text></text><text></text></view>
-          <text wx:else>{{item.text}}</text>
+          <text wx:else user-select="{{true}}">{{item.text}}</text>
         </view>
       </view>
     </block>
@@ -98,13 +108,13 @@
         <text class="text-sub">本页笔记</text>
         <text class="note-state note-state--{{noteState === '保存失败' ? 'err' : 'ok'}}">{{noteState}}</text>
       </view>
-      <textarea class="textarea" style="min-height:300rpx" value="{{note}}" placeholder="记录你的想法，自动保存" bindinput="onNoteInput" />
+      <textarea class="textarea" style="min-height:300rpx" value="{{note}}" maxlength="2000" cursor-spacing="20" placeholder="记录你的想法，自动保存" bindinput="onNoteInput" />
     </block>
   </scroll-view>
 
   <!-- 问答输入固定底部 -->
   <view wx:if="{{drawerTab === 'qa'}}" class="drawer__input">
-    <textarea class="qa__textarea" auto-height placeholder="向 AI 提问本页内容…" value="{{qaInput}}" bindinput="onQaInput" show-confirm-bar="{{false}}" />
+    <textarea class="qa__textarea" auto-height maxlength="2000" cursor-spacing="20" confirm-type="send" placeholder="向 AI 提问本页内容…" value="{{qaInput}}" bindinput="onQaInput" bindconfirm="sendPageQa" show-confirm-bar="{{false}}" />
     <button class="qa__send {{qaInput && !qaSending ? 'qa__send--on' : ''}}" disabled="{{!qaInput || qaSending}}" bindtap="sendPageQa">发送</button>
   </view>
 </view>
@@ -116,17 +126,18 @@
   <view class="sheet__title">页面缩略图</view>
   <scroll-view scroll-y style="max-height:56vh">
     <view class="thumb-grid">
-      <view wx:for="{{pages}}" wx:key="id" class="thumb {{index === current ? 'thumb--on' : ''}}" data-index="{{index}}" bindtap="jumpPage">
+      <view wx:for="{{pages}}" wx:key="id" class="thumb {{index === current ? 'thumb--on' : ''}}" hover-class="hover-dim" data-index="{{index}}" bindtap="jumpPage">
         <view class="thumb__num num">{{index + 1}}</view>
-        <view class="thumb__title clamp-2">{{item.page_title || item.page_text}}</view>
+        <view class="thumb__title clamp-2">{{item.thumbText}}</view>
       </view>
     </view>
   </scroll-view>
 </view>
 
-<!-- 完成卡 -->
-<view wx:if="{{completeOpen}}" class="sheet-mask"></view>
+<!-- 完成卡（点遮罩或关闭按钮可留在本页继续查看） -->
+<view wx:if="{{completeOpen}}" class="sheet-mask" bindtap="closeComplete"></view>
 <view wx:if="{{completeOpen}}" class="complete">
+  <view class="complete__close" hover-class="hover-dim" bindtap="closeComplete">×</view>
   <icon class="complete__icon" name="celebrate" size="80rpx" color="#00B8D4" />
   <view class="complete__title">课时完成！</view>
   <view class="complete__stats">

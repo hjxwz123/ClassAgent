@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "学生详情",
-  "usingComponents": {}
+  "usingComponents": {},
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark"
 }

@@ -1,5 +1,7 @@
 {
   "navigationBarTitleText": "题目辅导",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
   "usingComponents": {
     "icon": "/components/icon/index"
   }

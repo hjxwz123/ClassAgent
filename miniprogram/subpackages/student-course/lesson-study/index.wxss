@@ -1,20 +1,43 @@
 .study { height: 100vh; background: #121614; display: flex; flex-direction: column; position: relative; }
 
 .study__nav { background: #121614; }
-.study__nav-bar { display: flex; align-items: center; height: 88rpx; padding: 0 24rpx; }
+.study__nav-bar { position: relative; display: flex; align-items: center; height: 88rpx; padding: 0 24rpx; }
 .study__back { width: 64rpx; font-size: 56rpx; color: #F4F4F0; line-height: 1; }
 .study__title { flex: 1; text-align: center; color: #F4F4F0; }
-.study__title .ellipsis { font-size: 30rpx; font-weight: 600; max-width: 420rpx; margin: 0 auto; }
+.study__title .ellipsis { font-size: 30rpx; font-weight: 600; max-width: 360rpx; margin: 0 auto; }
 .study__sub { font-size: 22rpx; color: #8C948F; margin-top: 2rpx; }
-.study__set { width: 80rpx; text-align: right; font-size: 26rpx; color: #00E5FF; }
+/* 绝对定位到胶囊左侧（right 由 JS 按胶囊位置计算） */
+.study__set { position: absolute; top: 50%; transform: translateY(-50%); font-size: 26rpx; color: #00E5FF; padding: 8rpx 0; }
 
 .study__loading { flex: 1; display: flex; align-items: center; justify-content: center; color: #8C948F; font-size: 28rpx; }
 
+/* 加载失败态 */
+.study__error { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28rpx; }
+.study__error-text { color: #8C948F; font-size: 28rpx; }
+.study__error-btn { padding: 14rpx 56rpx; border-radius: 9999rpx; border: 1rpx solid #00E5FF; color: #00E5FF; font-size: 28rpx; }
+
 .stage { flex: 1; }
 .stage__scroll { height: 100%; }
-.slide { min-height: 100%; padding: 40rpx 40rpx 200rpx; }
-.slide__title { font-size: 40rpx; font-weight: 700; color: #F4F4F0; margin-bottom: 24rpx; }
-.slide__body { font-size: 32rpx; line-height: 1.8; color: #DEDEDA; white-space: pre-wrap; }
+/* 黑板暗底上的白色课件卡片（对齐网页端 slide-card 观感），Markdown 排版由 rich-text 内联样式承担 */
+.slide {
+  min-height: calc(100% - 264rpx);
+  margin: 24rpx 24rpx 240rpx;
+  padding: 44rpx 36rpx 48rpx;
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  box-shadow: 0 0 0 1rpx rgba(255, 255, 255, 0.1), 0 24rpx 48rpx rgba(0, 0, 0, 0.55);
+  position: relative;
+}
+.slide__badge {
+  position: absolute;
+  top: 24rpx;
+  right: 28rpx;
+  font-size: 22rpx;
+  color: #999990;
+  font-family: "SFMono-Regular", "Menlo", monospace;
+}
+.slide__title { font-size: 38rpx; font-weight: 700; color: #2C2B29; margin-bottom: 20rpx; padding-right: 80rpx; }
+.slide__body { display: block; font-size: 30rpx; line-height: 1.75; color: #444440; }
 
 .subtitle {
   position: absolute;
@@ -41,6 +64,7 @@
   background: rgba(0,229,255,0.14); color: #00E5FF;
   display: flex; align-items: center; justify-content: center; font-size: 28rpx; font-weight: 600;
 }
+.controls__icon--doc { font-size: 22rpx; letter-spacing: 1rpx; }
 
 .handle { padding: 12rpx 0 calc(env(safe-area-inset-bottom) + 12rpx); text-align: center; color: #8C948F; font-size: 22rpx; background: #1a201d; }
 .handle__bar { width: 72rpx; height: 8rpx; border-radius: 9999rpx; background: #3a423d; margin: 0 auto 8rpx; }
@@ -90,6 +114,7 @@
   background: var(--ca-card); border-radius: 28rpx; padding: 48rpx 40rpx; text-align: center;
 }
 .complete__icon { font-size: 80rpx; }
+.complete__close { position: absolute; top: 16rpx; right: 24rpx; width: 56rpx; height: 56rpx; line-height: 56rpx; text-align: center; font-size: 44rpx; color: var(--ca-muted); }
 .complete__title { font-size: 38rpx; font-weight: 700; margin: 16rpx 0 32rpx; }
 .complete__stats { display: flex; justify-content: space-around; }
 .complete__stat { display: flex; flex-direction: column; align-items: center; }

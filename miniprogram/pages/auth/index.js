@@ -33,6 +33,8 @@ Page({
   },
 
   async doLogin() {
+    // 防重入：提交中直接忽略重复触发
+    if (this.data.submitting) return;
     const { email, password } = this.data.login;
     const errors = {};
     if (!this.validateEmail(email)) errors.email = '请输入有效邮箱';
@@ -49,5 +51,9 @@ Page({
     } finally {
       this.setData({ submitting: false });
     }
+  },
+
+  onShareAppMessage() {
+    return { title: '智学黑板 · AI 课程学习助手', path: '/pages/auth/index' };
   }
 });

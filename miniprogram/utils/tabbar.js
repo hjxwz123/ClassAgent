@@ -3,7 +3,7 @@ function setTab(page, index) {
   if (typeof page.getTabBar === 'function' && page.getTabBar()) {
     const bar = page.getTabBar();
     bar.refreshRole();
-    bar.setData({ selected: index });
+    if (bar.data.selected !== index) bar.setData({ selected: index });
   }
 }
 

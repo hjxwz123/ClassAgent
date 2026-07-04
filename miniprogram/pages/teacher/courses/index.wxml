@@ -3,21 +3,27 @@
 
   <view class="search mt-16">
     <icon class="search__icon" name="search" size="28rpx" color="#999990" />
-    <input class="search__input" placeholder="搜索课程名称" value="{{keyword}}" bindinput="onSearch" />
+    <input class="search__input" placeholder="搜索课程名称" confirm-type="search" value="{{keyword}}" bindinput="onSearch" />
   </view>
 
   <view class="chips mt-16">
-    <view class="chip chip--teacher {{status === 'all' ? 'chip--on' : ''}}" data-status="all" bindtap="setStatus">全部</view>
-    <view class="chip chip--teacher {{status === 'active' ? 'chip--on' : ''}}" data-status="active" bindtap="setStatus">已上架</view>
-    <view class="chip chip--teacher {{status === 'inactive' ? 'chip--on' : ''}}" data-status="inactive" bindtap="setStatus">已下架</view>
+    <view class="chip chip--teacher {{status === 'all' ? 'chip--on' : ''}}" hover-class="hover-dim" data-status="all" bindtap="setStatus">全部</view>
+    <view class="chip chip--teacher {{status === 'active' ? 'chip--on' : ''}}" hover-class="hover-dim" data-status="active" bindtap="setStatus">已上架</view>
+    <view class="chip chip--teacher {{status === 'inactive' ? 'chip--on' : ''}}" hover-class="hover-dim" data-status="inactive" bindtap="setStatus">已下架</view>
   </view>
 
   <block wx:if="{{loading}}">
     <view class="card"><view class="skeleton skeleton-line"></view></view>
   </block>
 
+  <!-- 加载失败占位 -->
+  <view wx:elif="{{error}}" class="empty">
+    <view class="empty__text">加载失败：{{error}}</view>
+    <button class="btn btn--outline btn--sm" bindtap="load">重新加载</button>
+  </view>
+
   <block wx:elif="{{filtered.length}}">
-    <view wx:for="{{filtered}}" wx:key="id" class="card t-course-card fade-in" data-id="{{item.id}}" bindtap="openCourse">
+    <view wx:for="{{filtered}}" wx:key="id" class="card t-course-card fade-in" hover-class="hover-card" data-id="{{item.id}}" bindtap="openCourse">
       <view class="row-between">
         <view class="flex-1">
           <view class="ellipsis" style="font-weight:600;font-size:32rpx">{{item.name}}</view>
@@ -34,11 +40,18 @@
       </view>
 
       <view class="row-between mt-16">
-        <view class="tag tag--code" catchtap="copyCode" data-code="{{item.course_code}}">{{item.course_code}} 复制</view>
+        <view class="tag tag--code" hover-class="hover-dim" catchtap="copyCode" data-code="{{item.course_code}}">{{item.course_code}} 复制</view>
         <button class="btn btn--outline btn--sm" catchtap="toggleStatus" data-id="{{item.id}}" data-status="{{item.status}}">{{item.status === 'active' ? '下架' : '上架'}}</button>
       </view>
     </view>
   </block>
+
+  <!-- 有课程但筛选无结果 -->
+  <view wx:elif="{{courses.length}}" class="empty">
+    <icon class="empty__icon" name="search" size="64rpx" color="#D94925" />
+    <view class="empty__text">未找到匹配课程</view>
+    <button class="btn btn--outline btn--sm" bindtap="clearFilter">清除筛选</button>
+  </view>
 
   <view wx:else class="empty">
     <icon class="empty__icon" name="book" size="64rpx" color="#D94925" />

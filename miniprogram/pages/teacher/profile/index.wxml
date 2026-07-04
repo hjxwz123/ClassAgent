@@ -6,7 +6,7 @@
   <block wx:elif="{{profile}}">
     <view class="id-card banner banner--teacher fade-in">
       <view class="row gap-24">
-        <view class="id-card__avatar" bindtap="changeAvatar">
+        <view class="id-card__avatar" hover-class="hover-dim" bindtap="changeAvatar">
           <image wx:if="{{form.avatar_url}}" src="{{form.avatar_url}}" mode="aspectFill" class="id-card__avatar-img" />
           <text wx:else>{{form.nickname[0] || '师'}}</text>
         </view>
@@ -36,7 +36,7 @@
         <view class="field__label">简介</view>
         <textarea class="textarea" value="{{form.bio}}" data-field="bio" bindinput="onForm" />
       </view>
-      <button class="btn btn--teacher btn--block" bindtap="save">保存资料</button>
+      <button class="btn btn--teacher btn--block" loading="{{saving}}" disabled="{{saving}}" bindtap="save">保存资料</button>
     </view>
 
     <view class="card">
@@ -48,7 +48,7 @@
     </view>
 
     <view class="card">
-      <view class="list-link" bindtap="openPwd"><text class="flex-1">修改密码</text><text class="text-muted">›</text></view>
+      <view class="list-link" hover-class="hover-bg" bindtap="openPwd"><text class="flex-1">修改密码</text><text class="text-muted">›</text></view>
     </view>
 
     <button class="btn btn--danger btn--block" bindtap="logout">退出登录</button>

@@ -3,23 +3,29 @@
     <view class="card"><view class="skeleton skeleton-line"></view></view>
   </block>
 
+  <!-- 加载失败占位 -->
+  <view wx:elif="{{error}}" class="empty">
+    <view class="empty__text">加载失败：{{error}}</view>
+    <button class="btn btn--outline btn--sm" bindtap="load">重新加载</button>
+  </view>
+
   <block wx:elif="{{home}}">
     <!-- 横幅 -->
     <view class="banner banner--teacher fade-in">
       <view class="h2" style="color:#fff">{{home.course.name}}</view>
       <view class="text-sub" style="color:rgba(255,255,255,0.85);margin-top:8rpx">{{home.course.term}}</view>
       <view class="row gap-16 mt-16">
-        <view class="tag tag--code" catchtap="copyCode">{{home.course.course_code}} 复制</view>
+        <view class="tag tag--code" hover-class="hover-dim" catchtap="copyCode">{{home.course.course_code}} 复制</view>
         <text class="tag {{home.course.status === 'active' ? 'tag--success' : 'tag--warning'}}">{{home.course.status === 'active' ? '已上架' : '已下架'}}</text>
       </view>
     </view>
 
     <!-- 快捷入口 2x2 -->
     <view class="quick-grid">
-      <view class="quick quick--teacher" bindtap="goStudents"><icon class="quick__icon" name="user" size="40rpx" color="#D94925" /><text>学生</text></view>
-      <view class="quick quick--teacher" bindtap="goAnalytics"><icon class="quick__icon" name="chart" size="40rpx" color="#D94925" /><text>分析</text></view>
-      <view class="quick quick--teacher"><icon class="quick__icon" name="list" size="40rpx" color="#D94925" /><text>资料({{home.quick_counts.material_count}})</text></view>
-      <view class="quick quick--teacher"><icon class="quick__icon" name="play" size="40rpx" color="#D94925" /><text>课时({{home.quick_counts.lesson_count}})</text></view>
+      <view class="quick quick--teacher" hover-class="hover-card" bindtap="goStudents"><icon class="quick__icon" name="user" size="40rpx" color="#D94925" /><text>学生</text></view>
+      <view class="quick quick--teacher" hover-class="hover-card" bindtap="goAnalytics"><icon class="quick__icon" name="chart" size="40rpx" color="#D94925" /><text>分析</text></view>
+      <view class="quick quick--teacher" hover-class="hover-card" bindtap="noticeDesktop"><icon class="quick__icon" name="list" size="40rpx" color="#D94925" /><text>资料({{home.quick_counts.material_count}})</text></view>
+      <view class="quick quick--teacher" hover-class="hover-card" bindtap="noticeDesktop"><icon class="quick__icon" name="play" size="40rpx" color="#D94925" /><text>课时({{home.quick_counts.lesson_count}})</text></view>
     </view>
 
     <!-- 课时概览 -->

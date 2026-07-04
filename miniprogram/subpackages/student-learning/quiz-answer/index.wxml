@@ -1,8 +1,8 @@
 <view class="exam">
   <!-- 顶部 -->
   <view class="exam__nav" style="padding-top:{{statusBar}}px">
-    <view class="exam__nav-bar">
-      <view class="exam__exit" bindtap="exit">退出</view>
+    <view class="exam__nav-bar" style="height:{{navHeight}}px;padding-right:{{navPadRight}}px">
+      <view class="exam__exit" hover-class="hover-dim" bindtap="exit">退出</view>
       <view class="exam__title ellipsis">{{quiz.title || '作答'}}</view>
       <view class="exam__time num">{{timeText}}</view>
     </view>
@@ -12,6 +12,12 @@
   </view>
 
   <view wx:if="{{loading}}" class="exam__loading">AI 正在准备题目…</view>
+
+  <view wx:elif="{{error}}" class="exam__error">
+    <icon name="cross" size="64rpx" color="#C62828" />
+    <view class="exam__error-text">题目加载失败，请检查网络后重试</view>
+    <button class="btn btn--outline btn--sm" bindtap="load">重新加载</button>
+  </view>
 
   <block wx:elif="{{view}}">
     <scroll-view scroll-y class="exam__body">
@@ -23,7 +29,7 @@
 
       <!-- 选择题 -->
       <block wx:if="{{view.isChoice}}">
-        <view wx:for="{{view.opts}}" wx:key="index" class="opt {{item.selected ? 'opt--on' : ''}}" data-index="{{item.index}}" bindtap="selectOption">
+        <view wx:for="{{view.opts}}" wx:key="index" class="opt {{item.selected ? 'opt--on' : ''}}" hover-class="hover-card" data-index="{{item.index}}" bindtap="selectOption">
           <view class="opt__letter">{{item.letter}}</view>
           <view class="flex-1">{{item.text}}</view>
           <icon wx:if="{{item.selected}}" class="opt__check" name="check" size="30rpx" color="#00B8D4" />
@@ -41,10 +47,10 @@
 
     <!-- 底部操作 -->
     <view class="exam__foot">
-      <view class="exam__foot-btn" bindtap="prev">上一题</view>
-      <view class="exam__foot-panel" bindtap="togglePanel">{{answeredCount}}/{{questions.length}}</view>
-      <view wx:if="{{current < questions.length - 1}}" class="exam__foot-btn exam__foot-btn--primary" bindtap="next">下一题</view>
-      <view wx:else class="exam__foot-btn exam__foot-btn--primary" bindtap="submit">交卷</view>
+      <view class="exam__foot-btn" hover-class="hover-dim" bindtap="prev">上一题</view>
+      <view class="exam__foot-panel" hover-class="hover-dim" bindtap="togglePanel">{{answeredCount}}/{{questions.length}}</view>
+      <view wx:if="{{current < questions.length - 1}}" class="exam__foot-btn exam__foot-btn--primary" hover-class="hover-dim" bindtap="next">下一题</view>
+      <view wx:else class="exam__foot-btn exam__foot-btn--primary {{submitting ? 'exam__foot-btn--disabled' : ''}}" hover-class="hover-dim" bindtap="submit">{{submitting ? '提交中…' : '交卷'}}</view>
     </view>
   </block>
 </view>
@@ -55,7 +61,7 @@
   <view class="sheet__handle"></view>
   <view class="sheet__title">题号 · 已答 {{answeredCount}}/{{questions.length}}</view>
   <view class="num-grid">
-    <view wx:for="{{questions}}" wx:key="id" class="num-cell {{index === current ? 'num-cell--cur' : (answers[item.id] !== undefined && answers[item.id] !== '' ? 'num-cell--done' : '')}}" data-index="{{index}}" bindtap="jump">{{index + 1}}</view>
+    <view wx:for="{{questions}}" wx:key="id" class="num-cell {{index === current ? 'num-cell--cur' : (answeredMap[item.id] ? 'num-cell--done' : '')}}" hover-class="hover-dim" data-index="{{index}}" bindtap="jump">{{index + 1}}</view>
   </view>
-  <button class="btn btn--primary btn--block mt-16" loading="{{submitting}}" bindtap="submit">交卷</button>
+  <button class="btn btn--primary btn--block mt-16" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submit">交卷</button>
 </view>

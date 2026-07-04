@@ -1,6 +1,6 @@
 <view class="page page--tab">
   <view class="row-between">
-    <view class="course-sel" bindtap="toggleCoursePicker">
+    <view class="course-sel" hover-class="hover-dim" bindtap="toggleCoursePicker">
       <text class="ellipsis">{{courseName}}</text>
       <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#0097A7" />
     </view>
@@ -17,13 +17,13 @@
 
   <view class="search mt-16">
     <icon class="search__icon" name="search" size="28rpx" color="#999990" />
-    <input class="search__input" placeholder="搜索题干关键词" value="{{keyword}}" bindinput="onSearch" />
+    <input class="search__input" placeholder="搜索题干关键词" confirm-type="search" value="{{keyword}}" bindinput="onSearch" />
   </view>
 
   <view class="chips mt-16">
-    <view class="chip {{status === 'all' ? 'chip--on' : ''}}" data-status="all" bindtap="setStatus">全部</view>
-    <view class="chip {{status === 'pending' ? 'chip--on' : ''}}" data-status="pending" bindtap="setStatus">待重练</view>
-    <view class="chip {{status === 'resolved' ? 'chip--on' : ''}}" data-status="resolved" bindtap="setStatus">已掌握</view>
+    <view class="chip {{status === 'all' ? 'chip--on' : ''}}" hover-class="hover-bg" data-status="all" bindtap="setStatus">全部</view>
+    <view class="chip {{status === 'pending' ? 'chip--on' : ''}}" hover-class="hover-bg" data-status="pending" bindtap="setStatus">待重练</view>
+    <view class="chip {{status === 'resolved' ? 'chip--on' : ''}}" hover-class="hover-bg" data-status="resolved" bindtap="setStatus">已掌握</view>
   </view>
 
   <view wx:if="{{weakPoints.length}}" class="weak-strip mt-16">
@@ -35,7 +35,7 @@
   </block>
 
   <block wx:elif="{{filtered.length}}">
-    <view wx:for="{{filtered}}" wx:key="wrong_question_id" class="card wrong-card fade-in">
+    <view wx:for="{{filtered}}" wx:key="wrong_question_id" class="card wrong-card fade-in" hover-class="hover-card" data-index="{{index}}" bindtap="toggleExpand">
       <view class="row-between">
         <view class="row gap-8">
           <text class="tag {{item.is_resolved ? 'tag--success' : 'tag--error'}}">{{item.is_resolved ? '已掌握' : '待重练'}}</text>
@@ -43,7 +43,7 @@
         </view>
         <text class="text-muted" style="font-size:24rpx">{{item.knowledge_point_name || '未标注'}}</text>
       </view>
-      <view class="wrong-card__stem {{item.expanded ? '' : 'clamp-4'}}" data-index="{{index}}" bindtap="toggleExpand">{{item.question.stem}}</view>
+      <view class="wrong-card__stem {{item.expanded ? '' : 'clamp-4'}}">{{item.question.stem}}</view>
       <view wx:if="{{item.expanded && item.question.explanation}}" class="wrong-card__exp">
         <view class="wrong-card__exp-title">解析</view>
         <view>{{item.question.explanation}}</view>
@@ -55,9 +55,10 @@
   </block>
 
   <view wx:else class="empty">
-    <icon class="empty__icon" name="check-circle" size="64rpx" color="#2E7D32" />
-    <view class="empty__text">{{keyword || status !== 'all' ? '没有匹配的错题' : '本课程暂无错题'}}</view>
-    <button wx:if="{{!keyword && status === 'all'}}" class="btn btn--primary btn--sm" bindtap="toggleCoursePicker">切换课程</button>
+    <icon class="empty__icon" name="{{courses.length ? 'check-circle' : 'book'}}" size="64rpx" color="{{courses.length ? '#2E7D32' : '#00B8D4'}}" />
+    <view class="empty__text">{{!courses.length ? '加入课程后才有错题记录' : (keyword || status !== 'all' ? '没有匹配的错题' : '本课程暂无错题')}}</view>
+    <button wx:if="{{!courses.length}}" class="btn btn--primary btn--sm" bindtap="goCourses">先加入课程</button>
+    <button wx:elif="{{!keyword && status === 'all'}}" class="btn btn--primary btn--sm" bindtap="toggleCoursePicker">切换课程</button>
   </view>
 </view>
 
@@ -67,7 +68,7 @@
   <view class="sheet__handle"></view>
   <view class="sheet__title">选择课程</view>
   <scroll-view scroll-y style="max-height:50vh">
-    <view wx:for="{{courses}}" wx:key="id" class="pick-row {{item.id === courseId ? 'pick-row--on' : ''}}" data-id="{{item.id}}" bindtap="pickCourse">
+    <view wx:for="{{courses}}" wx:key="id" class="pick-row {{item.id === courseId ? 'pick-row--on' : ''}}" hover-class="hover-bg" data-id="{{item.id}}" bindtap="pickCourse">
       <text class="flex-1 ellipsis">{{item.name}}</text>
       <icon wx:if="{{item.id === courseId}}" name="check" size="30rpx" color="#00B8D4" />
     </view>

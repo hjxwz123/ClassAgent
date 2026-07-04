@@ -69,10 +69,13 @@ function request(path, options) {
       method: options.method || 'GET',
       data: options.data || {},
       header,
-      timeout: 30000,
+      // AI 生成类接口耗时远超 30s，允许调用方按需放宽
+      timeout: options.timeout || 30000,
       success(res) {
         const payload = res.data;
-        if (res.statusCode === 401) {
+        // 登录/注册等 /auth/ 接口的 401 是"账号密码错误"，不是会话过期：
+        // 透传后端文案，不能清会话并 reLaunch（否则登录页输错密码会被整页重载、输入全丢）
+        if (res.statusCode === 401 && path.indexOf('/auth/') !== 0) {
           handleUnauthorized();
           reject(new Error('登录已过期，请重新登录'));
           return;
@@ -83,8 +86,11 @@ function request(path, options) {
         }
         reject(new Error(errorMessage(payload)));
       },
-      fail() {
-        reject(new Error('网络异常，请检查连接'));
+      fail(err) {
+        const msg = err && err.errMsg && err.errMsg.indexOf('timeout') >= 0
+          ? '请求超时，请重试'
+          : '网络异常，请检查连接';
+        reject(new Error(msg));
       }
     });
   });
@@ -135,7 +141,10 @@ module.exports = {
   patch: (path, data) => request(path, { method: 'PATCH', data }),
   put: (path, data) => request(path, { method: 'PUT', data }),
   del: (path) => request(path, { method: 'DELETE' }),
+  // AI 生成等长耗时请求：允许覆盖默认 30s 超时
+  postLong: (path, data, timeout) => request(path, { method: 'POST', data, timeout: timeout || 300000 }),
   upload,
   buildUrl,
-  mediaUrl
+  mediaUrl,
+  handleUnauthorized
 };

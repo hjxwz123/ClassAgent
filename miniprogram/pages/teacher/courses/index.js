@@ -6,6 +6,7 @@ const tabbar = require('../../../utils/tabbar');
 Page({
   data: {
     loading: true,
+    error: '',
     courses: [],
     filtered: [],
     keyword: '',
@@ -19,18 +20,21 @@ Page({
   onPullDownRefresh() { this.load().then(() => wx.stopPullDownRefresh()); },
 
   async load() {
+    // 列表为空时（首次/失败重试）显示骨架屏，避免重试期间落入"暂无课程"假空态
+    this.setData({ error: '', loading: !this.data.courses.length });
     try {
       const courses = (await api.get('/teacher/courses')) || [];
       this.setData({ courses: courses.map((c) => Object.assign({}, c, { rate: fmt.percent(c.published_rate) })), loading: false });
       this.applyFilter();
     } catch (err) {
-      this.setData({ loading: false });
+      this.setData({ loading: false, error: err.message || '加载失败' });
       toast.error(err.message);
     }
   },
 
   onSearch(e) { this.setData({ keyword: e.detail.value }); this.applyFilter(); },
   setStatus(e) { this.setData({ status: e.currentTarget.dataset.status }); this.applyFilter(); },
+  clearFilter() { this.setData({ keyword: '', status: 'all' }); this.applyFilter(); },
   applyFilter() {
     const { courses, keyword, status } = this.data;
     const kw = keyword.trim();
@@ -66,5 +70,9 @@ Page({
       toast.success(activating ? '课程已上架' : '课程已下架');
       this.load();
     } catch (err) { toast.error(err.message); }
+  },
+
+  onShareAppMessage() {
+    return { title: '我的教学课程', path: '/pages/teacher/courses/index' };
   }
 });
