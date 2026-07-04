@@ -13,6 +13,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
+# 容器化部署默认使用 Qdrant 作为向量库（生产推荐）；从源码本地运行时代码默认仍是 chroma（零依赖）。
+# 部署时可用环境变量 VECTOR_STORE_PROVIDER / QDRANT_URL 覆盖。
+ENV VECTOR_STORE_PROVIDER=qdrant
+
 WORKDIR /app
 
 RUN apt-get update \
