@@ -1,8 +1,9 @@
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -26,6 +27,7 @@ from app.services.admin import (
     assert_admin,
     create_admin_user,
     create_backup,
+    export_config_bundle,
     course_summary_admin,
     deactivate_course_admin,
     delete_backup,
@@ -680,6 +682,23 @@ def download_backup_endpoint(
     if backup is None or not backup.file_path or not Path(backup.file_path).exists():
         raise not_found("备份文件不存在")
     return FileResponse(backup.file_path, filename=Path(backup.file_path).name)
+
+
+@router.get("/config/export")
+def export_config_endpoint(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """只导出配置数据（模型/API 配置、服务配置、系统设置）为 JSON 文件下载。"""
+    assert_admin(user)
+    bundle = export_config_bundle(db, actor_id=user.id)
+    payload = json.dumps(bundle, ensure_ascii=False, indent=2)
+    filename = f"classagent-config-{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.delete("/backups/{backup_id}")
