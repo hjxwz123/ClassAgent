@@ -1683,6 +1683,88 @@ def _mysql_command(url, command: str) -> tuple[list[str], Path | None]:
     return args, defaults_file
 
 
+def export_config_bundle(db: Session, *, actor_id: int | None = None) -> dict:
+    """只导出「配置」数据：全部模型/API 配置、服务配置、系统设置，打包为可移植 JSON。
+
+    区别于全量备份(mysqldump 整库)：这里只含管理员配置，体积小、便于跨部署迁移。
+    密钥(模型 api_key、服务 config)以明文写入，导出文件即含真实凭据，可原样再导入；
+    因此文件属敏感数据，调用方须提示妥善保管。
+    """
+    model_configs: list[dict] = []
+    for config in db.scalars(
+        select(ModelConfig).where(ModelConfig.deleted_at.is_(None)).order_by(ModelConfig.purpose, ModelConfig.id)
+    ):
+        model_configs.append(
+            {
+                "provider": config.provider,
+                "model_name": config.model_name,
+                "purpose": config.purpose,
+                "endpoint": config.endpoint,
+                "api_key": decrypt_secret(config.api_key_encrypted) if config.api_key_encrypted else None,
+                "is_default": bool(config.is_default),
+                "extra_config": config.extra_config or {},
+            }
+        )
+
+    service_configs: list[dict] = []
+    for config in db.scalars(
+        select(ServiceConfig).where(ServiceConfig.deleted_at.is_(None)).order_by(ServiceConfig.service_type, ServiceConfig.id)
+    ):
+        try:
+            raw = json.loads(decrypt_secret(config.config_encrypted)) if config.config_encrypted else {}
+        except (ValueError, TypeError):
+            raw = {}
+        service_configs.append(
+            {
+                "scope": config.scope,
+                "service_type": config.service_type,
+                "provider": config.provider,
+                "name": config.name,
+                "config": raw,
+                "is_enabled": bool(config.is_enabled),
+            }
+        )
+
+    system_settings: list[dict] = []
+    for setting in db.scalars(select(SystemSetting).order_by(SystemSetting.category, SystemSetting.setting_key)):
+        system_settings.append(
+            {
+                "category": setting.category,
+                "setting_key": setting.setting_key,
+                "setting_value": setting.setting_value,
+                "description": setting.description,
+            }
+        )
+
+    counts = {
+        "model_configs": len(model_configs),
+        "service_configs": len(service_configs),
+        "system_settings": len(system_settings),
+    }
+    bundle = {
+        "meta": {
+            "kind": "classagent-config-export",
+            "format_version": 1,
+            "exported_at": datetime.now(UTC).isoformat(),
+            "contains_secrets": True,
+            "note": "本文件包含明文 API Key 与服务密钥，属敏感数据，请妥善保管、切勿外传。可用于跨部署迁移后原样导入。",
+            "counts": counts,
+        },
+        "model_configs": model_configs,
+        "service_configs": service_configs,
+        "system_settings": system_settings,
+    }
+    log_operation(
+        db,
+        user_id=actor_id,
+        action="admin.config.export",
+        target_type="config",
+        detail={"counts": counts, "contains_secrets": True},
+    )
+    db.commit()
+    return bundle
+
+
 def create_backup(db: Session, *, trigger_user_id: int | None) -> BackupRecord:
     record = BackupRecord(trigger_user_id=trigger_user_id, status=BackupStatus.PENDING.value)
     db.add(record)
