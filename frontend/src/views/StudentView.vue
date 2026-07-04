@@ -3240,6 +3240,51 @@ function patchChatMessage(messages: Ref<ChatMessage[]>, id: number, updater: (me
   messages.value.splice(index, 1, updater({ ...messages.value[index] }));
 }
 
+// —— 流式 delta 帧级合并 ——
+// 实测：一条长答案有 2000+ 个 SSE delta，若每个事件都走"读布局(强制回流)→Vue 全列表重渲染→
+// scrollTo 整页滚动重绘"，成本随对话长度放大，前端消费跟不上上游，表现为"上游早发完、页面仍慢慢吐字"。
+// 因此 delta 文本先累积到普通(非响应式)缓冲，每帧(rAF)最多向响应式状态提交一次；
+// 滚动跟随(读 scrollHeight + scrollTo)也随帧最多一次。视觉上仍是逐字(每帧都有新字)，但布局/渲染开销与 token 数解耦。
+type QaDeltaBuffer = { messages: Ref<ChatMessage[]>; text: string; thought: string; follow: boolean };
+const qaDeltaBuffers = new Map<number, QaDeltaBuffer>();
+let qaDeltaFlushFrame = 0;
+function flushQaDeltas() {
+  if (qaDeltaFlushFrame) {
+    window.cancelAnimationFrame(qaDeltaFlushFrame);
+    qaDeltaFlushFrame = 0;
+  }
+  if (!qaDeltaBuffers.size) return;
+  for (const [id, buffer] of qaDeltaBuffers) {
+    // 布局读(是否跟随)在本帧 DOM 变更之前做：布局是干净的，读取不触发强制回流
+    const shouldFollow = buffer.follow ? isQaNearLatest(320) : false;
+    patchChatMessage(buffer.messages, id, (message) => ({
+      ...message,
+      text: buffer.text ? `${message.text || ""}${buffer.text}` : message.text,
+      thought: buffer.thought ? `${message.thought || ""}${buffer.thought}` : message.thought,
+      thoughtOpen: buffer.thought ? true : message.thoughtOpen,
+      statusText: "",
+    }));
+    if (buffer.follow) keepQaAtLatestIfNeeded(shouldFollow);
+  }
+  qaDeltaBuffers.clear();
+}
+function queueQaDelta(messages: Ref<ChatMessage[]>, id: number, data: any, follow: boolean) {
+  let buffer = qaDeltaBuffers.get(id);
+  if (!buffer) {
+    buffer = { messages, text: "", thought: "", follow };
+    qaDeltaBuffers.set(id, buffer);
+  }
+  buffer.follow = buffer.follow || follow;
+  if (data?.type === "thought") buffer.thought += data?.text || "";
+  else buffer.text += data?.text || "";
+  if (!qaDeltaFlushFrame) {
+    qaDeltaFlushFrame = window.requestAnimationFrame(() => {
+      qaDeltaFlushFrame = 0;
+      flushQaDeltas();
+    });
+  }
+}
+
 function applyQaStreamEvent(messages: Ref<ChatMessage[]>, messageId: number, event: string, data: any) {
   if (event === "stage") {
     // 首 token 前的进度提示（检索中→生成中），让用户不再面对空白干等
@@ -3343,17 +3388,24 @@ async function askInClass() {
       question: requestQuestion,
       attachments
     }, (event, data) => {
-      applyQaStreamEvent(classMessages, aiMessageId, event, data);
+      if (event === "delta") {
+        queueQaDelta(classMessages, aiMessageId, data, false);
+      } else {
+        flushQaDeltas();
+        applyQaStreamEvent(classMessages, aiMessageId, event, data);
+      }
       if (event === "created" || event === "final") classConversationId.value = data.conversation_id ?? classConversationId.value;
     }, undefined, controller.signal);
   } catch (error) {
     // 用户主动停止：保留已生成内容，不提示错误
+    flushQaDeltas();
     if (!controller.signal.aborted) {
       const current = classMessages.value.find((message) => message.id === aiMessageId);
       if (!current?.text) patchChatMessage(classMessages, aiMessageId, (message) => ({ ...message, text: "请求失败，请稍后重试。" }));
       emit("notice", "error", (error as Error).message);
     }
   } finally {
+    flushQaDeltas();
     patchChatMessage(classMessages, aiMessageId, (message) => ({ ...message, streaming: false }));
     classThinking.value = false;
     if (classAbortController === controller) classAbortController = null;
@@ -3414,6 +3466,12 @@ async function askGlobal() {
       question,
       attachments
     }, (event, data) => {
+      // delta 只进缓冲(每帧统一提交+滚动跟随一次)；其余事件先冲刷缓冲保证顺序，再按原逻辑处理
+      if (event === "delta") {
+        queueQaDelta(globalMessages, aiMessageId, data, true);
+        return;
+      }
+      flushQaDeltas();
       const shouldFollowLatest = isQaNearLatest(320);
       applyQaStreamEvent(globalMessages, aiMessageId, event, data);
       keepQaAtLatestIfNeeded(shouldFollowLatest);
@@ -3421,12 +3479,14 @@ async function askGlobal() {
     }, undefined, controller.signal);
   } catch (error) {
     // 用户主动停止：保留已生成内容，不提示错误
+    flushQaDeltas();
     if (!controller.signal.aborted) {
       const current = globalMessages.value.find((message) => message.id === aiMessageId);
       if (!current?.text) patchChatMessage(globalMessages, aiMessageId, (message) => ({ ...message, text: "请求失败，请稍后重试。" }));
       emit("notice", "error", (error as Error).message);
     }
   } finally {
+    flushQaDeltas();
     patchChatMessage(globalMessages, aiMessageId, (message) => ({ ...message, streaming: false }));
     globalThinking.value = false;
     if (globalAbortController === controller) globalAbortController = null;
