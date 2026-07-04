@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.core.enums import LearningSignalSource
 from app.db.models import KnowledgePoint, QARecord, StudentLearningSignal, User
 from app.services.ai import ai_service
-from app.services.knowledge import ensure_knowledge_points
 
 
 LEARNING_SIGNAL_SOURCE_QA = LearningSignalSource.QA.value
@@ -90,10 +89,12 @@ def _match_points_by_names(points: list[KnowledgePoint], names: list[str]) -> li
 
 
 def _course_signal_points(db: Session, *, course_id: int) -> list[KnowledgePoint]:
-    points = list(db.scalars(select(KnowledgePoint).where(KnowledgePoint.course_id == course_id).order_by(KnowledgePoint.id)))
-    if points:
-        return points
-    return ensure_knowledge_points(db, course_id=course_id, chapter_id=None)
+    # QA 信号记录处在问答收尾路径上。这里不能调用 ensure_knowledge_points：
+    # 课程尚无知识点时它会遍历全课 chunk 并逐块调用知识点抽取模型，导致 /qa/ask/stream
+    # 在答案已生成后仍被拖住很久。知识点生成由学习/练习入口显式触发；QA 只消费现有点位。
+    return list(
+        db.scalars(select(KnowledgePoint).where(KnowledgePoint.course_id == course_id).order_by(KnowledgePoint.id))
+    )
 
 
 def _qa_signal_candidates(db: Session, *, record: QARecord, points: list[KnowledgePoint]) -> tuple[str, float, list[KnowledgePoint]]:

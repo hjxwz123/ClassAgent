@@ -997,6 +997,49 @@ def test_qa_stream_falls_back_to_regular_answer_when_upstream_stream_fails(clien
     assert body.count("event: delta") >= 2
 
 
+def test_qa_stream_final_does_not_wait_for_learning_signal_postprocess(client, monkeypatch):
+    import threading
+    from time import perf_counter
+
+    course, _chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
+
+    from app.services import qa as qa_service
+    from app.services.ai import ChatDelta
+
+    def stream_answer(**kwargs):
+        yield ChatDelta("content", "行列式反映线性变换中的缩放系数。")
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def slow_record_signals(db, *, user, record):
+        entered.set()
+        release.wait(timeout=5)
+        return []
+
+    monkeypatch.setattr(qa_service.ai_service, "stream_answer_question", stream_answer)
+    monkeypatch.setattr(qa_service, "record_qa_learning_signals", slow_record_signals)
+
+    start = perf_counter()
+    try:
+        with client.stream(
+            "POST",
+            "/api/v1/qa/ask/stream",
+            json={"course_id": course["id"], "question": "行列式是什么概念？"},
+            headers=student_headers,
+        ) as response:
+            body = "".join(response.iter_text())
+        elapsed = perf_counter() - start
+
+        assert response.status_code == 200, body
+        assert "event: final" in body
+        assert "行列式反映线性变换中的缩放系数" in body
+        assert entered.wait(timeout=1)
+        assert elapsed < 2
+    finally:
+        release.set()
+
+
 def test_course_qa_history_excludes_lesson_page_conversations_by_default(client, monkeypatch):
     course, _chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
 

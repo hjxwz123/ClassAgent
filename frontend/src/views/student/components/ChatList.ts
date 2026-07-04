@@ -171,32 +171,40 @@ export default defineComponent({
         }, 720));
       });
     }
-    // 流式渲染策略（零延迟 + 无卡顿）：
-    // - 流式期间：后端来一个字就立刻显示一个字——直接把纯文本作为文本子节点渲染(pre-wrap)，
-    //   O(1)、不解析 markdown/KaTeX、不节流、不批处理。杜绝"每 token 全量重解析整段(O(n²))"造成的
-    //   "渲染一段卡很久才继续下一段、越往后越卡"。
-    // - 流结束(streaming=false)：再做【一次】完整 markdown+KaTeX 排版并按 text 缓存。
-    // - 非流式(历史/已完成)消息：按 text 缓存，渲染一次即锁定，其它消息刷新时不被连带重解析。
+    // 流式渲染策略：
+    // - delta 仍由父组件按 rAF 合并，避免每个 token 触发一次 Vue 列表重绘。
+    // - streaming=true 时也解析 Markdown/KaTeX，但按时间节流，避免每帧全量重解析长答案形成 O(n²) 卡顿。
+    // - streaming=false 后做一次最终解析并缓存，历史消息不被其它消息刷新连带重算。
     const streamStyle = { whiteSpace: "pre-wrap", wordBreak: "break-word" } as const;
-    const richCache = new Map<number, { text: string; html: string }>();
-    const thoughtCache = new Map<number, { text: string; html: string }>();
-    function renderFinal(cache: Map<number, { text: string; html: string }>, message: ChatMessage, text: string) {
+    type RichCacheEntry = { text: string; html: string; renderedAt: number };
+    const richCache = new Map<number, RichCacheEntry>();
+    const thoughtCache = new Map<number, RichCacheEntry>();
+    function renderFinal(cache: Map<number, RichCacheEntry>, message: ChatMessage, text: string) {
       const cached = cache.get(message.id);
       if (cached && cached.text === text) return cached.html;
       const html = renderRichText(text);
-      cache.set(message.id, { text, html });
+      cache.set(message.id, { text, html, renderedAt: performance.now() });
+      return html;
+    }
+    function renderStreaming(cache: Map<number, RichCacheEntry>, message: ChatMessage, text: string) {
+      const now = performance.now();
+      const cached = cache.get(message.id);
+      if (cached && cached.text === text) return cached.html;
+      if (cached && now - cached.renderedAt < 120) return cached.html;
+      const html = renderRichText(text);
+      cache.set(message.id, { text, html, renderedAt: now });
       return html;
     }
     function answerNode(message: ChatMessage) {
       if (!message.text) return streamingIndicator(message);
       return message.streaming
-        ? h("div", { class: "ai-text markdown-body", style: streamStyle }, message.text)
+        ? h("div", { class: "ai-text markdown-body", style: streamStyle, innerHTML: renderStreaming(richCache, message, message.text) })
         : h("div", { class: "ai-text markdown-body", innerHTML: renderFinal(richCache, message, message.text) });
     }
     function thoughtNode(message: ChatMessage) {
       if (!(message.thought && message.thoughtOpen)) return null;
       return message.streaming
-        ? h("div", { class: "thought markdown-body", style: streamStyle }, message.thought)
+        ? h("div", { class: "thought markdown-body", style: streamStyle, innerHTML: renderStreaming(thoughtCache, message, message.thought) })
         : h("div", { class: "thought markdown-body", innerHTML: renderFinal(thoughtCache, message, message.thought) });
     }
     function streamingIndicator(message: ChatMessage) {
