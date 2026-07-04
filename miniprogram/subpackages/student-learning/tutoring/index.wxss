@@ -6,6 +6,9 @@
 
 .step-card__content {
   margin-top: 16rpx; padding: 20rpx; background: var(--ca-bg); border-radius: 12rpx;
-  font-size: 28rpx; line-height: 1.7; color: var(--ca-ink-soft); white-space: pre-wrap;
+  font-size: 28rpx; line-height: 1.7; color: var(--ca-ink-soft);
 }
 .hist-card { font-size: 28rpx; }
+
+/* OCR 识别原图缩略图（可点预览） */
+.ocr-thumb { width: 96rpx; height: 96rpx; border-radius: 12rpx; background: var(--ca-bg); flex-shrink: 0; }

@@ -1,12 +1,12 @@
 <view class="page">
   <view class="search">
     <icon class="search__icon" name="search" size="28rpx" color="#999990" />
-    <input class="search__input" placeholder="搜索知识点" value="{{keyword}}" bindinput="onSearch" />
+    <input class="search__input" placeholder="搜索知识点" confirm-type="search" value="{{keyword}}" bindinput="onSearch" />
   </view>
 
   <!-- 章节 Chips -->
   <view wx:if="{{chapters.length}}" class="chips mt-16">
-    <view wx:for="{{chapters}}" wx:key="id" class="chip {{chapterId === item.id ? 'chip--on' : ''}}" data-id="{{item.id}}" bindtap="selectChapter">{{item.title}}</view>
+    <view wx:for="{{chapters}}" wx:key="id" class="chip {{chapterId === item.id ? 'chip--on' : ''}}" hover-class="hover-dim" data-id="{{item.id}}" bindtap="selectChapter">{{item.title}}</view>
   </view>
 
   <!-- 薄弱标签 -->
@@ -17,21 +17,27 @@
 
   <!-- 知识点选择 -->
   <scroll-view scroll-x class="kp-scroll mt-16" wx:if="{{filtered.length}}" enhanced show-scrollbar="{{false}}">
-    <view wx:for="{{filtered}}" wx:key="id" class="kp-chip {{selected.id === item.id ? 'kp-chip--on' : ''}}" data-id="{{item.id}}" bindtap="select">{{item.name}}</view>
+    <view wx:for="{{filtered}}" wx:key="id" class="kp-chip {{selected.id === item.id ? 'kp-chip--on' : ''}}" hover-class="hover-dim" data-id="{{item.id}}" bindtap="select">{{item.name}}</view>
   </scroll-view>
 
   <block wx:if="{{loading}}">
     <view class="card"><view class="skeleton skeleton-line"></view><view class="skeleton skeleton-line" style="width:70%"></view></view>
   </block>
 
+  <view wx:elif="{{error}}" class="empty">
+    <icon class="empty__icon" name="cross" size="64rpx" color="#C62828" />
+    <view class="empty__text">知识点加载失败，请检查网络后重试</view>
+    <button class="btn btn--outline btn--sm" bindtap="loadPoints">重新加载</button>
+  </view>
+
   <block wx:elif="{{selected}}">
     <!-- 详情头 -->
     <view class="card">
       <view class="h2">{{selected.name}}</view>
-      <view class="text-sub mt-8">所属：{{chapterName(selected.chapter_id)}}</view>
+      <view class="text-sub mt-8">所属：{{selected.chapterName}}</view>
       <!-- 难度分段 -->
       <view class="seg-tabs mt-16">
-        <view wx:for="{{levels}}" wx:key="value" class="seg-tabs__item {{level === item.value ? 'seg-tabs__item--on' : ''}}" data-level="{{item.value}}" bindtap="setLevel">{{item.label}}</view>
+        <view wx:for="{{levels}}" wx:key="value" class="seg-tabs__item {{level === item.value ? 'seg-tabs__item--on' : ''}}" hover-class="hover-dim" data-level="{{item.value}}" bindtap="setLevel">{{item.label}}</view>
       </view>
 
       <!-- 内容块 -->
@@ -55,8 +61,8 @@
       <view class="cta mt-16">
         <view class="row gap-8"><icon class="ai-spark" name="spark" size="32rpx" color="#00E5FF" /><text>生成练习题</text></view>
         <view class="row gap-16 mt-16">
-          <button class="btn btn--outline btn--sm flex-1" loading="{{generating}}" data-count="5" bindtap="generate">练习 5 题</button>
-          <button class="btn btn--primary btn--sm flex-1" loading="{{generating}}" data-count="10" bindtap="generate">练习 10 题</button>
+          <button class="btn btn--outline btn--sm flex-1" loading="{{generating}}" disabled="{{generating}}" data-count="5" bindtap="generate">练习 5 题</button>
+          <button class="btn btn--primary btn--sm flex-1" loading="{{generating}}" disabled="{{generating}}" data-count="10" bindtap="generate">练习 10 题</button>
         </view>
       </view>
     </view>

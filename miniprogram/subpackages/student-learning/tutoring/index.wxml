@@ -1,27 +1,37 @@
 <view class="page">
-  <view class="course-sel" bindtap="toggleCoursePicker">
+  <view class="course-sel" hover-class="hover-dim" bindtap="toggleCoursePicker">
     <text class="ellipsis">{{courseName}}</text>
     <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#0097A7" />
   </view>
 
   <!-- 输入模式 -->
   <view class="seg-tabs mt-16">
-    <view class="seg-tabs__item {{mode === 'text' ? 'seg-tabs__item--on' : ''}}" data-mode="text" bindtap="setMode">文字输入</view>
-    <view class="seg-tabs__item {{mode === 'image' ? 'seg-tabs__item--on' : ''}}" data-mode="image" bindtap="setMode">图片上传</view>
+    <view class="seg-tabs__item {{mode === 'text' ? 'seg-tabs__item--on' : ''}}" hover-class="hover-dim" data-mode="text" bindtap="setMode">文字输入</view>
+    <view class="seg-tabs__item {{mode === 'image' ? 'seg-tabs__item--on' : ''}}" hover-class="hover-dim" data-mode="image" bindtap="setMode">图片上传</view>
   </view>
 
   <view class="card">
     <block wx:if="{{mode === 'text'}}">
       <textarea class="textarea" style="min-height:220rpx" placeholder="输入或粘贴题目，AI 会分步引导你解题" value="{{text}}" bindinput="onText" maxlength="3000" />
-      <button class="btn btn--primary btn--block mt-16" loading="{{submitting}}" bindtap="submitText">获取辅导</button>
+      <button class="btn btn--primary btn--block mt-16" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitText">获取辅导</button>
     </block>
     <block wx:else>
-      <view class="upload-zone" bindtap="chooseImage">
+      <view class="upload-zone" hover-class="hover-dim" bindtap="chooseImage">
         <icon class="upload-zone__icon" name="camera" size="72rpx" color="#00B8D4" />
         <view class="text-sub">拍照或从相册选择题目图片</view>
         <view class="text-muted" style="font-size:24rpx;margin-top:8rpx">支持拍照识别题干（OCR）</view>
       </view>
     </block>
+  </view>
+
+  <!-- OCR 识别结果确认（可编辑） -->
+  <view wx:if="{{ocrReview}}" class="card fade-in">
+    <view class="row-between">
+      <text class="text-sub">识别结果（可修改）</text>
+      <image wx:if="{{ocrReview.imageUrl}}" class="ocr-thumb" src="{{ocrReview.imageUrl}}" mode="aspectFill" lazy-load hover-class="hover-dim" bindtap="previewOcrImage" />
+    </view>
+    <textarea class="textarea mt-16" style="min-height:200rpx" placeholder="请核对识别出的题目文字" value="{{ocrReview.text}}" bindinput="onOcrText" maxlength="5000" />
+    <button class="btn btn--primary btn--block mt-16" loading="{{confirming}}" disabled="{{confirming}}" bindtap="confirmOcr">确认无误，开始辅导</button>
   </view>
 
   <!-- 题目与辅导 -->
@@ -36,7 +46,7 @@
 
     <view class="section-title">分步辅导</view>
     <view wx:for="{{steps}}" wx:key="level" class="card step-card">
-      <view class="row-between" data-level="{{item.level}}" bindtap="loadGuidance">
+      <view class="row-between" hover-class="hover-dim" data-level="{{item.level}}" bindtap="loadGuidance">
         <view>
           <view style="font-weight:600">{{item.name}}</view>
           <view class="text-muted" style="font-size:24rpx">{{item.hint}}</view>
@@ -44,17 +54,18 @@
         <text wx:if="{{loadingLevel === item.level}}" class="text-muted">…</text>
         <icon wx:else name="{{openLevel[item.level] ? 'chevron-up' : 'chevron-down'}}" size="24rpx" color="#999990" />
       </view>
-      <view wx:if="{{openLevel[item.level]}}" class="step-card__content">{{guidance[item.level]}}</view>
+      <view wx:if="{{openLevel[item.level]}}" class="step-card__content"><rich-text nodes="{{guidance[item.level]}}"></rich-text></view>
     </view>
   </block>
 
   <!-- 历史 -->
   <block wx:if="{{history.length}}">
     <view class="section-title">历史辅导</view>
-    <view wx:for="{{history}}" wx:key="id" class="card hist-card" data-id="{{item.id}}" bindtap="openHistory">
+    <view wx:for="{{history}}" wx:key="id" class="card hist-card" hover-class="hover-card" data-id="{{item.id}}" bindtap="openHistory">
       <view class="clamp-2">{{item.corrected_text || item.ocr_text || item.raw_text}}</view>
       <view class="text-muted mt-8" style="font-size:24rpx">{{item.source_type === 'image' ? '图片' : '文字'}}</view>
     </view>
+    <view wx:if="{{historyHasMore}}" class="text-muted" style="text-align:center;font-size:24rpx;padding:16rpx 0">上滑加载更多</view>
   </block>
 </view>
 
@@ -64,7 +75,7 @@
   <view class="sheet__handle"></view>
   <view class="sheet__title">选择课程</view>
   <scroll-view scroll-y style="max-height:50vh">
-    <view wx:for="{{courses}}" wx:key="id" class="pick-row {{item.id === courseId ? 'pick-row--on' : ''}}" data-id="{{item.id}}" bindtap="pickCourse">
+    <view wx:for="{{courses}}" wx:key="id" class="pick-row {{item.id === courseId ? 'pick-row--on' : ''}}" hover-class="hover-bg" data-id="{{item.id}}" bindtap="pickCourse">
       <text class="flex-1 ellipsis">{{item.name}}</text>
       <icon wx:if="{{item.id === courseId}}" name="check" size="30rpx" color="#00B8D4" />
     </view>

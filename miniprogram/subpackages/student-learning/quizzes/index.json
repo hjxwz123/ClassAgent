@@ -1,5 +1,7 @@
 {
   "navigationBarTitleText": "练习与测验",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
   "usingComponents": {
     "icon": "/components/icon/index"
   }

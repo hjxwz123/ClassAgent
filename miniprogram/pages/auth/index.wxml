@@ -8,14 +8,15 @@
   <view class="auth__card fade-in">
     <view class="field">
       <view class="field__label">邮箱</view>
-      <input class="input {{errors.email ? 'input--error' : ''}}" type="text" placeholder="you@example.com" value="{{login.email}}" data-group="login" data-field="email" bindinput="onInput" />
+      <input class="input {{errors.email ? 'input--error' : ''}}" type="text" confirm-type="next" placeholder="you@example.com" value="{{login.email}}" data-group="login" data-field="email" bindinput="onInput" />
       <view wx:if="{{errors.email}}" class="field__error">{{errors.email}}</view>
     </view>
     <view class="field">
       <view class="field__label">密码</view>
-      <input class="input {{errors.password ? 'input--error' : ''}}" password placeholder="请输入密码" value="{{login.password}}" data-group="login" data-field="password" bindinput="onInput" />
+      <input class="input {{errors.password ? 'input--error' : ''}}" password confirm-type="done" bindconfirm="doLogin" placeholder="请输入密码" value="{{login.password}}" data-group="login" data-field="password" bindinput="onInput" />
       <view wx:if="{{errors.password}}" class="field__error">{{errors.password}}</view>
     </view>
-    <button class="btn btn--primary btn--block mt-8" loading="{{submitting}}" bindtap="doLogin">登录</button>
+    <button class="btn btn--primary btn--block mt-8" loading="{{submitting}}" disabled="{{submitting}}" bindtap="doLogin">登录</button>
+    <view class="auth__note text-muted">账号由学校/教师分发，注册与找回密码请前往网页端</view>
   </view>
 </view>

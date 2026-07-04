@@ -8,12 +8,13 @@ Page({
   data: {
     courseId: 0,
     loading: true,
+    error: false,
     tab: 'quiz', // quiz | practice
     quizzes: [],
     chapters: [],
     wrongCount: 0,
-    // 章节练习配置
-    selectedChapters: [],
+    // 章节练习配置（单选）
+    selectedChapter: 0,
     counts: COUNTS,
     count: 5,
     preferWeak: true,
@@ -32,6 +33,7 @@ Page({
 
   async load() {
     this._loaded = true;
+    this.setData({ loading: true, error: false });
     try {
       const [quizzes, detail, wrongs] = await Promise.all([
         api.get('/learning/quizzes', { course_id: this.data.courseId }),
@@ -45,9 +47,21 @@ Page({
         loading: false
       });
     } catch (err) {
-      this.setData({ loading: false });
+      // 加载失败与真空态区分，展示错误占位并允许重试
+      this.setData({ loading: false, error: true });
       toast.error(err.message);
     }
+  },
+
+  onPullDownRefresh() {
+    this.load().finally(() => wx.stopPullDownRefresh());
+  },
+
+  onShareAppMessage() {
+    return {
+      title: '练习与测验',
+      path: '/subpackages/student-learning/quizzes/index?courseId=' + this.data.courseId
+    };
   },
 
   async loadQuizzes() {
@@ -82,22 +96,20 @@ Page({
     }
   },
 
-  // 章节练习
+  // 章节练习（后端仅支持单章节，UI 单选：再次点击取消选中）
   toggleChapter(e) {
     const id = e.currentTarget.dataset.id;
-    const sel = this.data.selectedChapters.slice();
-    const idx = sel.indexOf(id);
-    if (idx >= 0) sel.splice(idx, 1); else sel.push(id);
-    this.setData({ selectedChapters: sel });
+    this.setData({ selectedChapter: this.data.selectedChapter === id ? 0 : id });
   },
   setCount(e) { this.setData({ count: e.currentTarget.dataset.count }); },
   toggleWeak(e) { this.setData({ preferWeak: e.detail.value }); },
 
   async generate() {
+    if (this.data.generating) return;
     this.setData({ generating: true });
     try {
-      const chapterId = this.data.selectedChapters[0] || undefined;
-      const quiz = await api.post('/learning/quizzes/generate', {
+      const chapterId = this.data.selectedChapter || undefined;
+      const quiz = await api.postLong('/learning/quizzes/generate', {
         course_id: this.data.courseId,
         chapter_id: chapterId,
         title: '章节练习',
@@ -120,7 +132,7 @@ Page({
 
   retryWrong() {
     if (!this.data.wrongCount) return toast.info('暂无待重练错题');
-    wx.navigateBack({ delta: 1, fail() { wx.switchTab({ url: '/pages/student/wrong-book/index' }); } });
+    // 错题本是 tabBar 页，直接 switchTab，避免同 tick 连发多个导航 API
     wx.switchTab({ url: '/pages/student/wrong-book/index' });
   }
 });

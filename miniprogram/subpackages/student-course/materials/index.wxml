@@ -1,27 +1,32 @@
 <view class="page">
   <view class="search">
     <icon class="search__icon" name="search" size="28rpx" color="#999990" />
-    <input class="search__input" placeholder="搜索资料名称" value="{{keyword}}" bindinput="onSearch" bindconfirm="doSearch" />
+    <input class="search__input" confirm-type="search" placeholder="搜索资料名称" value="{{keyword}}" bindinput="onSearch" bindconfirm="doSearch" />
   </view>
 
   <view class="chips mt-16">
-    <view wx:for="{{cats}}" wx:key="key" class="chip {{category === item.key ? 'chip--on' : ''}}" data-key="{{item.key}}" bindtap="setCategory">{{item.label}}</view>
+    <view wx:for="{{cats}}" wx:key="key" class="chip {{category === item.key ? 'chip--on' : ''}}" hover-class="hover-dim" data-key="{{item.key}}" bindtap="setCategory">{{item.label}}</view>
   </view>
 
   <block wx:if="{{loading}}">
     <view class="card"><view class="skeleton skeleton-line"></view><view class="skeleton skeleton-line" style="width:60%"></view></view>
   </block>
 
+  <!-- 加载失败（与真空态区分） -->
+  <view wx:elif="{{error}}" class="empty">
+    <icon class="empty__icon" name="cross" size="64rpx" color="#C62828" />
+    <view class="empty__text">{{error}}</view>
+    <button class="btn btn--outline btn--md" bindtap="load">重新加载</button>
+  </view>
+
   <block wx:elif="{{materials.length}}">
-    <view wx:for="{{materials}}" wx:key="id" class="card mat-card fade-in" data-id="{{item.id}}" bindtap="openMaterial">
+    <view wx:for="{{materials}}" wx:key="id" class="card mat-card fade-in" hover-class="hover-card" data-id="{{item.id}}" bindtap="openMaterial">
       <icon class="mat-card__icon" name="file" size="44rpx" color="#0277BD" />
       <view class="flex-1">
         <view class="ellipsis" style="font-weight:600">{{item.title}}</view>
         <view class="text-muted mt-8" style="font-size:24rpx">{{item.category}} · {{item.sizeText}}</view>
       </view>
-      <view class="tag {{item.parse_status === 'completed' || item.parse_status === 'ready' ? 'tag--success' : 'tag--warning'}}">
-        {{item.parse_status === 'completed' || item.parse_status === 'ready' ? '已解析' : '解析中'}}
-      </view>
+      <view class="tag {{item.statusClass}}">{{item.statusText}}</view>
     </view>
   </block>
 
@@ -38,7 +43,10 @@
   <view class="sheet__title">{{detail.material.title}}</view>
   <view class="text-sub">{{detail.material.category}} · {{detail.material.original_filename}}</view>
   <scroll-view scroll-y style="max-height:46vh" class="mt-16">
-    <view wx:if="{{detail.material.extracted_text}}" class="drawer__text" style="white-space:pre-wrap">{{detail.material.extracted_text}}</view>
+    <block wx:if="{{previewText}}">
+      <view class="drawer__text" style="white-space:pre-wrap">{{previewText}}</view>
+      <view wx:if="{{previewTruncated}}" class="text-muted" style="font-size:24rpx;text-align:center;padding:24rpx 0">内容较长，仅展示部分，可打开原文件查看全文</view>
+    </block>
     <view wx:else class="empty"><view class="empty__text">暂无可预览的文本内容</view></view>
   </scroll-view>
   <button class="btn btn--primary btn--block mt-16" bindtap="openFile">打开原文件</button>

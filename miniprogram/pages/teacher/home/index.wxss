@@ -1,1 +1,5 @@
 /* 教师工作台使用全局 .hero / .t-stats / .t-stat / .todo-row / .t-course-row 样式 */
+
+/* 骨架屏：模拟 2x2 统计块内部结构 */
+.sk-stat-num { width: 120rpx; height: 52rpx; }
+.sk-stat-label { width: 88rpx; height: 24rpx; margin-top: 12rpx; }

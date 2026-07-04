@@ -3,6 +3,12 @@
     <view class="card"><view class="skeleton skeleton-line"></view></view>
   </block>
 
+  <view wx:elif="{{error}}" class="empty">
+    <icon class="empty__icon" name="cross" size="64rpx" color="#C62828" />
+    <view class="empty__text">结果加载失败，请检查网络后重试</view>
+    <button class="btn btn--outline btn--sm" bindtap="load">重新加载</button>
+  </view>
+
   <block wx:elif="{{attempt}}">
     <!-- 结果卡 -->
     <view class="result-hero banner banner--student fade-in">
@@ -15,15 +21,15 @@
     </view>
 
     <!-- AI 建议 -->
-    <view wx:if="{{attempt.ai_feedback}}" class="card ai-card">
+    <view wx:if="{{feedbackText}}" class="card ai-card">
       <view class="row gap-8"><icon class="ai-card__spark" name="spark" size="36rpx" color="#00E5FF" /><text class="tag tag--ai">AI 学习建议</text></view>
-      <view class="text-body mt-16">{{attempt.ai_feedback}}</view>
+      <view class="text-body mt-16" style="white-space:pre-wrap">{{feedbackText}}</view>
     </view>
 
     <!-- 题目解析 -->
     <view class="section-title">题目解析</view>
     <view wx:for="{{rows}}" wx:key="id" class="card ana-card">
-      <view class="row-between" data-index="{{index}}" bindtap="toggleRow">
+      <view class="row-between" hover-class="hover-dim" data-index="{{index}}" bindtap="toggleRow">
         <view class="row gap-8 flex-1">
           <text class="tag {{item.is_correct ? 'tag--success' : 'tag--error'}}">{{item.is_correct ? '正确' : '错误'}}</text>
           <text class="flex-1 ellipsis">{{index + 1}}. {{item.question.stem}}</text>

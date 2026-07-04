@@ -11,6 +11,7 @@ Page({
   data: {
     courseId: 0,
     loading: true,
+    error: false,
     chapters: [],
     chapterId: 0,
     keyword: '',
@@ -38,13 +39,13 @@ Page({
       this.setData({ chapters: (detail && detail.chapters) || [], weakPoints: weak || [] });
       this.loadPoints();
     } catch (err) {
-      this.setData({ loading: false });
+      this.setData({ loading: false, error: true });
       toast.error(err.message);
     }
   },
 
   async loadPoints() {
-    this.setData({ loading: true });
+    this.setData({ loading: true, error: false });
     try {
       const points = (await api.get('/learning/knowledge-points', { course_id: this.data.courseId, chapter_id: this.data.chapterId || undefined })) || [];
       this.setData({ points, loading: false });
@@ -52,9 +53,17 @@ Page({
       if (points[0]) this.select({ currentTarget: { dataset: { id: points[0].id } } });
       else this.setData({ selected: null });
     } catch (err) {
-      this.setData({ loading: false });
+      // 加载失败与"暂无知识点"区分，展示错误占位并允许重试
+      this.setData({ loading: false, error: true });
       toast.error(err.message);
     }
+  },
+
+  onShareAppMessage() {
+    return {
+      title: '知识点精讲',
+      path: '/subpackages/student-learning/knowledge/index?courseId=' + this.data.courseId
+    };
   },
 
   selectChapter(e) {
@@ -71,7 +80,9 @@ Page({
 
   select(e) {
     const id = e.currentTarget.dataset.id;
-    const selected = this.data.points.find((p) => p.id === id);
+    const found = this.data.points.find((p) => p.id === id);
+    // WXML 不能调用 Page 方法，所属章节名在这里算好挂到 selected 上
+    const selected = found ? Object.assign({}, found, { chapterName: this.chapterName(found.chapter_id) }) : null;
     this.setData({ selected });
     this.refreshContent();
   },
@@ -90,9 +101,10 @@ Page({
   async generate(e) {
     const count = Number(e.currentTarget.dataset.count);
     if (!this.data.selected) return;
+    if (this.data.generating) return;
     this.setData({ generating: true });
     try {
-      const quiz = await api.post('/learning/quizzes/generate', {
+      const quiz = await api.postLong('/learning/quizzes/generate', {
         course_id: this.data.courseId,
         chapter_id: this.data.selected.chapter_id || undefined,
         knowledge_point_ids: [this.data.selected.id],

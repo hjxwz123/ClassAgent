@@ -1,5 +1,5 @@
 <view class="page page--tab">
-  <view class="course-sel course-sel--teacher" bindtap="toggleCoursePicker">
+  <view class="course-sel course-sel--teacher" hover-class="hover-dim" bindtap="toggleCoursePicker">
     <text class="ellipsis">{{courseName}}</text>
     <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#D94925" />
   </view>
@@ -14,23 +14,29 @@
 
   <view class="search mt-16">
     <icon class="search__icon" name="search" size="28rpx" color="#999990" />
-    <input class="search__input" placeholder="搜索学生姓名" value="{{keyword}}" bindinput="onSearch" />
+    <input class="search__input" placeholder="搜索学生姓名" confirm-type="search" value="{{keyword}}" bindinput="onSearch" />
   </view>
   <view class="chips mt-16">
-    <view class="chip chip--teacher {{filter === 'all' ? 'chip--on' : ''}}" data-filter="all" bindtap="setFilter">全部</view>
-    <view class="chip chip--teacher {{filter === 'active' ? 'chip--on' : ''}}" data-filter="active" bindtap="setFilter">活跃</view>
-    <view class="chip chip--teacher {{filter === 'inactive' ? 'chip--on' : ''}}" data-filter="inactive" bindtap="setFilter">未活跃</view>
+    <view class="chip chip--teacher {{filter === 'all' ? 'chip--on' : ''}}" hover-class="hover-dim" data-filter="all" bindtap="setFilter">全部</view>
+    <view class="chip chip--teacher {{filter === 'active' ? 'chip--on' : ''}}" hover-class="hover-dim" data-filter="active" bindtap="setFilter">活跃</view>
+    <view class="chip chip--teacher {{filter === 'inactive' ? 'chip--on' : ''}}" hover-class="hover-dim" data-filter="inactive" bindtap="setFilter">未活跃</view>
   </view>
 
   <block wx:if="{{loading}}">
     <view class="card"><view class="skeleton skeleton-line"></view></view>
   </block>
 
+  <!-- 加载失败占位 -->
+  <view wx:elif="{{error}}" class="empty">
+    <view class="empty__text">加载失败：{{error}}</view>
+    <button class="btn btn--outline btn--sm" bindtap="retryLoad">重新加载</button>
+  </view>
+
   <block wx:elif="{{filtered.length}}">
-    <view wx:for="{{filtered}}" wx:key="membership_id" class="card stu-card fade-in" data-id="{{student.id}}">
-      <view class="row gap-16" data-id="{{item.student.id}}" bindtap="openDetail">
+    <view wx:for="{{filtered}}" wx:key="membership_id" class="card stu-card fade-in" hover-class="hover-card" data-id="{{item.student.id}}" bindtap="openDetail">
+      <view class="row gap-16">
         <view class="stu-avatar">
-          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" class="stu-avatar__img" />
+          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load class="stu-avatar__img" />
           <text wx:else>{{item.name[0]}}</text>
         </view>
         <view class="flex-1">
@@ -50,7 +56,25 @@
     </view>
   </block>
 
-  <view wx:else class="empty"><icon class="empty__icon" name="users" size="64rpx" color="#D94925" /><view class="empty__text">暂无学生数据</view></view>
+  <!-- 有学生但筛选无结果 -->
+  <view wx:elif="{{filtering}}" class="empty">
+    <icon class="empty__icon" name="search" size="64rpx" color="#D94925" />
+    <view class="empty__text">未找到匹配学生</view>
+    <button class="btn btn--outline btn--sm" bindtap="clearFilter">清除筛选</button>
+  </view>
+
+  <!-- 无课程 -->
+  <view wx:elif="{{!courses.length}}" class="empty">
+    <icon class="empty__icon" name="book" size="64rpx" color="#D94925" />
+    <view class="empty__text">暂无课程，创建课程后可管理学生</view>
+  </view>
+
+  <!-- 课程内暂无学生：引导分享课程码 -->
+  <view wx:else class="empty">
+    <icon class="empty__icon" name="users" size="64rpx" color="#D94925" />
+    <view class="empty__text">暂无学生，分享课程码邀请学生加入</view>
+    <button class="btn btn--outline btn--sm" bindtap="copyCourseCode">复制课程码</button>
+  </view>
 </view>
 
 <!-- 课程选择 -->
@@ -59,7 +83,7 @@
   <view class="sheet__handle"></view>
   <view class="sheet__title">选择课程</view>
   <scroll-view scroll-y style="max-height:50vh">
-    <view wx:for="{{courses}}" wx:key="id" class="pick-row" data-id="{{item.id}}" bindtap="pickCourse">
+    <view wx:for="{{courses}}" wx:key="id" class="pick-row" hover-class="hover-bg" data-id="{{item.id}}" bindtap="pickCourse">
       <text class="flex-1 ellipsis">{{item.name}}</text>
       <icon wx:if="{{item.id === courseId}}" name="check" size="30rpx" color="#D94925" />
     </view>
@@ -79,5 +103,5 @@
     <view class="field__label">提醒内容</view>
     <textarea class="textarea" value="{{remindForm.message}}" bindinput="onRemindMsg" />
   </view>
-  <button class="btn btn--teacher btn--block mt-8" bindtap="sendRemind">发送提醒</button>
+  <button class="btn btn--teacher btn--block mt-8" loading="{{sending}}" disabled="{{sending}}" bindtap="sendRemind">发送提醒</button>
 </view>

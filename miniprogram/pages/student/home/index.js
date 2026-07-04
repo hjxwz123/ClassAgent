@@ -6,6 +6,7 @@ const auth = require('../../../utils/auth');
 Page({
   data: {
     loading: true,
+    error: false,
     greeting: '',
     nickname: '',
     dashboard: null,
@@ -28,6 +29,12 @@ Page({
 
   onShow() {
     tabbar.setTab(this, 0);
+    // 回到首页时静默刷新（30 秒节流），保持数据新鲜
+    if (this._lastLoad && Date.now() - this._lastLoad > 30000) this.load(true);
+  },
+
+  onShareAppMessage() {
+    return { title: '智学黑板 · 一起来学习', path: '/pages/student/home/index' };
   },
 
   onPullDownRefresh() {
@@ -56,12 +63,21 @@ Page({
         todayTotal: tasks.length,
         todayDone,
         weakPoints: (rec.weak_points || []).slice(0, 4),
-        loading: false
+        loading: false,
+        error: false
       });
+      this._lastLoad = Date.now();
     } catch (err) {
-      this.setData({ loading: false });
+      // 首屏失败时展示错误占位与重试入口，避免整页空白
+      this.setData({ loading: false, error: !this.data.dashboard });
       require('../../../utils/toast').error(err.message);
     }
+  },
+
+  // 错误占位"重新加载"
+  retryLoad() {
+    this.setData({ error: false });
+    this.load();
   },
 
   goCourses() { wx.switchTab({ url: '/pages/student/courses/index' }); },

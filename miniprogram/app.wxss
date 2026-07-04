@@ -182,6 +182,11 @@ view, text, scroll-view, button, input, textarea, navigator {
 }
 .search__input { flex: 1; font-size: 28rpx; }
 
+/* ===== 全局按压态（小程序无 :hover，可点元素统一用 hover-class 引用） ===== */
+.hover-dim { opacity: 0.6; }
+.hover-bg { background: #F1F0EB !important; }
+.hover-card { opacity: 0.85; transform: scale(0.99); }
+
 /* ===== 分隔线 ===== */
 .divider { height: 1rpx; background: var(--ca-border); margin: 24rpx 0; }
 
