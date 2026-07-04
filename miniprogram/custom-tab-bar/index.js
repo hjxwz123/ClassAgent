@@ -36,6 +36,8 @@ Component({
   methods: {
     refreshRole() {
       const role = auth.role() || 'student';
+      // 角色只在登录/登出时变化，未变则跳过整份 list 的冗余 setData
+      if (role === this.data.role && this.data.list.length) return;
       const list = role === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
       const activeColor = role === 'teacher' ? '#d94925' : '#00b8d4';
       this.setData({ role, list, activeColor });

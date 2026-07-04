@@ -18,6 +18,7 @@ Page({
     ranges: RANGES,
     range: 'week',
     loading: true,
+    error: '',
     analysis: null,
     metrics: [],
     lessonBars: [],
@@ -26,17 +27,52 @@ Page({
 
   onShow() {
     tabbar.setTab(this, 3);
+    // 承接课程主页跳转指定的课程
+    const transfer = getApp().globalData.transfer;
+    if (transfer.teacherCourseId) {
+      this._pendingCourseId = transfer.teacherCourseId;
+      transfer.teacherCourseId = null;
+    }
     if (!this.data.courses.length) this.loadCourses();
+    else if (this._pendingCourseId) this.applyPendingCourse();
   },
-  onPullDownRefresh() { this.load().then(() => wx.stopPullDownRefresh()); },
+  onPullDownRefresh() { this.retryLoad().then(() => wx.stopPullDownRefresh()); },
+
+  applyPendingCourse() {
+    const id = this._pendingCourseId;
+    this._pendingCourseId = null;
+    const course = this.data.courses.find((c) => c.id === id);
+    if (course) {
+      this.setData({ courseId: id, courseName: course.name });
+      this.load();
+    }
+  },
+
+  // 重试入口：课程列表未加载成功则先拉课程，否则重拉分析数据
+  retryLoad() {
+    if (!this.data.courses.length) return this.loadCourses();
+    return this.load();
+  },
 
   async loadCourses() {
+    // 在途去重：onShow 可能连续触发（首次进入 + 从课程主页跳转），并发请求会互抢 pendingCourseId
+    if (this._loadingCourses) return;
+    this._loadingCourses = true;
+    this.setData({ loading: true, error: '' });
     try {
       const courses = (await api.get('/teacher/courses')) || [];
-      const courseId = (courses[0] && courses[0].id) || 0;
-      this.setData({ courses, courseId, courseName: courses[0] ? courses[0].name : '选择课程' });
+      let courseId = this._pendingCourseId || 0;
+      this._pendingCourseId = null;
+      let course = courses.find((c) => c.id === courseId);
+      if (!course) { course = courses[0]; courseId = (course && course.id) || 0; }
+      this.setData({ courses, courseId, courseName: course ? course.name : '选择课程' });
       if (courseId) this.load(); else this.setData({ loading: false });
-    } catch (err) { this.setData({ loading: false }); toast.error(err.message); }
+    } catch (err) {
+      this.setData({ loading: false, error: err.message || '加载失败' });
+      toast.error(err.message);
+    } finally {
+      this._loadingCourses = false;
+    }
   },
 
   toggleCoursePicker() { this.setData({ coursePickerOpen: !this.data.coursePickerOpen }); },
@@ -50,7 +86,7 @@ Page({
 
   async load() {
     if (!this.data.courseId) return;
-    this.setData({ loading: true });
+    this.setData({ loading: true, error: '' });
     try {
       const days = (RANGES.find((r) => r.key === this.data.range) || RANGES[0]).days;
       const a = await api.get('/teacher/courses/' + this.data.courseId + '/analysis', { days });
@@ -64,10 +100,10 @@ Page({
         { label: '薄弱点', value: m.weak_point_count || 0, unit: '' }
       ];
       const lessons = a.lesson_completion || [];
-      const maxRate = Math.max(1, ...lessons.map((l) => fmt.percent(l.completion_rate || l.progress_percent || 0)));
+      // 条形宽度直接用绝对百分比，避免相对最大值缩放造成误导
       const lessonBars = lessons.slice(0, 8).map((l) => {
         const v = fmt.percent(l.completion_rate || l.progress_percent || 0);
-        return { title: l.title, value: v, width: Math.round(v / maxRate * 100) };
+        return { title: l.title, value: v, width: v };
       });
       const ly = a.student_layers || {};
       const layers = [
@@ -78,7 +114,7 @@ Page({
       ];
       this.setData({ analysis: a, metrics, lessonBars, layers, loading: false });
     } catch (err) {
-      this.setData({ loading: false });
+      this.setData({ loading: false, error: err.message || '加载失败' });
       toast.error(err.message);
     }
   }

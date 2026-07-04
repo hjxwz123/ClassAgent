@@ -74,6 +74,9 @@ const ICONS = {
 };
 
 // 小程序无 btoa，自实现 ASCII 字符串的 base64 编码（SVG 全为 ASCII）
+// (name|color) -> data-URI 缓存，跨实例复用
+const SRC_CACHE = {};
+
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 function base64(str) {
   let out = '';
@@ -108,8 +111,15 @@ Component({
     _render() {
       const fn = ICONS[this.data.name];
       if (!fn) { this.setData({ src: '' }); return; }
-      const svg = fn(this.data.color || '#2C2B29');
-      this.setData({ src: 'data:image/svg+xml;base64,' + base64(svg) });
+      // 同名同色图标在列表里会出现几十次，模块级缓存避免重复 SVG 拼串 + base64 编码
+      const key = this.data.name + '|' + (this.data.color || '#2C2B29');
+      let src = SRC_CACHE[key];
+      if (!src) {
+        const svg = fn(this.data.color || '#2C2B29');
+        src = 'data:image/svg+xml;base64,' + base64(svg);
+        SRC_CACHE[key] = src;
+      }
+      if (src !== this.data.src) this.setData({ src });
     }
   }
 });

@@ -47,6 +47,10 @@
     "pages/student/home/index": {
       "network": "all",
       "packages": ["student-course", "student-learning"]
+    },
+    "pages/teacher/home/index": {
+      "network": "all",
+      "packages": ["teacher"]
     }
   },
   "tabBar": {

@@ -1,5 +1,7 @@
 {
   "navigationBarTitleText": "课程资料",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "dark",
   "usingComponents": {
     "icon": "/components/icon/index"
   }

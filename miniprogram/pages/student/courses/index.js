@@ -6,6 +6,7 @@ const tabbar = require('../../../utils/tabbar');
 Page({
   data: {
     loading: true,
+    error: false,
     courses: [],
     filtered: [],
     keyword: '',
@@ -15,7 +16,8 @@ Page({
     joinCode: '',
     joinChecking: false,
     joinError: '',
-    joinPreview: null
+    joinPreview: null,
+    joining: false
   },
 
   onShow() {
@@ -30,12 +32,23 @@ Page({
   async load() {
     try {
       const courses = (await api.get('/student/courses')) || [];
-      this.setData({ courses, loading: false });
+      this.setData({ courses, loading: false, error: false });
       this.applyFilter();
     } catch (err) {
-      this.setData({ loading: false });
+      // 首次加载失败时展示错误占位，与"还没有加入课程"空态区分
+      this.setData({ loading: false, error: !this.data.courses.length });
       toast.error(err.message);
     }
+  },
+
+  // 错误占位"重新加载"
+  retryLoad() {
+    this.setData({ loading: true, error: false });
+    this.load();
+  },
+
+  onShareAppMessage() {
+    return { title: '智学黑板 · 我的课程', path: '/pages/student/courses/index' };
   },
 
   onSearch(e) {
@@ -99,7 +112,9 @@ Page({
     }
   },
   async confirmJoin() {
+    if (this.data.joining) return;
     if (!this.data.joinPreview || this.data.joinPreview.already_joined) return;
+    this.setData({ joining: true });
     try {
       await api.post('/courses/join', { course_code: this.data.joinCode.trim() });
       toast.success('已加入课程');
@@ -107,6 +122,8 @@ Page({
       this.load();
     } catch (err) {
       this.setData({ joinError: err.message });
+    } finally {
+      this.setData({ joining: false });
     }
   },
 

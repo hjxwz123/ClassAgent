@@ -1,11 +1,17 @@
 <view class="page">
+  <!-- 课程切换 -->
+  <view class="course-sel" hover-class="hover-dim" bindtap="toggleCoursePicker">
+    <text class="ellipsis">{{courseName}}</text>
+    <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#0097A7" />
+  </view>
+
   <block wx:if="{{loading}}">
-    <view class="card"><view class="skeleton skeleton-line"></view></view>
+    <view class="card mt-16"><view class="skeleton skeleton-line"></view></view>
   </block>
 
   <block wx:else>
     <!-- 横幅 -->
-    <view class="banner banner--student fade-in plan-banner">
+    <view class="banner banner--student fade-in plan-banner mt-16">
       <view class="plan-banner__cell"><view class="num">{{stats.monthCheckin}}</view><text>本月打卡</text></view>
       <view class="plan-banner__cell"><view class="num">{{stats.done}}</view><text>已完成任务</text></view>
       <view class="plan-banner__cell"><view class="num">{{stats.total}}</view><text>计划任务</text></view>
@@ -35,8 +41,12 @@
 
       <!-- 月历 -->
       <view class="row-between">
-        <view class="section-title" style="margin:0">{{monthLabel}}</view>
-        <text class="text-student" style="font-size:26rpx" bindtap="openGen">重新规划</text>
+        <view class="cal-head">
+          <view class="cal-head__arrow" hover-class="hover-bg" bindtap="prevMonth">‹</view>
+          <view class="section-title cal-head__label" style="margin:0">{{monthLabel}}</view>
+          <view class="cal-head__arrow" hover-class="hover-bg" bindtap="nextMonth">›</view>
+        </view>
+        <text class="text-student" style="font-size:26rpx" hover-class="hover-dim" bindtap="openGen">重新规划</text>
       </view>
       <view class="card calendar">
         <view class="calendar__week">
@@ -70,5 +80,18 @@
     <view class="field__label">计划周期（天）</view>
     <input class="input" type="number" value="{{form.available_days}}" bindinput="onDays" />
   </view>
-  <button class="btn btn--primary btn--block mt-8" loading="{{generating}}" bindtap="generate"><icon name="spark" size="28rpx" color="#ffffff" /> 生成计划</button>
+  <button class="btn btn--primary btn--block mt-8" loading="{{generating}}" disabled="{{generating}}" bindtap="generate"><icon name="spark" size="28rpx" color="#ffffff" /> 生成计划</button>
+</view>
+
+<!-- 课程选择 -->
+<view wx:if="{{coursePickerOpen}}" class="sheet-mask" bindtap="toggleCoursePicker"></view>
+<view wx:if="{{coursePickerOpen}}" class="sheet" catchtap="">
+  <view class="sheet__handle"></view>
+  <view class="sheet__title">选择课程</view>
+  <scroll-view scroll-y style="max-height:50vh">
+    <view wx:for="{{courses}}" wx:key="id" class="pick-row {{item.id === courseId ? 'pick-row--on' : ''}}" hover-class="hover-bg" data-id="{{item.id}}" bindtap="pickCourse">
+      <text class="flex-1 ellipsis">{{item.name}}</text>
+      <icon wx:if="{{item.id === courseId}}" name="check" size="30rpx" color="#00B8D4" />
+    </view>
+  </scroll-view>
 </view>

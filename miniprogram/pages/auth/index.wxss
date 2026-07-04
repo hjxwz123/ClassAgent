@@ -32,52 +32,8 @@
   box-shadow: 0 16rpx 48rpx rgba(18, 22, 20, 0.12);
 }
 
-.seg {
-  display: flex;
-  background: #F2F1EC;
-  border-radius: 12rpx;
-  padding: 6rpx;
-  margin-bottom: 32rpx;
-}
-.seg__item {
-  flex: 1;
+/* 登录卡片底部引导文案 */
+.auth__note {
   text-align: center;
-  height: 64rpx;
-  line-height: 64rpx;
-  font-size: 28rpx;
-  color: #666560;
-  border-radius: 9rpx;
-}
-.seg__item--on {
-  background: #fff;
-  color: #00B8D4;
-  font-weight: 600;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
-}
-
-.role-pick { display: flex; gap: 16rpx; }
-.role-pick__item {
-  flex: 1;
-  text-align: center;
-  height: 80rpx;
-  line-height: 80rpx;
-  border: 1rpx solid #E6E4DD;
-  border-radius: 12rpx;
-  font-size: 28rpx;
-  color: #444440;
-}
-.role-pick__item--on {
-  border-color: #00B8D4;
-  background: #E0F7FA;
-  color: #0097A7;
-  font-weight: 600;
-}
-
-.hint-box {
-  background: #E1F5FE;
-  color: #0277BD;
-  font-size: 26rpx;
-  padding: 16rpx 20rpx;
-  border-radius: 10rpx;
-  margin-bottom: 20rpx;
+  margin-top: 24rpx;
 }

@@ -1,6 +1,7 @@
 const api = require('../../../utils/api');
 const fmt = require('../../../utils/format');
 const toast = require('../../../utils/toast');
+const md = require('../../../utils/markdown');
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
@@ -8,11 +9,13 @@ Page({
   data: {
     attemptId: 0,
     loading: true,
+    error: false,
     attempt: null,
     quiz: null,
     rows: [],
     accuracy: 0,
-    scoreText: ''
+    scoreText: '',
+    feedbackText: ''
   },
 
   onLoad(query) {
@@ -27,13 +30,21 @@ Page({
   },
 
   async load() {
+    this.setData({ loading: true, error: false });
     try {
       const data = await api.get('/learning/attempts/' + this.data.attemptId);
       this.render(data);
     } catch (err) {
-      this.setData({ loading: false });
+      this.setData({ loading: false, error: true });
       toast.error(err.message);
     }
+  },
+
+  onShareAppMessage() {
+    return {
+      title: '我的测验成绩与解析',
+      path: '/subpackages/student-learning/quiz-result/index?attemptId=' + this.data.attemptId
+    };
   },
 
   answerText(value, question) {
@@ -67,7 +78,10 @@ Page({
       rows,
       accuracy: fmt.percent(attempt.accuracy),
       scoreText: Math.round(attempt.score || 0) + ' / ' + Math.round(attempt.total_score || 0),
-      loading: false
+      // AI 建议是 markdown 文本，去符号转纯文本，配合 pre-wrap 保留换行
+      feedbackText: attempt.ai_feedback ? md.toPlainText(attempt.ai_feedback) : '',
+      loading: false,
+      error: false
     });
   },
 

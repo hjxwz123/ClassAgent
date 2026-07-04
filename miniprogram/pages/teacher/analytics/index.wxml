@@ -1,18 +1,30 @@
 <view class="page page--tab">
   <view class="row-between">
-    <view class="course-sel course-sel--teacher" bindtap="toggleCoursePicker">
+    <view class="course-sel course-sel--teacher" hover-class="hover-dim" bindtap="toggleCoursePicker">
       <text class="ellipsis">{{courseName}}</text>
       <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#D94925" />
     </view>
   </view>
 
   <view class="chips mt-16">
-    <view wx:for="{{ranges}}" wx:key="key" class="chip chip--teacher {{range === item.key ? 'chip--on' : ''}}" data-key="{{item.key}}" bindtap="setRange">{{item.label}}</view>
+    <view wx:for="{{ranges}}" wx:key="key" class="chip chip--teacher {{range === item.key ? 'chip--on' : ''}}" hover-class="hover-dim" data-key="{{item.key}}" bindtap="setRange">{{item.label}}</view>
   </view>
 
   <block wx:if="{{loading}}">
     <view class="card"><view class="skeleton skeleton-line"></view></view>
   </block>
+
+  <!-- 加载失败占位 -->
+  <view wx:elif="{{error}}" class="empty">
+    <view class="empty__text">加载失败：{{error}}</view>
+    <button class="btn btn--outline btn--sm" bindtap="retryLoad">重新加载</button>
+  </view>
+
+  <!-- 无课程空态 -->
+  <view wx:elif="{{!courses.length}}" class="empty">
+    <icon class="empty__icon" name="book" size="64rpx" color="#D94925" />
+    <view class="empty__text">暂无课程，创建课程后可查看教学分析</view>
+  </view>
 
   <block wx:elif="{{analysis}}">
     <!-- AI 建议 -->
@@ -71,7 +83,7 @@
   <view class="sheet__handle"></view>
   <view class="sheet__title">选择课程</view>
   <scroll-view scroll-y style="max-height:50vh">
-    <view wx:for="{{courses}}" wx:key="id" class="pick-row" data-id="{{item.id}}" bindtap="pickCourse">
+    <view wx:for="{{courses}}" wx:key="id" class="pick-row" hover-class="hover-bg" data-id="{{item.id}}" bindtap="pickCourse">
       <text class="flex-1 ellipsis">{{item.name}}</text>
       <icon wx:if="{{item.id === courseId}}" name="check" size="30rpx" color="#D94925" />
     </view>

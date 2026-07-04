@@ -7,7 +7,7 @@
     <!-- 身份卡 -->
     <view class="id-card banner banner--student fade-in">
       <view class="row gap-24">
-        <view class="id-card__avatar" bindtap="changeAvatar">
+        <view class="id-card__avatar" hover-class="hover-dim" bindtap="changeAvatar">
           <image wx:if="{{form.avatar_url}}" src="{{form.avatar_url}}" mode="aspectFill" class="id-card__avatar-img" />
           <text wx:else>{{form.nickname[0] || '学'}}</text>
         </view>
@@ -40,9 +40,9 @@
 
     <!-- 分组 Tab -->
     <view class="seg-tabs">
-      <view class="seg-tabs__item {{tab === 'info' ? 'seg-tabs__item--on' : ''}}" data-tab="info" bindtap="switchTab">我的资料</view>
-      <view class="seg-tabs__item {{tab === 'archive' ? 'seg-tabs__item--on' : ''}}" data-tab="archive" bindtap="switchTab">学习档案</view>
-      <view class="seg-tabs__item {{tab === 'account' ? 'seg-tabs__item--on' : ''}}" data-tab="account" bindtap="switchTab">账号设置</view>
+      <view class="seg-tabs__item {{tab === 'info' ? 'seg-tabs__item--on' : ''}}" hover-class="hover-dim" data-tab="info" bindtap="switchTab">我的资料</view>
+      <view class="seg-tabs__item {{tab === 'archive' ? 'seg-tabs__item--on' : ''}}" hover-class="hover-dim" data-tab="archive" bindtap="switchTab">学习档案</view>
+      <view class="seg-tabs__item {{tab === 'account' ? 'seg-tabs__item--on' : ''}}" hover-class="hover-dim" data-tab="account" bindtap="switchTab">账号设置</view>
     </view>
 
     <!-- 资料 -->
@@ -57,15 +57,16 @@
       </view>
       <view class="field">
         <view class="field__label">个人简介</view>
-        <textarea class="textarea" value="{{form.bio}}" placeholder="介绍一下自己" data-field="bio" bindinput="onForm" />
+        <textarea class="textarea" value="{{form.bio}}" placeholder="介绍一下自己" auto-height maxlength="200" cursor-spacing="20" data-field="bio" bindinput="onForm" />
+        <view class="text-muted" style="font-size:24rpx;text-align:right;margin-top:8rpx">{{form.bio.length || 0}}/200</view>
       </view>
-      <button class="btn btn--primary btn--block" bindtap="saveProfile">保存资料</button>
+      <button class="btn btn--primary btn--block" loading="{{saving}}" disabled="{{saving}}" bindtap="saveProfile">保存资料</button>
     </view>
 
     <!-- 学习档案 -->
     <view wx:elif="{{tab === 'archive'}}" class="card">
       <block wx:if="{{profile.activities.length}}">
-        <view wx:for="{{profile.activities}}" wx:key="index" wx:if="{{index < 12}}" class="timeline">
+        <view wx:for="{{profile.activities}}" wx:key="time" wx:if="{{index < 12}}" class="timeline">
           <view class="timeline__dot"></view>
           <view class="flex-1">
             <view class="ellipsis">{{item.title}}</view>
@@ -86,7 +87,7 @@
         </view>
       </view>
       <view class="card">
-        <view class="list-link" bindtap="openPwd"><text class="flex-1">修改密码</text><text class="text-muted">›</text></view>
+        <view class="list-link" hover-class="hover-bg" bindtap="openPwd"><text class="flex-1">修改密码</text><text class="text-muted">›</text></view>
       </view>
       <button class="btn btn--danger btn--block" bindtap="logout">退出登录</button>
     </view>
@@ -110,5 +111,5 @@
     <view class="field__label">确认新密码</view>
     <input class="input" password value="{{pwd.confirm}}" data-field="confirm" bindinput="onPwd" />
   </view>
-  <button class="btn btn--primary btn--block mt-8" bindtap="submitPwd">保存</button>
+  <button class="btn btn--primary btn--block mt-8" loading="{{submitting}}" disabled="{{submitting}}" bindtap="submitPwd">保存</button>
 </view>

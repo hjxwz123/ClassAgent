@@ -8,12 +8,17 @@ Page({
     loading: true,
     profile: null,
     form: { nickname: '', avatar_url: '', organization: '', department: '', bio: '' },
+    saving: false,
     notices: [],
     pwdOpen: false,
     pwd: { old_password: '', new_password: '', confirm: '' }
   },
 
-  onShow() { tabbar.setTab(this, 4); this.load(); },
+  onShow() {
+    tabbar.setTab(this, 4);
+    // 表单有未保存修改时不重新加载，避免覆盖用户输入
+    if (!this._formDirty) this.load();
+  },
   onPullDownRefresh() { this.load().then(() => wx.stopPullDownRefresh()); },
 
   async load() {
@@ -32,13 +37,17 @@ Page({
         notices: (data.notification_settings || []),
         loading: false
       });
+      this._formDirty = false;
     } catch (err) {
       this.setData({ loading: false });
       toast.error(err.message);
     }
   },
 
-  onForm(e) { this.setData({ ['form.' + e.currentTarget.dataset.field]: e.detail.value }); },
+  onForm(e) {
+    this._formDirty = true;
+    this.setData({ ['form.' + e.currentTarget.dataset.field]: e.detail.value });
+  },
 
   async changeAvatar() {
     try {
@@ -57,6 +66,8 @@ Page({
   },
 
   async save() {
+    if (this.data.saving) return;
+    this.setData({ saving: true });
     try {
       await api.patch('/teacher/profile', {
         nickname: this.data.form.nickname,
@@ -66,18 +77,26 @@ Page({
         department: this.data.form.department
       });
       const user = auth.getUser() || {}; user.nickname = this.data.form.nickname; auth.setUser(user);
+      this._formDirty = false;
       toast.success('已保存');
     } catch (err) { toast.error(err.message); }
+    finally { this.setData({ saving: false }); }
   },
 
   toggleNotice(e) {
     const idx = e.currentTarget.dataset.index;
     const notices = this.data.notices.slice();
-    notices[idx].enabled = !notices[idx].enabled;
+    notices[idx] = Object.assign({}, notices[idx], { enabled: !notices[idx].enabled });
     this.setData({ notices });
     api.put('/teacher/profile/notifications', { settings: notices.map((n) => ({ key: n.key, enabled: n.enabled })) })
       .then(() => toast.success('已保存'))
-      .catch((err) => toast.error(err.message));
+      .catch((err) => {
+        // 保存失败回滚开关状态
+        const rollback = this.data.notices.slice();
+        rollback[idx] = Object.assign({}, rollback[idx], { enabled: !rollback[idx].enabled });
+        this.setData({ notices: rollback });
+        toast.error(err.message);
+      });
   },
 
   openPwd() { this.setData({ pwdOpen: true, pwd: { old_password: '', new_password: '', confirm: '' } }); },

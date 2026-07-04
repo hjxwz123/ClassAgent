@@ -56,6 +56,23 @@
 .msg__ai-head { font-size: 24rpx; color: var(--ca-sub); margin-bottom: 8rpx; }
 .msg__ai-spark { color: var(--ca-student-glow); }
 
+.stage-text { font-size: 24rpx; color: var(--ca-sub); margin-top: 12rpx; }
+.bubble__rich { display: block; word-break: break-word; }
+.stream-cursor {
+  display: inline-block;
+  width: 6rpx;
+  height: 32rpx;
+  margin-left: 4rpx;
+  background: var(--ca-student);
+  border-radius: 3rpx;
+  animation: caCursor 0.9s steps(1) infinite;
+  vertical-align: -4rpx;
+}
+@keyframes caCursor { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0; } }
+.msg__tool--retry { color: var(--ca-student-hover); font-weight: 600; }
+.qa__send--stop { background: var(--ca-error-bg); }
+.qa__stop-square { width: 28rpx; height: 28rpx; border-radius: 6rpx; background: var(--ca-error); }
+
 .typing { display: flex; gap: 10rpx; padding: 8rpx 0; }
 .typing text { width: 12rpx; height: 12rpx; border-radius: 9999rpx; background: var(--ca-muted); animation: caBlink 1.2s infinite; }
 .typing text:nth-child(2) { animation-delay: 0.2s; }

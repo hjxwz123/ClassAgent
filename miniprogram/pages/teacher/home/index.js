@@ -7,6 +7,7 @@ const auth = require('../../../utils/auth');
 Page({
   data: {
     loading: true,
+    error: '',
     nickname: '',
     greeting: '',
     dashboard: null,
@@ -14,14 +15,18 @@ Page({
   },
 
   onLoad() {
-    const user = auth.getUser() || {};
-    this.setData({ nickname: user.nickname || '老师', greeting: fmt.greeting() });
     this.load();
   },
-  onShow() { tabbar.setTab(this, 0); },
+  onShow() {
+    tabbar.setTab(this, 0);
+    // 问候语随时段变化，每次显示时重新计算
+    const user = auth.getUser() || {};
+    this.setData({ nickname: user.nickname || '老师', greeting: fmt.greeting() });
+  },
   onPullDownRefresh() { this.load().then(() => wx.stopPullDownRefresh()); },
 
   async load() {
+    this.setData({ loading: !this.data.dashboard, error: '' });
     try {
       const d = await api.get('/teacher/dashboard');
       const s = d.stats || {};
@@ -33,7 +38,7 @@ Page({
       ];
       this.setData({ dashboard: d, statCards, loading: false });
     } catch (err) {
-      this.setData({ loading: false });
+      this.setData({ loading: false, error: err.message || '加载失败' });
       toast.error(err.message);
     }
   },

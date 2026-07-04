@@ -3,6 +3,12 @@
     <view class="card"><view class="skeleton skeleton-line"></view></view>
   </block>
 
+  <!-- 加载失败占位 -->
+  <view wx:elif="{{error}}" class="empty">
+    <view class="empty__text">加载失败：{{error}}</view>
+    <button class="btn btn--outline btn--sm" bindtap="load">重新加载</button>
+  </view>
+
   <block wx:elif="{{detail}}">
     <!-- 学生卡 -->
     <view class="id-card banner banner--teacher fade-in">
@@ -62,6 +68,6 @@
       </view>
     </block>
 
-    <button class="btn btn--teacher btn--block mt-16" bindtap="remind">发送提醒</button>
+    <button class="btn btn--teacher btn--block mt-16" loading="{{reminding}}" disabled="{{reminding}}" bindtap="remind">发送提醒</button>
   </block>
 </view>

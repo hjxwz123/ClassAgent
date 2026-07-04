@@ -5,8 +5,29 @@
   </view>
 
   <block wx:if="{{loading}}">
-    <view class="card"><view class="skeleton skeleton-line"></view></view>
+    <!-- 骨架屏：按真实布局 2x2 统计块 + 卡片 -->
+    <view class="t-stats">
+      <view wx:for="{{[1, 2, 3, 4]}}" wx:key="*this" class="t-stat">
+        <view class="skeleton sk-stat-num"></view>
+        <view class="skeleton sk-stat-label"></view>
+      </view>
+    </view>
+    <view class="card">
+      <view class="skeleton skeleton-line" style="width:40%"></view>
+      <view class="skeleton skeleton-line"></view>
+      <view class="skeleton skeleton-line" style="width:70%"></view>
+    </view>
+    <view class="card">
+      <view class="skeleton skeleton-line" style="width:50%"></view>
+      <view class="skeleton skeleton-line" style="width:80%"></view>
+    </view>
   </block>
+
+  <!-- 加载失败占位 -->
+  <view wx:elif="{{error}}" class="empty">
+    <view class="empty__text">加载失败：{{error}}</view>
+    <button class="btn btn--outline btn--sm" bindtap="load">重新加载</button>
+  </view>
 
   <block wx:elif="{{dashboard}}">
     <!-- 统计 2x2 -->
@@ -21,7 +42,7 @@
     <block wx:if="{{dashboard.recent_courses.length}}">
       <view class="section-title">近期课程</view>
       <view class="card">
-        <view wx:for="{{dashboard.recent_courses}}" wx:key="id" wx:if="{{index < 4}}" class="t-course-row" data-id="{{item.id}}" bindtap="openCourse">
+        <view wx:for="{{dashboard.recent_courses}}" wx:key="id" wx:if="{{index < 4}}" class="t-course-row" hover-class="hover-bg" data-id="{{item.id}}" bindtap="openCourse">
           <view class="flex-1">
             <view class="ellipsis" style="font-weight:600">{{item.name}}</view>
             <view class="text-muted" style="font-size:24rpx">{{item.term}} · {{item.student_count}} 名学生</view>
