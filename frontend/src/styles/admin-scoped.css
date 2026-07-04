@@ -264,7 +264,9 @@ textarea.form-control { height: auto; min-height: 88px; padding: 12px; resize: v
 .monitor-service strong { color: var(--color-text-primary); }
 .monitor-service span { color: var(--color-text-muted); font-size: var(--text-caption); }
 .monitor-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.monitor-bottom, .backup-layout { display: grid; grid-template-columns: 55fr 45fr; gap: 16px; }
+.monitor-bottom { display: grid; grid-template-columns: 55fr 45fr; gap: 16px; }
+/* 备份页：备份文件宽表格会把 45fr 侧栏挤成窄条，改为整列堆叠——自动备份整行置于备份文件下方 */
+.backup-layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .log-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--color-border-default); }
 .log-tabs button { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--color-text-secondary); }
 .log-tabs button.active { border-bottom-color: var(--color-primary-600); color: var(--color-primary-700); font-weight: 600; }
@@ -278,6 +280,10 @@ pre { max-height: 420px; overflow: auto; border-radius: var(--radius-lg); border
 .compact-table th, .compact-table td { padding: 10px; }
 .policy-form { display: grid; gap: 12px; }
 .wide-btn { width: 100%; }
+/* 自动备份置于底部整行后：表单字段横向自适应铺开，开关与保存各占整行 */
+.backup-layout .policy-form { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 20px; align-items: end; }
+.backup-layout .policy-form > :first-child { grid-column: 1 / -1; }
+.backup-layout .policy-form .wide-btn { grid-column: 1 / -1; width: auto; justify-self: end; min-width: 180px; }
 .danger-zone { display: grid; grid-template-columns: auto 1fr 220px 180px auto; align-items: center; gap: 14px; border-left: 4px solid var(--color-danger-500); background: var(--color-danger-50); padding: 16px; }
 .danger-zone strong { display: block; color: var(--color-danger-700); }
 .danger-zone span { color: var(--color-text-secondary); font-size: var(--text-body-sm); }
