@@ -6,7 +6,7 @@ from pathlib import Path
 from queue import Empty, Queue
 import re
 import threading
-from time import sleep
+from time import perf_counter, sleep
 from typing import Any
 
 from fastapi import UploadFile
@@ -41,6 +41,9 @@ _THINK_END_TAGS = ("</think>", "</thinking>")
 _IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 _QA_IMAGE_LIMIT_BYTES = 10 * 1024 * 1024
 _STREAM_CHUNK_SIZE = 36
+# SSE 旁路消费端落后时允许合并已就绪 delta，但单个事件不能无限变大；
+# 否则 worker 很快把整段答案塞进队列后，前端会看到"一大块、一大块"跳出。
+_STREAM_MERGE_MAX_CHARS = 240
 # 零延迟：不再对分块下发做任何人为 sleep。后端产出多快就下发多快，前端逐字即时渲染。
 _STREAM_CHUNK_DELAY_SECONDS = 0.0
 _QA_FALLBACK_PAGE_SCAN_LIMIT = 240
@@ -2168,19 +2171,53 @@ def _save_qa_answer_fresh(record_id: int, *, answer: str, thinking: str | None, 
             session.close()
 
 
+def _record_qa_learning_signals_fresh(*, user_id: int, record_id: int) -> None:
+    """用独立连接在流式响应之外记录 QA 学习信号。
+
+    该流程可能触发课程知识点抽取和额外模型调用，不能挡在 SSE final 事件前面。
+    """
+    session = db_session.SessionLocal()
+    try:
+        user = session.get(User, user_id)
+        record = session.get(QARecord, record_id)
+        if user is None or record is None:
+            return
+        record_qa_learning_signals(session, user=user, record=record)
+    except Exception:
+        session.rollback()
+        logger.warning("QA 学习信号后台记录失败：record_id=%s", record_id, exc_info=True)
+    finally:
+        session.close()
+
+
+def _schedule_qa_learning_signal_recording(*, user_id: int, record_id: int) -> None:
+    threading.Thread(
+        target=_record_qa_learning_signals_fresh,
+        kwargs={"user_id": user_id, "record_id": record_id},
+        name=f"qa-learning-signal-{record_id}",
+        daemon=True,
+    ).start()
+
+
 def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> Iterator[dict]:
+    stream_started_at = perf_counter()
     _assert_student_course_access(db, course_id=payload.course_id, user=user)
-    # 进度事件：规划+检索在首 token 前串行执行，先给用户"检索中"的即时反馈，避免空白干等
-    yield {"event": "stage", "data": {"stage": "retrieving", "text": "正在检索课件资料…"}}
+    # 进度事件：规划+检索在首 token 前串行执行，先给用户即时反馈，避免空白干等。
+    yield {"event": "stage", "data": {"stage": "planning", "text": "正在分析问题…"}}
     conversation = _get_or_create_course_conversation(db, user=user, payload=payload)
     history = _conversation_history(db, conversation_id=conversation.id)
     history_for_prompt = _history_messages(history)
     attachments = _attachment_dicts(payload)
     question_for_ai = _question_with_attachments(payload.question, attachments)
     retrieval_question = _question_with_history_for_retrieval(question_for_ai, history_for_prompt)
-    agent_plan = _fast_path_plan(payload, retrieval_question=retrieval_question) or _classroom_agent_plan(
+    plan_started_at = perf_counter()
+    fast_plan = _fast_path_plan(payload, retrieval_question=retrieval_question)
+    agent_plan = fast_plan or _classroom_agent_plan(
         db, course_id=payload.course_id, payload=payload, question_for_ai=retrieval_question
     )
+    plan_elapsed = perf_counter() - plan_started_at
+    yield {"event": "stage", "data": {"stage": "retrieving", "text": "正在检索课件资料…"}}
+    retrieval_started_at = perf_counter()
     contexts, sources, _chunks = _qa_contexts_and_sources(
         db,
         course_id=payload.course_id,
@@ -2188,6 +2225,17 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
         question_for_ai=agent_plan.retrieval_query,
         history=history_for_prompt,
         agent_plan=agent_plan,
+    )
+    retrieval_elapsed = perf_counter() - retrieval_started_at
+    logger.info(
+        "QA stream pre-generation: course_id=%s plan=%s %.2fs retrieval=%.2fs contexts=%d sources=%d total=%.2fs",
+        payload.course_id,
+        "fast" if fast_plan is not None else "llm",
+        plan_elapsed,
+        retrieval_elapsed,
+        len(contexts),
+        len(sources),
+        perf_counter() - stream_started_at,
     )
     yield {"event": "stage", "data": {"stage": "generating", "text": "正在生成回答…"}}
     allow_general_ai_answer = _general_answer_allowed(db, course_id=payload.course_id)
@@ -2327,14 +2375,15 @@ def ask_question_stream(db: Session, *, user: User, payload: QAAskRequest) -> It
         # 保证完整回答落库；若当前连接落库失败（连接失效等），换新连接重试，杜绝"刷新后答案消失"。
         answer_text = "".join(answer_parts).strip()
         thinking_text = "".join(thought_parts).strip() or None
+        should_record_signals = completed and not out_of_scope and ai_error_message is None
         try:
             persist(final=True)
-            if completed and not out_of_scope and ai_error_message is None:
-                record_qa_learning_signals(db, user=user, record=record)
         except Exception:
             db.rollback()
             logger.warning("QA 最终落库失败，改用新连接重试：record_id=%s", record_id, exc_info=True)
             _save_qa_answer_fresh(record_id, answer=answer_text, thinking=thinking_text, out_of_scope=out_of_scope)
+        if should_record_signals:
+            _schedule_qa_learning_signal_recording(user_id=user.id, record_id=record_id)
 
     yield {
         "event": "final",
@@ -2392,7 +2441,10 @@ def run_qa_generation_streaming(*, user: User, payload: QAAskRequest) -> Iterato
         if event.get("event") == "delta":
             delta_type = (event.get("data") or {}).get("type")
             parts = [(event.get("data") or {}).get("text") or ""]
+            merged_chars = len(parts[0])
             while True:
+                if merged_chars >= _STREAM_MERGE_MAX_CHARS:
+                    break
                 try:
                     nxt = queue.get_nowait()
                 except Empty:
@@ -2403,7 +2455,12 @@ def run_qa_generation_streaming(*, user: User, payload: QAAskRequest) -> Iterato
                     and nxt.get("event") == "delta"
                     and (nxt.get("data") or {}).get("type") == delta_type
                 ):
-                    parts.append((nxt.get("data") or {}).get("text") or "")
+                    text = (nxt.get("data") or {}).get("text") or ""
+                    if parts and merged_chars + len(text) > _STREAM_MERGE_MAX_CHARS:
+                        pending = nxt
+                        break
+                    parts.append(text)
+                    merged_chars += len(text)
                     continue
                 pending = nxt
                 break
