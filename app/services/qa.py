@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import html
 import logging
 from pathlib import Path
-from queue import Queue
+from queue import Empty, Queue
 import re
 import threading
 from time import sleep
@@ -2379,10 +2379,40 @@ def run_qa_generation_streaming(*, user: User, payload: QAAskRequest) -> Iterato
             session.close()
 
     threading.Thread(target=worker, name="qa-generation", daemon=True).start()
+    # 下发时做"零延迟自适应合包"：只把队列里【已经就绪】的连续同类 delta 合并成一个事件，
+    # 绝不为凑包等待新事件——消费端(网络/前端)跟得上时每 token 仍即时下发，行为不变；
+    # 跟不上时积压的 token 自动合并，事件数骤降(一条长答案从 2000+ 事件降到数百)，
+    # 前端每事件的处理开销(布局/渲染)不再被 token 数放大。
+    pending: dict | object | None = None
     while True:
-        event = queue.get()
+        event = pending if pending is not None else queue.get()
+        pending = None
         if event is _QA_STREAM_SENTINEL:
             break
+        if event.get("event") == "delta":
+            delta_type = (event.get("data") or {}).get("type")
+            parts = [(event.get("data") or {}).get("text") or ""]
+            while True:
+                try:
+                    nxt = queue.get_nowait()
+                except Empty:
+                    break
+                if (
+                    nxt is not _QA_STREAM_SENTINEL
+                    and isinstance(nxt, dict)
+                    and nxt.get("event") == "delta"
+                    and (nxt.get("data") or {}).get("type") == delta_type
+                ):
+                    parts.append((nxt.get("data") or {}).get("text") or "")
+                    continue
+                pending = nxt
+                break
+            merged = dict(event.get("data") or {})
+            merged["text"] = "".join(parts)
+            yield {"event": "delta", "data": merged}
+            if pending is _QA_STREAM_SENTINEL:
+                break
+            continue
         yield event
 
 
