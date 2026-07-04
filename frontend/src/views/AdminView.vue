@@ -64,6 +64,7 @@
           <button v-if="active === 'adminSystem'" class="btn btn-primary" @click="saveSettings"><Save :size="16" />保存</button>
           <button v-if="active === 'adminMonitor'" class="btn btn-secondary" @click="loadMonitor"><RefreshCw :size="16" />刷新</button>
           <button v-if="active === 'adminLogs'" class="btn btn-ghost" @click="exportCurrent">导出</button>
+          <button v-if="active === 'adminBackups'" class="btn btn-secondary" @click="exportConfig"><Download :size="16" />导出配置</button>
           <button v-if="active === 'adminBackups'" class="btn btn-ai" @click="createBackup"><Database :size="16" />备份</button>
         </section>
       </div>
@@ -1678,6 +1679,12 @@ async function createBackup() {
   if (!confirmed) return;
   await run(() => api.post("/admin/backups"), "已备份");
   await loadBackups();
+}
+async function exportConfig() {
+  const confirmed = await confirmDanger({ title: "导出配置数据", message: "将导出全部管理配置（模型/API 配置、服务配置、系统设置）为 JSON 文件。文件包含明文 API Key 与服务密钥，属敏感数据，请妥善保管、切勿外传；可用于跨部署迁移后原样导入。", confirmText: "导出", tone: "primary" });
+  if (!confirmed) return;
+  const ts = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
+  await run(() => api.download("/admin/config/export", `classagent-config-${ts}.json`), "配置已导出");
 }
 async function verifyBackup(id: number) { const data = await run(() => api.post<any>(`/admin/backups/${id}/verify`)); if (data) emit("notice", data.success ? "success" : "warning", data.message); await loadBackups(); }
 async function downloadBackup(item: any) { await run(() => api.download(`/admin/backups/${item.id}/download`, `${item.backup_name || `backup_${item.id}`}.zip`)); }
