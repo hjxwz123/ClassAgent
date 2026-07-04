@@ -113,3 +113,21 @@ def test_save_rejects_soft_deleted_config(client):
         with pytest.raises(AppError) as exc_info:
             _save(db, config_id=created.id, purpose="qa")
         assert exc_info.value.status_code == 404
+
+
+def test_export_config_bundle_includes_plaintext_keys(client):
+    from app.services.admin import export_config_bundle
+
+    with db_session.SessionLocal() as db:
+        _save(db, purpose="qa", model_name="qwen-max", api_key="sk-export-secret", is_default=True)
+        bundle = export_config_bundle(db, actor_id=None)
+
+    assert set(bundle) >= {"meta", "model_configs", "service_configs", "system_settings"}
+    assert bundle["meta"]["kind"] == "classagent-config-export"
+    assert bundle["meta"]["contains_secrets"] is True
+    # 所有 API 配置都在，且密钥以明文导出（可再导入）
+    exported = next((m for m in bundle["model_configs"] if m["model_name"] == "qwen-max"), None)
+    assert exported is not None
+    assert exported["api_key"] == "sk-export-secret"
+    assert exported["purpose"] == "qa"
+    assert bundle["meta"]["counts"]["model_configs"] == len(bundle["model_configs"])
