@@ -572,17 +572,29 @@
             </article>
             <CourseRequired v-else-if="!courseHome.course" />
             <template v-else>
-              <article class="course-hero-student course-hero-compact" :class="{ 'has-image': courseHome.course.cover_url }" :style="courseHeroStyle(courseHome.course)">
-                <section>
-                  <h1>{{ courseHome.course.name }}</h1>
-                  <p><User :size="16" />{{ courseHome.teacher?.nickname || '教师' }} · {{ courseHome.course.term }}</p>
-                  <div><Check :size="16" />已完成 {{ courseHome.stats?.completion_rate || 0 }}% <AppProgress :value="courseHome.stats?.completion_rate || 0" class="hero-progress" tone="success" /><Users :size="16" />{{ courseHome.student_count || 0 }}名同学</div>
-                </section>
-                <aside class="course-hero-action-side">
-                  <button class="btn white-fill" :disabled="isLessonOpening || !latestLesson" @click="latestLesson && openLesson(Number(latestLesson.id))"><LoadingMark v-if="latestLesson && isOpeningLesson(Number(latestLesson.id))" :label="false" class="inline-loading-mark" /><Play v-else :size="16" />{{ latestLesson && isOpeningLesson(Number(latestLesson.id)) ? '正在打开' : '进入课时' }}</button>
+              <article class="course-hero" :class="{ 'has-cover': courseHome.course.cover_url }" :style="courseHeroStyle(courseHome.course)">
+                <div class="course-hero__main">
+                  <div class="course-hero__tags">
+                    <span v-if="courseHome.course.course_code" class="course-hero__code">{{ courseHome.course.course_code }}</span>
+                    <span class="course-hero__term">{{ courseHome.course.term }}</span>
+                  </div>
+                  <h1 class="course-hero__title">{{ courseHome.course.name }}</h1>
+                  <p class="course-hero__teacher"><User :size="15" /><span>{{ courseHome.teacher?.nickname || '教师' }}</span><i>主讲教师</i></p>
+                  <div class="course-hero__stats">
+                    <div class="course-hero__stat"><Presentation :size="16" /><b>{{ courseHome.lessons?.length || 0 }}</b><span>课时</span></div>
+                    <div class="course-hero__stat"><Users :size="16" /><b>{{ courseHome.student_count || 0 }}</b><span>同学</span></div>
+                    <div class="course-hero__stat"><FolderOpen :size="16" /><b>{{ courseHome.materials?.length || 0 }}</b><span>资料</span></div>
+                  </div>
+                </div>
+                <aside class="course-hero__aside">
+                  <div class="course-hero__progress">
+                    <div class="course-hero__progress-top"><span>学习进度</span><strong>{{ courseHome.stats?.completion_rate || 0 }}%</strong></div>
+                    <div class="course-hero__bar"><i :style="{ width: `${Math.min(100, courseHome.stats?.completion_rate || 0)}%` }"></i></div>
+                  </div>
+                  <button class="course-hero__enter" :disabled="isLessonOpening || !latestLesson" @click="latestLesson && openLesson(Number(latestLesson.id))"><LoadingMark v-if="latestLesson && isOpeningLesson(Number(latestLesson.id))" :label="false" class="inline-loading-mark" /><Play v-else :size="18" />{{ latestLesson && isOpeningLesson(Number(latestLesson.id)) ? '正在打开' : '进入课时' }}</button>
                 </aside>
               </article>
-              <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="courseSection = 'materials'" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="openQuizSelection('practice')" /></div>
+              <div class="quick-row"><QuickTile :icon="Presentation" label="课时学习" :sub="`${courseHome.lessons?.length || 0} 个课时`" @click="scrollToLessons" /><QuickTile :icon="MessageCircle" label="知识问答" sub="AI 解答" @click="go('studentQa')" /><QuickTile :icon="FolderOpen" label="课程资料" :sub="`${courseHome.materials?.length || 0} 份文件`" @click="scrollToMaterials" /><QuickTile :icon="ClipboardList" label="章节练习" sub="自选练习" @click="openQuizSelection('practice')" /></div>
               <div class="course-layout course-overview-layout">
                 <article id="lesson-list" class="panel-card course-lessons-card">
                   <div class="section-head"><h2><Presentation :size="18" />课时列表</h2><span class="tag">全部 {{ courseHome.lessons?.length || 0 }}</span></div>
@@ -591,7 +603,7 @@
                   </div>
                 </article>
                 <article class="panel-card course-data-card"><div class="section-head"><h2><BarChart2 :size="18" />我的数据</h2></div><div class="data-grid"><MiniMetric :icon="Clock" label="学习时长" :value="`${courseHome.stats?.study_hours || 0}h`" /><MiniMetric :icon="CheckCircle" label="完成进度" :value="`${courseHome.stats?.completion_rate || 0}%`" tone="success" /><MiniMetric :icon="MessageCircle" label="问答次数" :value="courseHome.stats?.qa_count || 0" tone="ai" /><MiniMetric :icon="XCircle" label="错题数" :value="courseHome.stats?.wrong_count || 0" tone="danger" /><MiniMetric :icon="Star" label="正确率" :value="`${courseHome.stats?.accuracy || 0}%`" tone="warning" /><MiniMetric :icon="Zap" label="连续打卡" :value="`${courseHome.stats?.streak_days || 0}天`" tone="warning" /></div></article>
-                <article class="panel-card course-materials-card">
+                <article id="course-material-section" class="panel-card course-materials-card">
                   <div class="section-head"><h2><FolderOpen :size="18" />课程资料</h2><button @click="materialsExpanded = !materialsExpanded">{{ materialsExpanded ? '收起' : '展开' }}</button></div>
                   <div class="course-material-list">
                     <MaterialRow v-for="item in baseCourseMaterials" :key="item.id" :item="item" />
@@ -814,10 +826,10 @@
                     type="button"
                     class="practice-generate-btn"
                     :data-loading="quizGenerating"
-                    :disabled="quizGenerating || !selectedCourseId"
+                    :disabled="quizGenerating"
                     @click="generateQuiz"
                   >
-                    <Sparkles :size="20" />智能生成练习
+                    <Sparkles :size="20" />{{ quizGenerating ? '出卷中…' : '智能生成练习' }}
                   </button>
                   <p class="practice-generate-hint"></p>
                 </article>
@@ -1095,12 +1107,12 @@
                     <article v-else-if="profileTab === 'records'" key="records" class="panel-card profile-records"><ActivityTimeline :items="profilePayload.activities || []" /></article>
                     <article v-else key="account" class="panel-card profile-form">
                       <h2>账号安全</h2>
-                      <div class="profile-form-grid">
-                        <PasswordField v-model="passwordForm.old_password" placeholder="当前密码" />
-                        <PasswordField v-model="passwordForm.new_password" placeholder="新密码" />
-                        <PasswordField v-model="passwordConfirm" placeholder="确认密码" />
+                      <div class="password-change">
+                        <div class="field"><span>当前密码</span><PasswordField v-model="passwordForm.old_password" placeholder="请输入当前密码" /></div>
+                        <div class="field"><span>新密码</span><PasswordField v-model="passwordForm.new_password" placeholder="至少 8 位，建议字母+数字组合" /></div>
+                        <div class="field"><span>确认新密码</span><PasswordField v-model="passwordConfirm" placeholder="再次输入新密码" /></div>
+                        <div class="password-change-actions"><button class="btn btn-primary" @click="changePassword">确认修改</button></div>
                       </div>
-                      <footer><button class="btn btn-primary" @click="changePassword">确认修改</button></footer>
                       <h2>通知设置</h2>
                       <div class="notice-settings-grid">
                         <div v-for="item in noticeSettings" :key="item.key" class="toggle-line"><AppCheckbox v-model="item.enabled" variant="switch" :label="item.label" /></div>
@@ -1242,7 +1254,8 @@ import {
   Pause, Pencil, Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings,
   Shield, Sparkles, Square, Star, Sun, Trash2, Type, User, Users, Wifi, X, XCircle, Zap
 } from "../icons";
-import { api, setToken } from "../api/client";
+import { api, ApiError, setToken } from "../api/client";
+import { PageTitle, DefaultUserAvatar, RingProgress, RingBlock, EmptyState, QuickTile, LessonItem, MiniMetric, EmptyGuide } from "./student/components/primitives";
 import { routeByPage } from "../router";
 import type { Lesson, LessonDetail, LessonPage, Material, MaterialDetail, PageActivity, Quiz, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
@@ -1292,7 +1305,7 @@ type StudentSearchResult = {
 };
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
-const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string]; authed: [user: UserType] }>();
+const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string, action?: { label: string; onClick: () => void }]; authed: [user: UserType] }>();
 const route = useRoute();
 const router = useRouter();
 
@@ -1325,7 +1338,6 @@ const selectedCourseId = ref<number>(Number(localStorage.getItem("student_curren
 const notifications = ref<any[]>([]);
 const lessons = ref<any[]>([]);
 const materialsExpanded = ref(false);
-const courseSection = ref("lessons");
 const materialPreviewItem = ref<any | null>(null);
 const materialPreviewDetail = ref<MaterialDetail | null>(null);
 const materialPreviewLoading = ref(false);
@@ -2067,6 +2079,16 @@ async function syncRouteState() {
     await leaveClassroom(true);
   }
   await loadActive();
+  await maybeOpenQuizFromQuery();
+}
+// 出卷成功消息点击 / 直达链接带 ?open=<quizId> 落到测验页：打开该卷后清掉 query，防刷新重开
+async function maybeOpenQuizFromQuery() {
+  if (active.value !== "studentQuizzes") return;
+  const openId = Number(route.query.open || 0);
+  if (openId <= 0) return;
+  const { open, ...rest } = route.query;
+  await startQuiz(openId);
+  void router.replace({ path: route.path, query: rest });
 }
 async function handleStudentNav(key: string) {
   if (key === "studentQuizzes") {
@@ -2288,6 +2310,7 @@ async function openQuizSelection(tab: "course" | "practice" = "practice") {
   await go("studentQuizzes");
 }
 function scrollToLessons() { document.getElementById("lesson-list")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
+function scrollToMaterials() { document.getElementById("course-material-section")?.scrollIntoView({ behavior: "smooth", block: "start" }); }
 function qaScrollRoot() {
   return document.scrollingElement || document.documentElement;
 }
@@ -2583,7 +2606,6 @@ async function openSearchResult(item: StudentSearchResult) {
   }
   if (item.type === "material" && courseId) {
     selectedCourseId.value = courseId;
-    courseSection.value = "materials";
     await loadCourseHome();
     await go("studentMaterials");
     return;
@@ -3758,13 +3780,40 @@ async function generateKnowledgeQuiz(count: number) {
 }
 
 async function loadQuizPage() { if (!selectedCourseId.value) return; quizzes.value = (await run<Quiz[]>(() => api.get("/learning/quizzes", { course_id: selectedCourseId.value }))) || []; if (!courseHome.value.course) await loadCourseHome(); await loadWrongBook(); }
+// 轮询出题任务直到 ready/failed/超时。出题走 Celery 异步队列，enqueue 立即返回 PENDING 任务，
+// 这里按节奏查 generation-tasks/{id}：ready 时后端返回带 quiz id 的载荷，failed 时 status=failed。
+async function pollGenerationTask(taskId: number, { intervalMs = 2000, timeoutMs = 120000 } = {}): Promise<{ status: "ready"; quizId: number } | { status: "failed" } | { status: "timeout" }> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    let res: any = null;
+    try {
+      res = await api.get<any>(`/learning/generation-tasks/${taskId}`);
+    } catch (error) {
+      // 鉴权失效/无权/任务不存在是终态，继续轮询只会刷屏并延后反馈；其余(网络抖动)等下一拍再查
+      if (error instanceof ApiError && [401, 403, 404].includes(error.status)) return { status: "failed" };
+      continue;
+    }
+    if (!res) continue;
+    if (Number(res.id) > 0) return { status: "ready", quizId: Number(res.id) };
+    if (String(res.status) === "failed") return { status: "failed" };
+  }
+  return { status: "timeout" };
+}
+// 点击成功消息后跳到答题：走路由带 open 参数，由「当前挂载的」测验页接手打开，
+// 避免闭包绑定在可能已卸载的旧组件实例上（学生 8s 内离开学生区再点击时会点不动）。
+async function openQuizById(quizId: number) {
+  await router.push({ path: routeByPage["studentQuizzes"] || "/quizzes", query: { open: String(quizId) } });
+}
 async function generateQuiz() {
-  if (!selectedCourseId.value || quizGenerating.value) return;
+  if (quizGenerating.value) return;
+  if (!selectedCourseId.value) return void emit("notice", "warning", "请先选择课程");
   quizGenerating.value = true;
+  emit("notice", "info", "出卷中，请稍候…");
   try {
     const count = Number(quizQuestionCount.value.replace("题", ""));
     const chapterIds = selectedPracticeChapters.value.length ? selectedPracticeChapters.value : (selectedChapterId.value ? [selectedChapterId.value] : []);
-    const quiz = await run<any>(() => api.post("/learning/quizzes/generate", {
+    const result = await run<any>(() => api.post("/learning/quizzes/generate", {
       course_id: selectedCourseId.value,
       chapter_id: chapterIds.length === 1 ? chapterIds[0] : undefined,
       chapter_ids: chapterIds,
@@ -3774,10 +3823,29 @@ async function generateQuiz() {
       prefer_weak_points: smartQuiz.value,
       difficulty: practiceDifficulty.value || "mixed",
     }));
-    if (quiz) emit("notice", quiz.id ? "success" : "info", queuedQuizMessage(quiz) || "已生成");
+    if (!result) return; // run() 已弹出错误提示
+    // enqueue 阶段 Celery 分发失败会同步返回 status=failed，直接报错，别再空等一轮轮询
+    if (String(result.status) === "failed") return void emit("notice", "error", "出卷失败，请稍后重试");
+    let quizId = Number(result.id || 0); // 极少数情况下 enqueue 直接返回已完成结果
+    if (!quizId) {
+      const taskId = Number(result.task_id || 0);
+      if (!taskId) {
+        emit("notice", "info", queuedQuizMessage(result) || "题目已加入生成队列，生成成功后会通知你");
+        await loadNotifications(true);
+        return;
+      }
+      const outcome = await pollGenerationTask(taskId);
+      if (outcome.status === "failed") return void emit("notice", "error", "出卷失败，请稍后重试");
+      if (outcome.status === "timeout") {
+        emit("notice", "info", "仍在出卷中，完成后可在练习列表或通知里查看");
+        await loadQuizPage();
+        await loadNotifications(true);
+        return;
+      }
+      quizId = outcome.quizId;
+    }
     await loadQuizPage();
-    if (quiz?.id) await startQuiz(quiz.id);
-    if (quiz && !quiz.id) await loadNotifications(true);
+    emit("notice", "success", "出卷成功，点击进入答题", { label: "进入答题", onClick: () => void openQuizById(quizId) });
   } finally {
     quizGenerating.value = false;
   }
@@ -3949,71 +4017,6 @@ function quizScoreLabel(quiz: any) {
   return statusText(quiz.status || "published");
 }
 
-const PageTitle = defineComponent({
-  props: { title: { type: String, required: true }, sub: { type: String, default: "" } },
-  setup(p, { slots }) {
-    return () => h("div", { class: "page-title-row" }, [
-      h("div", [h("h1", p.title), p.sub ? h("p", p.sub) : null]),
-      h("div", { class: "page-title-actions" }, slots.default?.())
-    ]);
-  }
-});
-
-const DefaultUserAvatar = defineComponent({
-  setup() {
-    return () => h("svg", { class: "default-user-avatar", viewBox: "0 0 64 64", role: "img", "aria-label": "默认头像" }, [
-      h("rect", { width: 64, height: 64, rx: 32, fill: "#F9F8F6" }),
-      h("circle", { cx: 32, cy: 25, r: 11, fill: "#00B8D4", opacity: "0.95" }),
-      h("path", { d: "M16 53c2.8-10.2 9-15.4 16-15.4S45.2 42.8 48 53", fill: "#121614", opacity: "0.92" }),
-      h("path", { d: "M48 12l1.8 4.4L54 18l-4.2 1.6L48 24l-1.8-4.4L42 18l4.2-1.6L48 12Z", fill: "#06B6D4" }),
-      h("path", { d: "M18 14l1.1 2.7L22 18l-2.9 1.3L18 22l-1.1-2.7L14 18l2.9-1.3L18 14Z", fill: "#00E5FF" })
-    ]);
-  }
-});
-
-const RingProgress = defineComponent({
-  props: { value: { type: Number, default: 0 }, tone: { type: String, default: "primary" } },
-  setup(p) {
-    return () => {
-      const value = Math.max(0, Math.min(100, Number(p.value || 0)));
-      const stroke = p.tone === "success" ? "#2E7D32" : p.tone === "ai" ? "#00B8D4" : "#00B8D4";
-      const radius = 28;
-      const circumference = 2 * Math.PI * radius;
-      return h("svg", { width: 72, height: 72, viewBox: "0 0 72 72", style: { transform: "rotate(-90deg)" } }, [
-        h("circle", { cx: 36, cy: 36, r: radius, fill: "none", stroke: "rgba(140,148,143,.22)", "stroke-width": 8 }),
-        h("circle", {
-          cx: 36,
-          cy: 36,
-          r: radius,
-          fill: "none",
-          stroke,
-          "stroke-linecap": "round",
-          "stroke-width": 8,
-          "stroke-dasharray": circumference,
-          "stroke-dashoffset": circumference * (1 - value / 100)
-        })
-      ]);
-    };
-  }
-});
-
-const RingBlock = defineComponent({
-  props: {
-    label: { type: String, required: true },
-    value: { type: Number, default: 0 },
-    text: { type: String, required: true },
-    sub: { type: String, default: "" },
-    tone: { type: String, default: "primary" }
-  },
-  setup(p) {
-    return () => h("div", { class: ["ring-block", p.tone] }, [
-      h("span", { class: "ring-wrap" }, [h(RingProgress, { value: p.value, tone: p.tone }), h("strong", p.text)]),
-      h("span", p.label),
-      h("small", p.sub)
-    ]);
-  }
-});
-
 const ActivityTimeline = defineComponent({
   props: { items: { type: Array as PropType<any[]>, default: () => [] } },
   setup(p) {
@@ -4032,13 +4035,6 @@ const ActivityTimeline = defineComponent({
         ]))
         : h(EmptyState, { text: "暂无动态" })
     ]);
-  }
-});
-
-const EmptyState = defineComponent({
-  props: { text: { type: String, default: "暂无数据" } },
-  setup(p) {
-    return () => h("div", { class: "empty" }, [h(BookOpen, { size: 28 }), h("span", p.text)]);
   }
 });
 
@@ -4074,35 +4070,6 @@ const CourseRequired = defineComponent({
   }
 });
 
-const QuickTile = defineComponent({
-  props: { icon: { type: Object, required: true }, label: { type: String, required: true }, sub: { type: String, default: "" } },
-  emits: ["click"],
-  setup(p, { emit: update }) {
-    return () => h("button", { type: "button", class: "quick-tile", onClick: () => update("click") }, [
-      h("span", [h(p.icon as any, { size: 18 })]),
-      h("strong", p.label),
-      h("small", p.sub)
-    ]);
-  }
-});
-
-const LessonItem = defineComponent({
-  props: {
-    lesson: { type: Object as PropType<any>, required: true },
-    index: { type: Number, required: true },
-    loading: { type: Boolean, default: false },
-    disabled: { type: Boolean, default: false }
-  },
-  emits: ["open"],
-  setup(p, { emit: update }) {
-    return () => h("button", { type: "button", class: ["lesson-item", p.lesson.progress_percent > 0 && p.lesson.progress_percent < 100 ? "current" : "", p.loading ? "loading" : ""], disabled: p.disabled || p.loading, onClick: () => update("open") }, [
-      h("b", String(p.index + 1).padStart(2, "0")),
-      h("div", [h("strong", p.lesson.title), h("small", p.loading ? "正在打开课时..." : `第 ${p.lesson.current_page || 1} 页 · ${p.lesson.progress_percent || 0}%`)]),
-      p.loading ? h(LoadingMark, { label: false, class: "inline-loading-mark" }) : p.lesson.progress_percent >= 100 ? h(CheckCircle, { size: 18 }) : h(Play, { size: 18 })
-    ]);
-  }
-});
-
 const MaterialRow = defineComponent({
   props: { item: { type: Object as PropType<any>, required: true } },
   setup(p) {
@@ -4114,27 +4081,6 @@ const MaterialRow = defineComponent({
         h("button", { type: "button", class: "material-row-action", onClick: () => downloadMaterial(p.item) }, [h(Download, { size: 14 }), "下载"])
       ])
     ]);
-  }
-});
-
-const MiniMetric = defineComponent({
-  props: {
-    icon: { type: Object, required: true },
-    label: { type: String, required: true },
-    value: { type: [String, Number], required: true },
-    tone: { type: String, default: "primary" }
-  },
-  setup(p) {
-    return () => h("div", { class: ["mini-metric", p.tone] }, [
-      h("span", { class: "mini-metric-icon" }, [h(p.icon as any, { size: 18 })]),
-      h("div", { class: "mini-metric-copy" }, [h("strong", String(p.value)), h("span", p.label)])
-    ]);
-  }
-});
-
-const EmptyGuide = defineComponent({
-  setup() {
-    return () => h("div", { class: "empty-guide" }, [h(Sparkles, { size: 38 }), h("strong", "等待题目"), h("span", "输入后开始辅导")]);
   }
 });
 
@@ -4414,9 +4360,11 @@ const QuizAnswerView = defineComponent({
             default: () => confirming.value ? h("div", { class: "exam-modal-mask exam-modal-scope" }, [
               h("article", { class: "exam-confirm-card" }, [
                 h("div", { class: "exam-modal-head" }, [h(AlertTriangle, { size: 22 }), h("h2", "确认交卷"), h("button", { type: "button", onClick: () => { confirming.value = false; } }, [h(X, { size: 16 })])]),
-                h("p", unanswered.length ? `还有 ${unanswered.length} 道未答` : "所有题目已作答"),
+                unanswered.length
+                  ? h("div", { class: "exam-confirm-warn" }, [h(AlertTriangle, { size: 16 }), h("span", [`还有 `, h("b", String(unanswered.length)), ` 道未作答，未答题将计 0 分。可返回补全后再交，或直接交卷。`])])
+                  : h("p", "所有题目均已作答，确定交卷？"),
                 marked.value.length ? h("p", `已标记 ${marked.value.length} 道`) : null,
-                h("footer", [h("button", { type: "button", class: "exam-btn exam-btn-outline", disabled: p.submitting, onClick: () => { confirming.value = false; } }, "继续作答"), h("button", { type: "button", class: "exam-btn exam-btn-primary", disabled: p.submitting, "data-loading": p.submitting, onClick: submit }, "确认交卷")])
+                h("footer", [h("button", { type: "button", class: "exam-btn exam-btn-outline", disabled: p.submitting, onClick: () => { confirming.value = false; } }, unanswered.length ? "写完再交" : "继续作答"), h("button", { type: "button", class: "exam-btn exam-btn-primary", disabled: p.submitting, "data-loading": p.submitting, onClick: submit }, unanswered.length ? "仍然交卷" : "确认交卷")])
               ])
             ]) : null
           }),
@@ -4595,6 +4543,7 @@ onMounted(async () => {
   } else {
     await loadCourses();
     await loadActive();
+    await maybeOpenQuizFromQuery();
   }
   updateTopNavIndicator();
   await loadNotifications(true);

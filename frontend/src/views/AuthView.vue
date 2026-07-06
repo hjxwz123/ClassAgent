@@ -67,9 +67,9 @@
                 </form>
 
                 <form v-else-if="mode === 'register'" key="register" @submit.prevent="registerForm.token ? register() : sendRegistrationLink()">
-                  <label class="label" for="register-email">邮箱</label>
-                  <input id="register-email" v-model="registerForm.email" class="input" type="email" autocomplete="username" required :readonly="Boolean(registerForm.token)" :aria-invalid="formError.includes('邮箱')" />
                   <template v-if="registerForm.token">
+                    <label class="label" for="register-email">邮箱</label>
+                    <input id="register-email" v-model="registerForm.email" class="input" type="email" autocomplete="username" required readonly :aria-invalid="formError.includes('邮箱')" />
                     <label class="label" for="register-nickname">昵称</label>
                     <input id="register-nickname" v-model="registerForm.nickname" class="input" autocomplete="nickname" required :aria-invalid="formError.includes('昵称')" />
                     <label class="label" for="register-student-no">学号</label>
@@ -78,18 +78,42 @@
                     <PasswordField id="register-password" v-model="registerForm.password" autocomplete="new-password" required :aria-invalid="formError.includes('密码')" />
                     <button class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />注册学生账号</button>
                   </template>
-                  <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />发送注册链接</button>
+                  <div v-else-if="linkSent" class="verify-pending">
+                    <span class="verify-pending-icon"><Mail :size="30" /></span>
+                    <strong class="verify-pending-title">验证邮件已发送</strong>
+                    <p class="verify-pending-text">已向 <b>{{ registerForm.email }}</b> 发送验证链接，请在 10 分钟内打开邮件中的链接完成注册。</p>
+                    <p class="verify-pending-hint">没收到？请检查垃圾邮件 / 垃圾箱，或稍后重新发送。</p>
+                    <button type="button" class="auth-submit" :data-loading="loading" :disabled="loading || resendCountdown > 0" @click="resendLink"><RefreshCw :size="16" />{{ resendCountdown > 0 ? `重新发送（${resendCountdown}s）` : '重新发送' }}</button>
+                    <button type="button" class="verify-pending-back" @click="backToEmailStep"><ArrowLeft :size="14" />换一个邮箱</button>
+                  </div>
+                  <template v-else>
+                    <label class="label" for="register-email">邮箱</label>
+                    <input id="register-email" v-model="registerForm.email" class="input" type="email" autocomplete="username" required :aria-invalid="formError.includes('邮箱')" />
+                    <button class="auth-submit" :data-loading="loading" :disabled="loading"><UserPlus :size="17" />发送注册链接</button>
+                  </template>
                 </form>
 
                 <form v-else key="reset" @submit.prevent="resetForm.token ? resetPassword() : sendResetLink()">
-                  <label class="label" for="reset-email">邮箱</label>
-                  <input id="reset-email" v-model="resetForm.email" class="input" type="email" autocomplete="username" required :readonly="Boolean(resetForm.token)" :aria-invalid="formError.includes('邮箱')" />
                   <template v-if="resetForm.token">
+                    <label class="label" for="reset-email">邮箱</label>
+                    <input id="reset-email" v-model="resetForm.email" class="input" type="email" autocomplete="username" required readonly :aria-invalid="formError.includes('邮箱')" />
                     <label class="label" for="reset-new-password">新密码</label>
                     <PasswordField id="reset-new-password" v-model="resetForm.new_password" autocomplete="new-password" required :aria-invalid="formError.includes('密码')" />
                     <button class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />重置密码</button>
                   </template>
-                  <button v-else class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />发送找回链接</button>
+                  <div v-else-if="linkSent" class="verify-pending">
+                    <span class="verify-pending-icon"><Mail :size="30" /></span>
+                    <strong class="verify-pending-title">找回链接已发送</strong>
+                    <p class="verify-pending-text">已向 <b>{{ resetForm.email }}</b> 发送重置密码链接，请在 10 分钟内打开邮件中的链接设置新密码。</p>
+                    <p class="verify-pending-hint">没收到？请检查垃圾邮件 / 垃圾箱，或稍后重新发送。</p>
+                    <button type="button" class="auth-submit" :data-loading="loading" :disabled="loading || resendCountdown > 0" @click="resendLink"><RefreshCw :size="16" />{{ resendCountdown > 0 ? `重新发送（${resendCountdown}s）` : '重新发送' }}</button>
+                    <button type="button" class="verify-pending-back" @click="backToEmailStep"><ArrowLeft :size="14" />换一个邮箱</button>
+                  </div>
+                  <template v-else>
+                    <label class="label" for="reset-email">邮箱</label>
+                    <input id="reset-email" v-model="resetForm.email" class="input" type="email" autocomplete="username" required :aria-invalid="formError.includes('邮箱')" />
+                    <button class="auth-submit" :data-loading="loading" :disabled="loading"><KeyRound :size="17" />发送找回链接</button>
+                  </template>
                 </form>
               </Transition>
             </template>
@@ -105,7 +129,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { NavigationFailureType, isNavigationFailure, useRoute, useRouter } from "vue-router";
 import type { NavigationFailure } from "vue-router";
-import { AlertCircle, ArrowLeft, BookOpen, KeyRound, LogIn, UserPlus } from "../icons";
+import { AlertCircle, ArrowLeft, BookOpen, KeyRound, LogIn, Mail, RefreshCw, UserPlus } from "../icons";
 import { api } from "../api/client";
 import { defaultRouteForRole } from "../router";
 import { useSessionStore } from "../stores/session";
@@ -135,6 +159,21 @@ const authTheme = ref<AppTheme>(readStoredTheme());
 const loginForm = reactive({ email: "", password: "" });
 const registerForm = reactive({ email: "", token: "", password: "", nickname: "" });
 const studentNo = ref("");
+// 发送注册链接后进入「待验证」页：显示已发送到哪个邮箱 + 重新发送(带冷却)
+const linkSent = ref(false);
+const resendCountdown = ref(0);
+let resendTimer: number | undefined;
+function startResendCountdown(seconds = 60) {
+  resendCountdown.value = seconds;
+  if (resendTimer) window.clearInterval(resendTimer);
+  resendTimer = window.setInterval(() => {
+    resendCountdown.value -= 1;
+    if (resendCountdown.value <= 0 && resendTimer) {
+      window.clearInterval(resendTimer);
+      resendTimer = undefined;
+    }
+  }, 1000);
+}
 const resetForm = reactive({ email: "", token: "", new_password: "" });
 const session = useSessionStore();
 const route = useRoute();
@@ -163,6 +202,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unsubscribeTheme?.();
+  if (resendTimer) window.clearInterval(resendTimer);
 });
 
 function setMode(value: "login" | "register" | "reset") {
@@ -170,6 +210,7 @@ function setMode(value: "login" | "register" | "reset") {
   formError.value = "";
   registerForm.token = "";
   resetForm.token = "";
+  linkSent.value = false;
   resetLinkValidation();
 }
 
@@ -280,6 +321,8 @@ async function sendRegistrationLink() {
   loading.value = true;
   try {
     await api.post("/auth/register/request", { email: registerForm.email });
+    linkSent.value = true;
+    startResendCountdown(60);
     emit("notice", "success", "注册链接已发送，请查收邮箱；找不到请查看垃圾邮件或垃圾箱");
   } catch (error) {
     formError.value = (error as Error).message;
@@ -287,6 +330,19 @@ async function sendRegistrationLink() {
   } finally {
     loading.value = false;
   }
+}
+
+// 注册 / 找回共用一套「待验证」重新发送：按当前模式发对应的链接
+function resendLink() {
+  if (loading.value || resendCountdown.value > 0) return;
+  if (mode.value === "register") void sendRegistrationLink();
+  else void sendResetLink();
+}
+
+// 「换一个邮箱」：退回邮箱输入
+function backToEmailStep() {
+  linkSent.value = false;
+  formError.value = "";
 }
 
 async function register() {
@@ -318,6 +374,8 @@ async function sendResetLink() {
   loading.value = true;
   try {
     await api.post("/auth/password/reset/request", { email: resetForm.email });
+    linkSent.value = true;
+    startResendCountdown(60);
     emit("notice", "success", "找回链接已发送，请查收邮箱；找不到请查看垃圾邮件或垃圾箱");
   } catch (error) {
     formError.value = (error as Error).message;
@@ -673,6 +731,44 @@ form { display: flex; flex-direction: column; }
 .link-result strong { color: var(--a-ink); font-size: 16px; }
 .link-result--error { color: #ff9a9a; }
 .link-result--error strong { color: #ff9a9a; }
+
+/* 发送注册链接后的「待验证」面板 */
+.verify-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 6px 2px 2px;
+}
+.verify-pending-icon {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  color: var(--a-cyan);
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  margin-bottom: 2px;
+}
+.verify-pending-title { color: var(--a-ink); font-size: 18px; font-weight: 800; }
+.verify-pending-text { color: var(--a-muted); font-size: 14px; line-height: 1.7; }
+.verify-pending-text b { color: var(--a-ink); font-weight: 700; word-break: break-all; }
+.verify-pending-hint { color: var(--a-muted); font-size: 12.5px; opacity: 0.85; }
+.verify-pending .auth-submit { margin-top: 8px; }
+.verify-pending-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--a-muted);
+  font-size: 13px;
+  transition: color 0.18s;
+}
+.verify-pending-back:hover { color: var(--a-ink); }
 
 /* 过渡动画 */
 .fade-slide-enter-active, .fade-slide-leave-active { transition: opacity 0.25s, transform 0.25s; }
