@@ -512,9 +512,9 @@
                     <div class="param-current">当前值：{{ serviceDrafts.email.password ? '已填写' : '未填写' }}</div>
                   </div>
                   <div class="param-row">
-                    <div class="param-info"><div class="param-title">SSL</div><div class="param-desc">启用 SSL 加密连接</div></div>
-                    <div class="param-control"><span class="aliyun-check"><AppCheckbox v-model="serviceDrafts.email.use_ssl" variant="switch" label="启用" /></span></div>
-                    <div class="param-current">当前值：{{ serviceDrafts.email.use_ssl ? '启用' : '关闭' }}</div>
+                    <div class="param-info"><div class="param-title">加密方式</div><div class="param-desc">端口 465 选 SSL/TLS，587 选 STARTTLS；请勿用明文对公网服务商发信，会被重置连接</div></div>
+                    <div class="param-control"><AppSelect v-model="emailEncryptionMode" :options="emailEncryptionOptions" /></div>
+                    <div class="param-current">当前值：{{ emailEncryptionOptions.find((option) => option.value === emailEncryptionMode)?.label || '-' }}</div>
                   </div>
                 </div>
               </article>
@@ -921,6 +921,26 @@ const serviceDrafts = reactive<Record<ServiceKey, any>>({
   doc_parser: { config_id: null, provider: "aliyun", name: "文档解析", is_enabled: true, access_key_id: "", access_key_secret: "", region: "cn-hangzhou", timeout_seconds: 600, poll_interval_seconds: 5, layout_step_size: 100, output_format: "markdown", llm_enhancement: true, enhancement_mode: "VLM", formula_enhancement: false, output_html_table: false },
   tts: { config_id: null, provider: "aliyun", name: "TTS", is_enabled: true, access_key_id: "", access_key_secret: "", appkey: "", voice: "xiaoyun", speech_rate: 0, volume: 50, sample_rate: 16000, format: "wav" },
   email: { config_id: null, provider: "smtp", name: "邮件", is_enabled: true, host: "", port: 465, sender: "", username: "", password: "", use_ssl: true, use_tls: false }
+});
+const emailEncryptionOptions = [
+  { label: "SSL / TLS（端口 465）", value: "ssl" },
+  { label: "STARTTLS（端口 587）", value: "starttls" },
+  { label: "不加密（明文，仅内网中继）", value: "none" },
+];
+// use_ssl 与 use_tls 互斥：SSL 从连接起即加密（465），STARTTLS 明文连接后升级（587）。
+// 旧版界面只暴露 use_ssl 且把 use_tls 写死为 false，导致 587 无法配置、关掉 SSL 后变明文被服务商重置连接。
+const emailEncryptionMode = computed<string>({
+  get() {
+    const draft = serviceDrafts.email;
+    if (draft.use_ssl) return "ssl";
+    if (draft.use_tls) return "starttls";
+    return "none";
+  },
+  set(mode) {
+    const draft = serviceDrafts.email;
+    draft.use_ssl = mode === "ssl";
+    draft.use_tls = mode === "starttls";
+  },
 });
 
 const navGroups = [
