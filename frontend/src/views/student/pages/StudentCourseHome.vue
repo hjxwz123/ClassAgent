@@ -59,7 +59,7 @@
     </div>
     <div class="course-qa-wide">
       <article class="ask-card"><Sparkles :size="20" /><h2>向 AI 提问</h2><form @submit.prevent="askCourseQuick"><input v-model="quickCourseQuestion" placeholder="这节课有什么不懂的..." /><button :disabled="!quickCourseQuestion.trim()"><Send :size="16" /></button></form><div class="quick-tags"><button v-for="item in courseHome.quick_questions || []" :key="item" @click="sendCourseQuick(item)">{{ item }}</button></div></article>
-      <article class="panel-card recent-qa-card"><div class="section-head"><h2><MessageCircle :size="18" />最近提问</h2><button @click="go('studentQa')">全部</button></div><div v-for="item in courseHome.recent_qa || []" :key="item.id" class="qa-mini"><strong>{{ item.question }}</strong><p>{{ item.answer }}</p></div><EmptyState v-if="!(courseHome.recent_qa || []).length" text="暂无提问" /></article>
+      <article class="panel-card recent-qa-card"><div class="section-head"><h2><MessageCircle :size="18" />最近提问</h2><button @click="go('studentQa')">全部</button></div><div v-for="item in courseHome.recent_qa || []" :key="item.id" class="qa-mini qa-mini-clickable" role="button" tabindex="0" title="查看这条问答" @click="openRecentQa(item)" @keydown.enter="openRecentQa(item)"><strong>{{ item.question }}</strong><p>{{ item.answer }}</p></div><EmptyState v-if="!(courseHome.recent_qa || []).length" text="暂无提问" /></article>
     </div>
   </template>
 </template>
@@ -69,6 +69,7 @@
 // 课程作用域数据 courseHome、课时打开/练习/资料预览下载、全局问答入口经 useStudentCtx 注入；
 // 本页自持 hero 样式、课时/资料派生、资料展开与"向 AI 提问"输入等局部状态与逻辑。
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import {
   AlertTriangle, ArrowLeft, BarChart2, CheckCircle, ChevronDown, ClipboardList, Clock,
   FolderOpen, MessageCircle, Play, Presentation, RefreshCw, Send, Sparkles, Star, User, Users, XCircle, Zap,
@@ -79,6 +80,7 @@ import LoadingMark from "../../../components/LoadingMark.vue";
 import { useStudentCtx } from "../context";
 
 const ctx = useStudentCtx();
+const router = useRouter();
 // 共享来源：课程作用域数据、课时打开态/操作、练习入口、资料预览下载、全局问答、导航与课程加载。
 const {
   courseHome,
@@ -94,6 +96,13 @@ const {
   go,
   loadCourseHome,
 } = ctx;
+
+// 点击"最近提问"跳到对应问答会话页；无会话 id 时退回问答主页。
+function openRecentQa(item: any) {
+  const conversationId = Number(item?.conversation_id || 0);
+  if (conversationId) void router.push(`/qa/${conversationId}`);
+  else void go("studentQa");
+}
 
 // —— 本页私有状态与派生 ——
 const materialsExpanded = ref(false);

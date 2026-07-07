@@ -50,7 +50,7 @@
       <button class="join-dashed" @click="openJoin()"><Plus :size="16" />加入新课程</button>
     </article>
     <article class="panel-card">
-      <div class="section-head"><h2><BarChart2 :size="18" />我的学习</h2><button @click="go('studentProfile')">学习报告</button></div>
+      <div class="section-head"><h2><BarChart2 :size="18" />我的学习</h2></div>
       <div class="rings"><RingBlock label="累计学习" :value="hourTargetRate" :text="`${stats.study_hours || 0}h`" sub="累计时长" /><RingBlock label="完成率" :value="stats.completion_rate || 0" :text="`${stats.completion_rate || 0}%`" sub="课时" tone="success" /><RingBlock label="正确率" :value="stats.accuracy || 0" :text="`${stats.accuracy || 0}%`" sub="练习" tone="ai" /></div>
       <div class="week-check"><span v-for="item in weekDays" :key="item.label" :class="{ done: item.done, today: item.today }">{{ item.label }}</span></div>
       <div class="streak"><Flame :size="16" />连续 {{ stats.streak_days || 0 }} 天</div>
@@ -111,7 +111,7 @@
       <button class="home-ac-view-all" @click="go('studentProfile')">查看全部记录 <ArrowRight :size="14" /></button>
     </div>
     <div v-if="homeActivityItems.length" class="home-activity-list">
-      <div v-for="item in homeActivityItems" :key="item.key" class="home-activity-item">
+      <div v-for="item in homeActivityItems" :key="item.key" class="home-activity-item is-clickable" role="button" tabindex="0" @click="onActivityClick(item)" @keydown.enter="onActivityClick(item)">
         <div class="home-ac-icon-wrapper" :class="item.tone">
           <component :is="item.icon" :size="20" />
         </div>
@@ -248,6 +248,12 @@ const homeActivityItems = computed(() => activities.value.map((item: any, index:
   }
   return { key: `${type}-${rawTitle}-${item?.time || index}`, icon: Sparkles, tone: "ai", action: type === "tutoring" ? "AI 题目辅导" : "学习记录", detail: meta ? `${rawTitle} · ${meta}` : rawTitle, quote: false, progress: null, timeText: relativeTime(item?.time) };
 }));
+// 学习动态点击后跳到对应板块（动态本身不带记录 id，按类型进入相应页面）。type 取自 key 前缀。
+function onActivityClick(item: any) {
+  const type = String(item?.key || "").split("-")[0];
+  const target: Record<string, string> = { qa: "studentQa", lesson: "studentCourses", quiz: "studentQuizzes", tutoring: "studentTutoring" };
+  void go(target[type] || "studentCourses");
+}
 const weekDays = computed(() => {
   const now = new Date();
   // Monday(0) .. Sunday(6) index of today; getDay() => 0=Sun..6=Sat
