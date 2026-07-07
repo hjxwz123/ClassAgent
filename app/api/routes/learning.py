@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -19,6 +20,7 @@ from app.schemas.learning import (
     QuizGenerateRequest,
     QuizQuestionPayload,
     QuizResponse,
+    QuizRetakeRequest,
     QuizSubmitRequest,
     StudyPlanCreateRequest,
     StudyPlanResponse,
@@ -31,6 +33,8 @@ from app.schemas.learning import (
 from app.services.learning import (
     checkin_task,
     create_study_plan,
+    delete_quiz,
+    dismiss_generation_task,
     enqueue_quiz_generation,
     enqueue_teacher_weak_quiz,
     enqueue_wrong_book_practice,
@@ -43,6 +47,7 @@ from app.services.learning import (
     get_teacher_quiz_attempts,
     get_weak_points,
     knowledge_point_name_map,
+    list_my_generation_tasks,
     list_student_quiz_attempts,
     list_teacher_weak_quizzes,
     list_quizzes,
@@ -50,9 +55,13 @@ from app.services.learning import (
     list_wrong_questions,
     publish_quiz,
     quiz_attempt_summary,
+    quiz_question_count_map,
     regenerate_quiz_question,
+    retake_quiz,
     submit_quiz,
     update_quiz_content,
+    wrong_question_mastery,
+    wrong_question_review_state,
 )
 
 
@@ -73,24 +82,30 @@ def _attempt_detail(db: Session, attempt) -> dict:
             .order_by(QuizQuestion.id.asc())
         )
     )
+    point_names = knowledge_point_name_map(db, [question for _answer, question in rows])
     attempt_payload = QuizAttemptResponse.model_validate(attempt).model_dump(mode="json")
+    answers = []
+    for answer, question in rows:
+        question_payload = QuizQuestionPayload.model_validate(question).model_dump(mode="json")
+        question_payload["knowledge_point_name"] = point_names.get(question.knowledge_point_id)
+        answers.append(
+            {
+                "id": answer.id,
+                "question_id": question.id,
+                "question": question_payload,
+                "user_answer": answer.user_answer,
+                "correct_answer": _reference_answer(question),
+                "is_correct": answer.is_correct,
+                "pending_review": bool(answer.pending_review),
+                "score": answer.score,
+                "feedback": answer.feedback,
+            }
+        )
     return {
         **attempt_payload,
         "attempt": attempt_payload,
         "quiz": QuizResponse.model_validate(quiz).model_dump(mode="json") if quiz else None,
-        "answers": [
-            {
-                "id": answer.id,
-                "question_id": question.id,
-                "question": QuizQuestionPayload.model_validate(question).model_dump(mode="json"),
-                "user_answer": answer.user_answer,
-                "correct_answer": _reference_answer(question),
-                "is_correct": answer.is_correct,
-                "score": answer.score,
-                "feedback": answer.feedback,
-            }
-            for answer, question in rows
-        ],
+        "answers": answers,
     }
 
 
@@ -149,9 +164,12 @@ def list_quizzes_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
+    quizzes = list_quizzes(db, course_id=course_id, user=user)
+    count_map = quiz_question_count_map(db, [item.id for item in quizzes])
     items = []
-    for item in list_quizzes(db, course_id=course_id, user=user):
+    for item in quizzes:
         payload = QuizResponse.model_validate(item).model_dump(mode="json")
+        payload["question_count"] = count_map.get(item.id, 0)
         if user.role == "student":
             attempts = [quiz_attempt_summary(db, attempt) for attempt in list_student_quiz_attempts(db, quiz_id=item.id, user=user)]
             payload["attempts"] = attempts
@@ -181,6 +199,36 @@ def generate_teacher_weak_quiz_endpoint(
 ):
     task = enqueue_teacher_weak_quiz(db, user=user, payload=payload)
     return success_response(data=_generation_task_response(db, task), request_id=request.state.request_id)
+
+
+@router.get("/generation-tasks")
+def list_generation_tasks_endpoint(
+    request: Request,
+    course_id: int,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    # 供前端刷新/回访后重建"生成中/生成失败"占位卡，避免任务在后台跑却在界面上凭空消失。
+    items = []
+    for task in list_my_generation_tasks(db, user=user, course_id=course_id):
+        detail = task.detail if isinstance(task.detail, dict) else {}
+        payload = AsyncTaskResponse.model_validate(task).model_dump(mode="json")
+        payload["task_id"] = task.id
+        payload["title"] = str(detail.get("title") or "AI 出题")
+        payload["kind"] = str(detail.get("kind") or "quiz")
+        items.append(payload)
+    return success_response(data=items, request_id=request.state.request_id)
+
+
+@router.delete("/generation-tasks/{task_id}")
+def dismiss_generation_task_endpoint(
+    task_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    dismiss_generation_task(db, task_id=task_id, user=user)
+    return success_response(data={"dismissed": True}, request_id=request.state.request_id)
 
 
 @router.get("/generation-tasks/{task_id}")
@@ -257,6 +305,10 @@ def regenerate_quiz_question_endpoint(
     point_names = knowledge_point_name_map(db, [question])
     payload = QuizQuestionPayload.model_validate(question).model_dump(mode="json")
     payload["knowledge_point_name"] = point_names.get(question.knowledge_point_id)
+    if user.role == "student":
+        # 与 get_quiz_detail 学生分支同口径：单题"换一道"的响应也剥离答案/解析，避免作答前泄题。
+        payload["reference_answer"] = None
+        payload["explanation"] = None
     return success_response(data=payload, request_id=request.state.request_id)
 
 
@@ -306,8 +358,33 @@ def submit_quiz_endpoint(
     user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ):
-    attempt = submit_quiz(db, quiz_id=quiz_id, user=user, answers=payload.answers)
+    attempt = submit_quiz(db, quiz_id=quiz_id, user=user, answers=payload.answers, duration_seconds=payload.duration_seconds)
     return success_response(data=_attempt_detail(db, attempt), request_id=request.state.request_id)
+
+
+@router.delete("/quizzes/{quiz_id}")
+def delete_quiz_endpoint(
+    quiz_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    delete_quiz(db, quiz_id=quiz_id, user=user)
+    return success_response(data={"deleted": True}, request_id=request.state.request_id)
+
+
+@router.post("/quizzes/{quiz_id}/retake")
+def retake_quiz_endpoint(
+    quiz_id: int,
+    payload: QuizRetakeRequest,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    quiz = retake_quiz(db, quiz_id=quiz_id, user=user, mode=payload.mode, attempt_id=payload.attempt_id)
+    data = QuizResponse.model_validate(quiz).model_dump(mode="json")
+    data["question_count"] = quiz_question_count_map(db, [quiz.id]).get(quiz.id, 0)
+    return success_response(data=data, request_id=request.state.request_id)
 
 
 @router.get("/wrong-questions")
@@ -318,8 +395,10 @@ def get_wrong_questions_endpoint(
     db: Annotated[Session, Depends(get_db)],
 ):
     items = []
+    now = datetime.now(UTC)
     for wrong, question in list_wrong_questions(db, course_id=course_id, user=user):
         point = db.get(KnowledgePoint, wrong.knowledge_point_id) if wrong.knowledge_point_id else None
+        review = wrong_question_review_state(wrong, now)
         items.append(
             WrongQuestionResponse(
                 wrong_question_id=wrong.id,
@@ -327,12 +406,18 @@ def get_wrong_questions_endpoint(
                 wrong_count=wrong.wrong_count,
                 history_count=wrong.wrong_count,
                 is_resolved=bool(wrong.is_resolved),
+                correct_streak=int(wrong.correct_streak or 0),
+                mastery=wrong_question_mastery(wrong),
                 knowledge_point_id=wrong.knowledge_point_id,
                 knowledge_point_name=point.name if point else None,
                 last_attempt_id=wrong.last_attempt_id,
                 resolved_at=wrong.resolved_at,
                 last_wrong_at=wrong.last_wrong_at,
                 last_correct_at=wrong.last_correct_at,
+                next_review_at=review["next_review_at"],
+                is_due=review["is_due"],
+                review_stage=review["review_stage"],
+                review_total=review["review_total"],
                 created_at=wrong.created_at,
                 updated_at=wrong.updated_at,
             ).model_dump(mode="json")

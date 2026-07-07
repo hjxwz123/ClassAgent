@@ -1,19 +1,4 @@
-@font-face {
-  font-family: "ClassAgent Chalk";
-  src: url("../assets/fonts/home/classagent-chalk.woff") format("woff");
-  font-style: normal;
-  font-weight: 400;
-  font-display: block;
-}
-
-@font-face {
-  font-family: "ClassAgent Serif";
-  src: url("../assets/fonts/home/classagent-serif.woff") format("woff");
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: block;
-}
-
+/* 全站统一字体：已移除 chalk(手写) 与 serif(花体衬线) 显示字体，只保留 Sans(正文) 与 Mono(代码/数字)。 */
 @font-face {
   font-family: "ClassAgent Sans";
   src: url("../assets/fonts/home/classagent-sans.woff") format("woff");
@@ -68,9 +53,11 @@
   --ca-color-info: #0277BD;
   --ca-color-info-light: #E1F5FE;
   --ca-color-info-border: #81D4FA;
-  --ca-font-chalk: "ClassAgent Chalk", "ClassAgent Sans", sans-serif;
-  --ca-font-serif: "ClassAgent Serif", serif;
   --ca-font-sans: "ClassAgent Sans", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  /* 全站统一为同一套无衬线字体：chalk(手写)/serif(花体衬线)显示字体一律回落到正文 sans，
+     避免任何标题/内容出现花体。代码/数字仍用 mono（功能性等宽，非花体）。 */
+  --ca-font-chalk: var(--ca-font-sans);
+  --ca-font-serif: var(--ca-font-sans);
   --ca-font-mono: "ClassAgent Mono", SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
   --ca-space-0: 0;
   --ca-space-1: 4px;
@@ -194,11 +181,12 @@
   --space-20: 80px;
   --space-24: 96px;
   --radius-none: 0;
-  --radius-sm: 2px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
+  /* 全站统一圆角：原 2/6/8px 太紧、提示框/卡片显得“直角”，整体上调为现代圆角刻度（保持递增）。 */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
   --radius-full: 9999px;
   --shadow-xs: 0 1px 2px rgba(0,0,0,0.02);
   --shadow-sm: 0 2px 8px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.02);

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import unicodedata
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -236,6 +237,7 @@ def _course_source_text_for_quiz(
     course_id: int,
     chapter_ids: list[int],
     points: list[KnowledgePoint],
+    artifact_bundle: tuple | None = None,
 ) -> str:
     pieces: list[str] = []
     seen: set[str] = set()
@@ -244,8 +246,9 @@ def _course_source_text_for_quiz(
 
     # 制品逐片注入（每个 ≤1200 字符，远低于窗口，绝不 join 后切窗）：例题模板的
     # 条件→步骤→槽位→迁移提示保持完整，才能支撑变式题/错误诊断题。
-    artifact_context_list, _artifact_count, _misconceptions = quiz_artifact_contexts(
-        db, course_id=course_id, chapter_ids=chapter_ids
+    # artifact_bundle 由调用方预先算好并复用，避免同一次出题里 quiz_artifact_contexts 被算两遍。
+    artifact_context_list, _artifact_count, _misconceptions = (
+        artifact_bundle if artifact_bundle is not None else quiz_artifact_contexts(db, course_id=course_id, chapter_ids=chapter_ids)
     )
     for artifact_context_text in artifact_context_list:
         _append_source_piece(pieces, seen, f"结构化教学对象\n{artifact_context_text}", limit=1500)
@@ -519,9 +522,19 @@ def _mark_quiz_task_dispatch_failed(db: Session, task: AsyncTaskLog) -> None:
     db.refresh(task)
 
 
-def _find_reusable_quiz_task(db: Session, *, user: User, course_id: int, kind: str, title: str) -> AsyncTaskLog | None:
-    """幂等：同一用户在同一课程、同种类、同标题的出题任务若仍 PENDING/PROCESSING，直接复用，
-    避免连点/请求重放触发 N 次完整 AI 出题与 N 份近同 Quiz 落库(#幂等)。"""
+def _canonical_quiz_payload(payload: dict | None) -> str:
+    """出题请求参数的规范化签名（键有序）。用于幂等去重：只有参数完全一致才算“同一次请求”。"""
+    return json.dumps(payload or {}, sort_keys=True, ensure_ascii=False, default=str)
+
+
+def _find_reusable_quiz_task(
+    db: Session, *, user: User, course_id: int, kind: str, title: str, payload: dict | None = None
+) -> AsyncTaskLog | None:
+    """幂等：同一用户在同一课程、同种类、同标题、且**出题参数完全一致**的任务若仍 PENDING/PROCESSING，
+    直接复用，避免连点/请求重放触发 N 次完整 AI 出题与 N 份近同 Quiz 落库(#幂等)。
+    参数不同（题量/难度/章节/知识点/题型分布等）视为不同请求，各自成任务——否则第二套会被静默并入
+    第一套且新参数被丢弃，用户看似“无法生成第二套”。"""
+    target_signature = _canonical_quiz_payload(payload)
     candidates = db.scalars(
         select(AsyncTaskLog)
         .where(
@@ -537,6 +550,7 @@ def _find_reusable_quiz_task(db: Session, *, user: User, course_id: int, kind: s
             and detail.get("course_id") == course_id
             and str(detail.get("kind") or "") == kind
             and str(detail.get("title") or "") == (title or "")
+            and _canonical_quiz_payload(detail.get("payload") if isinstance(detail.get("payload"), dict) else None) == target_signature
         ):
             return task
     return None
@@ -544,7 +558,8 @@ def _find_reusable_quiz_task(db: Session, *, user: User, course_id: int, kind: s
 
 def enqueue_quiz_generation(db: Session, *, user: User, payload: QuizGenerateRequest) -> AsyncTaskLog:
     course, question_type_counts = _validate_quiz_generation_request(db, user=user, payload=payload)
-    reusable = _find_reusable_quiz_task(db, user=user, course_id=course.id, kind="quiz", title=payload.title)
+    payload_dict = {**payload.model_dump(mode="json"), "question_type_counts": question_type_counts}
+    reusable = _find_reusable_quiz_task(db, user=user, course_id=course.id, kind="quiz", title=payload.title, payload=payload_dict)
     if reusable is not None:
         return reusable
     task = AsyncTaskLog(
@@ -555,7 +570,7 @@ def enqueue_quiz_generation(db: Session, *, user: User, payload: QuizGenerateReq
         detail=_quiz_generation_task_detail(
             user=user,
             course=course,
-            payload={**payload.model_dump(mode="json"), "question_type_counts": question_type_counts},
+            payload=payload_dict,
             kind="quiz",
             title=payload.title,
         ),
@@ -628,10 +643,12 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         user=user,
         enabled=payload.prefer_weak_points,
     )
-    source_text = _course_source_text_for_quiz(db, course_id=payload.course_id, chapter_ids=chapter_ids, points=points)
-    _artifact_contexts, pedagogy_artifact_count, misconception_contexts = quiz_artifact_contexts(
-        db, course_id=payload.course_id, chapter_ids=chapter_ids
+    # quiz_artifact_contexts 只算一遍，供 source_text 组装与下方元信息/误解上下文复用（原先算了两遍）。
+    artifact_bundle = quiz_artifact_contexts(db, course_id=payload.course_id, chapter_ids=chapter_ids)
+    source_text = _course_source_text_for_quiz(
+        db, course_id=payload.course_id, chapter_ids=chapter_ids, points=points, artifact_bundle=artifact_bundle
     )
+    _artifact_contexts, pedagogy_artifact_count, misconception_contexts = artifact_bundle
     if not source_text.strip():
         # #幻觉出题：真实出题源(课件/知识点正文)为空时，退化文本只剩课程元信息。若连课程简介都没有，
         # 就只剩"课程名称：X"，等于让 LLM 凭课程名凭空编题并冒充本课程测验；此时直接拒绝。
@@ -652,6 +669,9 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
             .limit(60)
         )
     )
+    # 学生自助练习走提速档：把最坏 3 次串行大模型调用降到常见 1 次（详见 generate_quiz_questions）。
+    # 教师课程测验(COURSE)与其它调用方保持完整质量流程不变。
+    practice_fast = payload.quiz_type == QuizType.PRACTICE.value and user.role == UserRole.STUDENT.value
     question_kwargs = {
         "topic": quiz_topic,
         "source_text": source_text,
@@ -661,6 +681,7 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         "knowledge_point_names": [point.name for point in points if point.name],
         "misconception_text": "\n\n".join(misconception_contexts) if misconception_contexts else None,
         "avoid_stems": recent_stems,
+        "practice_fast": practice_fast,
     }
     if question_type_counts:
         question_kwargs["type_counts"] = question_type_counts
@@ -745,6 +766,31 @@ def publish_quiz(db: Session, *, quiz_id: int, user: User) -> Quiz:
     return quiz
 
 
+def delete_quiz(db: Session, *, quiz_id: int, user: User) -> None:
+    """删除学生自建、且未开始作答的练习/错题重练卷（设计稿§1：仅未开始的 AI 自建练习可删）。
+
+    仅创建者本人、学生私有练习类型、且无任何 QuizAttempt 时允许，级联删题目。
+    已作答的卷是学习履历，不提供删除，避免误删历史。"""
+    quiz = db.get(Quiz, quiz_id)
+    if quiz is None:
+        raise not_found("练习不存在")
+    if user.role != UserRole.STUDENT.value:
+        raise forbidden("仅学生可删除自建练习")
+    if not _is_student_private_quiz(quiz) or quiz.creator_id != user.id:
+        raise forbidden("仅可删除自己创建的练习")
+    if _quiz_has_attempts(db, quiz_id):
+        raise bad_request("已作答的练习是学习记录，不可删除")
+    questions = list(db.scalars(select(QuizQuestion.id).where(QuizQuestion.quiz_id == quiz_id)))
+    if questions:
+        # 未开始的卷理论上不会被错题本引用（错题在交卷时才产生），仍防御性拦截以免破坏 FK。
+        referenced = db.scalar(select(WrongQuestion.id).where(WrongQuestion.question_id.in_(questions)).limit(1))
+        if referenced is not None:
+            raise bad_request("该练习的题目已进入错题本，暂不可删除")
+        db.execute(delete(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id))
+    db.delete(quiz)
+    db.commit()
+
+
 def _assert_quiz_teacher_access(db: Session, *, quiz: Quiz, user: User, require_active: bool = False) -> None:
     course = _get_course_or_404(db, quiz.course_id)
     _assert_course_owner(course, user, require_active=require_active)
@@ -757,6 +803,10 @@ def knowledge_point_name_map(db: Session, questions) -> dict[int, str]:
         return {}
     rows = db.scalars(select(KnowledgePoint).where(KnowledgePoint.id.in_(point_ids)))
     return {row.id: row.name for row in rows}
+
+
+def _quiz_has_attempts(db: Session, quiz_id: int) -> bool:
+    return db.scalar(select(QuizAttempt.id).where(QuizAttempt.quiz_id == quiz_id).limit(1)) is not None
 
 
 def regenerate_quiz_question(db: Session, *, quiz_id: int, question_id: int, user: User) -> QuizQuestion:
@@ -775,6 +825,9 @@ def regenerate_quiz_question(db: Session, *, quiz_id: int, question_id: int, use
             raise forbidden("学生私有练习仅创建者可重新生成题目")
     else:
         _assert_quiz_teacher_access(db, quiz=quiz, user=user, require_active=True)
+    # 已有作答的卷不许再改题：解析页读的是活题，原地重摇会把已提交作答对应的题面/答案偷偷换掉。
+    if _quiz_has_attempts(db, quiz_id):
+        raise bad_request("该测验已有作答记录，题目不可再重新生成；如需再练请生成新卷")
     metadata = quiz.metadata_json if isinstance(quiz.metadata_json, dict) else {}
     if not metadata.get("generated"):
         raise bad_request("仅 AI 生成的测验支持单题重新生成")
@@ -874,6 +927,9 @@ def update_quiz_content(db: Session, *, quiz_id: int, user: User, payload: QuizE
         # 经此测验管理接口改写题干/参考答案或删题。这类 quiz 不走教师审核/编辑流程。
         raise forbidden("学生私有练习不支持通过测验管理接口编辑")
     _assert_quiz_teacher_access(db, quiz=quiz, user=user, require_active=True)
+    # 已有作答的卷禁止删题/改写：学生解析页读的是活题，静默改写会让已交卷记录题面对不上、题目凭空消失。
+    if _quiz_has_attempts(db, quiz_id):
+        raise bad_request("该测验已有学生作答，题目不可再编辑；可关闭本卷并另建新测验")
     existing_questions = list(db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id).order_by(QuizQuestion.id)))
     existing_by_id = {item.id: item for item in existing_questions}
     seen_ids: set[int] = set()
@@ -944,6 +1000,9 @@ def list_quizzes(db: Session, *, course_id: int, user: User) -> list[Quiz]:
     elif user.role == UserRole.TEACHER.value:
         course = _get_course_or_404(db, course_id)
         _assert_course_owner(course, user)
+        # 与写路径口径对齐：学生私有练习(错题重练/自助练习)不进教师列表，
+        # 否则全班学生每次错题重练都会把教师的测验管理列表刷屏。
+        statement = statement.where(Quiz.quiz_type.not_in(_STUDENT_PRIVATE_QUIZ_TYPES))
     return list(db.scalars(statement.order_by(Quiz.created_at.desc())))
 
 
@@ -1165,7 +1224,8 @@ def enqueue_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGener
     if type_counts and sum(type_counts.values()) != payload.question_count:
         raise bad_request("题型数量合计必须等于总题量")
     title = payload.title or ("薄弱知识点综合测验" if payload.all_weak_points else "薄弱点专项测验")
-    reusable = _find_reusable_quiz_task(db, user=user, course_id=course.id, kind="teacher_weak_quiz", title=title)
+    payload_dict = {**payload.model_dump(mode="json"), "question_type_counts": type_counts}
+    reusable = _find_reusable_quiz_task(db, user=user, course_id=course.id, kind="teacher_weak_quiz", title=title, payload=payload_dict)
     if reusable is not None:
         return reusable
     task = AsyncTaskLog(
@@ -1176,7 +1236,7 @@ def enqueue_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGener
         detail=_quiz_generation_task_detail(
             user=user,
             course=course,
-            payload={**payload.model_dump(mode="json"), "question_type_counts": type_counts},
+            payload=payload_dict,
             kind="teacher_weak_quiz",
             title=title,
         ),
@@ -1279,6 +1339,9 @@ def get_quiz_detail(db: Session, *, quiz_id: int, user: User) -> tuple[Quiz, lis
     elif user.role == UserRole.TEACHER.value:
         course = _get_course_or_404(db, quiz.course_id)
         _assert_course_owner(course, user)
+        # 与写路径/列表口径对齐：教师不得查看学生私有练习(错题重练/自助练习)的详情。
+        if _is_student_private_quiz(quiz):
+            raise forbidden("学生私有练习不对教师开放")
     questions = list(db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id).order_by(QuizQuestion.id)))
     return quiz, questions
 
@@ -1468,6 +1531,24 @@ def _source_question_id(quiz: Quiz, question_id: int) -> int:
         return question_id
 
 
+# 艾宾浩斯遗忘曲线复习间隔（天）：新错题/答错后次日首次复习，之后每答对一次向后推一档；
+# 连对次数走完整条曲线（达 len）即判"已掌握"，不再安排复习。
+EBBINGHAUS_INTERVAL_DAYS = [1, 2, 4, 7, 15, 30]
+
+
+def _apply_wrong_review_schedule(wrong: WrongQuestion, now: datetime) -> None:
+    """按 correct_streak 计算错题的下次复习时间；连对走完整条曲线则归档为已掌握、不再复习。"""
+    streak = int(wrong.correct_streak or 0)
+    if streak >= len(EBBINGHAUS_INTERVAL_DAYS):
+        wrong.is_resolved = True
+        wrong.resolved_at = now
+        wrong.next_review_at = None
+    else:
+        wrong.is_resolved = False
+        wrong.resolved_at = None
+        wrong.next_review_at = now + timedelta(days=EBBINGHAUS_INTERVAL_DAYS[streak])
+
+
 def _record_answer_to_wrong_book(
     db: Session,
     *,
@@ -1489,10 +1570,13 @@ def _record_answer_to_wrong_book(
     )
     if is_correct:
         if wrong is not None:
-            wrong.is_resolved = True
-            wrong.resolved_at = now
+            # 掌握状态机 + 艾宾浩斯：答对一次连对数 +1，并按曲线安排下次复习；
+            # 一次答对就摘掉错题会让"背答案式通过"直接清空错题本，测不出真实掌握，
+            # 故需连对走完整条 [1,2,4,7,15,30] 天曲线才判"已掌握"。
+            wrong.correct_streak = int(wrong.correct_streak or 0) + 1
             wrong.last_correct_at = now
             wrong.last_attempt_id = attempt.id
+            _apply_wrong_review_schedule(wrong, now)
             db.add(wrong)
         return
     if wrong is None:
@@ -1503,17 +1587,17 @@ def _record_answer_to_wrong_book(
             knowledge_point_id=source_question.knowledge_point_id,
             wrong_count=1,
             last_attempt_id=attempt.id,
-            is_resolved=False,
-            resolved_at=None,
+            correct_streak=0,
             last_wrong_at=now,
         )
     else:
         wrong.wrong_count += 1
         wrong.last_attempt_id = attempt.id
         wrong.knowledge_point_id = source_question.knowledge_point_id
-        wrong.is_resolved = False
-        wrong.resolved_at = None
+        wrong.correct_streak = 0
         wrong.last_wrong_at = now
+    # 答错/新错题：连对清零，按曲线排到次日复习（helper 同时复位 is_resolved/resolved_at）。
+    _apply_wrong_review_schedule(wrong, now)
     db.add(wrong)
 
 
@@ -1535,6 +1619,8 @@ def _grade_question(question: QuizQuestion, user_answer, *, db: Session) -> dict
     has_answer = user_answer is not None and user_answer != "" and user_answer != []
     if not has_answer:
         feedback = "本题未作答。"
+        # 未作答 ≠ 做错：不进错题本、不累计 wrong_count，避免漏答污染薄弱点统计。
+        count_as_wrong = False
     elif question.question_type in {QuestionType.SINGLE_CHOICE.value, QuestionType.JUDGE.value}:
         expected = extract_reference_answer_value(question.reference_answer)
         if question.question_type == QuestionType.JUDGE.value:
@@ -1623,7 +1709,7 @@ def _attempt_ai_feedback(*, score: float, total_score: float, accuracy: float, w
     return "".join(parts)
 
 
-def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -> QuizAttempt:
+def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict], duration_seconds: int | None = None) -> QuizAttempt:
     quiz, questions = get_quiz_detail(db, quiz_id=quiz_id, user=user)
     if user.role != UserRole.STUDENT.value:
         raise forbidden("仅学生可提交测验")
@@ -1651,7 +1737,13 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
     graded_full_score = 0.0
     wrong_count = 0
     pending_count = 0
-    attempt = QuizAttempt(quiz_id=quiz_id, user_id=user.id, total_score=quiz.total_score, submitted_at=datetime.now(UTC))
+    attempt = QuizAttempt(
+        quiz_id=quiz_id,
+        user_id=user.id,
+        total_score=quiz.total_score,
+        submitted_at=datetime.now(UTC),
+        duration_seconds=duration_seconds,
+    )
     db.add(attempt)
     db.flush()
     db.refresh(attempt)
@@ -1701,6 +1793,183 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict]) -
         raise bad_request("该测验已提交，每名学生只能作答一次，请在练习记录中查看解析。")
     db.refresh(attempt)
     return attempt
+
+
+def retake_quiz(db: Session, *, quiz_id: int, user: User, mode: str = "full", attempt_id: int | None = None) -> Quiz:
+    """整卷/错题重做：克隆源卷为学生私有练习（新 attempt 记录，不覆盖历史）。
+
+    后端 quiz_attempts 有 (quiz_id, user_id) 唯一约束，一卷只能交一次；"再练一遍"
+    通过克隆新卷实现。source_question_map 一律指向最初的源题（穿透多层克隆），
+    保证重做结果仍能正确进出错题本、累计掌握状态。
+    """
+    if user.role != UserRole.STUDENT.value:
+        raise forbidden("仅学生可重做练习")
+    quiz, questions = get_quiz_detail(db, quiz_id=quiz_id, user=user)
+    if mode == "wrong":
+        attempt = None
+        if attempt_id is not None:
+            attempt = get_student_quiz_attempt(db, attempt_id=attempt_id, user=user)
+            if attempt.quiz_id != quiz.id:
+                raise bad_request("作答记录与练习不匹配")
+        else:
+            attempts = list_student_quiz_attempts(db, quiz_id=quiz.id, user=user)
+            attempt = attempts[0] if attempts else None
+        if attempt is None:
+            raise bad_request("尚未作答，无法只重做错题")
+        wrong_question_ids = set(
+            db.scalars(
+                select(QuizAnswer.question_id).where(
+                    QuizAnswer.attempt_id == attempt.id,
+                    QuizAnswer.is_correct.is_(False),
+                    QuizAnswer.pending_review.is_(False),
+                )
+            )
+        )
+        selected = [item for item in questions if item.id in wrong_question_ids]
+        if not selected:
+            raise bad_request("这次作答没有需要重做的错题")
+    else:
+        selected = list(questions)
+    if not selected:
+        raise bad_request("练习中没有题目")
+    suffix = "错题重做" if mode == "wrong" else "重做"
+    base_title = re.sub(r"\s*·\s*(错题重做|重做)(\s*\d+)?$", "", quiz.title or "").strip() or "练习"
+    clone_quiz = Quiz(
+        course_id=quiz.course_id,
+        chapter_id=quiz.chapter_id,
+        creator_id=user.id,
+        title=f"{base_title} · {suffix}",
+        description=quiz.description,
+        quiz_type=QuizType.PRACTICE.value,
+        status=QuizStatus.PUBLISHED.value,
+        metadata_json={"generated": True, "source": "retake", "source_quiz_id": quiz.id, "source_question_map": {}},
+    )
+    db.add(clone_quiz)
+    db.flush()
+    db.refresh(clone_quiz)
+    total_score = 0.0
+    source_question_map: dict[str, int] = {}
+    for question in selected:
+        clone = QuizQuestion(
+            quiz_id=clone_quiz.id,
+            course_id=question.course_id,
+            chapter_id=question.chapter_id,
+            knowledge_point_id=question.knowledge_point_id,
+            question_type=question.question_type,
+            stem=question.stem,
+            options=question.options,
+            reference_answer=question.reference_answer,
+            explanation=question.explanation,
+            score=question.score,
+            difficulty=question.difficulty,
+        )
+        total_score += question.score
+        db.add(clone)
+        db.flush()
+        # 穿透源卷自身的克隆链，归因到最初的源题。
+        source_question_map[str(clone.id)] = _source_question_id(quiz, question.id)
+    clone_quiz.total_score = total_score
+    clone_quiz.metadata_json = {
+        "generated": True,
+        "source": "retake",
+        "source_quiz_id": quiz.id,
+        "retake_mode": mode,
+        "source_question_map": source_question_map,
+    }
+    db.add(clone_quiz)
+    db.commit()
+    db.refresh(clone_quiz)
+    return clone_quiz
+
+
+_FAILED_TASK_VISIBLE_HOURS = 24
+
+
+def list_my_generation_tasks(db: Session, *, user: User, course_id: int) -> list[AsyncTaskLog]:
+    """当前用户在该课程下"仍在生成中/最近失败"的出题任务，供前端刷新后重建占位卡。"""
+    if user.role == UserRole.STUDENT.value:
+        _assert_student_course_access(db, course_id=course_id, user=user)
+    else:
+        course = _get_course_or_404(db, course_id)
+        _assert_course_owner(course, user)
+    candidates = db.scalars(
+        select(AsyncTaskLog)
+        .where(
+            AsyncTaskLog.target_type == "quiz",
+            AsyncTaskLog.status.in_([ProcessStatus.PENDING.value, ProcessStatus.PROCESSING.value, ProcessStatus.FAILED.value]),
+        )
+        .order_by(AsyncTaskLog.created_at.desc())
+        .limit(200)
+    )
+    items: list[AsyncTaskLog] = []
+    now = datetime.now(UTC)
+    for task in candidates:
+        detail = task.detail if isinstance(task.detail, dict) else {}
+        if int(detail.get("user_id") or 0) != user.id or int(detail.get("course_id") or 0) != course_id:
+            continue
+        if detail.get("dismissed"):
+            continue
+        if task.status == ProcessStatus.FAILED.value:
+            created = task.updated_at or task.created_at
+            if created is not None:
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=UTC)
+                if (now - created).total_seconds() > _FAILED_TASK_VISIBLE_HOURS * 3600:
+                    continue
+        items.append(task)
+    return items
+
+
+def dismiss_generation_task(db: Session, *, task_id: int, user: User) -> None:
+    """忽略一条失败的生成任务（从占位卡列表移除）。生成中的任务不可忽略，避免"看不见但仍在跑"。"""
+    task = db.get(AsyncTaskLog, task_id)
+    if task is None:
+        raise not_found("生成任务不存在")
+    detail = task.detail if isinstance(task.detail, dict) else {}
+    if int(detail.get("user_id") or 0) != user.id and user.role != UserRole.ADMIN.value:
+        raise forbidden("无权操作该生成任务")
+    if task.status != ProcessStatus.FAILED.value:
+        raise bad_request("仅失败的生成任务可以忽略")
+    task.detail = {**detail, "dismissed": True}
+    db.add(task)
+    db.commit()
+
+
+def quiz_question_count_map(db: Session, quiz_ids: list[int]) -> dict[int, int]:
+    if not quiz_ids:
+        return {}
+    rows = db.execute(
+        select(QuizQuestion.quiz_id, func.count(QuizQuestion.id))
+        .where(QuizQuestion.quiz_id.in_(quiz_ids))
+        .group_by(QuizQuestion.quiz_id)
+    )
+    return {int(quiz_id): int(count) for quiz_id, count in rows}
+
+
+def wrong_question_mastery(wrong: WrongQuestion) -> str:
+    if wrong.is_resolved:
+        return "resolved"
+    if int(wrong.correct_streak or 0) >= 1:
+        return "consolidating"
+    return "pending"
+
+
+def wrong_question_review_state(wrong: WrongQuestion, now: datetime | None = None) -> dict:
+    """错题的艾宾浩斯复习状态：下次复习时间、是否到期、当前档位/总档数。
+    SQLite 取回的时间可能是 naive，比较前统一补 UTC 时区，避免 naive/aware 比较报错。"""
+    now = now or datetime.now(UTC)
+    total = len(EBBINGHAUS_INTERVAL_DAYS)
+    next_review = wrong.next_review_at
+    is_due = False
+    if next_review is not None and not wrong.is_resolved:
+        aware = next_review if next_review.tzinfo is not None else next_review.replace(tzinfo=UTC)
+        is_due = aware <= now
+    return {
+        "next_review_at": next_review,
+        "is_due": is_due,
+        "review_stage": min(int(wrong.correct_streak or 0), total),
+        "review_total": total,
+    }
 
 
 def list_wrong_questions(db: Session, *, course_id: int, user: User) -> list[tuple[WrongQuestion, QuizQuestion]]:
@@ -1805,13 +2074,13 @@ def enqueue_wrong_book_practice(db: Session, *, course_id: int, user: User, wron
     if not wrong_rows:
         raise bad_request("暂无错题可重练")
     course = _get_course_or_404(db, course_id)
-    reusable = _find_reusable_quiz_task(db, user=user, course_id=course_id, kind="wrong_book_practice", title="错题重练")
-    if reusable is not None:
-        return reusable
     # #64：把定向重练的 wrong_question_id 透传到异步任务 payload。
     payload: dict = {"course_id": course_id}
     if wrong_question_id is not None:
         payload["wrong_question_id"] = wrong_question_id
+    reusable = _find_reusable_quiz_task(db, user=user, course_id=course_id, kind="wrong_book_practice", title="错题重练", payload=payload)
+    if reusable is not None:
+        return reusable
     task = AsyncTaskLog(
         task_name="quiz.wrong_book.generate",
         target_type="quiz",

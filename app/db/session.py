@@ -15,8 +15,26 @@ for path in (STORAGE_DIR, RUNTIME_DIR, BACKUP_DIR, UPLOAD_DIR, PUBLIC_DIR, GENER
 
 
 def _build_engine(database_url: str) -> Engine:
-    connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-    return create_engine(database_url, connect_args=connect_args, future=True, pool_pre_ping=True, pool_recycle=3600)
+    if database_url.startswith("sqlite"):
+        # SQLite（测试/本地）用默认连接池，不接受 pool_size/max_overflow。
+        return create_engine(
+            database_url,
+            connect_args={"check_same_thread": False},
+            future=True,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+        )
+    # MySQL：按配置扩容连接池，使其上限 >= Celery worker 并发度（每个在途出题任务在整段
+    # 大模型调用期间都占用一条连接），避免并发出题时排队等连接甚至 pool_timeout 报错。
+    settings = get_settings()
+    return create_engine(
+        database_url,
+        future=True,
+        pool_pre_ping=True,
+        pool_recycle=3600,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_max_overflow,
+    )
 
 
 settings = get_settings()
@@ -87,6 +105,13 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
             statements.append("ALTER TABLE wrong_questions ADD COLUMN last_wrong_at DATETIME")
         if "last_correct_at" not in wrong_columns:
             statements.append("ALTER TABLE wrong_questions ADD COLUMN last_correct_at DATETIME")
+        if "correct_streak" not in wrong_columns:
+            statements.append("ALTER TABLE wrong_questions ADD COLUMN correct_streak INTEGER NOT NULL DEFAULT 0")
+        if "next_review_at" not in wrong_columns:
+            statements.append("ALTER TABLE wrong_questions ADD COLUMN next_review_at DATETIME")
+            # 一次性回填：让新增列前就存在的未掌握错题立即进入复习计划（排到当下待复习），
+            # 否则历史错题 next_review_at 永远为 NULL、"今日待复习"始终为 0，新功能形同虚设。
+            statements.append("UPDATE wrong_questions SET next_review_at = CURRENT_TIMESTAMP WHERE is_resolved = 0 AND next_review_at IS NULL")
     if "quiz_answers" in table_names:
         # 待人工批改主观题标记：用于学情分析/正确率把 pending 与真正答错区分开。
         quiz_answer_columns = {column["name"] for column in inspector.get_columns("quiz_answers")}
@@ -95,6 +120,9 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
     if target_engine.dialect.name == "mysql":
         _append_mysql_longtext_updates(inspector, table_names, statements)
     if "quiz_attempts" in table_names:
+        attempt_columns = {column["name"] for column in inspector.get_columns("quiz_attempts")}
+        if "duration_seconds" not in attempt_columns:
+            statements.append("ALTER TABLE quiz_attempts ADD COLUMN duration_seconds INTEGER")
         # #14：为既有库补建 (quiz_id, user_id) 唯一约束，使并发重复提交时 IntegrityError 兜底生效。
         # 自我隔离、crash-safe：单独事务执行，失败（如生产已存在重复行）仅告警不抛出，保证启动不崩。
         existing_indexes = {index.get("name") for index in inspector.get_indexes("quiz_attempts")}

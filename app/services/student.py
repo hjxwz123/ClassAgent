@@ -49,6 +49,10 @@ STUDENT_NOTICE_KEY = "student.notifications"
 STUDENT_REMINDER_KEY = "student.teacher_reminders"
 STUDENT_RECOMMENDATION_CACHE_PREFIX = "classagent:student:daily_recommendation"
 STUDENT_RECOMMENDATION_CACHE_TTL_SECONDS = 60 * 60 * 48
+# 后台生成任务的派发去重标记：同一学生同一天只派发一次，避免首屏并发/多标签页重复触发大模型。
+# TTL 需覆盖一次生成的最坏耗时（模型默认 30s 超时 + 重试 + 队列等待），失败后到期自动允许重试。
+STUDENT_RECOMMENDATION_DISPATCH_PREFIX = "classagent:student:daily_recommendation:dispatch"
+STUDENT_RECOMMENDATION_DISPATCH_TTL_SECONDS = 120
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_STUDENT_NOTICES = [
@@ -124,6 +128,95 @@ def _cache_student_recommendation_text(*, user_id: int, text: str) -> None:
         )
     except Exception as exc:  # Best-effort cache write; homepage should still render.
         LOGGER.warning("Failed to write student recommendation cache: %s", exc)
+
+
+def _student_recommendation_dispatch_key(*, user_id: int) -> str:
+    today = datetime.now().date().isoformat()
+    return f"{STUDENT_RECOMMENDATION_DISPATCH_PREFIX}:{user_id}:{today}"
+
+
+def _mark_student_recommendation_dispatch(*, user_id: int) -> bool:
+    """用 Redis SET NX 抢占派发标记，成功返回 True 表示由本次请求负责派发后台任务。
+
+    Redis 不可用时返回 True：宁可偶尔重复派发，也不因缓存故障丢掉建议生成。"""
+    try:
+        acquired = _student_recommendation_cache_client().set(
+            _student_recommendation_dispatch_key(user_id=user_id),
+            "1",
+            nx=True,
+            ex=STUDENT_RECOMMENDATION_DISPATCH_TTL_SECONDS,
+        )
+        return bool(acquired)
+    except Exception as exc:  # 标记失败不应阻塞首屏，退化为允许派发。
+        LOGGER.warning("Failed to mark student recommendation dispatch: %s", exc)
+        return True
+
+
+def _clear_student_recommendation_dispatch(*, user_id: int) -> None:
+    try:
+        _student_recommendation_cache_client().delete(_student_recommendation_dispatch_key(user_id=user_id))
+    except Exception as exc:  # 清除失败最多让今天不再重试，不影响首屏。
+        LOGGER.warning("Failed to clear student recommendation dispatch: %s", exc)
+
+
+def _dispatch_student_recommendation(
+    *,
+    user_id: int,
+    course_count: int,
+    pending_tasks: int,
+    recent_lesson_title: str | None,
+    weak_points: list[str],
+    study_hours: float,
+    completion_rate: float,
+    accuracy: float,
+) -> None:
+    """派发后台任务生成学生每日 AI 建议。首屏只返回兜底文案，绝不同步等待大模型。"""
+    if not _mark_student_recommendation_dispatch(user_id=user_id):
+        return
+    from app.tasks.student import generate_student_recommendation_task
+
+    try:
+        generate_student_recommendation_task.delay(
+            user_id,
+            course_count,
+            pending_tasks,
+            recent_lesson_title,
+            weak_points,
+            study_hours,
+            completion_rate,
+            accuracy,
+        )
+    except Exception as exc:  # 派发失败不影响首屏；清除标记以便下次访问重试。
+        LOGGER.warning("Failed to dispatch student recommendation task: %s", exc)
+        _clear_student_recommendation_dispatch(user_id=user_id)
+
+
+def run_student_recommendation_generation(
+    db: Session,
+    *,
+    user_id: int,
+    course_count: int,
+    pending_tasks: int,
+    recent_lesson_title: str | None,
+    weak_points: list[str],
+    study_hours: float,
+    completion_rate: float,
+    accuracy: float,
+) -> None:
+    """后台任务体：调用大模型生成今日建议并写回缓存。若缓存已被其它请求填充则直接跳过。"""
+    if _cached_student_recommendation_text(user_id=user_id):
+        return
+    text = ai_service.generate_student_recommendation(
+        course_count=course_count,
+        pending_tasks=pending_tasks,
+        recent_lesson_title=recent_lesson_title,
+        weak_points=weak_points,
+        study_hours=study_hours,
+        completion_rate=completion_rate,
+        accuracy=accuracy,
+        db=db,
+    )
+    _cache_student_recommendation_text(user_id=user_id, text=text)
 
 
 def _student_notice_settings(db: Session, *, user_id: int) -> list[dict]:
@@ -518,21 +611,51 @@ def get_student_dashboard(db: Session, user: User, *, refresh_recommendation: bo
         },
     }
     if course_ids:
+        pending_tasks = len([task for task in tasks if task.get("status") != "done"])
+        recent_lesson_title = recent_lesson["lesson"]["title"] if recent_lesson else None
+        weak_names = [item["name"] for item in weak]
         cached_text = None if refresh_recommendation else _cached_student_recommendation_text(user_id=user.id)
         if cached_text:
             recommendation["text"] = cached_text
-        else:
+        elif refresh_recommendation:
+            # 用户显式点击“刷新建议”（已被 3 次/60 秒限流保护），允许同步等待一次生成。
             recommendation["text"] = ai_service.generate_student_recommendation(
                 course_count=len(course_ids),
-                pending_tasks=len([task for task in tasks if task.get("status") != "done"]),
-                recent_lesson_title=recent_lesson["lesson"]["title"] if recent_lesson else None,
-                weak_points=[item["name"] for item in weak],
+                pending_tasks=pending_tasks,
+                recent_lesson_title=recent_lesson_title,
+                weak_points=weak_names,
                 study_hours=stats["study_hours"],
                 completion_rate=stats["completion_rate"],
                 accuracy=stats["accuracy"],
                 db=db,
             )
             _cache_student_recommendation_text(user_id=user.id, text=recommendation["text"])
+        else:
+            # 每日首屏关键路径：绝不同步等待大模型。缓存 key 按天轮换，每天首次进入必然未命中，
+            # 若在此同步调用大模型（默认 30s 超时 + 重试）会把首屏拖到数秒甚至数十秒。改为立即返回
+            # 确定性兜底文案，真正的 AI 建议交由后台任务异步生成并写回缓存，下次访问即命中。
+            recommendation["text"] = ai_service.student_recommendation_fallback(
+                pending_tasks=pending_tasks,
+                weak_points=weak_names,
+                recent_lesson_title=recent_lesson_title,
+            )
+            recommendation["status"] = "generating"
+            _dispatch_student_recommendation(
+                user_id=user.id,
+                course_count=len(course_ids),
+                pending_tasks=pending_tasks,
+                recent_lesson_title=recent_lesson_title,
+                weak_points=weak_names,
+                study_hours=stats["study_hours"],
+                completion_rate=stats["completion_rate"],
+                accuracy=stats["accuracy"],
+            )
+            # eager 模式（本地/测试）下后台任务已内联执行并写好缓存，尽量在本次响应即返回真实建议；
+            # 生产异步模式此时缓存尚空，保持兜底文案 + generating 状态，由前端后续刷新拿到 AI 文案。
+            generated_text = _cached_student_recommendation_text(user_id=user.id)
+            if generated_text:
+                recommendation["text"] = generated_text
+                recommendation["status"] = "ready"
     return {
         "courses": courses,
         "today_tasks": tasks,
