@@ -4,6 +4,9 @@ import { router } from "../router";
 import type { User } from "../types";
 
 type NoticeType = "success" | "warning" | "error" | "info";
+// 可点击 Toast 的动作：点击消息即执行 onClick（如出卷成功后跳转答题）。
+// onClick 是运行时闭包，仅存活于当前 SPA 会话，不做持久化。
+export type ToastAction = { label: string; onClick: () => void };
 
 const LOGIN_ROUTE = "/auth";
 
@@ -14,7 +17,7 @@ export const useSessionStore = defineStore("session", {
   state: () => ({
     user: null as User | null,
     initialized: false,
-    toasts: [] as Array<{ id: number; type: NoticeType; text: string }>
+    toasts: [] as Array<{ id: number; type: NoticeType; text: string; action?: ToastAction }>
   }),
   actions: {
     // 注册 client.ts 的全局未授权回调：token 任意时刻失效(改密吊销/会话过期)
@@ -80,9 +83,9 @@ export const useSessionStore = defineStore("session", {
       this.initialized = true;
       this.pushToast("info", "已退出");
     },
-    pushToast(type: NoticeType, text: string) {
+    pushToast(type: NoticeType, text: string, action?: ToastAction) {
       const id = Date.now() + Math.random();
-      this.toasts.push({ id, type, text });
+      this.toasts.push({ id, type, text, action });
     },
     closeToast(id: number) {
       this.toasts = this.toasts.filter((item) => item.id !== id);
