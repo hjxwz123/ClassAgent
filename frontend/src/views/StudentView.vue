@@ -421,12 +421,17 @@
                     <span>{{ wrongFilterSummary }}</span>
                     <button type="button" @click="clearWrongFilters"><X :size="14" />清除</button>
                   </div>
-                  <WrongCard v-for="item in filteredWrongQuestions" :key="item.wrong_question_id" :item="item" :generating="wrongPracticeGenerating" @practice="practiceWrong(item)" />
+                  <WrongCard v-for="item in pagedWrongQuestions" :key="item.wrong_question_id" :item="item" :generating="wrongPracticeGenerating" @practice="practiceWrong(item)" />
                   <div v-if="!wrongQuestions.length" class="wrong-empty-chalk">
                     <strong>太棒了，一道错题都没有！</strong>
                     <p>做题时答错的题目会自动收进这里，并按遗忘曲线提醒你按时复习。</p>
                   </div>
                   <EmptyState v-else-if="!filteredWrongQuestions.length" text="没有符合当前筛选的错题" />
+                  <nav v-if="wrongPageCount > 1" class="course-pager">
+                    <button class="btn btn-ghost btn-sm" :disabled="wrongPage <= 1" @click="setWrongPage(wrongPage - 1)"><ChevronLeft :size="14" />上一页</button>
+                    <span class="course-pager-info">{{ wrongPage }} / {{ wrongPageCount }} · 共 {{ filteredWrongQuestions.length }} 道错题</span>
+                    <button class="btn btn-ghost btn-sm" :disabled="wrongPage >= wrongPageCount" @click="setWrongPage(wrongPage + 1)">下一页<ChevronRight :size="14" /></button>
+                  </nav>
                 </section>
               </div>
             </section>
@@ -745,7 +750,7 @@ const {
   quizCountOptions, quizTypeOptions, quizDifficultyOptions, wrongStatusOptions,
   courseQuizzes, practiceQuizzes, filteredPracticeQuizzes, wrongKnowledgeFilters,
   pendingWrongCount, consolidatingWrongCount, resolvedWrongCount, repeatedWrongCount, dueWrongCount,
-  filteredWrongQuestions, wrongFilterSummary, weeklyWrongCount,
+  filteredWrongQuestions, pagedWrongQuestions, wrongPage, wrongPageCount, setWrongPage, wrongFilterSummary, weeklyWrongCount,
   toggleQuizType, quizTypeCounts, wrongMastery, queuedQuizMessage, maybeOpenQuizFromQuery, notificationQuizId,
   openQuizSelection, generateKnowledgeQuiz, loadQuizPage,
   quizDraftKey, readQuizDraft, clearQuizDraft, hasQuizDraft, quizCardStatus,

@@ -2,7 +2,7 @@
 // 原为 StudentView.vue 内联，逐字抽出为独立 composable 以缩短主文件；模板仍留在 StudentView，
 // 由其解构本 composable 的返回值使用（调用点不变）。行为与原实现保持逐字一致。
 // 依赖外壳的导航/请求/通知等能力经 deps 注入；api 与 useStudentSearch 一样直接 import（同一单例）。
-import { computed, ref, type Ref } from "vue";
+import { computed, ref, watch, type Ref } from "vue";
 import type { Router, RouteLocationNormalizedLoaded } from "vue-router";
 import { api, ApiError } from "../../api/client";
 import type { Quiz, User as UserType } from "../../types";
@@ -164,6 +164,17 @@ export function useStudentQuiz(deps: QuizDeps) {
     if (wrongKeyword.value.trim()) parts.push(`关键词：${wrongKeyword.value.trim()}`);
     return parts.filter(Boolean).join(" · ") || "全部错题";
   });
+  // 错题分页：一页 10 道。切换筛选/知识点回到第 1 页；总数变化时夹住页码。
+  const WRONG_PER_PAGE = 10;
+  const wrongPage = ref(1);
+  const wrongPageCount = computed(() => Math.max(1, Math.ceil(filteredWrongQuestions.value.length / WRONG_PER_PAGE)));
+  const pagedWrongQuestions = computed(() => {
+    const start = (wrongPage.value - 1) * WRONG_PER_PAGE;
+    return filteredWrongQuestions.value.slice(start, start + WRONG_PER_PAGE);
+  });
+  watch([selectedWrongKnowledge, wrongStatus, wrongKeyword], () => { wrongPage.value = 1; });
+  watch(wrongPageCount, (count) => { if (wrongPage.value > count) wrongPage.value = count; });
+  function setWrongPage(page: number) { wrongPage.value = Math.min(wrongPageCount.value, Math.max(1, page)); }
   const weeklyWrongCount = computed(() => wrongQuestions.value.filter((item) => {
     const time = item.last_wrong_at || item.updated_at || item.created_at;
     const timeMs = timestampMs(time);
@@ -447,7 +458,7 @@ export function useStudentQuiz(deps: QuizDeps) {
     // 派生
     courseQuizzes, practiceQuizzes, filteredPracticeQuizzes, wrongKnowledgeFilters,
     pendingWrongCount, consolidatingWrongCount, resolvedWrongCount, repeatedWrongCount, dueWrongCount,
-    filteredWrongQuestions, wrongFilterSummary, weeklyWrongCount,
+    filteredWrongQuestions, pagedWrongQuestions, wrongPage, wrongPageCount, setWrongPage, wrongFilterSummary, weeklyWrongCount,
     // 方法
     toggleQuizType, quizTypeCounts, wrongMastery, queuedQuizMessage, maybeOpenQuizFromQuery, notificationQuizId,
     openQuizSelection, generateKnowledgeQuiz, loadQuizPage,
