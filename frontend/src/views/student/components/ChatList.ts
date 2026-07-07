@@ -175,7 +175,10 @@ export default defineComponent({
     // - delta 仍由父组件按 rAF 合并，避免每个 token 触发一次 Vue 列表重绘。
     // - streaming=true 时也解析 Markdown/KaTeX，但按时间节流，避免每帧全量重解析长答案形成 O(n²) 卡顿。
     // - streaming=false 后做一次最终解析并缓存，历史消息不被其它消息刷新连带重算。
-    const streamStyle = { whiteSpace: "pre-wrap", wordBreak: "break-word" } as const;
+    // 注意：流式内容已是解析后的 Markdown HTML（块级标签间带 \n 换行），因此绝不能加 white-space:pre-wrap，
+    // 否则这些块间换行会被当作可见空白叠加在 CSS margin 之上，造成"输出中间距很大、输出完才恢复"。
+    // 只保留 word-break 处理超长 token 换行，且与流结束后的最终渲染保持一致排版。
+    const streamStyle = { wordBreak: "break-word" } as const;
     type RichCacheEntry = { text: string; html: string; renderedAt: number };
     const richCache = new Map<number, RichCacheEntry>();
     const thoughtCache = new Map<number, RichCacheEntry>();

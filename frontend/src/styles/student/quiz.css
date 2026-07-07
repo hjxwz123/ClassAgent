@@ -175,12 +175,18 @@
 .exam-prog-fill{height:100%;border-radius:4px;background:var(--exam-primary-500);transition:width .25s ease}
 .exam-modal-scope{--exam-primary-50:#E0F7FA;--exam-primary-100:#B2EBF2;--exam-primary-400:#26C6DA;--exam-primary-500:#00B8D4;--exam-primary-600:#0097A7;--exam-success-50:#E8F5E9;--exam-success-500:#2E7D32;--exam-warning-50:#FFF8E1;--exam-warning-500:#D9A05B;--exam-warning-700:#A43B00;--exam-bg-page:#F9F8F6;--exam-bg-card:#FFFFFF;--exam-border-light:#F4F1EA;--exam-border-default:#E6E4DD;--exam-border-strong:#D1CBB5;--exam-text-main:#2C2B29;--exam-text-sec:#666560;--exam-text-hint:#999990;--exam-radius-sm:8px;--exam-radius-md:12px;--exam-radius-lg:16px;--exam-radius-xl:24px;--exam-radius-pill:9999px;--exam-shadow-sm:0 2px 8px rgba(18, 22, 20,.04);--exam-shadow-card:0 12px 32px rgba(18, 22, 20,.05);--exam-shadow-focus:0 0 0 4px rgba(0,184,212,.15);box-sizing:border-box;color:var(--exam-text-main);font-family:var(--font-family-base)}
 .exam-modal-scope *{box-sizing:border-box}
-.exam-modal-mask{position:fixed;inset:0;z-index:var(--z-modal-bg);display:grid;place-items:center;background:#1216145c;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+/* 确认/退出弹窗 Teleport 到 body，必须盖在全屏答题页(.exam-answer-page z=1310)之上；
+   否则弹窗被答题页遮住，点交卷/退出只有按钮反馈却“没反应”。取值介于 modal(1310) 与 toast(1600) 之间。 */
+.exam-modal-mask{position:fixed;inset:0;z-index:1450;display:grid;place-items:center;background:#1216145c;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .exam-confirm-card{width:440px;max-width:calc(100vw - 32px);border-radius:var(--exam-radius-xl);background:#fff;box-shadow:0 24px 60px #1216142e;padding:22px}
 .exam-modal-head{display:flex;align-items:center;gap:10px;margin-bottom:16px}
 .exam-modal-head h2{flex:1;margin:0;color:var(--exam-text-main);font-size:20px}
 .exam-modal-head svg{color:var(--exam-warning-500)}
 .exam-confirm-card p{margin:8px 0;color:var(--exam-text-sec)}
+/* 有空题时的醒目提示：让“还有 N 道未答”不被忽略 */
+.exam-confirm-warn{display:flex;align-items:flex-start;gap:8px;margin:8px 0;padding:12px 14px;border-radius:12px;background:var(--exam-warning-50,#fff7ed);border:1px solid var(--exam-warning-200,#fed7aa);color:var(--exam-warning-700,#b45309);font-size:14px;line-height:1.6}
+.exam-confirm-warn svg{flex:0 0 auto;margin-top:2px;color:var(--exam-warning-500)}
+.exam-confirm-warn b{font-weight:800}
 .exam-confirm-card footer{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 .exam-result-main{flex:1;display:grid;gap:20px;width:min(900px,calc(100% - 48px));margin:0 auto;overflow-y:auto;padding:32px 0 48px}
 .exam-result-card,.exam-result-summary,.exam-analysis-card{border:1px solid white;border-radius:var(--exam-radius-xl);background:#fff;box-shadow:var(--exam-shadow-card);padding:28px}
@@ -336,7 +342,9 @@
 .exam-prog-text{color:var(--exam-text-sec);font-size:14px;font-weight:800}
 .exam-prog-bar{width:120px;height:6px;overflow:hidden;border-radius:4px;background:var(--exam-border-default)}
 .exam-prog-fill{height:100%;border-radius:4px;background:var(--exam-primary-500);transition:width .25s ease}
-.exam-modal-mask{position:fixed;inset:0;z-index:var(--z-modal-bg);display:grid;place-items:center;background:#1216145c;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+/* 确认/退出弹窗 Teleport 到 body，必须盖在全屏答题页(.exam-answer-page z=1310)之上；
+   否则弹窗被答题页遮住，点交卷/退出只有按钮反馈却“没反应”。取值介于 modal(1310) 与 toast(1600) 之间。 */
+.exam-modal-mask{position:fixed;inset:0;z-index:1450;display:grid;place-items:center;background:#1216145c;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .exam-confirm-card{width:440px;max-width:calc(100vw - 32px);border-radius:var(--exam-radius-xl);background:#fff;box-shadow:0 24px 60px #1216142e;padding:22px}
 .exam-modal-head,.exam-analysis-trigger{display:flex;align-items:center;gap:10px}
 .exam-modal-head h2{flex:1;margin:0}

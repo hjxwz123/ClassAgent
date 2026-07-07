@@ -218,15 +218,34 @@ class EmailService:
             html_body=html_body,
         )
 
+    def _smtp_endpoint_detail(self, db: Session) -> dict:
+        """返回当前启用的 SMTP 端点摘要（不含账号/密码），用于错误诊断。"""
+        try:
+            service = get_enabled_service_config(db, "email")
+        except Exception:
+            return {}
+        if service is None or service.provider != "smtp":
+            return {}
+        config = service.config
+        # 与 _send_smtp 的默认取值保持一致，日志中体现「实际生效」的加密方式
+        return {
+            "host": config.get("host"),
+            "port": config.get("port"),
+            "use_ssl": bool(config.get("use_ssl", False)),
+            "use_tls": bool(config.get("use_tls", True)),
+        }
+
     def _log_background_email_error(self, *, source: str, to_email: str, exc: Exception) -> None:
         try:
             with db_session.SessionLocal() as db:
+                detail = {"to_email": to_email, "error_type": type(exc).__name__}
+                detail.update(self._smtp_endpoint_detail(db))
                 db.add(
                     SystemErrorLog(
                         level="error",
                         source=source,
                         message=str(exc),
-                        detail={"to_email": to_email},
+                        detail=detail,
                     )
                 )
                 db.commit()

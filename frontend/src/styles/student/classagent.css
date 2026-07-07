@@ -2008,21 +2008,21 @@ html.theme-dark .study-room :where(.icon-glass, .knowledge-dot) {
 .student-shell .profile-main-card .mini-metric {
   min-height: 104px;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   border: 1px solid var(--ca-color-paper-border);
   border-radius: 18px;
   background: var(--ca-color-paper-bg);
-  padding: 16px;
+  padding: 16px 14px;
   box-shadow: none;
 }
 
 .student-shell .profile-main-card .mini-metric-icon {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: 0;
   background: transparent !important;
   color: var(--ca-role-student-primary-hover);
@@ -2036,10 +2036,13 @@ html.theme-dark .study-room :where(.icon-glass, .knowledge-dot) {
 
 .student-shell .profile-main-card .mini-metric strong {
   color: var(--ca-color-paper-ink);
-  font-size: clamp(22px, 2.2vw, 30px);
+  /* 收窄字号 + 紧凑数字，避免像 82.35% 这类长值撑出卡片边框 */
+  font-size: clamp(20px, 1.9vw, 26px);
   line-height: 1;
   font-weight: 950;
   white-space: nowrap;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 .student-shell .profile-main-card .mini-metric span {
