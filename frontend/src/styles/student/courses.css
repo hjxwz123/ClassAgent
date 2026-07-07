@@ -711,6 +711,18 @@
     z-index: 1
 }
 
+.home-activity-item.is-clickable {
+    cursor: pointer;
+    border-radius: 12px;
+    margin: -6px -10px;
+    padding: 6px 10px;
+    transition: background .15s ease
+}
+
+.home-activity-item.is-clickable:hover {
+    background: #FAF9F6
+}
+
 .home-ac-icon-wrapper {
     width: 48px;
     height: 48px;
@@ -1039,7 +1051,7 @@
 
 .home-grid {
     grid-template-columns: minmax(0, 1.45fr) minmax(320px, .95fr);
-    align-items: start
+    align-items: stretch
 }
 
 .student-course-grid {
@@ -1198,6 +1210,17 @@
     border-radius: 14px;
     background: var(--s-bg);
     padding: 12px 14px
+}
+
+.qa-mini-clickable {
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease, transform .15s ease
+}
+
+.qa-mini-clickable:hover {
+    border-color: var(--s-primary-600);
+    background: #fff;
+    transform: translateX(2px)
 }
 
 .course-qa-wide .qa-mini strong,

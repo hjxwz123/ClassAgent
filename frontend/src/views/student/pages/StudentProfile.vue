@@ -91,7 +91,7 @@
 
     <!-- 3. 成就墙 + 最近动态 -->
     <div class="pf-columns">
-      <article class="pf-card pf-ach-card">
+      <article ref="achCardRef" class="pf-card pf-ach-card">
         <header class="pf-card-head">
           <h2><Award :size="18" />我的成就</h2>
           <span class="pf-card-sub">已解锁 {{ unlockedCount }}/{{ achievements.length || 5 }}</span>
@@ -113,7 +113,7 @@
         </div>
       </article>
 
-      <article class="pf-card pf-timeline">
+      <article ref="timelineCardRef" class="pf-card pf-timeline">
         <ActivityTimeline :items="profilePayload.activities || []" />
       </article>
     </div>
@@ -182,7 +182,7 @@
 // 依 UI.md「智学黑板」纸张系统重设计：纸张白卡 + 分形噪点颗粒 + 宋体标题 + mono 数字/学号 + 一处克制的粉笔黑板角标。
 // 跨页共享的资料表单、成就负载、统计、头像 URL、通知设置及 applyStudentProfile/loadProfile/normalizeNoticeSettings 经 useStudentCtx 注入；
 // 本页自持折叠面板状态、头像上传中态、密码表单等局部状态与仅本页调用的动作。
-import { computed, nextTick, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { api, setToken } from "../../../api/client";
 import {
   Award, Bell, CalendarCheck, Camera, CheckCircle, ChevronDown, Clock, Flame, GraduationCap,
@@ -202,6 +202,17 @@ const { user, profileForm, profilePayload, stats, currentAvatarUrl, noticeSettin
 // 三张设置面板的折叠态（资料编辑默认展开）。
 const panels = reactive({ profile: true, security: false, notify: false });
 const settingsRef = ref<HTMLElement | null>(null);
+// 学习动态（最近动态）过长：把它的高度限制到"我的成就"卡一样高、内部滚动（仅桌面双列时）。
+const achCardRef = ref<HTMLElement | null>(null);
+const timelineCardRef = ref<HTMLElement | null>(null);
+let heightObserver: ResizeObserver | null = null;
+function syncTimelineHeight() {
+  const ach = achCardRef.value;
+  const timeline = timelineCardRef.value;
+  if (!ach || !timeline) return;
+  if (window.innerWidth <= 1024) { timeline.style.maxHeight = ""; return; }
+  timeline.style.maxHeight = `${ach.offsetHeight}px`;
+}
 const avatarUploading = ref(false);
 const studentAvatarInput = ref<HTMLInputElement | null>(null);
 const passwordForm = reactive({ old_password: "", new_password: "" });
@@ -305,5 +316,16 @@ async function refreshProfile() {
 }
 
 // 进入个人中心即加载资料（原在外壳 loadActive 的 studentProfile 分支里的加载调用搬到这里）。
-onMounted(() => { void ctx.loadProfile(); });
+onMounted(() => {
+  void ctx.loadProfile();
+  heightObserver = new ResizeObserver(() => syncTimelineHeight());
+  if (achCardRef.value) heightObserver.observe(achCardRef.value);
+  window.addEventListener("resize", syncTimelineHeight);
+  void nextTick(syncTimelineHeight);
+});
+onBeforeUnmount(() => {
+  heightObserver?.disconnect();
+  heightObserver = null;
+  window.removeEventListener("resize", syncTimelineHeight);
+});
 </script>

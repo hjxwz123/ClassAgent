@@ -1427,6 +1427,10 @@
     box-shadow: 0 4px 10px rgba(217, 160, 91, .3)
 }
 .student-profile-page .pf-ach.unlocked .pf-ach-name { color: #A9631A }
+/* 最近动态：过长时高度限制到与"我的成就"一致（由脚本设 max-height），卡内滚动 */
+.student-profile-page .pf-timeline {
+    overflow-y: auto
+}
 /* 最近动态：ActivityTimeline 渲染 .profile-activity-card>.section-head；仅统一其标题字体（全局样式，不用 :deep） */
 .student-profile-page .pf-timeline .section-head h2 {
     font-family: var(--ca-font-serif);
