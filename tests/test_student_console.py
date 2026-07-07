@@ -213,6 +213,15 @@ def test_student_dashboard_recommendation_uses_daily_redis_cache(client, monkeyp
         def setex(self, key, ttl, value):
             self.values[key] = value
 
+        def set(self, key, value, nx=False, ex=None):
+            if nx and key in self.values:
+                return None
+            self.values[key] = value
+            return True
+
+        def delete(self, key):
+            self.values.pop(key, None)
+
     cache = FakeRedis()
 
     def fake_recommendation(**kwargs):
@@ -222,6 +231,8 @@ def test_student_dashboard_recommendation_uses_daily_redis_cache(client, monkeyp
     monkeypatch.setattr(student_service, "_student_recommendation_cache_client", lambda: cache)
     monkeypatch.setattr(student_service.ai_service, "generate_student_recommendation", fake_recommendation)
 
+    # 首屏不再同步等待大模型：改为派发后台任务。测试为 Celery eager 模式，任务内联执行并写好缓存，
+    # 本次响应即回填真实建议文案（生产异步模式下首屏会先返回兜底文案）。
     first_response = client.get("/api/v1/student/dashboard", headers=student_headers)
     assert first_response.status_code == 200, first_response.text
     assert first_response.json()["data"]["recommendation"]["text"] == "今日建议 1"
@@ -244,6 +255,54 @@ def test_student_dashboard_recommendation_uses_daily_redis_cache(client, monkeyp
     assert cached_response.status_code == 200, cached_response.text
     assert cached_response.json()["data"]["recommendation"]["text"] == "今日建议 2"
     assert len(calls) == 2
+
+
+def test_student_dashboard_first_load_never_blocks_on_ai(client, monkeypatch):
+    """生产（异步）语义：每日首次进入首屏时缓存必未命中，但不得同步调用大模型；
+    应立即返回确定性兜底文案并派发后台任务。"""
+    student_headers, *_ = prepare_student_workspace(client)
+    store: dict[str, str] = {}
+
+    class FakeRedis:
+        def get(self, key):
+            return store.get(key)
+
+        def setex(self, key, ttl, value):
+            store[key] = value
+
+        def set(self, key, value, nx=False, ex=None):
+            if nx and key in store:
+                return None
+            store[key] = value
+            return True
+
+        def delete(self, key):
+            store.pop(key, None)
+
+    monkeypatch.setattr(student_service, "_student_recommendation_cache_client", lambda: FakeRedis())
+
+    ai_calls = []
+    monkeypatch.setattr(
+        student_service.ai_service,
+        "generate_student_recommendation",
+        lambda **kwargs: ai_calls.append(kwargs) or "AI 生成建议",
+    )
+    # 模拟生产异步：派发不内联执行（后台 worker 才会真正生成），首屏此刻缓存仍为空。
+    dispatched = []
+    monkeypatch.setattr(
+        student_service,
+        "_dispatch_student_recommendation",
+        lambda **kwargs: dispatched.append(kwargs),
+    )
+
+    response = client.get("/api/v1/student/dashboard", headers=student_headers)
+    assert response.status_code == 200, response.text
+    recommendation = response.json()["data"]["recommendation"]
+    assert recommendation["status"] == "generating"
+    assert recommendation["text"]  # 兜底文案非空
+    assert recommendation["text"] != "AI 生成建议"
+    assert ai_calls == []  # 关键：首屏没有任何同步大模型调用
+    assert len(dispatched) == 1  # 已派发后台生成任务
 
 
 def test_student_console_endpoints_and_multiple_courses(client):
@@ -321,6 +380,11 @@ def test_student_console_endpoints_and_multiple_courses(client):
     assert attempt_detail["quiz"]["id"] == quiz_id
     assert attempt_detail["answers"][0]["question"]["stem"] == "TCP 的主要特性是？"
 
+    # 未作答 ≠ 做错：本次提交仅答对第 1 题、第 2 题跳过未答，跳过的题不进错题本（不污染薄弱点统计）。
+    wrong_after_skip = client.get("/api/v1/learning/wrong-questions", params={"course_id": first_course["id"]}, headers=student_headers)
+    assert wrong_after_skip.status_code == 200, wrong_after_skip.text
+    assert wrong_after_skip.json()["data"] == []
+
     with db_session.SessionLocal() as db:
         existing_quiz = db.get(Quiz, quiz_id)
         alias_quiz = Quiz(
@@ -355,14 +419,15 @@ def test_student_console_endpoints_and_multiple_courses(client):
         alias_quiz_id = alias_quiz.id
         alias_question_id = alias_question.id
 
+    # 故意答错(选 index 0「无连接」，正确为 index 1「可靠传输」)，以产生一条真实错题。
     alias_submit_response = client.post(
         f"/api/v1/learning/quizzes/{alias_quiz_id}/submit",
-        json={"answers": [{"question_id": alias_question_id, "answer": 1}]},
+        json={"answers": [{"question_id": alias_question_id, "answer": 0}]},
         headers=student_headers,
     )
     assert alias_submit_response.status_code == 200, alias_submit_response.text
     alias_result = alias_submit_response.json()["data"]
-    assert alias_result["score"] == 5
+    assert alias_result["score"] == 0
     assert alias_result["answers"][0]["correct_answer"] == "可靠传输"
     assert extract_reference_answer_value({"key": "A"}) == "A"
     assert extract_reference_answer_value({"text": "格式奖励是二值设计"}) == "格式奖励是二值设计"
@@ -370,8 +435,10 @@ def test_student_console_endpoints_and_multiple_courses(client):
 
     wrong_first_response = client.get("/api/v1/learning/wrong-questions", params={"course_id": first_course["id"]}, headers=student_headers)
     assert wrong_first_response.status_code == 200, wrong_first_response.text
-    assert wrong_first_response.json()["data"]
-    assert {item["question"]["course_id"] for item in wrong_first_response.json()["data"]} == {first_course["id"]}
+    wrong_first_items = wrong_first_response.json()["data"]
+    # 只有真正答错的 alias 题进错题本；主测验里"未作答"的判断题不应被计为答错。
+    assert {item["question"]["id"] for item in wrong_first_items} == {alias_question_id}
+    assert {item["question"]["course_id"] for item in wrong_first_items} == {first_course["id"]}
     wrong_second_response = client.get("/api/v1/learning/wrong-questions", params={"course_id": second_course["id"]}, headers=student_headers)
     assert wrong_second_response.status_code == 200, wrong_second_response.text
     assert wrong_second_response.json()["data"] == []

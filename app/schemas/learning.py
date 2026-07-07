@@ -113,6 +113,13 @@ class QuizEditRequest(BaseModel):
 
 class QuizSubmitRequest(BaseModel):
     answers: list[dict]
+    duration_seconds: int | None = Field(default=None, ge=0, le=86400)
+
+
+class QuizRetakeRequest(BaseModel):
+    # full=整卷重做；wrong=只重做某次作答中的错题（默认取最近一次作答）
+    mode: str = Field(default="full", pattern="^(full|wrong)$")
+    attempt_id: int | None = None
 
 
 class QuizAttemptResponse(ORMModel):
@@ -124,6 +131,7 @@ class QuizAttemptResponse(ORMModel):
     accuracy: float
     ai_feedback: str | None
     submitted_at: datetime | None
+    duration_seconds: int | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -173,12 +181,21 @@ class WrongQuestionResponse(BaseModel):
     wrong_count: int
     history_count: int | None = None
     is_resolved: bool = False
+    # 掌握状态机：pending=未掌握 / consolidating=巩固中(复习曲线进行中) / resolved=已掌握(走完整条曲线)
+    correct_streak: int = 0
+    mastery: str = "pending"
     knowledge_point_id: int | None = None
     knowledge_point_name: str | None = None
     last_attempt_id: int | None = None
     resolved_at: datetime | None = None
     last_wrong_at: datetime | None = None
     last_correct_at: datetime | None = None
+    # 艾宾浩斯遗忘曲线复习调度：next_review_at=下次应复习时间；is_due=是否已到期待复习；
+    # review_stage=已走过档位(=correct_streak)，review_total=曲线总档数。
+    next_review_at: datetime | None = None
+    is_due: bool = False
+    review_stage: int = 0
+    review_total: int = 6
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

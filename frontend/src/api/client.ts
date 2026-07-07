@@ -26,7 +26,7 @@ export function getToken() {
   return token;
 }
 
-// 全局未授权(401/鉴权失效 403)回调：token 中途失效(改密吊销/会话过期)时，
+// 全局未授权(401)回调：token 中途失效(改密吊销/会话过期/账号禁用)时，
 // 已打开页面的请求会拿到 401，需要统一清理会话并跳转登录，避免界面"卡死"。
 // 由 session store 在应用初始化时通过 setUnauthorizedHandler 注册。
 let onUnauthorized: (() => void) | null = null;
@@ -48,9 +48,11 @@ function isUnauthorizedExempt(path: string) {
 let handlingUnauthorized = false;
 
 function handleUnauthorized(status: number, path: string) {
-  // 仅对鉴权失效语义(401 未认证 / 403 已认证但权限不足/被吊销)触发全局登出；
-  // 业务层无权 401/403 也走登出语义，与"token 失效"保持一致(见任务说明)。
-  if (status !== 401 && status !== 403) return;
+  // 仅 401 触发全局登出跳转。后端对一切“鉴权/会话失效”都返回 401：缺失/非法/过期令牌、
+  // 改密吊销(token_version 不匹配)、用户被删除、账号被禁用(见 app/core/deps.get_current_user)。
+  // 403(forbidden) 是“已认证但无权访问该资源”——未加入的课程、未发布课时、角色不匹配等业务授权错误，
+  // 必须由调用方局部处理(提示/错误态)，绝不能登出。否则在问答里点开一个无权来源(如未发布课时)就会被误登出。
+  if (status !== 401) return;
   if (isUnauthorizedExempt(path)) return;
   if (handlingUnauthorized) return;
   handlingUnauthorized = true;

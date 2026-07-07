@@ -553,16 +553,94 @@ def test_learning_core_flow(client, monkeypatch):
             answer_payload.append({"question_id": item["id"], "answer": answer})
     wrong_submit_resp = client.post(
         f"/api/v1/learning/quizzes/{wrong_practice['id']}/submit",
-        json={"answers": answer_payload},
+        json={"answers": answer_payload, "duration_seconds": 123},
         headers=student_headers,
     )
     assert wrong_submit_resp.status_code == 200, wrong_submit_resp.text
+    assert wrong_submit_resp.json()["data"]["duration_seconds"] == 123
     wrong_after_resp = client.get("/api/v1/learning/wrong-questions", params={"course_id": course["id"]}, headers=student_headers)
     assert wrong_after_resp.status_code == 200, wrong_after_resp.text
     wrong_after_items = wrong_after_resp.json()["data"]
     assert len(wrong_after_items) == wrong_count_before
-    assert any(item["is_resolved"] for item in wrong_after_items)
+    # 掌握状态机：答对一次仅进入"巩固中"，不直接摘掉错题。
+    assert not any(item["is_resolved"] for item in wrong_after_items)
+    assert any(item["mastery"] == "consolidating" and item["correct_streak"] == 1 for item in wrong_after_items)
     assert all(item["history_count"] >= 1 for item in wrong_after_items)
+
+    # 整卷重做：克隆出一份新私有练习，作答后连对次数累计到 2。艾宾浩斯曲线下"已掌握"需走完
+    # 整条 [1,2,4,7,15,30] 天曲线，故此时仍为"巩固中"，并已排定下一档复习时间(next_review_at)。
+    retake_resp = client.post(
+        f"/api/v1/learning/quizzes/{wrong_practice['id']}/retake",
+        json={"mode": "full"},
+        headers=student_headers,
+    )
+    assert retake_resp.status_code == 200, retake_resp.text
+    retake_quiz_data = retake_resp.json()["data"]
+    assert retake_quiz_data["id"] != wrong_practice["id"]
+    assert retake_quiz_data["question_count"] == len(wrong_detail_questions)
+    retake_detail_resp = client.get(f"/api/v1/learning/quizzes/{retake_quiz_data['id']}", headers=student_headers)
+    assert retake_detail_resp.status_code == 200, retake_detail_resp.text
+    retake_questions = retake_detail_resp.json()["data"]["questions"]
+    assert len(retake_questions) == len(wrong_detail_questions)
+    # 学生视角作答前不泄露答案。
+    assert all(item["reference_answer"] is None for item in retake_questions)
+    with db_session.SessionLocal() as db:
+        retake_answers = []
+        for item in retake_questions:
+            stored_question = db.get(QuizQuestion, item["id"])
+            reference = stored_question.reference_answer
+            if isinstance(reference, dict):
+                expected = reference.get("value", reference.get("answer", reference.get("correct_answer", reference.get("keywords", ""))))
+            else:
+                expected = reference
+            if isinstance(expected, list):
+                answer = " ".join(str(value) for value in expected) if item["question_type"] == "short_answer" else expected
+            else:
+                answer = expected
+            retake_answers.append({"question_id": item["id"], "answer": answer})
+    retake_submit_resp = client.post(
+        f"/api/v1/learning/quizzes/{retake_quiz_data['id']}/submit",
+        json={"answers": retake_answers},
+        headers=student_headers,
+    )
+    assert retake_submit_resp.status_code == 200, retake_submit_resp.text
+    resolved_resp = client.get("/api/v1/learning/wrong-questions", params={"course_id": course["id"]}, headers=student_headers)
+    assert resolved_resp.status_code == 200, resolved_resp.text
+    resolved_items = resolved_resp.json()["data"]
+    # 连对 2 次仍在曲线中途：巩固中、未掌握归档，且已排定下一档复习时间。
+    assert any(
+        (not item["is_resolved"])
+        and item["mastery"] == "consolidating"
+        and item["correct_streak"] == 2
+        and item["review_stage"] == 2
+        and item["next_review_at"]
+        for item in resolved_items
+    )
+
+    # 生成任务占位卡列表：接口可用且只返回本人任务。
+    tasks_resp = client.get(
+        "/api/v1/learning/generation-tasks",
+        params={"course_id": course["id"]},
+        headers=student_headers,
+    )
+    assert tasks_resp.status_code == 200, tasks_resp.text
+    assert isinstance(tasks_resp.json()["data"], list)
+
+    # 删除练习：未开始的克隆卷可删；已作答的卷不可删。
+    fresh_retake_resp = client.post(
+        f"/api/v1/learning/quizzes/{wrong_practice['id']}/retake",
+        json={"mode": "full"},
+        headers=student_headers,
+    )
+    assert fresh_retake_resp.status_code == 200, fresh_retake_resp.text
+    fresh_quiz_id = fresh_retake_resp.json()["data"]["id"]
+    # 未开始 → 删除成功，且删除后取详情 404。
+    del_resp = client.delete(f"/api/v1/learning/quizzes/{fresh_quiz_id}", headers=student_headers)
+    assert del_resp.status_code == 200, del_resp.text
+    assert client.get(f"/api/v1/learning/quizzes/{fresh_quiz_id}", headers=student_headers).status_code == 404
+    # 已作答的错题重练卷 → 删除被拒。
+    del_attempted_resp = client.delete(f"/api/v1/learning/quizzes/{wrong_practice['id']}", headers=student_headers)
+    assert del_attempted_resp.status_code == 400, del_attempted_resp.text
 
     practice_resp = client.post(
         "/api/v1/learning/quizzes/generate",
@@ -878,6 +956,53 @@ def test_quiz_generation_retries_ai_when_valid_questions_are_insufficient(monkey
     )
     assert questions[0]["question_type"] == "single_choice"
     assert questions[0]["reference_answer"] == {"value": 1}
+
+
+def test_quiz_generation_practice_fast_cuts_llm_calls(monkeypatch):
+    # 学生自助练习提速档应把最坏 3 次串行大模型调用（主生成 + critic 自评 + 定向重试）降到 1 次。
+    def batch(n=14):
+        items = [
+            {
+                "question_type": "single_choice",
+                "stem": f"下列关于编译原理概念 C{i} 的表述中，正确的是哪一项？",
+                "options": [
+                    f"C{i} 的正确定义表述",
+                    f"C{i} 的错误表述甲项",
+                    f"C{i} 的错误表述乙项",
+                    f"C{i} 的错误表述丙项",
+                ],
+                "reference_answer": {"value": 0},
+                "explanation": f"正确项准确刻画了 C{i}，其余三项分别在范围、条件、对象上出现常见混淆。",
+                "difficulty": "standard",
+                "knowledge_point": f"概念C{i}",
+                "cognitive_level": "理解",
+            }
+            for i in range(n)
+        ]
+        return json.dumps({"items": items}, ensure_ascii=False)
+
+    calls: list = []
+
+    def fake_call_chat(*args, **kwargs):
+        calls.append(kwargs.get("purpose"))
+        return batch()
+
+    monkeypatch.setattr(ai_service, "_call_chat", fake_call_chat)
+    source = "属性文法定义为 A=(G,C,F)，其中 F 是关于属性的计算规则。语义分析包括语义检查与翻译。"
+
+    calls.clear()
+    fast = ai_service.generate_quiz_questions(topic="编译原理", source_text=source, count=5, practice_fast=True)
+    fast_calls = len(calls)
+
+    calls.clear()
+    normal = ai_service.generate_quiz_questions(topic="编译原理", source_text=source, count=5, practice_fast=False)
+    normal_calls = len(calls)
+
+    assert len(fast) == 5
+    assert len(normal) == 5
+    # 提速档只调用一次主生成；默认档额外触发 critic 自评（且通常再加一次定向重试）
+    assert fast_calls == 1
+    assert normal_calls > fast_calls
 
 
 def test_quiz_generation_respects_question_type_counts(monkeypatch):
@@ -1985,3 +2110,49 @@ def test_knowledge_points_use_local_explanations(client, monkeypatch):
     point = response.json()["data"][0]
     assert point["name"] == "矩阵"
     assert point["content_by_level"]["standard"]["definition"].startswith("矩阵")
+
+
+def test_ebbinghaus_wrong_review_schedule():
+    """艾宾浩斯遗忘曲线调度：连对按 [1,2,4,7,15,30] 天推进，走完整条曲线才判已掌握；到期判定 is_due。"""
+    from datetime import UTC, datetime, timedelta
+
+    from app.db.models import WrongQuestion
+    from app.services.learning import (
+        EBBINGHAUS_INTERVAL_DAYS,
+        _apply_wrong_review_schedule,
+        wrong_question_review_state,
+    )
+
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    wrong = WrongQuestion(user_id=1, question_id=1, course_id=1, wrong_count=1, correct_streak=0)
+
+    # 新错题/答错：排到次日（曲线第 0 档 = 1 天），未掌握。
+    _apply_wrong_review_schedule(wrong, now)
+    assert wrong.is_resolved is False
+    assert wrong.next_review_at == now + timedelta(days=EBBINGHAUS_INTERVAL_DAYS[0])
+
+    # 逐次答对：每档按曲线推进，走完前不归档。
+    for streak in range(1, len(EBBINGHAUS_INTERVAL_DAYS)):
+        wrong.correct_streak = streak
+        _apply_wrong_review_schedule(wrong, now)
+        assert wrong.is_resolved is False
+        assert wrong.next_review_at == now + timedelta(days=EBBINGHAUS_INTERVAL_DAYS[streak])
+
+    # 连对走完整条曲线：判已掌握、不再安排复习。
+    wrong.correct_streak = len(EBBINGHAUS_INTERVAL_DAYS)
+    _apply_wrong_review_schedule(wrong, now)
+    assert wrong.is_resolved is True
+    assert wrong.resolved_at == now
+    assert wrong.next_review_at is None
+
+    # is_due：到期(next_review <= now)判待复习；未来不判；已掌握不判。
+    due = WrongQuestion(user_id=1, question_id=2, course_id=1, wrong_count=1, correct_streak=0)
+    due.next_review_at = now - timedelta(days=1)
+    assert wrong_question_review_state(due, now)["is_due"] is True
+    due.next_review_at = now + timedelta(days=1)
+    assert wrong_question_review_state(due, now)["is_due"] is False
+    resolved = WrongQuestion(user_id=1, question_id=3, course_id=1, wrong_count=1, correct_streak=6, is_resolved=True)
+    resolved.next_review_at = None
+    state = wrong_question_review_state(resolved, now)
+    assert state["is_due"] is False
+    assert state["review_total"] == len(EBBINGHAUS_INTERVAL_DAYS)

@@ -1,8 +1,9 @@
 // 从 StudentView.vue 抽出的纯展示型子组件（仅依赖 props/emits/slots + 图标，无父作用域闭包）。
 // 均为渲染函数组件，行为与原内联定义完全一致。
-import { defineComponent, h, type PropType } from "vue";
-import { BookOpen, CheckCircle, Play, Sparkles } from "../../../icons";
+import { computed, defineComponent, h, Transition, type PropType } from "vue";
+import { AlertTriangle, BookOpen, CheckCircle, ChevronDown, Layers, Pencil, Play, Quote, Sparkles } from "../../../icons";
 import LoadingMark from "../../../components/LoadingMark.vue";
+import { renderRichText } from "../../../utils/richText";
 
 export const PageTitle = defineComponent({
   props: { title: { type: String, required: true }, sub: { type: String, default: "" } },
@@ -123,5 +124,50 @@ export const MiniMetric = defineComponent({
 export const EmptyGuide = defineComponent({
   setup() {
     return () => h("div", { class: "empty-guide" }, [h(Sparkles, { size: 38 }), h("strong", "等待题目"), h("span", "输入后开始辅导")]);
+  }
+});
+
+// 辅导页分步引导（提示/思路/详解），点击展开富文本。
+export const GuideStep = defineComponent({
+  props: { level: { type: Number, required: true }, data: { type: Object as PropType<any>, default: null }, open: { type: Boolean, default: false }, loading: { type: Boolean, default: false } },
+  emits: ["toggle", "load"],
+  setup(p, { emit: update }) {
+    const title = computed(() => p.level === 1 ? "提示" : p.level === 2 ? "思路" : "详解");
+    const bodyHtml = computed(() => renderRichText(p.data?.content || p.data?.hint || p.data?.answer || "暂无内容"));
+    return () => h("section", { class: ["guide-step", p.loading ? "is-loading" : ""] }, [
+      h("button", { type: "button", disabled: p.loading, onClick: () => { if (!p.loading) update(p.data ? "toggle" : "load"); } }, [h("b", String(p.level)), h("strong", `第 ${p.level} 步 · ${title.value}`), p.loading ? h(LoadingMark, { label: false, class: "inline-loading-mark" }) : h(ChevronDown, { size: 16, class: { rotate: p.open } })]),
+      h(Transition, { name: "accordion" }, {
+        default: () => p.open && p.data ? h("div", { class: "guide-body" }, [
+          h("div", { class: "guide-content markdown-body", innerHTML: bodyHtml.value }),
+          p.data.steps?.length ? h("ol", { class: "guide-points" }, p.data.steps.map((step: string, index: number) => h("li", { key: index }, [
+            h("div", { class: "markdown-body", innerHTML: renderRichText(step) })
+          ]))) : null,
+          p.data.final_answer ? h("div", { class: "guide-answer markdown-body", innerHTML: renderRichText(`**答案**\n\n${p.data.final_answer}`) }) : null
+        ]) : null
+      })
+    ]);
+  }
+});
+
+// 知识点卡块（定义/原理/例题/易错点），content 支持字符串/数组/对象。
+export const KnowledgeBlock = defineComponent({
+  props: {
+    icon: { type: String, default: "Quote" },
+    title: { type: String, required: true },
+    content: { type: [String, Array, Object] as PropType<string | any[] | Record<string, any>>, default: "" },
+    ai: { type: Boolean, default: false },
+    warning: { type: Boolean, default: false }
+  },
+  setup(p) {
+    const icons: Record<string, any> = { Quote, Layers, Pencil, AlertTriangle };
+    const content = computed(() => {
+      if (Array.isArray(p.content)) return p.content.join("；");
+      if (p.content && typeof p.content === "object") return Object.values(p.content).join("；");
+      return String(p.content || "暂无内容");
+    });
+    return () => h("section", { class: ["knowledge-block", p.ai ? "ai" : "", p.warning ? "warning" : ""] }, [
+      h("h3", [h(icons[p.icon] || Quote, { size: 17 }), p.title]),
+      h("div", content.value)
+    ]);
   }
 });

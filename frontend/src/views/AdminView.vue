@@ -746,12 +746,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   Activity, AlertCircle, AlertTriangle, Ban, BarChart2, Bell, BookOpen, CheckCircle, CheckSquare, ChevronDown,
   ChevronLeft, ChevronRight, Cloud, Database, Download, Eye, File, FileCheck, FileText, GraduationCap, Grid2X2,
-  Inbox, KeyRound, Layers, LayoutDashboard, List, LogOut, MoreHorizontal, Pencil, Plus, RefreshCw,
+  KeyRound, Layers, LayoutDashboard, List, LogOut, MoreHorizontal, Pencil, Plus, RefreshCw,
   Save, Scan, Search, Server, Settings, Shield, ShieldCheck, Sparkles, Trash2, Upload, User, UserCheck,
   Users, Volume2, X, XCircle
 } from "../icons";
@@ -768,6 +768,7 @@ import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import AdminChart from "./admin/AdminChart.vue";
+import { SettingControl, MetricCard, EmptyState, InfoRow } from "./admin/components/primitives";
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string] }>();
@@ -1234,36 +1235,6 @@ function formatSettingValue(value: unknown) {
   if (typeof value === "object") return JSON.stringify(value);
   return String(value ?? "");
 }
-const SettingControl = defineComponent({
-  props: { item: { type: Object, required: true }, drafts: { type: Object, required: true } },
-  setup(innerProps) {
-    return () => {
-      const key = (innerProps.item as any).key;
-      const item = innerProps.item as any;
-      const drafts = innerProps.drafts as Record<string, any>;
-      const update = (event: Event) => { drafts[key] = (event.target as HTMLInputElement).value; };
-      if (item.type === "number") {
-        const clampNumber = (raw: number) => {
-          let value = Number.isFinite(raw) ? raw : 0;
-          if (typeof item.min === "number" && value < item.min) value = item.min;
-          if (typeof item.max === "number" && value > item.max) value = item.max;
-          return value;
-        };
-        return h("input", { class: "input form-control", type: "number", min: item.min, max: item.max, step: item.step, value: drafts[key], onInput: (event: Event) => { drafts[key] = clampNumber(Number((event.target as HTMLInputElement).value)); } });
-      }
-      if (item.type === "range") return h(AppSlider, { modelValue: Number(drafts[key] || 0), min: item.min, max: item.max, "onUpdate:modelValue": (value: number) => { drafts[key] = value; } });
-      if (item.type === "toggle") return h(AppCheckbox, { modelValue: !!drafts[key], label: "启用", variant: "switch", "onUpdate:modelValue": (value: boolean) => { drafts[key] = value; } });
-      if (item.type === "textarea") return h("textarea", { class: "textarea form-control", value: drafts[key], onInput: update });
-      if (item.type === "select") return h(AppSelect, { modelValue: drafts[key], options: item.options.map((option: string) => ({ label: option, value: option })), "onUpdate:modelValue": (value: unknown) => { drafts[key] = value; } });
-      if (item.type === "checks") return h("div", { class: "checkbox-group" }, item.options.map((option: string) => h(AppCheckbox, { label: option, modelValue: Array.isArray(drafts[key]) && drafts[key].includes(option), "onUpdate:modelValue": (checked: boolean) => {
-        const current = Array.isArray(drafts[key]) ? [...drafts[key]] : [];
-        drafts[key] = checked ? [...new Set([...current, option])] : current.filter((value) => value !== option);
-      } })));
-      if (item.type === "json") return h("textarea", { class: "textarea form-control", value: JSON.stringify(drafts[key] || {}, null, 2), onInput: (event: Event) => { try { drafts[key] = JSON.parse((event.target as HTMLTextAreaElement).value || "{}"); } catch { drafts[key] = (event.target as HTMLTextAreaElement).value; } } });
-      return h("input", { class: "input form-control", value: drafts[key], onInput: update });
-    };
-  }
-});
 
 async function loadDashboard() {
   dashboard.value = (await run(() => api.get("/admin/dashboard", { activity_days: trendDays.value }))) || {};
@@ -1773,15 +1744,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", updateSidebarOverflow);
 });
 
-const MetricCard = defineComponent({
-  props: { icon: { type: Object, required: true }, label: { type: String, required: true }, value: { type: [String, Number], required: true }, trend: { type: String, default: "" }, tone: { type: String, default: "primary" }, danger: { type: Boolean, default: false } },
-  setup(p) {
-    return () => h("article", { class: ["metric-card", p.tone, p.danger ? "danger" : ""] }, [h("div", [h("span", { class: "metric-icon" }, [h(p.icon as any, { size: 20 })]), h("span", p.label)]), h("strong", String(p.value)), h("small", [h(TrendingUpIcon), p.trend])]);
-  }
-});
-const TrendingUpIcon = defineComponent(() => () => h("span", { class: "trend-dot" }));
-const EmptyState = defineComponent({ props: { text: { type: String, required: true } }, setup(p) { return () => h("div", { class: "empty" }, [h(Inbox, { size: 28 }), h("span", p.text)]); } });
-const InfoRow = defineComponent({ props: { label: { type: String, required: true }, value: { type: String, required: true } }, setup(p) { return () => h("div", { class: "info-row" }, [h("span", p.label), h("strong", p.value)]); } });
 </script>
 
 <style scoped src="../styles/admin-scoped.css"></style>
