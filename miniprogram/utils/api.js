@@ -141,8 +141,8 @@ module.exports = {
   patch: (path, data) => request(path, { method: 'PATCH', data }),
   put: (path, data) => request(path, { method: 'PUT', data }),
   del: (path) => request(path, { method: 'DELETE' }),
-  // AI 生成等长耗时请求：允许覆盖默认 30s 超时
-  postLong: (path, data, timeout) => request(path, { method: 'POST', data, timeout: timeout || 300000 }),
+  // AI 生成等长耗时请求：默认 300s 超时；query 与 post 对齐，供 /wrong-questions/practice 这类带查询参数的长调用使用
+  postLong: (path, data, query, timeout) => request(path, { method: 'POST', data, query, timeout: timeout || 300000 }),
   upload,
   buildUrl,
   mediaUrl,

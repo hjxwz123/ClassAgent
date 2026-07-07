@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # 记住登录为默认行为：30 天有效期；改密码/重置密码会提升 token_version 立即吊销旧 token
     access_token_expire_minutes: int = 60 * 24 * 30
     database_url: str = "mysql+pymysql://class_agent:class_agent_2026@127.0.0.1:3306/class_agent?charset=utf8mb4"
+    # 数据库连接池上限（仅 MySQL 生效，SQLite 用默认池）。worker 端每个在途出题任务会在整段大模型
+    # 调用期间占用一条连接，故并发出题时 db_pool_size + db_max_overflow 必须 >= Celery worker 并发度，
+    # 否则任务会排队等连接、达 pool_timeout 后报错。默认 10+20=30，覆盖默认并发 12 且留足 app 请求余量。
+    db_pool_size: int = Field(default=10, ge=1, le=500)
+    db_max_overflow: int = Field(default=20, ge=0, le=500)
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"

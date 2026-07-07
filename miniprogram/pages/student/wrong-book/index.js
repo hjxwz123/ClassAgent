@@ -127,10 +127,12 @@ Page({
   },
 
   async startPractice() {
+    if (this.data.generating) return;
     if (!(this._wrongs || []).length) return toast.info('本课程暂无错题');
     this.setData({ generating: true });
     try {
-      const quiz = await api.post('/learning/wrong-questions/practice', undefined, { course_id: this.data.courseId });
+      // 错题变式是同步 LLM 长调用：30s 默认超时会"客户端报错、服务端照常落卷"，重点一次就多一份重复卷。
+      const quiz = await api.postLong('/learning/wrong-questions/practice', undefined, { course_id: this.data.courseId });
       if (quiz && quiz.id) {
         toast.success('已生成重练');
         getApp().globalData.transfer.quiz = quiz;

@@ -233,7 +233,7 @@
                 <div><h2><Presentation :size="18" />课时列表</h2><small>{{ courseHome.quick_counts?.lesson_count || 0 }} 个课时 · 点击可进入脚本工作台</small></div>
                 <button class="btn btn-ghost btn-sm" :disabled="!currentCourseOperable" @click="go('teacherLessons')"><Presentation :size="14" />管理课时</button>
               </div>
-              <LessonRows :items="courseHome.lessons || []" :student-total="courseHome.quick_counts?.student_count || 0" :disabled="!currentCourseOperable" @open="openLessonScript" />
+              <LessonRows :items="courseHome.lessons || []" :student-total="courseHome.quick_counts?.student_count || 0" :chapters="courseHome.chapters || []" :disabled="!currentCourseOperable" @open="openLessonScript" />
               <button class="btn btn-primary btn-sm full home-card-action" :disabled="!currentCourseOperable" @click="go('teacherMaterials')"><Plus :size="14" />从资料生成课时</button>
             </article>
             <article class="panel-card material-overview-card">
@@ -307,7 +307,7 @@
           <div class="analysis-grid knowledge"><article class="panel-card"><div class="panel-head"><h2><Layers :size="18" />章节掌握</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="260" /></article><article class="panel-card weak-list"><div class="panel-head weak-head"><div><h2><TrendingDown :size="18" />薄弱知识点</h2><small>专项题生成与作答管理已移至薄弱题目页面</small></div><button class="btn btn-secondary btn-sm weak-create-all" @click="go('teacherWeakQuizzes')"><ClipboardList :size="14" />管理题目</button></div><TransitionGroup name="motion-list" tag="div" class="weak-row-list"><div v-for="(item, index) in analysis.weak_points || []" :key="item.knowledge_point" class="weak-row weak-row-readonly"><b>{{ rankNumber(index) }}</b><span>{{ item.knowledge_point }}</span><AppProgress :value="item.wrong_count" :max="weakMax" tone="danger" /><strong>{{ item.wrong_count }}</strong><em>错题数</em></div></TransitionGroup><EmptyState v-if="!(analysis.weak_points || []).length" text="暂无薄弱点" /></article></div>
           <article class="panel-card"><div class="panel-head"><h2><MessageCircle :size="18" />学生高频问题</h2><small>{{ analysisRange }}</small></div><div class="question-layout"><TransitionGroup name="cloud-list" tag="div" class="word-cloud"><span v-for="item in analysis.high_frequency_questions || []" :key="item.question" :style="{ fontSize: cloudSize(item.count) }">{{ item.question.slice(0, 12) }}</span></TransitionGroup><TransitionGroup name="motion-list" tag="div"><div v-for="(item, index) in analysis.high_frequency_questions || []" :key="item.question" class="question-row"><b>{{ rankPlain(index) }}</b><span>{{ item.question }}</span><strong>{{ item.count }}次</strong></div></TransitionGroup></div></article>
           <div class="analysis-grid three"><article class="panel-card"><div class="panel-head"><h2><ClipboardList :size="18" />成绩分布</h2></div><AdminChart type="bar" :labels="scoreLabels" :series="scoreSeries" :height="220" /></article><article class="panel-card"><div class="panel-head"><h2><CheckCircle :size="18" />测验完成</h2></div><AdminChart type="hbar" :labels="lessonAnalysisLabels" :series="lessonAnalysisSeries" :height="220" /></article><article class="panel-card"><div class="panel-head"><h2><XCircle :size="18" />错题分布</h2></div><AdminChart type="bar" :labels="weakLabels" :series="weakSeries" :height="220" /></article></div>
-          <article class="panel-card"><div class="panel-head"><h2><Users :size="18" />学生活跃度</h2><button class="btn btn-ghost btn-sm" :disabled="!filteredStudents.length" @click="batchRemind"><Bell :size="14" />批量提醒</button></div><div class="activity-layers"><LayerCard label="高度活跃" :value="analysis.student_layers?.high || 0" tone="success" /><LayerCard label="正常活跃" :value="analysis.student_layers?.normal || 0" /><LayerCard label="低活跃" :value="analysis.student_layers?.low || 0" tone="warning" /><LayerCard label="长期未活跃" :value="analysis.student_layers?.inactive || 0" tone="danger" /></div></article>
+          <article class="panel-card"><div class="panel-head"><h2><Users :size="18" />学生活跃度</h2><button class="btn btn-ghost btn-sm" :disabled="!filteredStudents.length" @click="batchRemind"><Bell :size="14" />批量提醒</button></div><div class="activity-layers"><LayerCard label="高度活跃" :value="analysis.student_layers?.high || 0" tone="success" :max="studentPayload.stats?.total || 1" /><LayerCard label="正常活跃" :value="analysis.student_layers?.normal || 0" :max="studentPayload.stats?.total || 1" /><LayerCard label="低活跃" :value="analysis.student_layers?.low || 0" tone="warning" :max="studentPayload.stats?.total || 1" /><LayerCard label="长期未活跃" :value="analysis.student_layers?.inactive || 0" tone="danger" :max="studentPayload.stats?.total || 1" /></div></article>
         </template>
       </section>
 
@@ -662,12 +662,12 @@
 </template>
 
 <script setup lang="ts">
-import { TransitionGroup, computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type PropType } from "vue";
+import { TransitionGroup, computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   Activity, AlertCircle, AlertTriangle, ArrowLeft, Ban, BarChart2, Bell, BookOpen, Camera, Check, CheckCircle,
   ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Database, Download, Edit2, Eye, File,
-  FileEdit, FileText, FolderOpen, GripVertical, Grid2X2, HelpCircle, Home, IdCard, Inbox, Layers, LayoutDashboard,
+  FileEdit, FileText, FolderOpen, GripVertical, Grid2X2, HelpCircle, Home, IdCard, Layers, LayoutDashboard,
   Lock, LogOut, Mail, Maximize, MessageCircle, Pencil, Plus, PlusCircle, Presentation, RefreshCw,
   Save, Search, Settings, Share2, SkipBack, SkipForward, Sparkles, Trash2, TrendingDown, Upload, User, UserPlus, UserX,
   Users, Volume2, Wand2, X, XCircle, ZoomIn
@@ -687,6 +687,8 @@ import PageLoader from "../components/PageLoader.vue";
 import PasswordField from "../components/PasswordField.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
 import AdminChart from "./admin/AdminChart.vue";
+import { firstChar, fileIcon, relativeTime, statusClass, statusText, typeText } from "./teacher/components/helpers";
+import { MetricCard, EmptyState, CourseRequired, QuickAction, TaskList, LessonRows, MaterialTypeList, ActivityList, ProgressList, ProgressBar, MaterialStatus, LayerCard, InfoRow } from "./teacher/components/primitives";
 
 const props = defineProps<{ user: UserType; pageKey?: string }>();
 const emit = defineEmits<{ logout: []; notice: [type: "success" | "warning" | "error" | "info", text: string]; authed: [user: UserType] }>();
@@ -2047,14 +2049,12 @@ async function saveProfile() { const data = await withAction<any>("save-profile"
 async function changePassword() { if (passwordForm.new_password !== passwordConfirm.value) return emit("notice", "warning", "密码不一致"); await withAction("change-password", async () => { const res = await run(() => api.post<{ access_token: string }>("/auth/me/password", passwordForm), "已保存"); if (res?.access_token) setToken(res.access_token); Object.assign(passwordForm, { old_password: "", new_password: "" }); passwordConfirm.value = ""; }); }
 async function saveNotice() { const data = await withAction<any[]>("save-notice", () => api.put("/teacher/profile/notifications", { settings: noticeSettings.map((item) => ({ key: item.key, enabled: item.enabled })) }), "已保存"); if (data) noticeSettings.splice(0, noticeSettings.length, ...data); }
 
-function firstChar(value?: string) { return (value || "-").slice(0, 1); }
 function shortName(value?: string) { return (value || "-").length > 12 ? `${(value || "").slice(0, 12)}...` : value || "-"; }
 function rankPlain(index: string | number) { return Number(index) + 1; }
 function rankNumber(index: string | number) { return String(rankPlain(index)).padStart(2, "0"); }
 function cloudSize(count: string | number) { return `${14 + Math.min(Number(count) || 0, 20)}px`; }
 function formatTime(value?: string | null) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
 function shortDate(value?: string | null) { return value ? new Date(value).toLocaleDateString("zh-CN") : "-"; }
-function relativeTime(value?: string | null) { if (!value) return "从未"; const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000)); if (seconds < 60) return "刚刚"; if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟前`; if (seconds < 86400) return `${Math.floor(seconds / 3600)}小时前`; return `${Math.floor(seconds / 86400)}天前`; }
 function isCourseOperable(course?: any | null) { return !!course && String(course.status || "active") === "active"; }
 function ensureCurrentCourseOperable() {
   if (!currentCourse.value) {
@@ -2067,8 +2067,6 @@ function ensureCurrentCourseOperable() {
   }
   return true;
 }
-function statusClass(status?: string) { if (["ready", "published", "active", "success"].includes(String(status))) return "tag-success"; if (["pending", "processing", "review"].includes(String(status))) return "tag-warning"; if (["failed", "inactive", "disabled"].includes(String(status))) return "tag-danger"; return ""; }
-function statusText(status?: string) { return { ready: "已解析", published: "已发布", active: "进行中", inactive: "已下架", pending: "待处理", processing: "处理中", failed: "失败", draft: "草稿", review: "待发布", closed: "已关闭" }[String(status)] || String(status || "-"); }
 function courseColor(id: number) { return `linear-gradient(135deg, ${palette[id % palette.length]}, #121614)`; }
 function courseCoverText(course?: any) {
   const text = String(course?.name || "课程名称").replace(/\s+/g, "");
@@ -2095,8 +2093,6 @@ function courseCoverPreviewStyle() {
 }
 function heatOpacity(count: number) { return String(Math.min(1, 0.15 + count / 20)); }
 function todoIcon(type: string) { return type === "error" ? AlertCircle : type === "lesson" ? Presentation : FileText; }
-function fileIcon(type: string) { if (type === "pptx") return Presentation; if (type === "pdf") return FileText; if (type === "docx") return FileEdit; return File; }
-function typeText(type: string) { return { pptx: "PPT", pdf: "PDF", docx: "Word", txt: "TXT/Markdown" }[type] || type; }
 function sizeLabel(size?: number) { const value = Number(size || 0); if (value < 1024) return `${value} B`; if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`; if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`; return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`; }
 function chapterName(id?: number | null) { return (courseHome.value.chapters || []).find((chapter: any) => chapter.id === id)?.title || "未分章"; }
 function isLongInactive(value?: string | null) { return !value || Date.now() - new Date(value).getTime() > 14 * 86400000; }
@@ -2134,39 +2130,6 @@ onBeforeUnmount(() => {
   resetCourseCoverSelection();
 });
 
-const MetricCard = defineComponent({ props: { icon: { type: Object, required: true }, label: { type: String, required: true }, value: { type: [String, Number], required: true }, sub: { type: String, default: "" }, tone: { type: String, default: "primary" }, danger: { type: Boolean, default: false } }, setup(p) { return () => h("article", { class: ["metric-card", p.tone, p.danger ? "danger" : ""] }, [h("div", [h("span", { class: "metric-icon" }, [h(p.icon as any, { size: 20 })]), h("span", p.label)]), h("strong", String(p.value)), h("small", p.sub)]); } });
-const EmptyState = defineComponent({ props: { text: { type: String, required: true }, success: { type: Boolean, default: false } }, setup(p, { slots }) { return () => h("div", { class: "empty" }, [p.success ? h(CheckCircle, { size: 30 }) : h(Inbox, { size: 30 }), h("span", p.text), slots.default?.()]); } });
-const CourseRequired = defineComponent(() => () => h("div", { class: "empty page-empty" }, [h(BookOpen, { size: 48 }), h("span", "请选择课程")]));
-const QuickAction = defineComponent({ props: { icon: { type: Object, required: true }, label: { type: String, required: true }, sub: { type: String, required: true } }, emits: ["click"], setup(p, { emit: update }) { return () => h("button", { class: "quick-action", onClick: () => update("click") }, [h(p.icon as any, { size: 22 }), h("strong", p.label), h("small", p.sub)]); } });
-const TaskList = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true } }, emits: ["retry"], setup(p, { emit: update }) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "task-list" }, { default: () => p.items.length ? p.items.map((item) => h("div", { key: item.id || item.title, class: "task-item" }, [h(item.status === "ready" ? CheckCircle : item.status === "failed" ? XCircle : item.status === "processing" ? RefreshCw : Clock, { size: 16, class: item.status }), h("span", item.title), h("small", statusText(item.status)), item.status === "failed" ? h("button", { class: "link-btn", onClick: () => update("retry", item) }, "重试") : null])) : [h(EmptyState, { key: "empty", text: "暂无任务" })] }); } });
-const LessonRows = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true }, studentTotal: { type: Number, required: true }, disabled: { type: Boolean, default: false } }, emits: ["open"], setup(p, { emit: update }) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "lesson-rows" }, { default: () => p.items.length ? p.items.slice(0, 6).map((item, index) => {
-  const progress = Math.round(Number(item.average_progress || 0));
-  const progressTone: "success" | "warning" | "danger" = progress >= 70 ? "success" : progress >= 30 ? "warning" : "danger";
-  return h("button", { key: item.id, class: "lesson-row", disabled: p.disabled, onClick: () => update("open", item) }, [
-    h("span", { class: "lesson-index" }, [h("b", String(index + 1).padStart(2, "0")), h("i")]),
-    h("span", { class: "lesson-body" }, [
-      h("span", { class: "lesson-title-line" }, [h("strong", item.title), h("span", { class: ["tag", statusClass(item.status)] }, statusText(item.status))]),
-      h("small", `${chapterName(item.chapter_id)} · ${item.page_count || 0} 页 · ${item.learned_count || 0}/${p.studentTotal} 人`),
-      h("span", { class: "lesson-progress-line" }, [h(AppProgress, { value: progress, compact: true, tone: progressTone }), h("em", `${progress}%`)])
-    ]),
-    h("span", { class: "lesson-open-label" }, [h(Wand2, { size: 14 }), h("span", "脚本")])
-  ]);
-}) : [h(EmptyState, { key: "empty", text: "暂无课时" })] }); } });
-const MaterialTypeList = defineComponent({ props: { stats: { type: Object as PropType<Record<string, number>>, required: true } }, setup(p) { return () => {
-  const rows = ["pptx", "pdf", "docx", "txt"].map((type) => ({ type, count: Number(p.stats[type] || 0) }));
-  const max = Math.max(1, ...rows.map((item) => item.count));
-  return h(TransitionGroup, { name: "motion-list", tag: "div", class: "type-list" }, { default: () => rows.map((item) => h("div", { key: item.type, class: ["type-row", item.type] }, [
-    h("span", { class: "type-icon" }, [h(fileIcon(item.type), { size: 16 })]),
-    h("span", { class: "type-body" }, [h("strong", typeText(item.type)), h(AppProgress, { value: item.count, max, compact: true, tone: item.count ? "primary" : "danger" })]),
-    h("b", `${item.count}份`)
-  ])) });
-}; } });
-const ActivityList = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true } }, setup(p) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "activity-list" }, { default: () => p.items.length ? p.items.map((item) => h("div", { key: item.id || `${item.tone}-${item.time}-${item.text}`, class: "activity-item" }, [h("i", { class: item.tone }), h("span", item.text), h("small", relativeTime(item.time))])) : [h(EmptyState, { key: "empty", text: "暂无活动" })] }); } });
-const ProgressList = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true } }, setup(p) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "progress-list" }, { default: () => p.items.length ? p.items.map((item) => h("div", { key: item.student.id, class: "student-progress-row" }, [h("span", { class: "avatar mini" }, firstChar(item.student.nickname)), h("strong", item.student.nickname), h(ProgressBar, { value: item.progress_percent }), h("small", `${item.progress_percent}%`)])) : [h(EmptyState, { key: "empty", text: "暂无学生" })] }); } });
-const ProgressBar = defineComponent({ props: { value: { type: Number, required: true } }, setup(p) { return () => h(AppProgress, { class: "progress-bar", value: p.value, tone: p.value < 30 ? "danger" : p.value < 70 ? "warning" : "success" }); } });
-const MaterialStatus = defineComponent({ props: { item: { type: Object, required: true } }, setup(p) { return () => h("small", { class: ["material-status", p.item.parse_status === "processing" ? "processing" : ""] }, p.item.parse_status === "ready" ? "脚本已生成 · 语音已合成 · 教学结构已就绪" : p.item.parse_status === "processing" ? "正在解析课件、生成脚本和教学结构，请稍候" : p.item.parse_status === "failed" ? "解析失败，可重新解析" : "待处理"); } });
-const LayerCard = defineComponent({ props: { label: { type: String, required: true }, value: { type: Number, required: true }, tone: { type: String, default: "primary" } }, setup(p) { return () => h("article", { class: ["layer-card", p.tone] }, [h("strong", p.label), h("span", `${p.value} 人`), h(AppProgress, { value: p.value, max: Math.max(1, studentPayload.value.stats?.total || 1), tone: p.tone as any })]); } });
-const InfoRow = defineComponent({ props: { label: { type: String, required: true }, value: { type: String, required: true } }, setup(p) { return () => h("div", { class: "info-row" }, [h("span", p.label), h("strong", p.value)]); } });
 </script>
 
 <style scoped src="../styles/teacher-scoped.css"></style>

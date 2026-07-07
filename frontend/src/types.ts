@@ -135,6 +135,7 @@ export type Quiz = {
   total_score: number;
   metadata_json?: Record<string, unknown> | null;
   published_at?: string | null;
+  question_count?: number;
   attempts?: Array<Record<string, any>>;
   latest_attempt?: Record<string, any> | null;
   attempt_count?: number;
