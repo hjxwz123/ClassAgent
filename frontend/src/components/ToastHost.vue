@@ -5,14 +5,16 @@
         v-for="item in items"
         :key="item.id"
         class="toast"
-        :class="[item.type, { paused: pausedIds.has(item.id) }]"
+        :class="[item.type, { paused: pausedIds.has(item.id), clickable: !!item.action }]"
         @mouseenter="pause(item.id)"
         @mouseleave="resume(item.id)"
+        @click="item.action ? activate(item) : undefined"
       >
         <component :is="iconMap[item.type]" :size="20" />
         <span>{{ item.text }}</span>
-        <button class="btn btn-ghost btn-xs" aria-label="关闭" @click="close(item.id)"><X :size="12" /></button>
-        <i class="toast-progress" :style="{ animationDuration: `${durationMs}ms` }"></i>
+        <button v-if="item.action" type="button" class="toast-action" @click.stop="activate(item)">{{ item.action.label }}</button>
+        <button class="btn btn-ghost btn-xs" aria-label="关闭" @click.stop="close(item.id)"><X :size="12" /></button>
+        <i class="toast-progress" :style="{ animationDuration: `${durationFor(item)}ms` }"></i>
       </div>
     </TransitionGroup>
   </div>
@@ -22,11 +24,15 @@
 import { onBeforeUnmount, reactive, watch } from "vue";
 import { AlertTriangle, CheckCircle, Info, X, XCircle } from "../icons";
 
-const props = defineProps<{ items: Array<{ id: number; type: "success" | "warning" | "error" | "info"; text: string }> }>();
+type ToastItem = { id: number; type: "success" | "warning" | "error" | "info"; text: string; action?: { label: string; onClick: () => void } };
+const props = defineProps<{ items: ToastItem[] }>();
 const emit = defineEmits<{ close: [id: number] }>();
 
 const iconMap = { success: CheckCircle, warning: AlertTriangle, error: XCircle, info: Info };
-const durationMs = 4000;
+const BASE_DURATION = 4000;
+const ACTION_DURATION = 8000; // 可点击 Toast 停留更久，给用户时间点击跳转
+function durationFor(item: ToastItem) { return item.action ? ACTION_DURATION : BASE_DURATION; }
+function durationById(id: number) { const item = props.items.find((entry) => entry.id === id); return item ? durationFor(item) : BASE_DURATION; }
 const timers = new Map<number, { timer: number; startedAt: number; remaining: number }>();
 const pausedIds = reactive(new Set<number>());
 
@@ -37,7 +43,11 @@ function close(id: number) {
   pausedIds.delete(id);
   emit("close", id);
 }
-function schedule(id: number, remaining = durationMs) {
+// 点击可交互 Toast：执行动作后立即关闭，避免重复触发
+function activate(item: ToastItem) {
+  try { item.action?.onClick(); } finally { close(item.id); }
+}
+function schedule(id: number, remaining = durationById(id)) {
   const record = timers.get(id);
   if (record) window.clearTimeout(record.timer);
   timers.set(id, {
@@ -57,7 +67,7 @@ function resume(id: number) {
   const record = timers.get(id);
   if (!record) return;
   pausedIds.delete(id);
-  schedule(id, record.remaining || durationMs);
+  schedule(id, record.remaining || durationById(id));
 }
 
 watch(
@@ -98,8 +108,7 @@ onBeforeUnmount(() => {
 .toast {
   position: relative;
   overflow: hidden;
-  display: grid;
-  grid-template-columns: 20px 1fr auto;
+  display: flex;
   align-items: center;
   gap: var(--space-3);
   background: var(--color-bg-surface);
@@ -110,6 +119,23 @@ onBeforeUnmount(() => {
   padding: var(--space-3);
   color: var(--color-text-body);
 }
+.toast > span { flex: 1 1 auto; min-width: 0; }
+.toast > svg:first-child { flex: 0 0 auto; }
+.toast.clickable { cursor: pointer; }
+.toast.clickable:hover { border-color: var(--color-border-strong, var(--color-border-default)); box-shadow: 0 12px 32px rgba(18, 22, 20, .16), 0 3px 8px rgba(18, 22, 20, .08); }
+.toast-action {
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--color-success-600, var(--color-success-500));
+  cursor: pointer;
+  white-space: nowrap;
+}
+.toast-action:hover { background: color-mix(in srgb, var(--color-success-500) 12%, transparent); }
 .toast > svg:first-child { color: var(--color-info-500); }
 .toast.success > svg:first-child { color: var(--color-success-500); }
 .toast.warning > svg:first-child { color: var(--color-warning-500); }

@@ -3,7 +3,10 @@
   <template v-else>
     <RouterView v-slot="{ Component, route }">
       <Transition :name="transitionName" :mode="transitionMode">
+        <!-- 鉴权路由必须等 session.user 就绪再挂载：token 失效时 store 会先把 user 置空再异步跳登录页，
+             这个空窗期若仍渲染角色视图会命中 user.nickname 之类的空指针崩溃 -->
         <component
+          v-if="!route.meta.requiresAuth || session.user"
           :is="Component"
           :key="String(route.meta.shellKey || route.path)"
           :user="session.user"
@@ -11,6 +14,7 @@
           @logout="logout"
           @notice="session.pushToast"
         />
+        <PageLoader v-else />
       </Transition>
     </RouterView>
     <ToastHost :items="session.toasts" @close="session.closeToast" />
