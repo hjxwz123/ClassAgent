@@ -83,8 +83,27 @@ Page({
 
   switchTab(e) { this.setData({ tab: e.currentTarget.dataset.tab }); },
 
-  openQuiz(e) {
+  async openQuiz(e) {
     const id = e.currentTarget.dataset.id;
+    const quiz = this.data.quizzes.find((item) => item.id === id);
+    // 后端一卷只允许一次作答："再次作答"必须先克隆新卷，否则答完整卷交卷才被 400 拒绝、作答全丢。
+    if (quiz && quiz.attempted) {
+      if (this.data.retaking) return;
+      this.setData({ retaking: true });
+      try {
+        const clone = await api.post('/learning/quizzes/' + id + '/retake', { mode: 'full' });
+        if (clone && clone.id) {
+          wx.navigateTo({ url: '/subpackages/student-learning/quiz-answer/index?quizId=' + clone.id });
+        } else {
+          toast.error('创建重做练习失败，请稍后重试');
+        }
+      } catch (err) {
+        toast.error(err.message);
+      } finally {
+        this.setData({ retaking: false });
+      }
+      return;
+    }
     wx.navigateTo({ url: '/subpackages/student-learning/quiz-answer/index?quizId=' + id });
   },
   viewResult(e) {
@@ -115,7 +134,8 @@ Page({
         title: '章节练习',
         quiz_type: 'practice',
         question_count: this.data.count,
-        prefer_weak: this.data.preferWeak
+        // 后端字段名是 prefer_weak_points；旧名 prefer_weak 会被 pydantic 静默忽略，开关等于摆设。
+        prefer_weak_points: this.data.preferWeak
       });
       if (quiz && quiz.id) {
         toast.success('练习已生成');

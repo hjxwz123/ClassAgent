@@ -2281,7 +2281,11 @@ class AIService:
         knowledge_point_names: Sequence[str] | None = None,
         misconception_text: str | None = None,
         avoid_stems: Sequence[str] | None = None,
+        practice_fast: bool = False,
     ) -> list[dict]:
+        # practice_fast：学生自助练习提速档。默认 False 保持教师/课程测验与旧调用方的完整质量流程不变。
+        # 开启后为练习路径把"最坏 3 次串行大模型调用(主生成+critic自评+定向重试)"降到常见 1 次：
+        # 降低超采样、跳过 critic 这次额外 LLM 调用、题量够就不再为"应用题占比偏低"追加一次重试。
         clean_source = sanitize_quiz_source_text(source_text)
         if not clean_source.strip():
             raise bad_request("课程资料或知识点清洗后没有足够文本，无法调用 AI 出题")
@@ -2294,7 +2298,11 @@ class AIService:
         if normalized_type_counts and sum(normalized_type_counts.values()) != count:
             raise bad_request("题型数量合计必须等于总题量")
         # 超采样上限 20→40：count 大时旧上限使冗余归零，质量筛选(排序/critic 淘汰)完全失效
-        candidate_count = min(40, max(count + 6, math.ceil(count * 1.8)))
+        # 练习提速档降到 1.5×（仍保留 count+6 冗余供筛选），减少主生成输出 token（生成耗时≈输出长度）。
+        if practice_fast:
+            candidate_count = min(30, max(count + 6, math.ceil(count * 1.5)))
+        else:
+            candidate_count = min(40, max(count + 6, math.ceil(count * 1.8)))
         # 每题预算 340→620 token：情境化题干+逐项解析写不进 325 token，预算与风格要求打架
         completion_limit = max(3600, min(12000, 620 * max(candidate_count, 1) + 2200))
         type_instruction = (
@@ -2405,7 +2413,10 @@ class AIService:
         )
         # 生成后质量自评(critic)：正则测不出"答案有争议/多选项皆可/干扰项无迷惑性"，
         # 让模型以审题人身份复核一遍并剔除不合格候选；失败时静默降级不影响出题。
-        normalized = self._critique_quiz_candidates(normalized, topic=topic, db=db)
+        # 练习提速档跳过 critic 这次必触发的额外 LLM 调用（每次生成候选>3 都会跑，是首要提速点）；
+        # 词法混合度筛选(_prioritize_quiz_question_mix)与应用题占比门槛仍在，教师/课程测验保留 critic。
+        if not practice_fast:
+            normalized = self._critique_quiz_candidates(normalized, topic=topic, db=db)
         normalized = _prioritize_quiz_question_mix(normalized)
         difficulty_targets = _quiz_difficulty_targets(count, difficulty)
 
@@ -2414,17 +2425,26 @@ class AIService:
                 return 0.0
             return sum(1 for item in items if _quiz_application_score(item) > 0) / len(items)
 
+        # 练习提速档放宽应用题占比门槛 0.4→0.3，让"题量已够"的练习卷更容易直接返回、少触发第 3 次调用。
+        app_floor = 0.3 if practice_fast else 0.4
         missing_by_type: dict[str, int] = {}
         if normalized_type_counts:
             selected, missing_by_type = _select_quiz_questions_by_type_counts(normalized, normalized_type_counts)
-            if not missing_by_type and _application_share(selected[:count]) >= 0.4:
+            if not missing_by_type and _application_share(selected[:count]) >= app_floor:
                 return selected[:count]
-        elif len(normalized) >= count and _application_share(normalized[:count]) >= 0.4:
+        elif len(normalized) >= count and _application_share(normalized[:count]) >= app_floor:
             return _select_quiz_questions_by_difficulty(normalized, count=count, targets=difficulty_targets)
 
-        # 数量/题型不足，或应用题占比 < 40%（防"一卷概念题"静默通过）→ 定向重试一次
+        # 数量/题型不足，或应用题占比 < 门槛（防"一卷概念题"静默通过）→ 定向重试一次
         missing = sum(missing_by_type.values()) if normalized_type_counts else max(count - len(normalized), 0)
-        low_quality = _application_share(normalized[:count]) < 0.4
+        low_quality = _application_share(normalized[:count]) < app_floor
+        # 练习提速档：题量/题型已够就直接返回，不再仅因"应用题占比偏低"追加一次生成（第 3 次 LLM 调用）——
+        # 把练习常见路径从 3 次调用降到 1 次；仅在题量/题型确实不足时才进入下方重试。
+        if practice_fast and missing <= 0:
+            if normalized_type_counts:
+                selected, _ = _select_quiz_questions_by_type_counts(normalized, normalized_type_counts)
+                return selected[:count]
+            return _select_quiz_questions_by_difficulty(normalized, count=count, targets=difficulty_targets)
         retry_count = min(24, max(missing + 4, math.ceil(max(missing, 2) * 2.4)))
         retry_content = self._call_chat(
             db,
@@ -2746,6 +2766,26 @@ class AIService:
             f"建议优先回讲 {weak}，并针对 {inactive_students} 名低活跃学生安排提醒或补学任务。"
         )
 
+    def student_recommendation_fallback(
+        self,
+        *,
+        pending_tasks: int,
+        weak_points: Sequence[str],
+        recent_lesson_title: str | None,
+    ) -> str:
+        """不依赖大模型的确定性今日建议。
+
+        用于两处：学生首屏在缓存未命中时即时返回（避免同步等待大模型），以及大模型
+        不可用/超时时兜底。仅依赖已在内存中的统计量，无任何网络调用。"""
+        weak = list(weak_points[:3])
+        if pending_tasks > 0:
+            return f"今天先完成 {pending_tasks} 个学习任务，再用 10 分钟复盘最近课时。"
+        if weak:
+            return f"建议今天优先复盘 {weak[0]}，并完成 3 到 5 道相关练习。"
+        if recent_lesson_title:
+            return f"建议从《{recent_lesson_title}》继续学习，并在课后整理 3 个关键概念。"
+        return "建议选择一门课程完成一个课时，并用练习检查掌握情况。"
+
     def generate_student_recommendation(
         self,
         *,
@@ -2772,13 +2812,11 @@ class AIService:
         )
         if result:
             return result.strip()
-        if pending_tasks > 0:
-            return f"今天先完成 {pending_tasks} 个学习任务，再用 10 分钟复盘最近课时。"
-        if weak:
-            return f"建议今天优先复盘 {weak[0]}，并完成 3 到 5 道相关练习。"
-        if recent_lesson_title:
-            return f"建议从《{recent_lesson_title}》继续学习，并在课后整理 3 个关键概念。"
-        return "建议选择一门课程完成一个课时，并用练习检查掌握情况。"
+        return self.student_recommendation_fallback(
+            pending_tasks=pending_tasks,
+            weak_points=weak_points,
+            recent_lesson_title=recent_lesson_title,
+        )
 
 
 ai_service = AIService()

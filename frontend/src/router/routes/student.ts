@@ -9,6 +9,14 @@ const StudentView = defineAsyncComponent({
   suspensible: false
 });
 
+// 做题为独立全屏路由，不复用 StudentView 外壳（做题应无干扰全屏）。
+const StudentQuizAnswer = defineAsyncComponent({
+  loader: () => import("../../views/student/StudentQuizAnswer.vue"),
+  loadingComponent: PageLoader,
+  delay: 0,
+  suspensible: false
+});
+
 const studentRoute = (path: string, pageKey: string): RouteRecordRaw => ({
   path,
   component: StudentView,
@@ -28,6 +36,11 @@ export const studentRoutes: RouteRecordRaw[] = [
   studentRoute("/qa", "studentQa"),
   studentRoute("/tutoring", "studentTutoring"),
   studentRoute("/knowledge", "studentKnowledge"),
+  {
+    path: "/quizzes/:quizId/answer",
+    component: StudentQuizAnswer,
+    meta: { requiresAuth: true, roles: ["student"] }
+  },
   studentRoute("/quizzes", "studentQuizzes"),
   studentRoute("/wrong-book", "studentWrongBook"),
   studentRoute("/learning", "studentQuizzes"),

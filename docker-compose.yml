@@ -9,6 +9,8 @@ services:
       APP_ENV: production
       SECRET_KEY: "${CLASSAGENT_SECRET_KEY:?set CLASSAGENT_SECRET_KEY}"
       DATABASE_URL: "mysql+pymysql://${CLASSAGENT_MYSQL_USER:-class_agent}:${CLASSAGENT_MYSQL_PASSWORD:?set CLASSAGENT_MYSQL_PASSWORD}@mysql:3306/${CLASSAGENT_MYSQL_DATABASE:-class_agent}?charset=utf8mb4"
+      DB_POOL_SIZE: "${CLASSAGENT_DB_POOL_SIZE:-10}"
+      DB_MAX_OVERFLOW: "${CLASSAGENT_DB_MAX_OVERFLOW:-20}"
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
@@ -52,11 +54,15 @@ services:
     image: ${CLASSAGENT_IMAGE:-ghcr.io/hjxwz123/classagent:latest}
     container_name: classagent-worker
     restart: unless-stopped
-    command: ["celery", "-A", "app.tasks.celery_app.celery_app", "worker", "--loglevel=info"]
+    # 出题/材料等任务是大模型/外部 API 的 I/O 等待型（读期间释放 GIL），用线程池即可在单进程内
+    # 承载远多于 CPU 核数的在途任务。并发度需 <= DB_POOL_SIZE + DB_MAX_OVERFLOW（默认 30）。
+    command: ["celery", "-A", "app.tasks.celery_app.celery_app", "worker", "--loglevel=info", "--pool=threads", "--concurrency=${CLASSAGENT_CELERY_CONCURRENCY:-12}"]
     environment:
       APP_ENV: production
       SECRET_KEY: "${CLASSAGENT_SECRET_KEY:?set CLASSAGENT_SECRET_KEY}"
       DATABASE_URL: "mysql+pymysql://${CLASSAGENT_MYSQL_USER:-class_agent}:${CLASSAGENT_MYSQL_PASSWORD:?set CLASSAGENT_MYSQL_PASSWORD}@mysql:3306/${CLASSAGENT_MYSQL_DATABASE:-class_agent}?charset=utf8mb4"
+      DB_POOL_SIZE: "${CLASSAGENT_DB_POOL_SIZE:-10}"
+      DB_MAX_OVERFLOW: "${CLASSAGENT_DB_MAX_OVERFLOW:-20}"
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2

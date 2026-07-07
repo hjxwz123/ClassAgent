@@ -347,6 +347,8 @@ class QuizAttempt(TimestampMixin, Base):
     accuracy: Mapped[float] = mapped_column(Float, default=0)
     ai_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 前端交卷时上报的真实作答用时（秒）；历史数据为 NULL，展示层需回退到"提交时间"。
+    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class QuizAnswer(TimestampMixin, Base):
@@ -375,10 +377,15 @@ class WrongQuestion(TimestampMixin, Base):
     knowledge_point_id: Mapped[int | None] = mapped_column(ForeignKey("knowledge_points.id"), nullable=True, index=True)
     wrong_count: Mapped[int] = mapped_column(Integer, default=1)
     last_attempt_id: Mapped[int | None] = mapped_column(ForeignKey("quiz_attempts.id"), nullable=True)
+    # 掌握状态机：连续答对次数。答错清零；连对 2 次才置 is_resolved（1 次为"巩固中"）。
+    correct_streak: Mapped[int] = mapped_column(Integer, default=0)
     is_resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_wrong_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_correct_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 艾宾浩斯遗忘曲线：下次应复习时间。答错/新错题排到次日；每答对一次按 [1,2,4,7,15,30] 天推进；
+    # 走完整条曲线（correct_streak 达间隔条数）才判"已掌握"并置空（不再复习）。
+    next_review_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class StudyPlan(TimestampMixin, Base):
