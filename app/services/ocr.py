@@ -90,15 +90,18 @@ class OCRService:
             raise bad_request("OCR 未识别到文本")
         return text
 
-    def recognize(self, upload: UploadFile, db: Session | None = None) -> str:
+    def recognize_bytes(self, content: bytes, db: Session | None = None) -> str:
         service = get_enabled_service_config(db, "ocr")
         if service is None:
             raise bad_request("OCR 服务未配置，请先在管理员服务配置中启用 ocr")
-        content = upload.file.read()
-        upload.file.seek(0)
         if service.provider == "aliyun":
             return self._recognize_aliyun(content, service.config)
         raise bad_request(f"暂不支持的 OCR 服务提供方: {service.provider}")
+
+    def recognize(self, upload: UploadFile, db: Session | None = None) -> str:
+        content = upload.file.read()
+        upload.file.seek(0)
+        return self.recognize_bytes(content, db=db)
 
 
 ocr_service = OCRService()
