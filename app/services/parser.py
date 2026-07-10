@@ -39,7 +39,7 @@ DEFAULT_LAYOUT_STEP_SIZE = 100
 DEFAULT_DOC_PARSER_TIMEOUT_SECONDS = 7200
 MAX_DOC_PARSER_TIMEOUT_SECONDS = 7200
 DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS = 10
-SUPPORTED_MATERIAL_TYPES = {MaterialType.PPTX.value, MaterialType.PDF.value, MaterialType.DOCX.value, MaterialType.TXT.value}
+SUPPORTED_MATERIAL_TYPES = {MaterialType.PPTX.value, MaterialType.PDF.value, MaterialType.DOCX.value, MaterialType.TXT.value, MaterialType.IMAGE.value}
 MARKDOWN_IMAGE_URL_PATTERN = re.compile(
     r"!\[(?P<alt>[^\]]*)]\(\s*(?:<(?P<angle>[^>]+)>|(?P<plain>[^)\s]+))(?:\s+['\"][^'\"]*['\"])?\s*\)"
 )
@@ -279,6 +279,18 @@ def _pages_from_markdown(content: str) -> list[dict]:
     if tail:
         pages.append(_normalize_page(_markdown_title(tail, f"第{len(pages) + 1}页"), tail, len(pages) + 1))
     return pages
+
+
+def _parse_image(path: Path, db: Session | None) -> list[dict]:
+    # 修复 DEF-02：图片课程资料经 OCR 识别为文本，生成单页课时内容；OCR 未配置或未识别到文本时
+    # 抛出可理解的错误，由上层将资料标记为 failed（诚实降级，不产出空课时）。
+    from app.services.ocr import ocr_service
+
+    content = path.read_bytes()
+    text = (ocr_service.recognize_bytes(content, db=db) or "").strip()
+    if not text:
+        raise bad_request("图片资料未识别到文本，请上传更清晰的图片")
+    return [_normalize_page(_markdown_title(text, "图片资料"), text, 1)]
 
 
 def _parse_local_fallback(path: Path, material_type: str) -> list[dict]:
@@ -1063,6 +1075,9 @@ class DocParserService:
     ) -> list[dict]:
         if material_type not in SUPPORTED_MATERIAL_TYPES:
             raise bad_request("暂不支持该资料类型解析")
+        # 修复 DEF-02：图片资料不走 DocMind，改由 OCR 抽取文本生成课时页。
+        if material_type == MaterialType.IMAGE.value:
+            return _parse_image(path, db)
         service = get_enabled_service_config(db, SERVICE_TYPE)
         if service is None:
             if self.settings.app_env != "production":

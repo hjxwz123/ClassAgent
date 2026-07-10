@@ -48,8 +48,11 @@ def _get_course_or_404(db: Session, course_id: int) -> Course:
 
 def _assert_course_available_for_student(db: Session, course_id: int) -> Course:
     course = _get_course_or_404(db, course_id)
-    if course.status != CourseStatus.ACTIVE.value:
-        raise forbidden("课程已下架，暂时无法访问")
+    # 修复 DEF-03：本函数的调用方（课时/问答/辅导）均已先校验学生成员关系；下架(inactive)仅“停止招新”
+    # （加入由 join_course 单独拦截），已加入学生仍应能继续学习/提问（与 UC-03 及“老学生可见课程”一致）。
+    # 仅对已归档(archived)课程阻断成员访问。
+    if course.status == CourseStatus.ARCHIVED.value:
+        raise forbidden("课程已归档，暂时无法访问")
     return course
 
 
@@ -242,6 +245,9 @@ def list_joined_courses(db: Session, user: User) -> list[Course]:
 
 def join_course(db: Session, user: User, course_code: str) -> Course:
     _ensure_student(user)
+    # 修复 DEF-01：课程码统一归一化为大写（生成时即大写），与 preview_course_by_code 口径一致，
+    # 避免“可预览却加不进”的大小写不一致问题。
+    course_code = (course_code or "").strip().upper()
     course = db.scalar(select(Course).where(Course.course_code == course_code, Course.deleted_at.is_(None)))
     if course is None or course.status != CourseStatus.ACTIVE.value:
         raise not_found("课程不存在或已停用")
