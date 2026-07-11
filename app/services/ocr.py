@@ -81,7 +81,13 @@ class OCRService:
             connect_timeout=int(self.settings.external_service_timeout_seconds * 1000),
             read_timeout=int(self.settings.external_service_timeout_seconds * 1000),
         )
-        response = client.recognize_general_with_options(request, runtime)
+        try:
+            response = client.recognize_general_with_options(request, runtime)
+        except Exception as exc:
+            # SDK 对"图片无文字/凭据无效/配额超限/网络失败"等一律抛 TeaException 之类异常，
+            # 不捕获会以 500 暴露给调用方；统一转为带真实原因的 400 业务错误
+            message = getattr(exc, "message", None) or str(exc)
+            raise bad_request(f"OCR 识别失败：{str(message)[:180]}") from exc
         body = response.body.to_map() if response.body else {}
         if body.get("Code") and str(body["Code"]).lower() not in {"ok", "success"}:
             raise bad_request(f"OCR 识别失败: {body.get('Message') or body.get('Code')}")
