@@ -1658,14 +1658,27 @@ function clearMaterialRefreshTimers() {
 }
 function scheduleMaterialRefreshes() {
   clearMaterialRefreshTimers();
-  [3500, 12000, 30000].forEach((delay) => {
-    const timer = window.setTimeout(async () => {
-      if (!currentCourse.value) return;
-      await loadMaterials();
-      await loadCourseHome();
-    }, delay);
-    materialRefreshTimers.push(timer);
-  });
+  // 持续退避轮询直到没有 processing/pending 的资料（或 15 分钟上限）。
+  // 原来只固定刷 3 次（3.5s/12s/30s），而完整流水线（解析→讲稿→TTS→向量→教学产物）常见 2-5 分钟，
+  // 第三次刷新后状态就永远停在 processing，除非用户手动刷新页面。
+  const startedAt = Date.now();
+  const maxDurationMs = 15 * 60 * 1000;
+  const nextDelay = (elapsedMs: number) => (elapsedMs < 30000 ? 3500 : elapsedMs < 120000 ? 8000 : 15000);
+  const poll = async () => {
+    if (!currentCourse.value) return;
+    await loadMaterials();
+    await loadCourseHome();
+    const stillProcessing = materials.value.some(
+      (item) => ["processing", "pending"].includes(String(item.parse_status)) || String(item.vector_status) === "processing",
+    );
+    const elapsed = Date.now() - startedAt;
+    if (stillProcessing && elapsed < maxDurationMs) {
+      const timer = window.setTimeout(poll, nextDelay(elapsed));
+      materialRefreshTimers.push(timer);
+    }
+  };
+  const timer = window.setTimeout(poll, 3500);
+  materialRefreshTimers.push(timer);
 }
 function closeUploadModal() {
   if (isPending("upload-materials")) return;

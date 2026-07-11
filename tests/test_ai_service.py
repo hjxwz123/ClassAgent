@@ -190,6 +190,60 @@ def test_build_rerank_request_custom_appends_rerank_path():
     assert payload == {"model": "bge-reranker-v2-m3", "query": "q", "documents": ["a", "b"], "top_n": 1, "return_documents": False}
 
 
+def test_build_rerank_request_qwen3_honors_workspace_domain():
+    """百炼业务空间独立域名（{WorkspaceId}.<region>.maas.aliyuncs.com）不应被强制打回经典 dashscope 域名。"""
+    from app.services.ai import build_rerank_request
+
+    ws = "https://ws-abc123.cn-beijing.maas.aliyuncs.com"
+    # qwen3-rerank：从配置的 compatible-mode base（同 host）推导兼容版 reranks
+    url, payload = build_rerank_request(
+        provider="qwen",
+        endpoint=f"{ws}/compatible-mode/v1",
+        model_name="qwen3-rerank",
+        query="q",
+        documents=["a", "b"],
+        top_n=2,
+    )
+    assert url == f"{ws}/compatible-api/v1/reranks"
+    assert sorted(payload) == ["documents", "instruct", "model", "query", "top_n"]
+
+    # 直接配完整 reranks URL 也原样沿用
+    url2, _ = build_rerank_request(
+        provider="qwen",
+        endpoint=f"{ws}/compatible-api/v1/reranks",
+        model_name="qwen3-rerank",
+        query="q",
+        documents=["a", "b"],
+        top_n=2,
+    )
+    assert url2 == f"{ws}/compatible-api/v1/reranks"
+
+    # 其它 qwen 重排（gte-rerank-v2 等）走 DashScope 文本重排协议，同样按 host 推导
+    url3, _ = build_rerank_request(
+        provider="qwen",
+        endpoint=f"{ws}/compatible-mode/v1",
+        model_name="gte-rerank-v2",
+        query="q",
+        documents=["a", "b"],
+        top_n=2,
+    )
+    assert url3 == f"{ws}/api/v1/services/rerank/text-rerank/text-rerank"
+
+
+def test_build_rerank_request_qwen3_empty_endpoint_falls_back_to_classic():
+    from app.services.ai import RERANK_DASHSCOPE_COMPAT_ENDPOINT, build_rerank_request
+
+    url, _ = build_rerank_request(
+        provider="qwen",
+        endpoint="",
+        model_name="qwen3-rerank",
+        query="q",
+        documents=["a", "b"],
+        top_n=2,
+    )
+    assert url == RERANK_DASHSCOPE_COMPAT_ENDPOINT
+
+
 def test_parse_rerank_results_supports_dashscope_and_standard():
     from app.services.ai import parse_rerank_results
 

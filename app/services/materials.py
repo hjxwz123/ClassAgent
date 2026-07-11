@@ -514,6 +514,44 @@ def get_material_detail(db: Session, material_id: int, user: User) -> tuple[Cour
     return material, lesson, pages
 
 
+def get_material_status(db: Session, material_id: int, user: User) -> dict[str, Any]:
+    """轻量处理状态：供前端/自动化持续轮询，不携带页面全文（详情接口 50KB+ 不适合轮询）。
+
+    parse_status 语义是"整条流水线状态"（解析→摘要→讲稿→TTS→向量→教学产物，最后才 ready）；
+    课时在 TTS 完成后即 ready 可用，故单独给出 lesson_status/page_count 供"课时可用"级别的判断，
+    并透出流水线任务的 stage/progress，让调用方能直接看到当前卡在哪一步。
+    """
+    material = db.get(CourseMaterial, material_id)
+    if material is None or material.deleted_at is not None:
+        raise not_found("资料不存在")
+    _assert_material_access(db, material, user)
+    lesson = db.scalar(
+        select(Lesson).where(Lesson.material_id == material.id).order_by(Lesson.id.desc()).limit(1)
+    )
+    first_page_id = (
+        db.scalar(
+            select(LessonPage.id).where(LessonPage.lesson_id == lesson.id).order_by(LessonPage.page_number).limit(1)
+        )
+        if lesson is not None
+        else None
+    )
+    task = db.scalar(_material_process_task_statement(material_id=material_id).order_by(AsyncTaskLog.id.desc()).limit(1))
+    detail = _task_detail(task) if task is not None else {}
+    return {
+        "material_id": material.id,
+        "parse_status": material.parse_status,
+        "vector_status": material.vector_status,
+        "lesson_id": lesson.id if lesson else None,
+        "lesson_status": lesson.status if lesson else None,
+        "page_count": lesson.page_count if lesson else 0,
+        "first_page_id": first_page_id,
+        "task_status": task.status if task else None,
+        "pipeline": detail.get("pipeline"),
+        "queue": detail.get("queue"),
+        "task_updated_at": task.updated_at if task else None,
+    }
+
+
 def get_material_for_preview(db: Session, *, material_id: int, user: User) -> CourseMaterial:
     material = db.get(CourseMaterial, material_id)
     if material is None or material.deleted_at is not None:
