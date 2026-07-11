@@ -578,7 +578,14 @@ def enqueue_quiz_generation(db: Session, *, user: User, payload: QuizGenerateReq
     db.add(task)
     db.commit()
     db.refresh(task)
-    if not _dispatch_quiz_generation(task.id):
+    dispatched = _dispatch_quiz_generation(task.id)
+    # CELERY_TASK_ALWAYS_EAGER=true 时，上面这行会用另一个独立 SessionLocal() 同步跑完整个任务并 commit；
+    # 但当前 db 的事务快照早在上面 refresh() 时就已固定（MySQL REPEATABLE-READ），必须先结束当前事务
+    # （即使没有本地变更也要 commit 一次）才能让后续查询看到那个独立 session 已提交的最新状态——
+    # 否则无论 refresh 多少次都会一直读到过期的 pending/processing 快照，且下面 _mark_quiz_task_dispatch_failed
+    # 会误判"仍在 pending/processing"而用语焉不详的 dispatch_failed 覆盖掉已经写好的真实失败原因。
+    db.commit()
+    if not dispatched:
         _mark_quiz_task_dispatch_failed(db, task)
     db.refresh(task)
     return task
@@ -1244,7 +1251,14 @@ def enqueue_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGener
     db.add(task)
     db.commit()
     db.refresh(task)
-    if not _dispatch_quiz_generation(task.id):
+    dispatched = _dispatch_quiz_generation(task.id)
+    # CELERY_TASK_ALWAYS_EAGER=true 时，上面这行会用另一个独立 SessionLocal() 同步跑完整个任务并 commit；
+    # 但当前 db 的事务快照早在上面 refresh() 时就已固定（MySQL REPEATABLE-READ），必须先结束当前事务
+    # （即使没有本地变更也要 commit 一次）才能让后续查询看到那个独立 session 已提交的最新状态——
+    # 否则无论 refresh 多少次都会一直读到过期的 pending/processing 快照，且下面 _mark_quiz_task_dispatch_failed
+    # 会误判"仍在 pending/processing"而用语焉不详的 dispatch_failed 覆盖掉已经写好的真实失败原因。
+    db.commit()
+    if not dispatched:
         _mark_quiz_task_dispatch_failed(db, task)
     db.refresh(task)
     return task
@@ -2097,7 +2111,14 @@ def enqueue_wrong_book_practice(db: Session, *, course_id: int, user: User, wron
     db.add(task)
     db.commit()
     db.refresh(task)
-    if not _dispatch_quiz_generation(task.id):
+    dispatched = _dispatch_quiz_generation(task.id)
+    # CELERY_TASK_ALWAYS_EAGER=true 时，上面这行会用另一个独立 SessionLocal() 同步跑完整个任务并 commit；
+    # 但当前 db 的事务快照早在上面 refresh() 时就已固定（MySQL REPEATABLE-READ），必须先结束当前事务
+    # （即使没有本地变更也要 commit 一次）才能让后续查询看到那个独立 session 已提交的最新状态——
+    # 否则无论 refresh 多少次都会一直读到过期的 pending/processing 快照，且下面 _mark_quiz_task_dispatch_failed
+    # 会误判"仍在 pending/processing"而用语焉不详的 dispatch_failed 覆盖掉已经写好的真实失败原因。
+    db.commit()
+    if not dispatched:
         _mark_quiz_task_dispatch_failed(db, task)
     db.refresh(task)
     return task
