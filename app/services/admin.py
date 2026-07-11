@@ -1934,8 +1934,11 @@ def restore_backup(db: Session, *, backup_id: int, actor_id: int | None = None) 
     temp_root = Path(tempfile.mkdtemp(prefix=f"restore_{record.id}_", dir=BACKUP_DIR))
     try:
         if backup_path.suffix == ".zip":
-            with zipfile.ZipFile(backup_path) as archive:
-                archive.extractall(temp_root)
+            try:
+                with zipfile.ZipFile(backup_path) as archive:
+                    archive.extractall(temp_root)
+            except zipfile.BadZipFile as exc:
+                raise bad_request("备份文件损坏，不是有效的 zip 包") from exc
             sqlite_backup = temp_root / "database.db"
             mysql_backup = temp_root / "database.sql"
             vector_backup = temp_root / "vectors"
@@ -1945,10 +1948,19 @@ def restore_backup(db: Session, *, backup_id: int, actor_id: int | None = None) 
                 with mysql_backup.open("rb") as input_file:
                     command, defaults_file = _mysql_command(bind_url, "mysql")
                     try:
-                        subprocess.run(command, stdin=input_file, check=True, timeout=300)
+                        # 恢复是外部命令执行，失败原因（权限/DEFINER/连接/客户端缺失）必须透出，
+                        # 不能让 CalledProcessError 等裸异常以无信息的 500 暴露
+                        result = subprocess.run(command, stdin=input_file, capture_output=True, timeout=300)
+                    except FileNotFoundError as exc:
+                        raise AppError(500, "服务器未安装 mysql 客户端，无法执行数据库恢复") from exc
+                    except subprocess.TimeoutExpired as exc:
+                        raise AppError(500, "数据库恢复执行超时（300 秒），请检查备份大小与数据库负载") from exc
                     finally:
                         if defaults_file is not None:
                             defaults_file.unlink(missing_ok=True)
+                    if result.returncode != 0:
+                        stderr_tail = (result.stderr or b"").decode("utf-8", errors="replace").strip()[-300:]
+                        raise AppError(500, f"数据库恢复命令执行失败：{stderr_tail or f'exit={result.returncode}'}")
             else:
                 raise bad_request("备份文件与当前数据库类型不匹配")
             if vector_store.provider == "chroma" and vector_backup.exists():
