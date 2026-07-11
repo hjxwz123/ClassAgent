@@ -10,6 +10,7 @@ from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 from hashlib import blake2b
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from sqlalchemy.orm import Session
@@ -903,6 +904,31 @@ RERANK_DASHSCOPE_COMPAT_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-ap
 RERANK_DEFAULT_INSTRUCT = "Given a web search query, retrieve relevant passages that answer the query."
 
 
+def _qwen_rerank_url(endpoint: str | None, *, compat: bool) -> str:
+    """按管理端配置 endpoint 的 scheme+host 推导 qwen 重排 URL。
+
+    百炼「业务空间独立域名」（https://{WorkspaceId}.<region>.maas.aliyuncs.com/...）与经典
+    dashscope 域名的重排子路径相同，只是主机不同；因此从配置 endpoint 取 origin 拼子路径，
+    而非硬编码 dashscope.aliyuncs.com——否则配了 WorkspaceId 域名的用户会被强制打到经典域名、
+    落在错误的业务空间/账号上（新模型 text-embedding-v4 / qwen3-rerank 常只在业务空间域名开放）。
+
+    compat=True  -> OpenAI 兼容版 reranks:  {origin}/compatible-api/v1/reranks
+    compat=False -> DashScope 文本重排:      {origin}/api/v1/services/rerank/text-rerank/text-rerank
+    """
+    raw = str(endpoint or "").strip()
+    # 已是完整目标端点则原样沿用（允许直接配整条 URL）
+    if compat and "/compatible-api/" in raw and raw.rstrip("/").endswith("reranks"):
+        return raw
+    if not compat and ("/services/rerank/" in raw or raw.rstrip("/").endswith("text-rerank")):
+        return raw
+    parts = urlsplit(raw) if raw else None
+    if parts and parts.scheme and parts.netloc:
+        origin = f"{parts.scheme}://{parts.netloc}"
+        return f"{origin}/compatible-api/v1/reranks" if compat else f"{origin}/api/v1/services/rerank/text-rerank/text-rerank"
+    # 未配置 endpoint：回退经典 DashScope 默认地址（保持 rerank 可留空 endpoint 的既有行为）
+    return RERANK_DASHSCOPE_COMPAT_ENDPOINT if compat else RERANK_DASHSCOPE_ENDPOINT
+
+
 def build_rerank_request(
     *,
     provider: str,
@@ -924,10 +950,8 @@ def build_rerank_request(
     if provider == "qwen":
         model_key = str(model_name or "").strip().lower()
         if model_key.startswith("qwen3-rerank"):
-            url = str(endpoint or "").strip()
-            # 仅当显式配置了兼容版 reranks 端点才沿用；空值或旧 text-rerank 端点都换成默认兼容端点。
-            if "/compatible-api/" not in url or "rerank" not in url:
-                url = RERANK_DASHSCOPE_COMPAT_ENDPOINT
+            # 按配置 endpoint 的 host 推导兼容版 reranks 地址（支持业务空间独立域名）
+            url = _qwen_rerank_url(endpoint, compat=True)
             payload = {
                 "model": model_name,
                 "query": query,
@@ -936,9 +960,7 @@ def build_rerank_request(
                 "instruct": (str(instruct).strip() if instruct and str(instruct).strip() else RERANK_DEFAULT_INSTRUCT),
             }
             return url, payload
-        url = str(endpoint or "").strip()
-        if not url or "rerank" not in url:
-            url = RERANK_DASHSCOPE_ENDPOINT
+        url = _qwen_rerank_url(endpoint, compat=False)
         payload = {
             "model": model_name,
             "input": {"query": query, "documents": documents},
