@@ -20,6 +20,7 @@ from app.services.materials import (
     dispatch_material_processing,
     get_material_detail,
     get_material_for_preview,
+    get_material_status,
     list_materials,
     regenerate_page_script,
     reprocess_material,
@@ -94,6 +95,16 @@ def upload_material_endpoint(
     dispatch_material_processing(material.id)
     db.refresh(material)
     return success_response(data=serialize_material(material), request_id=request.state.request_id)
+
+
+@router.get("/{material_id}/status")
+def get_material_status_endpoint(
+    material_id: int,
+    request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    return success_response(data=get_material_status(db, material_id, user), request_id=request.state.request_id)
 
 
 @router.get("/{material_id}")
