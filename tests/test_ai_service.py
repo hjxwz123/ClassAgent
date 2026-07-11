@@ -508,3 +508,29 @@ def test_stream_does_not_retry_after_emitting(monkeypatch):
     # 只连了一次(未重连)，且把已产出的"半句"透传给了调用方
     assert calls["n"] == 1
     assert "".join(d.text for d in got if d.kind == "content") == "半句"
+
+
+def test_log_ai_usage_never_propagates_on_write_failure(monkeypatch):
+    """使用日志（分析用途）写失败绝不能拖垮已完成的主操作。
+
+    复现线上事故：ai_usage_logs 表缺失时，出题任务在写使用日志处抛
+    ProgrammingError，把已生成的 quiz 一起回滚（target_id=null、任务 failed）。
+    修复后 log_ai_usage 在独立 session 写入并吞掉任何异常，绝不向调用方传播。
+    """
+    import app.db.session as db_session
+    from app.services import usage as usage_mod
+
+    def boom_session():
+        raise RuntimeError("simulated: ai_usage_logs 写入路径失败（如表缺失）")
+
+    monkeypatch.setattr(db_session, "SessionLocal", boom_session)
+    # 不抛异常即通过（调用方主操作不受影响）
+    usage_mod.log_ai_usage(
+        db=None,
+        module="quiz_generation",
+        user_id=1,
+        course_id=1,
+        prompt_chars=24,
+        completion_chars=364,
+        success=True,
+    )
