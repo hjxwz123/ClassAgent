@@ -23,6 +23,7 @@ from app.db.models import (
     Lesson,
     LessonPage,
     OperationLog,
+    PageNote,
     PedagogyArtifact,
     QARecord,
     Quiz,
@@ -1082,8 +1083,20 @@ def delete_lesson(db: Session, *, lesson_id: int, user: User) -> None:
     if lesson is None:
         raise not_found("课时不存在")
     _assert_course_access(db, course_id=lesson.course_id, user=user, require_active=True)
+    # LessonPage 被 KnowledgeChunk / PageNote / PedagogyArtifact / QARecord 以外键引用，
+    # 必须先清理这些引用再删页面，否则删「已向量化（含知识块）或已有学生笔记/问答」的课时
+    # 会撞外键约束抛 IntegrityError → 500。清理口径与资料重处理管线（materials.py）保持一致。
+    page_ids = list(db.scalars(select(LessonPage.id).where(LessonPage.lesson_id == lesson_id)))
     db.execute(delete(LearningProgress).where(LearningProgress.lesson_id == lesson_id))
-    db.execute(delete(PedagogyArtifact).where(PedagogyArtifact.lesson_id == lesson_id))
+    if page_ids:
+        db.execute(delete(KnowledgeChunk).where(KnowledgeChunk.lesson_page_id.in_(page_ids)))
+        db.execute(delete(PageNote).where(PageNote.lesson_page_id.in_(page_ids)))
+        db.execute(update(QARecord).where(QARecord.lesson_page_id.in_(page_ids)).values(lesson_page_id=None))
+    db.execute(
+        delete(PedagogyArtifact).where(
+            or_(PedagogyArtifact.lesson_id == lesson_id, PedagogyArtifact.lesson_page_id.in_(page_ids or [-1]))
+        )
+    )
     db.execute(delete(LessonPage).where(LessonPage.lesson_id == lesson_id))
     db.delete(lesson)
     db.commit()
