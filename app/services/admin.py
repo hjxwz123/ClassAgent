@@ -1048,7 +1048,9 @@ def save_service_config(
             timeout_seconds = int(config.get("timeout_seconds") or config.get("timeout") or DEFAULT_DOC_PARSER_TIMEOUT_SECONDS)
         except (TypeError, ValueError):
             timeout_seconds = DEFAULT_DOC_PARSER_TIMEOUT_SECONDS
-        config["timeout_seconds"] = max(DEFAULT_DOC_PARSER_TIMEOUT_SECONDS, min(MAX_DOC_PARSER_TIMEOUT_SECONDS, timeout_seconds))
+        # 下限用小的安全值(60s)而非 DEFAULT(7200s)：原写法 max(DEFAULT, ...) 会把管理员配置的
+        # 任何较短超时强制抬回 2 小时，导致 DocMind 排队的资料一直占着 worker 显示 processing
+        config["timeout_seconds"] = max(60, min(MAX_DOC_PARSER_TIMEOUT_SECONDS, timeout_seconds))
         try:
             poll_interval_seconds = int(config.get("poll_interval_seconds") or DEFAULT_DOC_PARSER_POLL_INTERVAL_SECONDS)
         except (TypeError, ValueError):

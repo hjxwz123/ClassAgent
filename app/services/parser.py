@@ -1078,6 +1078,10 @@ class DocParserService:
         # 修复 DEF-02：图片资料不走 DocMind，改由 OCR 抽取文本生成课时页。
         if material_type == MaterialType.IMAGE.value:
             return _parse_image(path, db)
+        # 纯文本(.txt/.md/.markdown 统一映射为 TXT)没有版面结构，DocMind 云端解析零增益，
+        # 反而引入云端排队延迟（实测一份 159B 的 txt 也可能等数分钟起步）；直接本地按段落分页。
+        if material_type == MaterialType.TXT.value:
+            return _parse_local_fallback(path, material_type)
         service = get_enabled_service_config(db, SERVICE_TYPE)
         if service is None:
             if self.settings.app_env != "production":
