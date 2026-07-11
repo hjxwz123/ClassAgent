@@ -14,6 +14,7 @@ from pathlib import Path
 import httpx
 import redis
 from sqlalchemy import case, delete, distinct, func, or_, select, text, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import BACKUP_DIR, VECTOR_DIR, get_settings
@@ -340,7 +341,13 @@ def create_admin_user(
         employee_no=employee_no,
     )
     db.add(created_user)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        # 兜底：并发创建、或历史软删行仍占用唯一索引（释放字段的修复上线前的老数据）时，
+        # 唯一索引冲突不应以 500 暴露，统一转为 400 业务错误
+        db.rollback()
+        raise bad_request("邮箱、学号或工号已存在") from exc
     # 创建特权/用户账号属敏感操作，记入审计日志；detail 仅脱敏关键字段，绝不含密码
     log_operation(
         db,
@@ -432,6 +439,15 @@ def soft_delete_user(db: Session, *, user_id: int, actor_id: int | None = None) 
         raise bad_request("系统至少需保留一名管理员")
     user.deleted_at = datetime.now(UTC)
     user.token_version = int(user.token_version or 0) + 1
+    # 软删除后释放唯一字段：email/student_no/employee_no 有全表唯一索引，行保留会一直占用，
+    # 导致同邮箱/学号/工号此后永远无法再创建（查重只看未删用户，INSERT 直接撞索引变 500）。
+    # 原值完整记入下方审计日志 detail 以便追溯；email 改写值带用户 id 与时间戳，保证自身唯一且不可预测。
+    original_email = user.email
+    original_student_no = user.student_no
+    original_employee_no = user.employee_no
+    user.email = f"deleted_{user.id}_{int(user.deleted_at.timestamp())}_{original_email}"[:255]
+    user.student_no = None
+    user.employee_no = None
     db.add(user)
     log_operation(
         db,
@@ -439,7 +455,12 @@ def soft_delete_user(db: Session, *, user_id: int, actor_id: int | None = None) 
         action="admin.user.delete",
         target_type="user",
         target_id=user.id,
-        detail={"target_email": user.email, "role": user.role},
+        detail={
+            "target_email": original_email,
+            "role": user.role,
+            "student_no": original_student_no,
+            "employee_no": original_employee_no,
+        },
     )
     db.commit()
 

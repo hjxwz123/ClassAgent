@@ -255,8 +255,18 @@ def _assert_text(content: bytes) -> None:
 def validate_material_upload(upload: UploadFile, *, max_bytes: int) -> ValidatedUpload:
     suffix = _suffix(upload)
     media_type = MATERIAL_MEDIA_TYPES.get(suffix)
-    if media_type is None:
-        raise bad_request("仅支持 .pptx、.pdf、.docx、.txt、.md、.markdown")
+    image_media_type = IMAGE_MEDIA_TYPES.get(suffix)
+    if media_type is None and image_media_type is None:
+        raise bad_request("仅支持 .pptx、.pdf、.docx、.txt、.md、.markdown 或 .png、.jpg、.jpeg、.webp 图片")
+    # 修复 DEF-02：图片资料走图片校验/清洗链路（签名校验、像素与尺寸上限、重编码去 EXIF、可选内容审核）。
+    if image_media_type is not None:
+        content = _read_limited(upload, max_bytes=max_bytes, label="资料")
+        _assert_image_signature(content, suffix)
+        _review_image_content(content, label="资料")
+        content = _sanitize_image(content, suffix, label="资料", max_bytes=max_bytes)
+        _scan_for_malware(content, label="资料")
+        _replace_upload_content(upload, content)
+        return ValidatedUpload(content=content, suffix=suffix, media_type=image_media_type, size_bytes=len(content))
     content = _read_limited(upload, max_bytes=max_bytes, label="资料")
     if suffix == ".pdf" and not content.startswith(b"%PDF-"):
         raise bad_request("PDF 文件内容无效")

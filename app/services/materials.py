@@ -44,6 +44,11 @@ ALLOWED_EXTENSIONS = {
     ".txt": MaterialType.TXT.value,
     ".md": MaterialType.TXT.value,
     ".markdown": MaterialType.TXT.value,
+    # 修复 DEF-02：FR-11 要求支持图片格式课程资料，图片经 OCR 抽取文本后生成课时页。
+    ".png": MaterialType.IMAGE.value,
+    ".jpg": MaterialType.IMAGE.value,
+    ".jpeg": MaterialType.IMAGE.value,
+    ".webp": MaterialType.IMAGE.value,
 }
 
 KNOWLEDGE_CHUNK_TARGET_CHARS = 900
@@ -117,7 +122,7 @@ def _detect_material_type(filename: str) -> str:
     suffix = Path(filename).suffix.lower()
     material_type = ALLOWED_EXTENSIONS.get(suffix)
     if material_type is None:
-        raise bad_request("仅支持 .pptx、.pdf、.docx、.txt、.md、.markdown")
+        raise bad_request("仅支持 .pptx、.pdf、.docx、.txt、.md、.markdown 或 .png、.jpg、.jpeg、.webp 图片")
     return material_type
 
 

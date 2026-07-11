@@ -4,6 +4,7 @@ from time import perf_counter
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -132,7 +133,10 @@ def create_app() -> FastAPI:
             content={
                 "code": 422,
                 "message": "请求参数校验失败",
-                "data": exc.errors(),
+                # 自定义 field_validator 抛 ValueError 时，exc.errors() 的 ctx 会含不可 JSON 序列化的
+                # 异常对象，直接下发会在 JSONResponse 渲染时抛 TypeError 变成 500；用 jsonable_encoder
+                # 统一清洗，保证任何入参校验失败都返回规范 422。（修复 DEF-04）
+                "data": jsonable_encoder(exc.errors()),
             },
         )
 
