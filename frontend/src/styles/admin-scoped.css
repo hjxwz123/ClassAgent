@@ -945,10 +945,15 @@
   min-width: 96px;
 }
 
+/* 不能对 <td> 直接用 display:flex —— 会让该单元格脱离 table-cell 模型、不随行高拉伸，
+   其 border-bottom 画在内容高度处，与同行其它单元格的 border-collapse 横线错位。
+   保持 td 为 table-cell，按钮(inline-flex)内联排布 + 外边距间隔。 */
 .row-actions {
-  display: flex;
-  gap: 4px;
   white-space: nowrap;
+}
+
+.row-actions > * + * {
+  margin-left: 4px;
 }
 
 .icon-action.danger {

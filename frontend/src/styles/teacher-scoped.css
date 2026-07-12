@@ -2115,6 +2115,14 @@ code {
   padding: 12px;
 }
 
+/* 列表视图过滤/切章节时，离场行立即脱离网格流，避免存留卡片被顶到底部滞留、等离场动画结束才回弹上移 */
+.material-list:not(.grid) .material-list-motion-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 0;
+}
+
 .material-row {
   min-width: 0;
   display: grid;
