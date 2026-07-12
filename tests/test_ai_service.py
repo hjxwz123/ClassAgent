@@ -564,3 +564,20 @@ def test_tutoring_supplements_degrade_when_model_returns_bad_json(monkeypatch):
     similar = ai_service.generate_similar_questions(["牛顿第二定律"], db=None)
     assert isinstance(mistakes, list) and len(mistakes) >= 1   # 走兜底
     assert isinstance(similar, list) and len(similar) >= 1
+
+
+def test_call_json_surfaces_raw_model_output_on_parse_failure(monkeypatch):
+    """模型返回非 JSON 时，错误必须暴露"模型实际返回了什么"（错误信息片段 + 异常 raw_model_output 属性），
+    便于排查——而不是吞成一句无信息的"未返回合法 JSON"。"""
+    from app.core.errors import AppError
+    from app.services.ai import ai_service
+
+    raw = "让我先分析一下 {思路草稿} 然后我决定不返回 JSON 了，就这样。"
+    monkeypatch.setattr(ai_service, "_call_chat", lambda *a, **k: raw)
+
+    try:
+        ai_service._call_json(None, purpose="quiz", system_prompt="返回 json", user_prompt='出题 {"items":[]}')
+        assert False, "应抛异常"
+    except AppError as exc:
+        assert "实际返回" in exc.detail["message"]
+        assert getattr(exc, "raw_model_output", None) == raw
