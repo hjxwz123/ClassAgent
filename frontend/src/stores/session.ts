@@ -79,6 +79,9 @@ export const useSessionStore = defineStore("session", {
     },
     logout() {
       clearToken();
+      // 清除按用户维度缓存的选课状态，避免同一浏览器换账号后残留上一个用户的课程 id，
+      // 导致新用户（尚未加入任何课程）自动请求非成员课程而被 403 拦截。
+      try { localStorage.removeItem("student_current_course_id"); } catch { /* 忽略存储异常 */ }
       this.user = null;
       this.initialized = true;
       this.pushToast("info", "已退出");

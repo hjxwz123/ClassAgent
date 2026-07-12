@@ -958,6 +958,7 @@ watch(() => [props.pageKey, route.fullPath], async () => { await syncRouteState(
 watch(active, () => updateTopNavIndicator(), { flush: "post" });
 watch(selectedCourseId, async (id, previousId) => {
   if (id) localStorage.setItem("student_current_course_id", String(id));
+  else localStorage.removeItem("student_current_course_id");
   if (id === previousId) return;
   if (suppressCourseScopedReset) return;
   resetCourseScopedState();
@@ -1036,14 +1037,14 @@ async function handleStudentNav(key: string) {
 async function loadCourses() {
   courses.value = (await run<any[]>(() => api.get("/student/courses"))) || [];
   pruneSearchCache();
-  if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id;
+  if (!courses.value.some((course) => course.id === selectedCourseId.value)) selectedCourseId.value = courses.value[0]?.id || 0;
 }
 async function loadDashboard(options: { refreshRecommendation?: boolean } = {}) {
   dashboard.value = (await run(() => api.get("/student/dashboard", options.refreshRecommendation ? { refresh_recommendation: true } : undefined))) || {};
   notifications.value = dashboard.value.notifications || [];
   courses.value = dashboard.value.courses || courses.value;
   pruneSearchCache();
-  if ((!selectedCourseId.value || !courses.value.some((course) => course.id === selectedCourseId.value)) && courses.value[0]) selectedCourseId.value = courses.value[0].id;
+  if (!courses.value.some((course) => course.id === selectedCourseId.value)) selectedCourseId.value = courses.value[0]?.id || 0;
 }
 async function loadNotifications(silent = false) {
   if (notificationLoading.value) return;
@@ -1170,7 +1171,7 @@ async function loadActive() {
       if (!dashboardTasks.length) await loadPlans();
     }
     if (active.value === "studentCourses") await loadCourses();
-    if (["studentQa", "studentWrongBook", "studentTutoring", "studentKnowledge", "studentQuizzes"].includes(active.value) && !courses.value.length) await loadCourses();
+    if (["studentQa", "studentWrongBook", "studentTutoring", "studentKnowledge", "studentQuizzes", "studentPlans"].includes(active.value) && !courses.value.length) await loadCourses();
     if (["studentCourseHome", "studentMaterials"].includes(active.value)) await loadCourseHome();
     if (active.value === "studentQa") {
       if (routeQaConversationId()) await loadQaRouteConversation();
