@@ -2241,12 +2241,17 @@ class AIService:
         )
 
     def generate_common_mistakes(self, knowledge_points: Sequence[str], db: Session | None = None) -> list[str]:
-        payload = self._call_json(
-            db,
-            purpose="tutoring",
-            system_prompt="你是学习诊断助手。请只返回 JSON。",
-            user_prompt=f"知识点：{list(knowledge_points)}\n生成 3 个常见错误，格式：{{\"items\":[\"错误\"]}}",
-        )
+        # 常见错误是辅导的补充内容，模型偶尔不吐合法 JSON 时应降级到下方兜底，
+        # 绝不能因它抛 "模型未返回合法 JSON" 把整个辅导/题目分析请求打挂。
+        try:
+            payload = self._call_json(
+                db,
+                purpose="tutoring",
+                system_prompt="你是学习诊断助手。请只返回 JSON。",
+                user_prompt=f"知识点：{list(knowledge_points)}\n生成 3 个常见错误，格式：{{\"items\":[\"错误\"]}}",
+            )
+        except Exception:
+            payload = None
         if isinstance(payload, dict) and isinstance(payload.get("items"), list):
             items = [str(item).strip() for item in payload["items"] if str(item).strip()]
             if items:
@@ -2264,12 +2269,16 @@ class AIService:
             # 无有效知识点时不造占位题干，返回空列表。
             return []
         knowledge_points = valid_points
-        payload = self._call_json(
-            db,
-            purpose="tutoring",
-            system_prompt="你是练习题生成助手。请只返回 JSON。",
-            user_prompt=f"知识点：{list(knowledge_points)}\n生成 3 道相似练习题题干，格式：{{\"items\":[\"题干\"]}}",
-        )
+        # 相似练习题是辅导的补充内容，模型不吐合法 JSON 时降级到下方兜底，不阻断主流程。
+        try:
+            payload = self._call_json(
+                db,
+                purpose="tutoring",
+                system_prompt="你是练习题生成助手。请只返回 JSON。",
+                user_prompt=f"知识点：{list(knowledge_points)}\n生成 3 道相似练习题题干，格式：{{\"items\":[\"题干\"]}}",
+            )
+        except Exception:
+            payload = None
         if isinstance(payload, dict) and isinstance(payload.get("items"), list):
             items = [str(item).strip() for item in payload["items"] if str(item).strip()]
             if items:
