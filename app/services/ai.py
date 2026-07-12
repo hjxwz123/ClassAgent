@@ -698,6 +698,30 @@ def _stem_copies_source(stem: str, normalized_source: str) -> bool:
     return matched >= max(10, int(total * 0.7))
 
 
+def _extract_quiz_items(payload: Any) -> list | None:
+    """从模型返回的多种结构里取出题目数组。
+
+    出题 prompt 约定返回 {"items":[...]}，但 JSON 模式下不同模型偶尔会改用 questions、
+    裸数组、或 {"data":{"items":[...]}} 等结构。归一化对每道题的字段本就宽松匹配同义词
+    （stem/question/title...），顶层容器键也应同样宽松，避免"能出题却因外层键名不符判 0 道"。
+    """
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in ("items", "questions", "quiz", "quizzes", "题目", "问题", "list", "results"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return value
+        # 兜底：{"data": {...}} / {"result": {...}} 等再向下一层找
+        for key in ("data", "result", "output", "payload"):
+            nested = payload.get(key)
+            if isinstance(nested, (dict, list)):
+                found = _extract_quiz_items(nested)
+                if found is not None:
+                    return found
+    return None
+
+
 def _normalize_quiz_questions_from_payload(
     payload: Any,
     *,
@@ -705,11 +729,12 @@ def _normalize_quiz_questions_from_payload(
     seen_stems: set[str] | None = None,
     normalized_source: str = "",
 ) -> list[dict]:
-    if not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+    items = _extract_quiz_items(payload)
+    if items is None:
         raise bad_request("AI 出题失败：模型未返回有效 JSON 题目")
     seen = seen_stems if seen_stems is not None else set()
     normalized: list[dict] = []
-    questions = [item for item in payload["items"] if isinstance(item, dict)]
+    questions = [item for item in items if isinstance(item, dict)]
     for item in questions:
         stem = str(_quiz_item_value(item, "stem", "question", "title", "题干", "问题") or "")
         if _invalid_quiz_stem(stem):
