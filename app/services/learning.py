@@ -2221,6 +2221,8 @@ def process_quiz_generation_task(db: Session, task_id: int) -> None:
         task.detail = {
             **(task.detail if isinstance(task.detail, dict) else detail),
             "error": str(exc),
+            # 模型实际返回（解析失败时由 ai.py 挂在异常上），方便直接从 detail 排查
+            "raw_model_output": getattr(exc, "raw_model_output", None),
             "failed_at": datetime.now(UTC).isoformat(),
             "notification": {"title": title, "message": message},
         }

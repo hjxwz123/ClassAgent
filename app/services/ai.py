@@ -1211,6 +1211,10 @@ class AIService:
                 with httpx.Client(timeout=timeout) as client:
                     resp = client.post(endpoint, headers=headers, json=payload)
                     if resp.status_code >= 400 and json_mode and "response_format" in payload:
+                        # response_format 被拒→模型端不支持 JSON 模式：记录真实原因，避免静默降级为
+                        # 无约束输出后又报"未返回合法 JSON"、让人以为是解析问题。
+                        logger.warning("模型拒绝 response_format(HTTP %s)：%s；去掉后重试，该模型的 JSON 输出不受强约束",
+                                       resp.status_code, resp.text[:300])
                         retry_payload = dict(payload)
                         retry_payload.pop("response_format", None)
                         resp = client.post(endpoint, headers=headers, json=retry_payload)
@@ -1507,10 +1511,16 @@ class AIService:
             return None
         try:
             return _parse_json_payload(content)
-        except Exception:
+        except Exception as exc:
+            # 上游模型稳定却解析失败，一定是"返回了非 JSON 内容"。把原始返回打进日志与错误，
+            # 让问题可见可查（不是兜底掩盖）。
+            snippet = re.sub(r"\s+", " ", str(content)).strip()
+            logger.warning("JSON 解析失败 purpose=%s，模型原始返回(前1000字)：%s", purpose, snippet[:1000])
             if self._fallback_allowed():
                 return None
-            raise bad_request("模型未返回合法 JSON")
+            err = bad_request(f"模型未返回合法 JSON（实际返回前120字：{snippet[:120]}）")
+            err.raw_model_output = snippet[:4000]
+            raise err from exc
 
     def extract_keywords(self, text: str, *, limit: int = 6) -> list[str]:
         candidates = re.findall(r"[\u4e00-\u9fffA-Za-z0-9]{2,12}", text)
@@ -2459,7 +2469,11 @@ class AIService:
         try:
             payload = _parse_json_payload(content)
         except Exception as exc:
-            raise bad_request("AI 出题失败：模型未返回合法 JSON 题目") from exc
+            snippet = re.sub(r"\s+", " ", str(content)).strip()
+            logger.warning("出题 JSON 解析失败，模型原始返回(前1500字)：%s", snippet[:1500])
+            err = bad_request(f"AI 出题失败：模型返回无法解析为 JSON（实际返回前120字：{snippet[:120]}）")
+            err.raw_model_output = snippet[:4000]
+            raise err from exc
         seen_stems: set[str] = {_clean_text(stem) for stem in avoid_list}
         normalized = _normalize_quiz_questions_from_payload(
             payload,
@@ -2535,7 +2549,11 @@ class AIService:
             try:
                 retry_payload = _parse_json_payload(retry_content)
             except Exception as exc:
-                raise bad_request("AI 出题失败：模型未返回合法 JSON 题目") from exc
+                snippet = re.sub(r"\s+", " ", str(retry_content)).strip()
+                logger.warning("出题(重试) JSON 解析失败，模型原始返回(前1500字)：%s", snippet[:1500])
+                err = bad_request(f"AI 出题失败：模型返回无法解析为 JSON（实际返回前120字：{snippet[:120]}）")
+                err.raw_model_output = snippet[:4000]
+                raise err from exc
             normalized.extend(
                 _normalize_quiz_questions_from_payload(
                     retry_payload,
