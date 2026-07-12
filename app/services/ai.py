@@ -2413,7 +2413,7 @@ class AIService:
             purpose="quiz",
             system_prompt=quiz_system_prompt,
             user_prompt=base_prompt,
-            json_mode=False,
+            json_mode=True,
             allow_fallback=False,
             max_tokens=completion_limit,
             timeout_seconds=max(self.settings.external_service_timeout_seconds, 300),
@@ -2491,7 +2491,7 @@ class AIService:
                 "\"stem\":\"\",\"options\":[\"\"],\"reference_answer\":{},\"explanation\":\"\",\"score\":10,"
                 "\"difficulty\":\"easy|standard|hard\",\"knowledge_point\":\"\",\"cognitive_level\":\"记忆|理解|应用|分析\"}]}"
             ),
-            json_mode=False,
+            json_mode=True,
             allow_fallback=False,
             max_tokens=max(3600, min(12000, 620 * retry_count + 2000)),
             timeout_seconds=max(self.settings.external_service_timeout_seconds, 300),
