@@ -534,3 +534,18 @@ def test_log_ai_usage_never_propagates_on_write_failure(monkeypatch):
         completion_chars=364,
         success=True,
     )
+
+
+def test_extract_quiz_items_tolerates_container_key_variants():
+    """JSON 模式下不同模型对顶层容器键的写法不一，归一化不应因外层键名不符而判 0 道题。"""
+    from app.services.ai import _extract_quiz_items
+
+    q = {"question_type": "single_choice", "stem": "题干", "options": ["a", "b", "c", "d"],
+         "reference_answer": {"value": 0}, "explanation": "解析"}
+    assert _extract_quiz_items({"items": [q]}) == [q]          # 标准
+    assert _extract_quiz_items({"questions": [q]}) == [q]      # questions
+    assert _extract_quiz_items([q]) == [q]                     # 裸数组
+    assert _extract_quiz_items({"data": {"items": [q]}}) == [q]  # 嵌套 data
+    assert _extract_quiz_items({"题目": [q]}) == [q]           # 中文键
+    assert _extract_quiz_items({"foo": "bar"}) is None         # 无题目数组
+    assert _extract_quiz_items("not json") is None
