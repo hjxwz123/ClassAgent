@@ -549,3 +549,18 @@ def test_extract_quiz_items_tolerates_container_key_variants():
     assert _extract_quiz_items({"题目": [q]}) == [q]           # 中文键
     assert _extract_quiz_items({"foo": "bar"}) is None         # 无题目数组
     assert _extract_quiz_items("not json") is None
+
+
+def test_tutoring_supplements_degrade_when_model_returns_bad_json(monkeypatch):
+    """辅导的补充内容（常见错误/相似题）在模型不吐合法 JSON 时应降级到兜底，绝不抛异常打挂主流程。"""
+    from app.core.errors import bad_request
+    from app.services.ai import ai_service
+
+    def boom(*args, **kwargs):
+        raise bad_request("模型未返回合法 JSON")
+
+    monkeypatch.setattr(ai_service, "_call_json", boom)
+    mistakes = ai_service.generate_common_mistakes(["牛顿第二定律"], db=None)
+    similar = ai_service.generate_similar_questions(["牛顿第二定律"], db=None)
+    assert isinstance(mistakes, list) and len(mistakes) >= 1   # 走兜底
+    assert isinstance(similar, list) and len(similar) >= 1
