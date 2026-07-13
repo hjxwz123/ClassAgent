@@ -165,12 +165,8 @@
                 <span>{{ lessonAskContextPreview }}</span>
                 <button type="button" aria-label="移除选中文本" @click="clearLessonAskContext"><X :size="13" /></button>
               </div>
-              <transition name="fade-slide">
-                <MathKeyboard v-if="classMathPanelOpen" class="qa-math-keyboard" @insert="insertClassMath" @close="classMathPanelOpen = false" />
-              </transition>
-              <form class="chat-input compact has-math" @submit.prevent="askInClass">
+              <form class="chat-input compact" @submit.prevent="askInClass">
                 <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
-                <button type="button" class="attach-btn math-btn" :class="{ active: classMathPanelOpen }" :aria-pressed="classMathPanelOpen" title="数学公式键盘" @click="classMathPanelOpen = !classMathPanelOpen"><FunctionIcon :size="17" /></button>
                 <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || (classConversationLoading && !classMessages.length) || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
                 <MathTextField
                   ref="classMathField"
@@ -249,12 +245,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   ArrowLeft, Camera, Check, CheckCircle, ChevronLeft, ChevronRight, Clock, Copy, FileText, Flag,
-  FunctionIcon, Grid2X2, Info, Layers, ListChecks, Maximize, MessageCircle, PanelRight, Pause, Pencil, Play,
+  Grid2X2, Info, Layers, ListChecks, Maximize, MessageCircle, PanelRight, Pause, Pencil, Play,
   Presentation, Quote, Send, Settings, Shield, Sparkles, Square, X, Zap,
 } from "../../../icons";
 import { api } from "../../../api/client";
 import { extractStructuredText, renderRichText } from "../../../utils/richText";
-import MathKeyboard from "../../../components/MathKeyboard.vue";
 import MathTextField from "../../../components/MathTextField.vue";
 import { timeLabel, timestampMs, relativeTime } from "../../../utils/datetime";
 import type { Material, PageActivity } from "../../../types";
@@ -313,12 +308,8 @@ const classConversationId = ref<number | null>(null);
 const classQaImageInput = ref<HTMLInputElement | null>(null);
 const classQaAttachments = ref<QaAttachment[]>([]);
 const classQaImageUploading = ref(false);
-// 数学公式键盘：开合状态 + 把公式片段插入到所见即所得的公式输入栏（MathLive）。
-const classMathPanelOpen = ref(false);
+// 公式输入栏（文本框 + 内联公式块）引用，供聚焦等使用；fx 公式编辑器已内聚在组件内。
 const classMathField = ref<InstanceType<typeof MathTextField> | null>(null);
-function insertClassMath(template: string) {
-  classMathField.value?.insertTemplate(template);
-}
 const lessonAskContext = ref("");
 const aiPanelOpen = ref(true);
 const chromeVisible = ref(true);

@@ -477,12 +477,8 @@
                 <button type="button" @click="removeQaAttachment('global', index)"><X :size="13" /></button>
               </div>
             </div>
-            <transition name="fade-slide">
-              <MathKeyboard v-if="mathPanelOpen" class="qa-math-keyboard" @insert="insertGlobalMath" @close="mathPanelOpen = false" />
-            </transition>
             <section class="input-box">
               <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
-              <button type="button" class="attach-btn math-btn" :class="{ active: mathPanelOpen }" :aria-pressed="mathPanelOpen" title="数学公式键盘" @click="mathPanelOpen = !mathPanelOpen"><FunctionIcon :size="18" /></button>
               <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || (globalConversationLoading && !globalMessages.length) || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
               <MathTextField
                 ref="globalMathField"
@@ -570,7 +566,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref,
 import { useRoute, useRouter } from "vue-router";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Bell, BookMarked, BookOpen, CalendarCheck, Camera, Check, CheckCircle,
-  ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, FileText, FunctionIcon, GitBranch, Grid2X2, History,
+  ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, FileText, GitBranch, Grid2X2, History,
   Info, Flag, Layers, ListChecks, LogOut, Maximize, MessageCircle, PanelRight, Pause, Pencil,
   Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings, Shield,
   Sparkles, Square, Trash2, User, X, XCircle, Zap
@@ -597,7 +593,6 @@ import BrandLogo from "../components/BrandLogo.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import LoadingMark from "../components/LoadingMark.vue";
 import MaterialPreviewModal from "../components/MaterialPreviewModal.vue";
-import MathKeyboard from "../components/MathKeyboard.vue";
 import MathTextField from "../components/MathTextField.vue";
 import PageLoader from "../components/PageLoader.vue";
 import SelectMenu from "../components/SelectMenu";
@@ -726,12 +721,8 @@ const globalConversationId = ref<number | null>(null);
 const globalQaImageInput = ref<HTMLInputElement | null>(null);
 const globalQaAttachments = ref<QaAttachment[]>([]);
 const globalQaImageUploading = ref(false);
-// 数学公式键盘：开合状态 + 把公式片段插入到所见即所得的公式输入栏（MathLive）。
-const mathPanelOpen = ref(false);
+// 公式输入栏（文本框 + 内联公式块）引用，供聚焦等使用；fx 公式编辑器已内聚在组件内。
 const globalMathField = ref<InstanceType<typeof MathTextField> | null>(null);
-function insertGlobalMath(template: string) {
-  globalMathField.value?.insertTemplate(template);
-}
 const qaHistory = ref<QaHistoryConversation[]>([]);
 const qaKeyword = ref("");
 const historyOpen = ref(false);
