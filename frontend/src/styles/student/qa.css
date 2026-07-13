@@ -1924,29 +1924,10 @@
     color: var(--qa-primary-600, var(--color-primary-600))
 }
 
-/* 公式键盘面板（浮在输入框上方，宽度与输入框对齐） */
-.qa-modern-page .qa-math-keyboard,
-.class-chat .qa-math-keyboard {
-    align-self: center;
-    width: 100%
-}
-
 .class-chat .chat-input.compact {
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: end;
     border-radius: var(--radius-lg)
-}
-
-.class-chat .chat-input.compact.has-math {
-    grid-template-columns: auto auto minmax(0, 1fr) auto
-}
-
-.class-chat .chat-input.compact textarea {
-    align-self: center;
-    min-height: 40px;
-    max-height: 120px;
-    overflow: auto;
-    resize: none
 }
 
 .qa-modern-page .send-btn {
