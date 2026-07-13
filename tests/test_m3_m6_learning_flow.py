@@ -2,7 +2,7 @@ import json
 from io import BytesIO
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from pptx import Presentation
 
 from app.core.enums import LessonStatus, MaterialCategory, MaterialType, ProcessStatus
@@ -261,6 +261,63 @@ def test_quiz_generation_calls_ai_with_course_context_without_material(client, m
     assert captured["topic"] == "离散数学"
     assert "课程名称：离散数学" in captured["source_text"]
     assert "课程简介：图论与集合基础" in captured["source_text"]
+
+
+def test_quiz_generation_never_extracts_knowledge_points_on_user_request(client, monkeypatch):
+    register_user(
+        client,
+        email="teacher-no-lazy-points@example.com",
+        password="Teacher123",
+        nickname="不懒加载老师",
+        role="teacher",
+        employee_no="T2026098",
+    )
+    teacher_login = login_user(client, email="teacher-no-lazy-points@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "编译原理热路径", "description": "词法分析与语法分析", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+    chapter_resp = client.post(
+        f"/api/v1/courses/{course['id']}/chapters",
+        json={"title": "词法分析", "description": "", "order_index": 1},
+        headers=teacher_headers,
+    )
+    assert chapter_resp.status_code == 200, chapter_resp.text
+    chapter = chapter_resp.json()["data"]
+
+    with db_session.SessionLocal() as db:
+        db.add(
+            KnowledgeChunk(
+                course_id=course["id"],
+                chapter_id=chapter["id"],
+                title="词法分析片段",
+                content="词法分析器将源程序字符流转换为单词符号序列。",
+            )
+        )
+        db.commit()
+
+    def fail_lazy_extraction(*args, **kwargs):
+        raise AssertionError("quiz generation must not extract knowledge points on the user request path")
+
+    monkeypatch.setattr(ai_service, "extract_knowledge_points", fail_lazy_extraction)
+    monkeypatch.setattr(ai_service, "generate_quiz_questions", fake_quiz_questions)
+    response = client.post(
+        "/api/v1/learning/quizzes/generate",
+        json={
+            "course_id": course["id"],
+            "chapter_id": chapter["id"],
+            "title": "词法分析测验",
+            "quiz_type": "course",
+            "question_count": 1,
+        },
+        headers=teacher_headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["data"]["id"] > 0
 
 
 def test_lesson_detail_includes_material_for_original_preview(client):
@@ -708,6 +765,7 @@ def test_learning_core_flow(client, monkeypatch):
 def test_qa_concept_question_contributes_to_weak_points_and_quiz_priority(client, monkeypatch):
     course, chapter, lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
     with db_session.SessionLocal() as db:
+        db.execute(delete(KnowledgePoint).where(KnowledgePoint.course_id == course["id"]))
         db.add_all(
             [
                 KnowledgePoint(
@@ -2090,8 +2148,6 @@ def test_qa_image_attachment_uploads_and_participates_in_stream_answer(client, m
 
 
 def test_knowledge_points_use_local_explanations(client, monkeypatch):
-    course, chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
-
     from app.services import knowledge as knowledge_service
 
     monkeypatch.setattr(knowledge_service.ai_service, "extract_knowledge_points", lambda text, db=None: ["矩阵"])
@@ -2100,6 +2156,7 @@ def test_knowledge_points_use_local_explanations(client, monkeypatch):
         raise AssertionError("knowledge explanations should not call the model synchronously")
 
     monkeypatch.setattr(knowledge_service.ai_service, "generate_knowledge_explanation", fail_explanation_call)
+    course, chapter, _lesson_id, _teacher_headers, student_headers = bootstrap_course_with_material(client)
 
     response = client.get(
         "/api/v1/learning/knowledge-points",

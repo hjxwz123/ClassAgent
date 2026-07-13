@@ -1,21 +1,37 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 import logging
 import threading
 import time
 from collections import Counter
+from threading import BoundedSemaphore
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import Chapter, KnowledgeChunk, KnowledgePoint, LessonPage
+from app.core.config import get_settings
 from app.db import session as db_session
+from app.db.models import Chapter, Course, KnowledgeChunk, KnowledgePoint, LessonPage
 from app.services.ai import ai_service
 from app.services.retrieval import build_retrieval_query_variants, defocused_query_text, page_numbers_from_query, query_terms, score_text_for_query
 from app.services.runtime_settings import runtime_setting_float
 from app.services.vector_store import vector_store
 
 LOGGER = logging.getLogger(__name__)
+_settings = get_settings()
+_knowledge_point_extraction_limiter = BoundedSemaphore(
+    max(1, int(_settings.knowledge_point_extraction_max_concurrency))
+)
+
+
+@dataclass(frozen=True)
+class KnowledgePointPreGenerationResult:
+    points: list[KnowledgePoint]
+    chunk_count: int
+    failed_chunk_count: int
+    reused_existing: bool
 
 
 def _clean_excerpt(value: str, limit: int = 260) -> str:
@@ -307,23 +323,84 @@ def _query_course_variants(
     return [(chunk_id, meta[3]) for chunk_id, meta in ranked[:candidate_limit]]
 
 
-def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None = None) -> list[KnowledgePoint]:
+def list_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None = None) -> list[KnowledgePoint]:
     statement = select(KnowledgePoint).where(KnowledgePoint.course_id == course_id)
     if chapter_id is not None:
         statement = statement.where(KnowledgePoint.chapter_id == chapter_id)
-    existing = list(db.scalars(statement))
+    return list(db.scalars(statement.order_by(KnowledgePoint.id)))
+
+
+def _extract_chunk_knowledge_points(content: str) -> tuple[list[str], str | None]:
+    """Run one chunk extraction with an isolated DB session; SQLAlchemy sessions are not thread-safe."""
+    with db_session.SessionLocal() as task_db:
+        try:
+            with _knowledge_point_extraction_limiter:
+                items = ai_service.extract_knowledge_points(content, db=task_db)
+            names = [str(item).strip()[:255] for item in items if str(item).strip()]
+            return list(dict.fromkeys(names)), None
+        except Exception as exc:
+            # Knowledge-point pre-generation must not fail the whole material pipeline. A local keyword
+            # fallback still gives later quiz generation useful anchors without another user-time model call.
+            names = [str(item).strip()[:255] for item in ai_service.extract_keywords(content, limit=5) if str(item).strip()]
+            return list(dict.fromkeys(names)), str(exc) or "模型调用失败"
+
+
+def pre_generate_knowledge_points(
+    db: Session,
+    *,
+    course_id: int,
+    chapter_id: int | None = None,
+    max_concurrency: int | None = None,
+) -> KnowledgePointPreGenerationResult:
+    """Pre-generate a course/chapter's points during material processing, never from a user hot path."""
+    if chapter_id is None:
+        scope_statement = select(Course.id).where(Course.id == course_id)
+    else:
+        scope_statement = select(Chapter.id).where(Chapter.id == chapter_id, Chapter.course_id == course_id)
+    scope_id = db.scalar(scope_statement.with_for_update())
+    if scope_id is None:
+        db.rollback()
+        return KnowledgePointPreGenerationResult([], 0, 0, False)
+
+    existing = list_knowledge_points(db, course_id=course_id, chapter_id=chapter_id)
     if existing:
-        return existing
+        db.commit()
+        return KnowledgePointPreGenerationResult(existing, 0, 0, True)
+
     chunk_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
     if chapter_id is not None:
         chunk_statement = chunk_statement.where(KnowledgeChunk.chapter_id == chapter_id)
-    chunks = list(db.scalars(chunk_statement))
+    chunks = list(db.scalars(chunk_statement.order_by(KnowledgeChunk.id)))
+    if not chunks:
+        db.commit()
+        return KnowledgePointPreGenerationResult([], 0, 0, False)
+
+    worker_limit = max_concurrency or int(_settings.knowledge_point_extraction_max_concurrency)
+    worker_count = min(len(chunks), max(1, int(worker_limit)))
+    extracted: list[tuple[list[str], str | None] | None] = [None] * len(chunks)
+    if worker_count == 1:
+        for index, chunk in enumerate(chunks):
+            extracted[index] = _extract_chunk_knowledge_points(chunk.content)
+    else:
+        with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="knowledge-point") as executor:
+            future_map = {
+                executor.submit(_extract_chunk_knowledge_points, chunk.content): index
+                for index, chunk in enumerate(chunks)
+            }
+            for future in as_completed(future_map):
+                extracted[future_map[future]] = future.result()
+
     counter: Counter[str] = Counter()
     source_text: dict[str, str] = {}
-    for chunk in chunks:
-        for keyword in ai_service.extract_knowledge_points(chunk.content, db=db):
+    failed_chunk_count = 0
+    for chunk, result in zip(chunks, extracted, strict=True):
+        names, error = result or ([], "抽取任务未返回结果")
+        if error:
+            failed_chunk_count += 1
+        for keyword in names:
             counter[keyword] += 1
             source_text.setdefault(keyword, chunk.content)
+
     created: list[KnowledgePoint] = []
     for keyword, _ in counter.most_common(8):
         content = {
@@ -341,7 +418,12 @@ def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | No
         db.add(point)
         created.append(point)
     db.commit()
-    return created
+    return KnowledgePointPreGenerationResult(created, len(chunks), failed_chunk_count, False)
+
+
+def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None = None) -> list[KnowledgePoint]:
+    """Backward-compatible processing helper. User-facing paths must call list_knowledge_points instead."""
+    return pre_generate_knowledge_points(db, course_id=course_id, chapter_id=chapter_id).points
 
 
 def get_chapter_name(db: Session, chapter_id: int | None) -> str | None:

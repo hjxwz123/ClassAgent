@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     material_processing_worker_count: int = 4
     doc_parser_max_concurrency: int = 2
     material_ai_max_concurrency: int = 6
+    knowledge_point_extraction_max_concurrency: int = Field(default=15, ge=1, le=100)
     tts_max_concurrency: int = 1
     material_processing_stale_minutes: int = 10
     material_processing_watchdog_interval_seconds: int = 30

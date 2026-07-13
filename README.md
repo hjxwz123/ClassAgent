@@ -333,6 +333,7 @@ npm run build
 | `CLASSAGENT_ADMIN_DEFAULT_EMAIL` | `admin@classagent.com` | 默认管理员邮箱 |
 | `CLASSAGENT_ADMIN_DEFAULT_PASSWORD` | `Admin123456` | 默认管理员密码，生产必须替换 |
 | `CLASSAGENT_EMBEDDING_DIMENSION` | `1536` | Embedding 维度 |
+| `CLASSAGENT_KNOWLEDGE_POINT_EXTRACTION_MAX_CONCURRENCY` | `15` | 资料解析阶段知识点抽取的进程内并发上限 |
 
 ### 后端 `.env` 变量
 
@@ -347,6 +348,7 @@ npm run build
 | `CELERY_BROKER_URL` | Celery Broker |
 | `CELERY_RESULT_BACKEND` | Celery 结果后端 |
 | `CELERY_TASK_ALWAYS_EAGER` | 是否同步执行 Celery 任务，生产必须为 `false` |
+| `KNOWLEDGE_POINT_EXTRACTION_MAX_CONCURRENCY` | 资料解析阶段知识点抽取并发，默认 `15` |
 | `PUBLIC_BASE_URL` | 外部访问基础地址 |
 | `VECTOR_STORE_PROVIDER` | `chroma` 或 `qdrant` |
 | `CHROMA_PERSIST_DIR` | Chroma 本地持久化目录 |

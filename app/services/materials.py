@@ -27,6 +27,7 @@ from app.db.models import AsyncTaskLog, Chapter, CourseMaterial, KnowledgeChunk,
 from app.services.ai import ai_service
 from app.services.audit import log_operation
 from app.services.courses import _assert_course_active_for_teacher, _assert_course_owner, _get_course_or_404
+from app.services.knowledge import pre_generate_knowledge_points
 from app.services.parser import parse_material
 from app.services.pedagogy import generate_material_pedagogy_artifacts
 from app.services.runtime_config import get_enabled_service_config
@@ -1357,6 +1358,9 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
                 db.add(chunk)
             created_chunks.extend(page_chunks)
         db.flush()
+        # Knowledge-point workers use independent DB sessions, so chunks must be committed before any
+        # concurrent extraction starts. Do not rely on task-progress commits as an implicit boundary.
+        db.commit()
         try:
             _update_task_stage(
                 db,
@@ -1380,13 +1384,59 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         except Exception as exc:
             material.vector_status = ProcessStatus.FAILED.value
             warnings.append(f"向量索引写入失败: {exc}")
+        db.add(material)
+        db.commit()
+
+        knowledge_point_count = 0
+        try:
+            _update_task_stage(
+                db,
+                task,
+                stage="knowledge_points",
+                status=ProcessStatus.PROCESSING.value,
+                progress=89,
+                chunk_count=len(created_chunks),
+                max_concurrency=int(_settings.knowledge_point_extraction_max_concurrency),
+            )
+            knowledge_result = pre_generate_knowledge_points(
+                db,
+                course_id=material.course_id,
+                chapter_id=material.chapter_id,
+            )
+            knowledge_point_count = len(knowledge_result.points)
+            if knowledge_result.failed_chunk_count:
+                warnings.append(
+                    f"知识点抽取有 {knowledge_result.failed_chunk_count}/{knowledge_result.chunk_count} 个片段使用本地关键词降级"
+                )
+            _update_task_stage(
+                db,
+                task,
+                stage="knowledge_points",
+                status=ProcessStatus.READY.value,
+                progress=90,
+                chunk_count=knowledge_result.chunk_count,
+                knowledge_point_count=knowledge_point_count,
+                failed_chunk_count=knowledge_result.failed_chunk_count,
+                reused_existing=knowledge_result.reused_existing,
+            )
+        except Exception as exc:
+            db.rollback()
+            warnings.append(f"知识点预生成失败: {exc}")
+            _update_task_stage(
+                db,
+                task,
+                stage="knowledge_points",
+                status=ProcessStatus.FAILED.value,
+                progress=90,
+                error=str(exc),
+            )
         try:
             _update_task_stage(
                 db,
                 task,
                 stage="pedagogy",
                 status=ProcessStatus.PROCESSING.value,
-                progress=90,
+                progress=91,
                 total_pages=len(created_pages),
                 completed_pages=0,
             )
@@ -1399,7 +1449,7 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
                     task,
                     stage="pedagogy",
                     status=ProcessStatus.PROCESSING.value,
-                    progress=90 + int(8 * completed / max(total, 1)),
+                    progress=91 + int(7 * completed / max(total, 1)),
                     total_pages=total,
                     completed_pages=completed,
                     current_page=progress.get("page_number"),
@@ -1440,6 +1490,7 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
         task.detail = {
             **_task_detail(task),
             "page_count": len(created_pages),
+            "knowledge_point_count": knowledge_point_count,
             "pedagogy_artifact_count": artifact_count,
             "warnings": warnings,
             "finished_at": datetime.now(UTC).isoformat(),

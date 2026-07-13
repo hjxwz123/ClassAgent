@@ -11,7 +11,8 @@ from sqlalchemy import select
 
 from app.core.enums import ProcessStatus
 from app.db import session as db_session
-from app.db.models import AsyncTaskLog, CourseMaterial, KnowledgeChunk, Lesson, LessonPage
+from app.db.models import AsyncTaskLog, CourseMaterial, KnowledgeChunk, KnowledgePoint, Lesson, LessonPage
+from app.services.ai import ai_service
 from app.services.materials import _split_knowledge_text, recover_stale_material_processing_tasks
 from app.services.parser import (
     DEFAULT_DOC_PARSER_TIMEOUT_SECONDS,
@@ -543,6 +544,15 @@ def test_material_management_flow(client):
         assert all(chunk.source_meta and chunk.source_meta.get("lesson_id") for chunk in chunks)
         assert all("页码：第" in chunk.content for chunk in chunks)
         assert all(chunk.embedding is None for chunk in chunks)
+        points = list(
+            db.scalars(
+                select(KnowledgePoint).where(
+                    KnowledgePoint.course_id == course["id"],
+                    KnowledgePoint.chapter_id == chapter["id"],
+                )
+            )
+        )
+        assert points, "资料处理完成时应已预生成章节知识点"
         if material["vector_status"] == "ready":
             assert vector_store.indexed_chunk_count(db, course_id=course["id"]) >= len(chunks)
             vector_rows = vector_store.query_course(db, course_id=course["id"], query="函数变化趋势怎样理解", limit=2)
@@ -741,6 +751,71 @@ def test_material_pipeline_keeps_parse_ready_when_tts_fails(client, monkeypatch)
         task = db.scalar(select(AsyncTaskLog).where(AsyncTaskLog.target_id == material["id"]).order_by(AsyncTaskLog.id.desc()))
         assert task.status == "ready"
         assert "语音合成失败" in "；".join(task.detail["warnings"])
+
+
+def test_material_pipeline_keeps_parse_ready_when_knowledge_extraction_fails(client, monkeypatch):
+    register_user(
+        client,
+        email="teacher-knowledge-fallback@example.com",
+        password="Teacher123",
+        nickname="知识点降级老师",
+        role="teacher",
+        employee_no="KNOWLEDGE-FALLBACK",
+    )
+    teacher_login = login_user(client, email="teacher-knowledge-fallback@example.com", password="Teacher123")
+    teacher_headers = auth_headers(teacher_login["access_token"])
+    course_resp = client.post(
+        "/api/v1/courses",
+        json={"name": "知识点降级课程", "description": "测试", "term": "2026春"},
+        headers=teacher_headers,
+    )
+    assert course_resp.status_code == 200, course_resp.text
+    course = course_resp.json()["data"]
+    chapter_resp = client.post(
+        f"/api/v1/courses/{course['id']}/chapters",
+        json={"title": "降级章节", "description": "", "order_index": 1},
+        headers=teacher_headers,
+    )
+    assert chapter_resp.status_code == 200, chapter_resp.text
+    chapter = chapter_resp.json()["data"]
+
+    def fail_extraction(*args, **kwargs):
+        raise RuntimeError("knowledge model down")
+
+    monkeypatch.setattr(ai_service, "extract_knowledge_points", fail_extraction)
+    upload_resp = client.post(
+        "/api/v1/materials",
+        data={
+            "course_id": str(course["id"]),
+            "title": "知识点降级课件",
+            "category": "courseware",
+            "chapter_id": str(chapter["id"]),
+        },
+        files={"file": ("knowledge.txt", build_txt_bytes(), "text/plain")},
+        headers=teacher_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    material = upload_resp.json()["data"]
+    assert material["parse_status"] == "ready"
+
+    with db_session.SessionLocal() as db:
+        points = list(
+            db.scalars(
+                select(KnowledgePoint).where(
+                    KnowledgePoint.course_id == course["id"],
+                    KnowledgePoint.chapter_id == chapter["id"],
+                )
+            )
+        )
+        task = db.scalar(
+            select(AsyncTaskLog)
+            .where(AsyncTaskLog.target_id == material["id"])
+            .order_by(AsyncTaskLog.id.desc())
+        )
+        assert points, "模型失败时应使用本地关键词生成知识点"
+        assert task is not None
+        assert task.status == "ready"
+        assert "知识点抽取有" in "；".join(task.detail["warnings"])
 
 
 def test_material_pipeline_keeps_pages_when_vector_store_fails(client, monkeypatch):

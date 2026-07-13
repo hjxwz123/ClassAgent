@@ -36,7 +36,7 @@ from app.db.models import (
 from app.schemas.learning import QuizEditRequest, QuizGenerateRequest, StudyPlanCreateRequest, WeakQuizGenerateRequest
 from app.services.ai import ai_service, sanitize_quiz_source_text
 from app.services.courses import _assert_course_owner, _get_course_or_404
-from app.services.knowledge import ensure_knowledge_points
+from app.services.knowledge import list_knowledge_points
 from app.services.learning_signals import learning_signal_point_stats
 from app.services.notifications import push_user_notification
 from app.services.pedagogy import quiz_artifact_contexts
@@ -72,7 +72,7 @@ def get_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None,
     elif user.role == UserRole.TEACHER.value:
         course = _get_course_or_404(db, course_id)
         _assert_course_owner(course, user)
-    return ensure_knowledge_points(db, course_id=course_id, chapter_id=chapter_id)
+    return list_knowledge_points(db, course_id=course_id, chapter_id=chapter_id)
 
 
 _PLACEHOLDER_SOURCE_TEXT = (
@@ -341,15 +341,16 @@ def _chapter_ids_for_quiz(payload: QuizGenerateRequest) -> list[int]:
 
 def _knowledge_points_for_quiz(db: Session, *, course_id: int, chapter_ids: list[int]) -> list[KnowledgePoint]:
     if not chapter_ids:
-        return ensure_knowledge_points(db, course_id=course_id, chapter_id=None)
-    points: list[KnowledgePoint] = []
-    seen: set[int] = set()
-    for chapter_id in chapter_ids:
-        for point in ensure_knowledge_points(db, course_id=course_id, chapter_id=chapter_id):
-            if point.id not in seen:
-                points.append(point)
-                seen.add(point.id)
-    return points
+        return list_knowledge_points(db, course_id=course_id, chapter_id=None)
+    chapter_rank = {chapter_id: index for index, chapter_id in enumerate(chapter_ids)}
+    points = list(
+        db.scalars(
+            select(KnowledgePoint)
+            .where(KnowledgePoint.course_id == course_id, KnowledgePoint.chapter_id.in_(chapter_ids))
+            .order_by(KnowledgePoint.id)
+        )
+    )
+    return sorted(points, key=lambda point: (chapter_rank.get(point.chapter_id, len(chapter_rank)), point.id))
 
 
 def _knowledge_points_by_ids(db: Session, *, course_id: int, point_ids: list[int]) -> list[KnowledgePoint]:
@@ -2333,7 +2334,7 @@ def create_study_plan(db: Session, *, user: User, payload: StudyPlanCreateReques
     # #18：注入课程真实知识点与该生薄弱点，让 AI 据课程内容生成计划而非空泛模板。
     knowledge_points = [
         point.name
-        for point in ensure_knowledge_points(db, course_id=payload.course_id, chapter_id=None)
+        for point in list_knowledge_points(db, course_id=payload.course_id, chapter_id=None)
         if getattr(point, "name", None)
     ]
     weak_points = [
