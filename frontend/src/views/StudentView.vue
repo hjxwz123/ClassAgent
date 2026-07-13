@@ -477,8 +477,15 @@
                 <button type="button" @click="removeQaAttachment('global', index)"><X :size="13" /></button>
               </div>
             </div>
+            <transition name="fade-slide">
+              <div v-if="globalQuestionPreview" class="qa-math-preview" aria-label="公式预览"><span class="qa-math-preview-tag">预览</span><div class="qa-math-preview-body" v-html="globalQuestionPreview"></div></div>
+            </transition>
+            <transition name="fade-slide">
+              <MathKeyboard v-if="mathPanelOpen" class="qa-math-keyboard" @insert="insertGlobalMath" @close="mathPanelOpen = false" />
+            </transition>
             <section class="input-box">
               <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
+              <button type="button" class="attach-btn math-btn" :class="{ active: mathPanelOpen }" :aria-pressed="mathPanelOpen" title="数学公式键盘" @click="mathPanelOpen = !mathPanelOpen"><FunctionIcon :size="18" /></button>
               <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || (globalConversationLoading && !globalMessages.length) || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
               <textarea
                 ref="globalQuestionInput"
@@ -569,7 +576,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, provide, reactive, ref,
 import { useRoute, useRouter } from "vue-router";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Bell, BookMarked, BookOpen, CalendarCheck, Camera, Check, CheckCircle,
-  ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, FileText, GitBranch, Grid2X2, History,
+  ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, FileText, FunctionIcon, GitBranch, Grid2X2, History,
   Info, Flag, Layers, ListChecks, LogOut, Maximize, MessageCircle, PanelRight, Pause, Pencil,
   Play, Plus, PlusCircle, Presentation, Quote, RefreshCw, Search, Send, Settings, Shield,
   Sparkles, Square, Trash2, User, X, XCircle, Zap
@@ -590,12 +597,15 @@ import StudentCourseHome from "./student/pages/StudentCourseHome.vue";
 import { routeByPage } from "../router";
 import type { LessonDetail, MaterialDetail, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
+import { renderRichText } from "../utils/richText";
+import { computeMathInsert } from "../utils/mathInput";
 import { timestampMs, relativeTime, formatTime } from "../utils/datetime";
 import AppSelect from "../components/AppSelect.vue";
 import BrandLogo from "../components/BrandLogo.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import LoadingMark from "../components/LoadingMark.vue";
 import MaterialPreviewModal from "../components/MaterialPreviewModal.vue";
+import MathKeyboard from "../components/MathKeyboard.vue";
 import PageLoader from "../components/PageLoader.vue";
 import SelectMenu from "../components/SelectMenu";
 import ThemeToggle from "../components/ThemeToggle.vue";
@@ -724,6 +734,27 @@ const globalConversationId = ref<number | null>(null);
 const globalQaImageInput = ref<HTMLInputElement | null>(null);
 const globalQaAttachments = ref<QaAttachment[]>([]);
 const globalQaImageUploading = ref(false);
+// 数学公式键盘：开合状态、实时预览、把 LaTeX 片段插入到全局问答输入框。
+const mathPanelOpen = ref(false);
+const globalQuestionPreview = computed(() => {
+  const text = globalQuestion.value;
+  if (!text || !/[$\\]/.test(text)) return "";
+  return renderRichText(text);
+});
+function insertGlobalMath(template: string) {
+  const el = globalQuestionInput.value;
+  const start = el?.selectionStart ?? globalQuestion.value.length;
+  const end = el?.selectionEnd ?? start;
+  const result = computeMathInsert(globalQuestion.value, start, end, template);
+  globalQuestion.value = result.value;
+  nextTick(() => {
+    const node = globalQuestionInput.value;
+    if (!node) return;
+    node.focus();
+    node.setSelectionRange(result.caret, result.caret);
+    resizeQuestionInput(node);
+  });
+}
 const qaHistory = ref<QaHistoryConversation[]>([]);
 const qaKeyword = ref("");
 const historyOpen = ref(false);
