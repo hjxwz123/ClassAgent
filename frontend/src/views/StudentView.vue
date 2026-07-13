@@ -478,24 +478,18 @@
               </div>
             </div>
             <transition name="fade-slide">
-              <div v-if="globalQuestionPreview" class="qa-math-preview" aria-label="公式预览"><span class="qa-math-preview-tag">预览</span><div class="qa-math-preview-body" v-html="globalQuestionPreview"></div></div>
-            </transition>
-            <transition name="fade-slide">
               <MathKeyboard v-if="mathPanelOpen" class="qa-math-keyboard" @insert="insertGlobalMath" @close="mathPanelOpen = false" />
             </transition>
             <section class="input-box">
               <input ref="globalQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'global')" />
               <button type="button" class="attach-btn math-btn" :class="{ active: mathPanelOpen }" :aria-pressed="mathPanelOpen" title="数学公式键盘" @click="mathPanelOpen = !mathPanelOpen"><FunctionIcon :size="18" /></button>
               <button type="button" class="attach-btn" :data-loading="globalQaImageUploading" :disabled="globalThinking || (globalConversationLoading && !globalMessages.length) || globalQaImageUploading || globalQaAttachments.length >= 3" title="上传图片" @click="globalQaImageInput?.click()"><Camera :size="18" /></button>
-              <textarea
-                ref="globalQuestionInput"
+              <MathTextField
+                ref="globalMathField"
                 v-model="globalQuestion"
-                placeholder="输入问题"
-                rows="1"
-                @compositionstart="handleQuestionCompositionStart('global')"
-                @compositionend="handleQuestionCompositionEnd('global')"
-                @keydown="handleGlobalQuestionKeydown"
-              ></textarea>
+                placeholder="输入问题，点 fx 插入公式"
+                @submit="askGlobal"
+              />
               <button v-if="globalThinking" type="button" class="send-btn send-btn-stop" title="停止生成" aria-label="停止生成" @click="stopGlobalGeneration"><Square :size="18" /></button>
               <button v-else :disabled="(!globalQuestion.trim() && !globalQaAttachments.length) || (globalConversationLoading && !globalMessages.length) || globalQaImageUploading" class="send-btn"><Send :size="20" /></button>
             </section>
@@ -597,8 +591,6 @@ import StudentCourseHome from "./student/pages/StudentCourseHome.vue";
 import { routeByPage } from "../router";
 import type { LessonDetail, MaterialDetail, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
-import { renderRichText } from "../utils/richText";
-import { computeMathInsert } from "../utils/mathInput";
 import { timestampMs, relativeTime, formatTime } from "../utils/datetime";
 import AppSelect from "../components/AppSelect.vue";
 import BrandLogo from "../components/BrandLogo.vue";
@@ -606,6 +598,7 @@ import ConfirmDialog from "../components/ConfirmDialog.vue";
 import LoadingMark from "../components/LoadingMark.vue";
 import MaterialPreviewModal from "../components/MaterialPreviewModal.vue";
 import MathKeyboard from "../components/MathKeyboard.vue";
+import MathTextField from "../components/MathTextField.vue";
 import PageLoader from "../components/PageLoader.vue";
 import SelectMenu from "../components/SelectMenu";
 import ThemeToggle from "../components/ThemeToggle.vue";
@@ -703,15 +696,14 @@ const pendingSourcePageNumber = ref<number | null>(null);
 const pendingSourcePageId = ref<number | null>(null);
 const pageDirection = ref<"next" | "prev">("next");
 let globalAbortController: AbortController | null = null;
-const globalQuestionInput = ref<HTMLTextAreaElement | null>(null);
 const lessonSelectionMenu = reactive({ open: false, text: "", x: 0, y: 0 });
+// 生成中若用户主动滚动（滚轮/触摸/翻页键），置为 true → 停止自动跟随到底端，避免与用户滚动来回打架。
+// 由新提问或点击“回到最新”重新贴底时复位。课堂问答 follow=false，不受影响、无需此逻辑。
+let qaFollowDetached = false;
 // QA 流式引擎（全局问答与课堂问答共用）。跟随滚动钩子接全局问答页的滚动函数（课堂问答 follow=false 不触发）。
 const {
   patchChatMessage, flushQaDeltas, queueQaDelta, applyQaStreamEvent,
-  questionCompositionState, handleQuestionCompositionStart, handleQuestionCompositionEnd,
-  submitQuestionOnEnter, resizeQuestionInput,
-} = useQaEngine({ isNearLatest: () => isQaNearLatest(320), keepAtLatest: keepQaAtLatestIfNeeded });
-function handleGlobalQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, "global", askGlobal); }
+} = useQaEngine({ isNearLatest: () => !qaFollowDetached && isQaNearLatest(320), keepAtLatest: keepQaAtLatestIfNeeded });
 const thumbOpen = ref(false);
 const settingsOpen = ref(false);
 const studySeconds = ref(0);
@@ -734,26 +726,11 @@ const globalConversationId = ref<number | null>(null);
 const globalQaImageInput = ref<HTMLInputElement | null>(null);
 const globalQaAttachments = ref<QaAttachment[]>([]);
 const globalQaImageUploading = ref(false);
-// 数学公式键盘：开合状态、实时预览、把 LaTeX 片段插入到全局问答输入框。
+// 数学公式键盘：开合状态 + 把公式片段插入到所见即所得的公式输入栏（MathLive）。
 const mathPanelOpen = ref(false);
-const globalQuestionPreview = computed(() => {
-  const text = globalQuestion.value;
-  if (!text || !/[$\\]/.test(text)) return "";
-  return renderRichText(text);
-});
+const globalMathField = ref<InstanceType<typeof MathTextField> | null>(null);
 function insertGlobalMath(template: string) {
-  const el = globalQuestionInput.value;
-  const start = el?.selectionStart ?? globalQuestion.value.length;
-  const end = el?.selectionEnd ?? start;
-  const result = computeMathInsert(globalQuestion.value, start, end, template);
-  globalQuestion.value = result.value;
-  nextTick(() => {
-    const node = globalQuestionInput.value;
-    if (!node) return;
-    node.focus();
-    node.setSelectionRange(result.caret, result.caret);
-    resizeQuestionInput(node);
-  });
+  globalMathField.value?.insertTemplate(template);
 }
 const qaHistory = ref<QaHistoryConversation[]>([]);
 const qaKeyword = ref("");
@@ -1270,6 +1247,9 @@ function scheduleQaLatestButtonCheck() {
   });
 }
 function scrollQaToLatest(smooth = true) {
+  // 每一次“滚到最新”都是有意的贴底动作（新提问 / 加载会话 / 点击回到最新），重新恢复自动跟随。
+  // 生成中的跟随路径在脱离时不会走到这里（见 keepQaAtLatestIfNeeded 的 else 分支），故此处复位安全。
+  qaFollowDetached = false;
   void nextTick(() => {
     const root = qaScrollRoot();
     const top = Math.max(0, root.scrollHeight - root.clientHeight);
@@ -1281,6 +1261,21 @@ function scrollQaToLatest(smooth = true) {
 function keepQaAtLatestIfNeeded(wasNearLatest: boolean) {
   if (wasNearLatest) scrollQaToLatest(false);
   else scheduleQaLatestButtonCheck();
+}
+// 生成进行中，用户用滚轮/触摸/翻页键主动滚动时：停止自动跟随（仅全局问答页；课堂问答 follow=false 不受影响）。
+// 程序化 window.scrollTo 不会触发 wheel/touchmove，故这些手势必为用户发起，不会误判。
+function onQaUserScrollIntent() {
+  if (qaFollowDetached || active.value !== "studentQa" || !globalThinking.value) return;
+  qaFollowDetached = true;
+  scheduleQaLatestButtonCheck();
+}
+const qaScrollKeys = new Set(["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " ", "Spacebar"]);
+function onQaScrollKeydown(event: KeyboardEvent) {
+  if (!qaScrollKeys.has(event.key)) return;
+  // 焦点在输入框/公式栏内时是编辑而非滚动，忽略
+  const target = event.target as HTMLElement | null;
+  if (target?.closest('input, textarea, math-field, [contenteditable="true"]')) return;
+  onQaUserScrollIntent();
 }
 function firstChar(value?: string) { return (value || "-").slice(0, 1); }
 function todayTaskKey() {
@@ -1620,8 +1615,6 @@ async function handleQaImageChange(event: Event, scope: "class" | "global") {
   }
 }
 
-// 全局问答输入框随内容自适应高度（课堂问答输入框由 StudentLessonStudy 组件自持）。
-watch(globalQuestion, () => nextTick(() => resizeQuestionInput(globalQuestionInput.value)));
 async function askGlobal() {
   if (globalThinking.value || (globalConversationLoading.value && !globalMessages.value.length) || globalQaImageUploading.value) return;
   if (!globalQuestion.value.trim() && !globalQaAttachments.value.length) return;
@@ -1652,7 +1645,7 @@ async function askGlobal() {
         return;
       }
       flushQaDeltas();
-      const shouldFollowLatest = isQaNearLatest(320);
+      const shouldFollowLatest = !qaFollowDetached && isQaNearLatest(320);
       applyQaStreamEvent(globalMessages, aiMessageId, event, data);
       keepQaAtLatestIfNeeded(shouldFollowLatest);
       if (event === "created" || event === "final") globalConversationId.value = data.conversation_id ?? globalConversationId.value;
@@ -1931,6 +1924,10 @@ onMounted(async () => {
   window.addEventListener("resize", updateTopNavIndicator);
   window.addEventListener("resize", scheduleQaLatestButtonCheck);
   window.addEventListener("scroll", scheduleQaLatestButtonCheck, { passive: true });
+  // 生成中用户主动滚动 → 脱离自动跟随（滚轮/触摸/翻页键）
+  window.addEventListener("wheel", onQaUserScrollIntent, { passive: true });
+  window.addEventListener("touchmove", onQaUserScrollIntent, { passive: true });
+  window.addEventListener("keydown", onQaScrollKeydown);
   // 课堂划词/全屏/幻灯尺寸监听（selectionchange、fullscreenchange、resize→compact、ResizeObserver）
   // 已移入 StudentLessonStudy 组件，仅课堂挂载时存在。
   if (active.value === "studentLessonStudy") {
@@ -1955,6 +1952,9 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", updateTopNavIndicator);
   window.removeEventListener("resize", scheduleQaLatestButtonCheck);
   window.removeEventListener("scroll", scheduleQaLatestButtonCheck);
+  window.removeEventListener("wheel", onQaUserScrollIntent);
+  window.removeEventListener("touchmove", onQaUserScrollIntent);
+  window.removeEventListener("keydown", onQaScrollKeydown);
   if (topNavIndicatorFrame) window.cancelAnimationFrame(topNavIndicatorFrame);
   if (qaScrollFrame) window.cancelAnimationFrame(qaScrollFrame);
   stopStudyClock();

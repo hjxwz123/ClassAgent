@@ -166,24 +166,18 @@
                 <button type="button" aria-label="移除选中文本" @click="clearLessonAskContext"><X :size="13" /></button>
               </div>
               <transition name="fade-slide">
-                <div v-if="classQuestionPreview" class="qa-math-preview compact" aria-label="公式预览"><span class="qa-math-preview-tag">预览</span><div class="qa-math-preview-body" v-html="classQuestionPreview"></div></div>
-              </transition>
-              <transition name="fade-slide">
                 <MathKeyboard v-if="classMathPanelOpen" class="qa-math-keyboard" @insert="insertClassMath" @close="classMathPanelOpen = false" />
               </transition>
               <form class="chat-input compact has-math" @submit.prevent="askInClass">
                 <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
                 <button type="button" class="attach-btn math-btn" :class="{ active: classMathPanelOpen }" :aria-pressed="classMathPanelOpen" title="数学公式键盘" @click="classMathPanelOpen = !classMathPanelOpen"><FunctionIcon :size="17" /></button>
                 <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || (classConversationLoading && !classMessages.length) || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
-                <textarea
-                  ref="classQuestionInput"
+                <MathTextField
+                  ref="classMathField"
                   v-model="classQuestion"
                   :placeholder="classQuestionPlaceholder"
-                  rows="1"
-                  @compositionstart="handleQuestionCompositionStart('class')"
-                  @compositionend="handleQuestionCompositionEnd('class')"
-                  @keydown="handleClassQuestionKeydown"
-                ></textarea>
+                  @submit="askInClass"
+                />
                 <button v-if="classThinking" type="button" class="send-btn send-btn-stop" title="停止生成" aria-label="停止生成" @click="stopClassGeneration"><Square :size="16" /></button>
                 <button v-else :disabled="(!classQuestion.trim() && !classQaAttachments.length) || (classConversationLoading && !classMessages.length) || classQaImageUploading" class="send-btn"><Send :size="18" /></button>
               </form>
@@ -260,8 +254,8 @@ import {
 } from "../../../icons";
 import { api } from "../../../api/client";
 import { extractStructuredText, renderRichText } from "../../../utils/richText";
-import { computeMathInsert } from "../../../utils/mathInput";
 import MathKeyboard from "../../../components/MathKeyboard.vue";
+import MathTextField from "../../../components/MathTextField.vue";
 import { timeLabel, timestampMs, relativeTime } from "../../../utils/datetime";
 import type { Material, PageActivity } from "../../../types";
 import AppSlider from "../../../components/AppSlider.vue";
@@ -317,29 +311,13 @@ let classAbortController: AbortController | null = null;
 const classConversationLoading = ref(false);
 const classConversationId = ref<number | null>(null);
 const classQaImageInput = ref<HTMLInputElement | null>(null);
-const classQuestionInput = ref<HTMLTextAreaElement | null>(null);
 const classQaAttachments = ref<QaAttachment[]>([]);
 const classQaImageUploading = ref(false);
-// 数学公式键盘：开合状态、实时预览、把 LaTeX 片段插入到课堂问答输入框。
+// 数学公式键盘：开合状态 + 把公式片段插入到所见即所得的公式输入栏（MathLive）。
 const classMathPanelOpen = ref(false);
-const classQuestionPreview = computed(() => {
-  const text = classQuestion.value;
-  if (!text || !/[$\\]/.test(text)) return "";
-  return renderRichText(text);
-});
+const classMathField = ref<InstanceType<typeof MathTextField> | null>(null);
 function insertClassMath(template: string) {
-  const el = classQuestionInput.value;
-  const start = el?.selectionStart ?? classQuestion.value.length;
-  const end = el?.selectionEnd ?? start;
-  const result = computeMathInsert(classQuestion.value, start, end, template);
-  classQuestion.value = result.value;
-  nextTick(() => {
-    const node = classQuestionInput.value;
-    if (!node) return;
-    node.focus();
-    node.setSelectionRange(result.caret, result.caret);
-    resizeQuestionInput(node);
-  });
+  classMathField.value?.insertTemplate(template);
 }
 const lessonAskContext = ref("");
 const aiPanelOpen = ref(true);
@@ -365,9 +343,7 @@ const speedItems = ["0.5", "0.75", "1", "1.25", "1.5", "2"].map((value) => ({ la
 // 因此传入空实现即可（与外壳全局问答共用引擎时课堂分支行为一致）。
 const {
   patchChatMessage, flushQaDeltas, queueQaDelta, applyQaStreamEvent,
-  handleQuestionCompositionStart, handleQuestionCompositionEnd, submitQuestionOnEnter, resizeQuestionInput,
 } = useQaEngine({ isNearLatest: () => false, keepAtLatest: () => {} });
-function handleClassQuestionKeydown(event: KeyboardEvent) { submitQuestionOnEnter(event, "class", askInClass); }
 
 const activeCourse = computed(() => courses.value.find((course) => course.id === selectedCourseId.value) || courses.value[0] || null);
 const activePage = computed(() => classroomLesson.value?.pages.find((page) => page.page_number === currentPage.value) || classroomLesson.value?.pages[0] || null);
@@ -623,7 +599,7 @@ async function prepareLessonSelectionQuestion() {
   lessonAskContext.value = text;
   classQuestion.value = "";
   await openClassQaFromSelection();
-  classQuestionInput.value?.focus();
+  classMathField.value?.focus();
 }
 
 function lessonPanelBounds(totalWidth = studyMainRef.value?.clientWidth || lessonLayoutWidth.value || 0) {
@@ -889,8 +865,6 @@ function sendQuickClass(text: string) {
   classQuestion.value = text;
   void nextTick(() => askInClass());
 }
-// 用 watch 覆盖所有改值路径：键入、快捷追问写入、发送后清空
-watch(classQuestion, () => nextTick(() => resizeQuestionInput(classQuestionInput.value)));
 
 async function loadClassQaHistory() {
   if (!classroomLesson.value) return;

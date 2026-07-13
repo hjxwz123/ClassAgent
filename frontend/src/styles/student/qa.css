@@ -1931,50 +1931,6 @@
     width: 100%
 }
 
-/* 正在输入的公式实时预览：把 LaTeX 排版成正常数学公式 */
-.qa-math-preview {
-    align-self: center;
-    width: 100%;
-    max-width: var(--qa-content-width);
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    border: 1px dashed var(--qa-primary-100, var(--color-primary-100));
-    border-radius: 14px;
-    background: var(--qa-primary-50, var(--color-primary-50));
-    box-shadow: var(--qa-shadow-sm);
-    padding: 8px 14px;
-    overflow-x: auto
-}
-
-.qa-math-preview-tag {
-    flex: 0 0 auto;
-    margin-top: 2px;
-    border-radius: 999px;
-    background: var(--qa-primary-600, var(--color-primary-600));
-    color: #fff;
-    padding: 1px 8px;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: .04em
-}
-
-.qa-math-preview-body {
-    min-width: 0;
-    color: var(--qa-text);
-    font-size: 15px;
-    line-height: 1.6;
-    overflow-x: auto
-}
-
-.qa-math-preview-body p {
-    margin: 0
-}
-
-.qa-math-preview-body .katex {
-    font-size: 1.05em
-}
-
 .class-chat .chat-input.compact {
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: end;
@@ -1983,11 +1939,6 @@
 
 .class-chat .chat-input.compact.has-math {
     grid-template-columns: auto auto minmax(0, 1fr) auto
-}
-
-.qa-math-preview.compact {
-    max-width: none;
-    margin-bottom: 8px
 }
 
 .class-chat .chat-input.compact textarea {

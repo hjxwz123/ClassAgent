@@ -1,9 +1,7 @@
-// 数学公式键盘：把 LaTeX 片段插入到问答输入框。
-// 设计要点：
-// - 公式在文本里以 LaTeX 存在（$...$ 行内），发送后由 renderRichText/KaTeX 排版成正常公式；
+// 数学公式键盘的键位数据（分类符号盘）。
 // - 面板按键用 KaTeX 把 label 渲染成真实符号，做到「所见即所得」的键盘（类似 Word 插入公式）；
-// - 插入时若光标已在某段行内 $...$ 内，则直接插裸 LaTeX，否则自动补一对 $；
-// - 模板里的占位符 CARET(▮) 标记「插入后光标应落点」，并会吞掉当前选中文本（选中 x+1 点根号 → \sqrt{x+1}）。
+// - insert 模板里的占位符 CARET(▮) 标记「插入后光标应落点」；toMathfieldInsert() 会把它转成
+//   MathLive 的 #?/#@ 语法插入到公式输入栏（见 utils/mathfield.ts）。
 
 export const CARET = "▮";
 
@@ -192,42 +190,3 @@ export const MATH_GROUPS: MathGroup[] = [
     ],
   },
 ];
-
-/** 统计 pos 之前未转义的 `$` 个数为奇数 ⇒ 光标当前处于一段行内数学 $...$ 之内。 */
-function isInsideInlineMath(value: string, pos: number): boolean {
-  let count = 0;
-  for (let i = 0; i < pos && i < value.length; i += 1) {
-    if (value[i] === "$" && value[i - 1] !== "\\") count += 1;
-  }
-  return count % 2 === 1;
-}
-
-export type MathInsertResult = { value: string; caret: number };
-
-/**
- * 计算把某个模板插入到 (value, start, end) 后的新文本与光标位置。纯函数，便于测试。
- * - 选中文本会填入模板第一个 CARET 处（无选中则该处为空）；
- * - 不在数学区内时自动补一对 $，并把光标留在 $...$ 内。
- */
-export function computeMathInsert(value: string, start: number, end: number, template: string): MathInsertResult {
-  const selected = value.slice(start, end);
-  const caretIndex = template.indexOf(CARET);
-  let filled: string;
-  let innerCaret: number;
-  if (caretIndex >= 0) {
-    const before = template.slice(0, caretIndex);
-    const after = template.slice(caretIndex + CARET.length).split(CARET).join("");
-    filled = before + selected + after;
-    innerCaret = before.length + selected.length;
-  } else {
-    filled = template.split(CARET).join("");
-    innerCaret = filled.length;
-  }
-  let leadOffset = 0;
-  if (!isInsideInlineMath(value, start)) {
-    filled = `$${filled}$`;
-    leadOffset = 1;
-  }
-  const nextValue = value.slice(0, start) + filled + value.slice(end);
-  return { value: nextValue, caret: start + leadOffset + innerCaret };
-}
