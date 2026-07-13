@@ -165,8 +165,15 @@
                 <span>{{ lessonAskContextPreview }}</span>
                 <button type="button" aria-label="移除选中文本" @click="clearLessonAskContext"><X :size="13" /></button>
               </div>
-              <form class="chat-input compact" @submit.prevent="askInClass">
+              <transition name="fade-slide">
+                <div v-if="classQuestionPreview" class="qa-math-preview compact" aria-label="公式预览"><span class="qa-math-preview-tag">预览</span><div class="qa-math-preview-body" v-html="classQuestionPreview"></div></div>
+              </transition>
+              <transition name="fade-slide">
+                <MathKeyboard v-if="classMathPanelOpen" class="qa-math-keyboard" @insert="insertClassMath" @close="classMathPanelOpen = false" />
+              </transition>
+              <form class="chat-input compact has-math" @submit.prevent="askInClass">
                 <input ref="classQaImageInput" class="qa-image-input" type="file" accept="image/*" @change="handleQaImageChange($event, 'class')" />
+                <button type="button" class="attach-btn math-btn" :class="{ active: classMathPanelOpen }" :aria-pressed="classMathPanelOpen" title="数学公式键盘" @click="classMathPanelOpen = !classMathPanelOpen"><FunctionIcon :size="17" /></button>
                 <button type="button" class="attach-btn" :data-loading="classQaImageUploading" :disabled="classThinking || (classConversationLoading && !classMessages.length) || classQaImageUploading || classQaAttachments.length >= 3" title="上传图片" @click="classQaImageInput?.click()"><Camera :size="17" /></button>
                 <textarea
                   ref="classQuestionInput"
@@ -248,11 +255,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import {
   ArrowLeft, Camera, Check, CheckCircle, ChevronLeft, ChevronRight, Clock, Copy, FileText, Flag,
-  Grid2X2, Info, Layers, ListChecks, Maximize, MessageCircle, PanelRight, Pause, Pencil, Play,
+  FunctionIcon, Grid2X2, Info, Layers, ListChecks, Maximize, MessageCircle, PanelRight, Pause, Pencil, Play,
   Presentation, Quote, Send, Settings, Shield, Sparkles, Square, X, Zap,
 } from "../../../icons";
 import { api } from "../../../api/client";
 import { extractStructuredText, renderRichText } from "../../../utils/richText";
+import { computeMathInsert } from "../../../utils/mathInput";
+import MathKeyboard from "../../../components/MathKeyboard.vue";
 import { timeLabel, timestampMs, relativeTime } from "../../../utils/datetime";
 import type { Material, PageActivity } from "../../../types";
 import AppSlider from "../../../components/AppSlider.vue";
@@ -311,6 +320,27 @@ const classQaImageInput = ref<HTMLInputElement | null>(null);
 const classQuestionInput = ref<HTMLTextAreaElement | null>(null);
 const classQaAttachments = ref<QaAttachment[]>([]);
 const classQaImageUploading = ref(false);
+// 数学公式键盘：开合状态、实时预览、把 LaTeX 片段插入到课堂问答输入框。
+const classMathPanelOpen = ref(false);
+const classQuestionPreview = computed(() => {
+  const text = classQuestion.value;
+  if (!text || !/[$\\]/.test(text)) return "";
+  return renderRichText(text);
+});
+function insertClassMath(template: string) {
+  const el = classQuestionInput.value;
+  const start = el?.selectionStart ?? classQuestion.value.length;
+  const end = el?.selectionEnd ?? start;
+  const result = computeMathInsert(classQuestion.value, start, end, template);
+  classQuestion.value = result.value;
+  nextTick(() => {
+    const node = classQuestionInput.value;
+    if (!node) return;
+    node.focus();
+    node.setSelectionRange(result.caret, result.caret);
+    resizeQuestionInput(node);
+  });
+}
 const lessonAskContext = ref("");
 const aiPanelOpen = ref(true);
 const chromeVisible = ref(true);

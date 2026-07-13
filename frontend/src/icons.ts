@@ -38,6 +38,7 @@ import {
   PhFlame,
   PhFolderOpen,
   PhFloppyDisk,
+  PhFunction,
   PhGearSix,
   PhGitBranch,
   PhGraduationCap,
@@ -154,6 +155,7 @@ export const FileText = icon(PhFileText);
 export const Flag = icon(PhFlag);
 export const Flame = icon(PhFlame);
 export const FolderOpen = icon(PhFolderOpen);
+export const FunctionIcon = icon(PhFunction);
 export const GitBranch = icon(PhGitBranch);
 export const GraduationCap = icon(PhGraduationCap);
 export const Grid2X2 = icon(PhGridFour);
