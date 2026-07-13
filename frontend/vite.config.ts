@@ -2,14 +2,15 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === "math-field" } } })],
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
           vue: ["vue"],
           charts: ["echarts"],
-          icons: ["@phosphor-icons/vue"]
+          icons: ["@phosphor-icons/vue"],
+          mathlive: ["mathlive"]
         }
       }
     }
