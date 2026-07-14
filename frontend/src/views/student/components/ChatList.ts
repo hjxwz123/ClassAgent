@@ -1,6 +1,6 @@
 import { defineComponent, h, onBeforeUnmount, ref, Transition, type PropType } from "vue";
 import { BookMarked, BookOpen, ChevronDown, Copy, Sparkles, ThumbsDown, ThumbsUp } from "../../../icons";
-import { renderRichText } from "../../../utils/richText";
+import { renderRichText, renderUserRichText } from "../../../utils/richText";
 import BrandLogo from "../../../components/BrandLogo.vue";
 
 type QaAttachment = { type: string; url: string; filename?: string; size_bytes?: number; ocr_text?: string };
@@ -220,7 +220,8 @@ export default defineComponent({
     }
     function bubble(message: ChatMessage) {
       if (p.large && message.role === "user") {
-        return h("div", { class: "chat-bubble bubble-user" }, [h("p", message.text), attachmentNodes(message)]);
+        // 用户消息经轻量渲染：$...$ 排版成公式，其余文本转义原样（不走 markdown）
+        return h("div", { class: "chat-bubble bubble-user" }, [h("p", { innerHTML: renderUserRichText(message.text) }), attachmentNodes(message)]);
       }
       if (p.large && message.role === "ai") {
         return h("div", { class: "chat-bubble bubble-ai" }, [
@@ -245,7 +246,7 @@ export default defineComponent({
         message.outOfScope ? h("span", { class: "tag tag-warning" }, "可能超纲") : null,
         message.role === "ai"
           ? answerNode(message)
-          : [h("p", message.text), attachmentNodes(message)],
+          : [h("p", { innerHTML: renderUserRichText(message.text) }), attachmentNodes(message)],
         sourceSection(message, "source-tags", "source-label"),
         h("div", { class: "msg-actions" }, [
           h("button", { type: "button", title: "复制", disabled: !message.text, onClick: () => emit("copy", message.text) }, [h(Copy, { size: 13 }), "复制"]),

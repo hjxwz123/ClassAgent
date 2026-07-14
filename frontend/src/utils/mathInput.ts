@@ -5,6 +5,38 @@
 
 export const CARET = "▮";
 
+export type PlainSegment = { type: "text" | "math"; value: string };
+
+/** 把「散文 + $...$」拆成文本段与数学段（未配对的 $ 当普通文本）。 */
+export function parsePlainSegments(plain: string): PlainSegment[] {
+  const segments: PlainSegment[] = [];
+  let text = "";
+  let i = 0;
+  const flushText = () => {
+    if (text) segments.push({ type: "text", value: text });
+    text = "";
+  };
+  while (i < plain.length) {
+    const ch = plain[i];
+    if (ch === "$" && plain[i - 1] !== "\\") {
+      const end = plain.indexOf("$", i + 1);
+      if (end > i) {
+        const inner = plain.slice(i + 1, end).trim();
+        if (inner) {
+          flushText();
+          segments.push({ type: "math", value: inner });
+        }
+        i = end + 1;
+        continue;
+      }
+    }
+    text += ch;
+    i += 1;
+  }
+  flushText();
+  return segments;
+}
+
 export type MathKey = {
   /** 渲染在按键上的 KaTeX 源码（所见即所得的符号）。为空时回退显示 fallback 文本。 */
   label: string;

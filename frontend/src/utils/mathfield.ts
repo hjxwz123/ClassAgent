@@ -4,7 +4,6 @@
 // - configureMathfield(): 全局配置 MathLive 字体目录、禁用音效（只需一次）。
 // - toMathfieldInsert(): 把公式键盘模板（▮=光标）转成 MathLive insert 语法（#? 占位 / #@ 选区）。
 // - stripOuterMath(): 剥掉 MathLive getValue('latex') 的外层数学定界，得到裸公式 LaTeX。
-// - parsePlainSegments(): 把「散文 + $...$」拆成文本段 / 数学段，供 contenteditable 渲染成文字 + 公式块。
 import { MathfieldElement } from "mathlive";
 import { CARET } from "./mathInput";
 
@@ -37,34 +36,5 @@ export function stripOuterMath(latex: string): string {
   return s.trim();
 }
 
-export type PlainSegment = { type: "text" | "math"; value: string };
-
-/** 把「散文 + $...$」拆成文本段与数学段（未配对的 $ 当普通文本）。 */
-export function parsePlainSegments(plain: string): PlainSegment[] {
-  const segments: PlainSegment[] = [];
-  let text = "";
-  let i = 0;
-  const flushText = () => {
-    if (text) segments.push({ type: "text", value: text });
-    text = "";
-  };
-  while (i < plain.length) {
-    const ch = plain[i];
-    if (ch === "$" && plain[i - 1] !== "\\") {
-      const end = plain.indexOf("$", i + 1);
-      if (end > i) {
-        const inner = plain.slice(i + 1, end).trim();
-        if (inner) {
-          flushText();
-          segments.push({ type: "math", value: inner });
-        }
-        i = end + 1;
-        continue;
-      }
-    }
-    text += ch;
-    i += 1;
-  }
-  flushText();
-  return segments;
-}
+// parsePlainSegments（「散文 + $...$」拆段）在 utils/mathInput.ts：
+// 该函数也被消息渲染(richText)使用，放在无 mathlive 依赖的模块里，避免把 mathlive 拖进公共 chunk。
