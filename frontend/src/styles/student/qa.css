@@ -1924,6 +1924,11 @@
     color: var(--qa-primary-600, var(--color-primary-600))
 }
 
+/* 历史概要里的公式：压到正文字号，随行单行截断、不撑破布局 */
+.qa-modern-page .history-row-q .katex {
+    font-size: 1em
+}
+
 .class-chat .chat-input.compact {
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: end;

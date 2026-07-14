@@ -500,7 +500,7 @@
             </div>
             <div class="history-drawer-list">
               <div v-for="item in filteredQaHistory" :key="item.conversation_id" class="history-row-wrap" :class="{ active: routeQaConversationId() === Number(item.conversation_id) }">
-                <button class="history-row" type="button" @click="openQaConversation(item)"><MessageCircle :size="13" /><span>{{ item.question }}</span><small>{{ formatTime(item.created_at) }}<template v-if="item.record_count > 1"> · {{ item.record_count }} 条</template></small></button>
+                <button class="history-row" type="button" @click="openQaConversation(item)"><MessageCircle :size="13" /><span class="history-row-q" v-html="renderUserRichText(item.question)"></span><small>{{ formatTime(item.created_at) }}<template v-if="item.record_count > 1"> · {{ item.record_count }} 条</template></small></button>
                 <button class="history-del-btn" type="button" title="删除该问答历史" aria-label="删除该问答历史" @click.stop="requestDeleteQaHistory(item)"><Trash2 :size="14" /></button>
               </div>
               <EmptyState v-if="!filteredQaHistory.length" text="本课程暂无问答记录" />
@@ -587,6 +587,7 @@ import StudentCourseHome from "./student/pages/StudentCourseHome.vue";
 import { routeByPage } from "../router";
 import type { LessonDetail, MaterialDetail, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
+import { renderUserRichText } from "../utils/richText";
 import { timestampMs, relativeTime, formatTime } from "../utils/datetime";
 import AppSelect from "../components/AppSelect.vue";
 import BrandLogo from "../components/BrandLogo.vue";
