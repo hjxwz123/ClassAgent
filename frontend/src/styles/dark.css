@@ -1472,7 +1472,7 @@ html.theme-dark .student-shell :where(
   .mini-metric strong,
   .knowledge-block h3,
   .profile-form label,
-  .qa-modern-page .history-row span,
+  .qa-modern-page .history-row > span,
   .tutoring-page .guide-step strong,
   .tutoring-page .knowledge-box strong,
   .practice-switch-wrapper strong,

@@ -30,7 +30,7 @@
     <div
       ref="editable"
       class="math-editable"
-      :class="{ empty: !modelValue }"
+      :class="{ 'is-empty': !modelValue }"
       :contenteditable="!disabled"
       :data-placeholder="placeholder"
       role="textbox"
@@ -314,7 +314,8 @@ defineExpose({ focus });
   word-break: break-word;
 }
 
-.math-editable.empty::before {
+/* 占位符：用独有类名 is-empty，避免撞全局 .empty（EmptyState 占位框：grid/居中/超高/大内边距） */
+.math-editable.is-empty::before {
   content: attr(data-placeholder);
   color: var(--qa-hint, var(--color-text-muted));
   pointer-events: none;
