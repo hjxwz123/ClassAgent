@@ -40,7 +40,6 @@
       @click="onEditableClick"
       @keyup="saveRange"
       @mouseup="saveRange"
-      @focus="saveRange"
       @compositionstart="onCompositionStart"
       @compositionend="onCompositionEnd"
     ></div>
@@ -54,7 +53,8 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import { X, FunctionIcon } from "../icons";
 import MathKeyboard from "./MathKeyboard.vue";
-import { configureMathfield, toMathfieldInsert, stripOuterMath, parsePlainSegments } from "../utils/mathfield";
+import { configureMathfield, toMathfieldInsert, stripOuterMath } from "../utils/mathfield";
+import { parsePlainSegments } from "../utils/mathInput";
 
 // 引入即注册 <math-field> 自定义元素并完成字体/音效配置。
 configureMathfield();
@@ -129,6 +129,19 @@ function setContent(plain: string) {
   }
   root.innerHTML = "";
   root.appendChild(frag);
+  // 内容整体重建后旧光标失去意义，浏览器会把残留 selection 钳到 (root, 0)——若编辑区
+  // 仍持焦点，这个"开头光标"会让后续打字/插公式全落到最前面。显式把光标移到末尾。
+  if (document.activeElement === root) {
+    const range = document.createRange();
+    range.selectNodeContents(root);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    savedRange = range.cloneRange();
+  } else {
+    savedRange = null;
+  }
 }
 
 function onInput() {
@@ -144,11 +157,14 @@ function onCompositionEnd() {
   onInput();
 }
 
-// 记录 contenteditable 内当前光标位置，供 fx 插入公式块时定位
+// 记录 contenteditable 内当前光标位置，供 fx 插入公式块时定位。
+// 仅在编辑区确实持有焦点时保存：内容重建后浏览器会把残留 selection 钳到 (root, 0)，
+// 焦点不在编辑区时读到的就是这类陈旧位置，存下来会让公式插到最前面。
 function saveRange() {
   const root = editable.value;
+  if (!root || document.activeElement !== root) return;
   const sel = window.getSelection();
-  if (root && sel && sel.rangeCount && root.contains(sel.anchorNode)) {
+  if (sel && sel.rangeCount && root.contains(sel.anchorNode)) {
     savedRange = sel.getRangeAt(0).cloneRange();
   }
 }
@@ -157,8 +173,10 @@ function insertChip(latex: string) {
   const root = editable.value;
   if (!root) return;
   const chip = createChip(latex);
+  // 先克隆已保存的光标位置再聚焦：focus() 会让浏览器把 selection 挪到内容开头，
+  // 若此后再读 savedRange（或经 focus 监听覆盖），公式会永远插到最前面。
+  let range = savedRange && root.contains(savedRange.startContainer) ? savedRange.cloneRange() : null;
   root.focus();
-  let range = savedRange && root.contains(savedRange.startContainer) ? savedRange : null;
   if (!range) {
     range = document.createRange();
     range.selectNodeContents(root);

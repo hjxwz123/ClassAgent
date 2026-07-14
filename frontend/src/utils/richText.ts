@@ -2,6 +2,7 @@ import MarkdownIt from "markdown-it";
 import katex from "katex";
 import DOMPurify, { type Config } from "dompurify";
 import "katex/dist/katex.min.css";
+import { parsePlainSegments } from "./mathInput";
 
 const markdownRenderer = new MarkdownIt({ html: false, linkify: true, breaks: true });
 const codeLanguagePattern = /[^\w#+.-]/g;
@@ -183,6 +184,19 @@ function wrapInlineBareLatex(value: string) {
       return `${prefix}$${expr.trim()}$`;
     });
   }).join("\n");
+}
+
+/**
+ * 用户消息的轻量渲染：只把 $...$ 排版成公式，其余文本原样转义（换行→<br>）。
+ * 不走 markdown——用户随手输入的 #、*、> 等不应被解释成标题/强调/引用。
+ */
+export function renderUserRichText(value?: string) {
+  if (!value) return "";
+  const html = parsePlainSegments(value).map((segment) => {
+    if (segment.type === "math") return renderMath(normalizeLatexEscapes(segment.value), false);
+    return markdownRenderer.utils.escapeHtml(segment.value).replace(/\n/g, "<br>");
+  }).join("");
+  return sanitizeHtml(html);
 }
 
 export function renderRichText(value?: unknown) {
