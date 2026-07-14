@@ -553,7 +553,7 @@
     text-align: left
 }
 
-.qa-modern-page .history-row span {
+.qa-modern-page .history-row > span {
     display: block;
     min-width: 0;
     max-width: 100%;
@@ -1924,9 +1924,12 @@
     color: var(--qa-primary-600, var(--color-primary-600))
 }
 
-/* 历史概要里的公式：压到正文字号，随行单行截断、不撑破布局 */
+/* 历史概要里的公式：压到正文字号；强制 nowrap+inline-block，避免继承窄屏 .history-row span
+   的 white-space:normal 而逐字换行、上下标 vlist 垮掉（KaTeX 的 .katex 自身不设 white-space） */
 .qa-modern-page .history-row-q .katex {
-    font-size: 1em
+    font-size: 1em;
+    display: inline-block;
+    white-space: nowrap
 }
 
 .class-chat .chat-input.compact {
@@ -2164,7 +2167,7 @@
 .notice-item strong,
 .notice-item p,
 .user-card small,
-.history-row span,
+.history-row > span,
 .qa-attachment-chip span {
     max-width: none;
     overflow: visible;
@@ -2215,7 +2218,7 @@
     border-color: var(--qa-primary-100)
 }
 
-.qa-modern-page .history-row span {
+.qa-modern-page .history-row > span {
     display: block;
     min-width: 0;
     max-width: 100%;
@@ -2442,7 +2445,7 @@
     z-index: calc(var(--z-sticky, 1100) - 2)
 }
 
-.qa-modern-page .history-row span {
+.qa-modern-page .history-row > span {
     display: block;
     min-width: 0;
     max-width: 100%;
