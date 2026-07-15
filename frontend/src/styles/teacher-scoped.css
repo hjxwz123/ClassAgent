@@ -3085,6 +3085,12 @@ code {
   gap: 10px;
 }
 
+.weak-custom-instructions textarea {
+  min-height: 60px;
+  resize: vertical;
+  font-family: inherit;
+}
+
 .weak-type-status {
   display: flex;
   align-items: center;

@@ -511,6 +511,20 @@ def _dispatch_quiz_generation(task_id: int) -> bool:
         return False
 
 
+def _report_quiz_generation_step(db: Session, task_id: int | None, step: str) -> None:
+    """把出题子阶段（preparing/drafting/reviewing/refining/assembling）写进任务 detail，
+    供前端轮询渲染右侧步骤清单。task_id 为空（同步调用场景）时静默跳过。"""
+    if not task_id:
+        return
+    task = db.get(AsyncTaskLog, task_id)
+    if task is None:
+        return
+    detail = task.detail if isinstance(task.detail, dict) else {}
+    task.detail = {**detail, "step": step}
+    db.add(task)
+    db.commit()
+
+
 def _mark_quiz_task_dispatch_failed(db: Session, task: AsyncTaskLog) -> None:
     db.refresh(task)
     if task.status not in {ProcessStatus.PENDING.value, ProcessStatus.PROCESSING.value}:
@@ -636,7 +650,8 @@ def _match_knowledge_point(points: list[KnowledgePoint], name) -> KnowledgePoint
     return None
 
 
-def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Quiz:
+def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest, task_id: int | None = None) -> Quiz:
+    _report_quiz_generation_step(db, task_id, "preparing")
     course, question_type_counts = _validate_quiz_generation_request(db, user=user, payload=payload)
     chapter_ids = _chapter_ids_for_quiz(payload)
     points = (
@@ -690,11 +705,14 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
         "misconception_text": "\n\n".join(misconception_contexts) if misconception_contexts else None,
         "avoid_stems": recent_stems,
         "practice_fast": practice_fast,
+        "custom_instructions": payload.custom_instructions,
+        "on_step": lambda step: _report_quiz_generation_step(db, task_id, step),
     }
     if question_type_counts:
         question_kwargs["type_counts"] = question_type_counts
     question_dicts = ai_service.generate_quiz_questions(**question_kwargs)
     _assign_quiz_scores(question_dicts)
+    _report_quiz_generation_step(db, task_id, "assembling")
     quiz = Quiz(
         course_id=payload.course_id,
         chapter_id=chapter_ids[0] if len(chapter_ids) == 1 else None,
@@ -713,6 +731,7 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest) -> Q
             "source_topic": quiz_topic,
             "source_chars": len(source_text),
             "pedagogy_artifact_count": pedagogy_artifact_count,
+            "custom_instructions": payload.custom_instructions or None,
         },
         total_score=0,
     )
@@ -1177,7 +1196,7 @@ def list_teacher_weak_quizzes(db: Session, *, course_id: int, user: User) -> dic
     }
 
 
-def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGenerateRequest) -> Quiz:
+def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGenerateRequest, task_id: int | None = None) -> Quiz:
     course = _assert_teacher_course_access(db, course_id=payload.course_id, user=user, require_active=True)
     if payload.weak_point_id:
         point_ids = [payload.weak_point_id]
@@ -1209,7 +1228,9 @@ def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGene
             prefer_weak_points=True,
             knowledge_point_ids=[point.id for point in points],
             difficulty=payload.difficulty or "mixed",
+            custom_instructions=payload.custom_instructions,
         ),
+        task_id=task_id,
     )
     metadata = quiz.metadata_json if isinstance(quiz.metadata_json, dict) else {}
     quiz.metadata_json = {
@@ -2160,7 +2181,7 @@ def process_quiz_generation_task(db: Session, task_id: int) -> None:
     try:
         payload_data = detail.get("payload") if isinstance(detail.get("payload"), dict) else {}
         if kind == "teacher_weak_quiz":
-            quiz = generate_teacher_weak_quiz(db, user=user, payload=WeakQuizGenerateRequest(**payload_data))
+            quiz = generate_teacher_weak_quiz(db, user=user, payload=WeakQuizGenerateRequest(**payload_data), task_id=task_id)
         elif kind == "wrong_book_practice":
             raw_wrong_question_id = payload_data.get("wrong_question_id")
             wrong_question_id = int(raw_wrong_question_id) if raw_wrong_question_id is not None else None
@@ -2171,7 +2192,7 @@ def process_quiz_generation_task(db: Session, task_id: int) -> None:
                 wrong_question_id=wrong_question_id,
             )
         else:
-            quiz = generate_quiz(db, user=user, payload=QuizGenerateRequest(**payload_data))
+            quiz = generate_quiz(db, user=user, payload=QuizGenerateRequest(**payload_data), task_id=task_id)
         question_count = int(db.scalar(select(func.count(QuizQuestion.id)).where(QuizQuestion.quiz_id == quiz.id)) or 0)
         task = db.get(AsyncTaskLog, task_id)
         if task is None:

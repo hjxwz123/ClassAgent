@@ -298,6 +298,19 @@
                     <AppSelect v-model="practiceDifficulty" :options="quizDifficultyOptions" />
                   </div>
 
+                  <div class="practice-custom-instructions">
+                    <button type="button" class="practice-custom-toggle" @click="showCustomInstructions = !showCustomInstructions">
+                      <Sparkles :size="14" />自定义要求（可选）
+                    </button>
+                    <textarea
+                      v-if="showCustomInstructions"
+                      v-model="quizCustomInstructions"
+                      maxlength="300"
+                      placeholder="例如：多考察应用题，避免概念题；侧重讲义第3节内容"
+                      class="input practice-custom-textarea"
+                    ></textarea>
+                  </div>
+
                   <button
                     type="button"
                     class="practice-generate-btn"
@@ -755,11 +768,12 @@ const {
   openQuizSelection, generateKnowledgeQuiz, loadQuizPage,
   quizDraftKey, readQuizDraft, clearQuizDraft, hasQuizDraft, quizCardStatus,
   refreshGenerationTasks, upsertGeneratingTask, removeGeneratingTask, ignoreGenerationTask,
-  trackGenerationTask, handleGenerateResult, pollGenerationTask, openQuizById,
+  trackGenerationTask, handleGenerateResult, openQuizById,
   practiceQuizTitle, generateQuiz, latestQuizAttempt, practiceRecordTime,
   openQuiz, startQuiz, reviewAttempt, retakeQuiz, deletePractice, togglePracticeChapter,
   loadWrongBook, loadWrongPractice, practiceWrong, clearWrongFilters,
   quizQuestionMeta, quizScoreLabel,
+  showCustomInstructions, quizCustomInstructions,
 } = useStudentQuiz({
   run, emit, router, route, active, go,
   selectedCourseId, weakPoints, courseHome, selectedChapterId,
