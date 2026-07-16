@@ -18,20 +18,24 @@
       </Transition>
     </RouterView>
     <ToastHost :items="session.toasts" @close="session.closeToast" />
+    <GenerationProgressPanel :tasks="generation.tasks" @dismiss="generation.removeTask" />
   </template>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import GenerationProgressPanel from "./components/GenerationProgressPanel.vue";
 import PageLoader from "./components/PageLoader.vue";
 import ToastHost from "./components/ToastHost.vue";
+import { useGenerationTasksStore } from "./stores/generationTasks";
 import { useSessionStore } from "./stores/session";
 import { applyAppTheme, readStoredTheme, subscribeAppTheme, type AppTheme } from "./theme";
 import type { User } from "./types";
 
 const router = useRouter();
 const session = useSessionStore();
+const generation = useGenerationTasksStore();
 const ready = computed(() => session.initialized);
 const transitionName = ref("route-none");
 const transitionMode = computed(() => (transitionName.value === "route-page" ? "out-in" : undefined));

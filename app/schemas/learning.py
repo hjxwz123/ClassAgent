@@ -28,6 +28,8 @@ class QuizGenerateRequest(BaseModel):
     prefer_weak_points: bool = False
     # mixed=易:中:难≈3:5:2 梯度组卷；easy/standard/hard 为整卷单一难度
     difficulty: str = "mixed"
+    # 用户自定义出题要求（如"多考应用题""侧重第3章"），仅作为补充提示，不覆盖上述结构化约束
+    custom_instructions: str | None = Field(default=None, max_length=300)
 
 
 class WeakQuizGenerateRequest(BaseModel):
@@ -39,6 +41,7 @@ class WeakQuizGenerateRequest(BaseModel):
     question_count: int = Field(default=5, ge=1, le=20)
     question_type_counts: dict[str, int] | None = None
     difficulty: str = "mixed"
+    custom_instructions: str | None = Field(default=None, max_length=300)
 
 
 class QuizQuestionPayload(ORMModel):

@@ -4,7 +4,9 @@
 // 依赖外壳的导航/请求/通知等能力经 deps 注入；api 与 useStudentSearch 一样直接 import（同一单例）。
 import { computed, ref, watch, type Ref } from "vue";
 import type { Router, RouteLocationNormalizedLoaded } from "vue-router";
-import { api, ApiError } from "../../api/client";
+import { api } from "../../api/client";
+import { pollGenerationProgress } from "../../composables/useGenerationProgress";
+import { useGenerationTasksStore } from "../../stores/generationTasks";
 import type { Quiz, User as UserType } from "../../types";
 import { timestampMs } from "../../utils/datetime";
 import { statusText } from "../../utils/quiz";
@@ -38,6 +40,7 @@ export function useStudentQuiz(deps: QuizDeps) {
     selectedCourseId, weakPoints, courseHome, selectedChapterId,
     loadCourseHome, loadNotifications, user,
   } = deps;
+  const generation = useGenerationTasksStore();
 
   // ─── 状态 ───
   const quizTab = ref<"course" | "practice">("practice");
@@ -46,6 +49,9 @@ export function useStudentQuiz(deps: QuizDeps) {
   const quizQuestionCount = ref(10);
   const practiceDifficulty = ref("mixed");
   const smartQuiz = ref(true);
+  // NotebookLM 式自定义出题要求：默认收起，非空时随生成请求一起提交
+  const showCustomInstructions = ref(false);
+  const quizCustomInstructions = ref("");
   const quizGenerating = ref(false);
   const wrongPracticeGenerating = ref(false);
   const quizRetaking = ref(false);
@@ -260,26 +266,49 @@ export function useStudentQuiz(deps: QuizDeps) {
   }
 
   // ─── 生成任务占位卡（非阻塞出题） ───
+  // 同步一份到全局 generationTasks store，供 App.vue 根级挂载的右侧步骤清单浮层读取；
+  // 面板需要在做题路由(无 shellKey，会整卸载 StudentView)之上常驻，因此不能只放本地 ref。
+  function syncGenerationPanelTask(task: any) {
+    const id = Number(task.task_id || task.id || 0);
+    if (!id) return;
+    generation.upsertTask({
+      id,
+      title: String(task.title || "AI 出题"),
+      status: (task.status || "pending") as any,
+      step: task.detail?.step ?? null,
+    });
+  }
   async function refreshGenerationTasks() {
     if (!selectedCourseId.value) { generatingTasks.value = []; return; }
     try {
-      generatingTasks.value = (await api.get<any[]>("/learning/generation-tasks", { course_id: selectedCourseId.value })) || [];
+      const previousIds = new Set(generatingTasks.value.map((item) => Number(item.task_id || item.id)));
+      const items = (await api.get<any[]>("/learning/generation-tasks", { course_id: selectedCourseId.value })) || [];
+      generatingTasks.value = items;
+      const nextIds = new Set(items.map((item) => Number(item.task_id || item.id)));
+      previousIds.forEach((id) => { if (!nextIds.has(id)) generation.removeTask(id); });
+      items.forEach((item) => syncGenerationPanelTask(item));
     } catch { /* 占位卡刷新失败保持现状，不打扰用户 */ }
   }
   function upsertGeneratingTask(task: any) {
     const id = Number(task.task_id || task.id || 0);
     if (!id) return;
     generatingTasks.value = [{ ...task, task_id: id }, ...generatingTasks.value.filter((item) => Number(item.task_id || item.id) !== id)];
+    syncGenerationPanelTask({ ...task, task_id: id });
   }
   function removeGeneratingTask(taskId: number) {
     generatingTasks.value = generatingTasks.value.filter((item) => Number(item.task_id || item.id) !== taskId);
+    generation.removeTask(taskId);
   }
   async function ignoreGenerationTask(taskId: number) {
     const result = await run(() => api.delete(`/learning/generation-tasks/${taskId}`));
     if (result !== null) removeGeneratingTask(taskId);
   }
   async function trackGenerationTask(taskId: number, kind: string) {
-    const outcome = await pollGenerationTask(taskId, { intervalMs: 2500, timeoutMs: 300000 });
+    const outcome = await pollGenerationProgress(taskId, {
+      intervalMs: 2500,
+      timeoutMs: 300000,
+      onTick: (step, status) => generation.updateTask(taskId, { status: status as any, step }),
+    });
     if (outcome.status === "ready") {
       removeGeneratingTask(taskId);
       await loadQuizPage();
@@ -289,6 +318,7 @@ export function useStudentQuiz(deps: QuizDeps) {
     }
     if (outcome.status === "failed") {
       generatingTasks.value = generatingTasks.value.map((item) => (Number(item.task_id || item.id) === taskId ? { ...item, status: "failed" } : item));
+      generation.updateTask(taskId, { status: "failed" });
       emit("notice", "error", "AI 出题失败，可在练习列表中重试或忽略该任务");
       return;
     }
@@ -312,26 +342,6 @@ export function useStudentQuiz(deps: QuizDeps) {
     upsertGeneratingTask({ task_id: taskId, title, status: String(result.status || "pending"), kind });
     emit("notice", "info", "AI 已开始出题，可以先做别的，完成后会提醒你");
     void trackGenerationTask(taskId, kind);
-  }
-  // 轮询出题任务直到 ready/failed/超时。出题走 Celery 异步队列，enqueue 立即返回 PENDING 任务，
-  // 这里按节奏查 generation-tasks/{id}：ready 时后端返回带 quiz id 的载荷，failed 时 status=failed。
-  async function pollGenerationTask(taskId: number, { intervalMs = 2000, timeoutMs = 120000 } = {}): Promise<{ status: "ready"; quizId: number } | { status: "failed" } | { status: "timeout" }> {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
-      let res: any = null;
-      try {
-        res = await api.get<any>(`/learning/generation-tasks/${taskId}`);
-      } catch (error) {
-        // 鉴权失效/无权/任务不存在是终态，继续轮询只会刷屏并延后反馈；其余(网络抖动)等下一拍再查
-        if (error instanceof ApiError && [401, 403, 404].includes(error.status)) return { status: "failed" };
-        continue;
-      }
-      if (!res) continue;
-      if (Number(res.id) > 0) return { status: "ready", quizId: Number(res.id) };
-      if (String(res.status) === "failed") return { status: "failed" };
-    }
-    return { status: "timeout" };
   }
   // 出卷成功后点击“进入答题”：直接跳该卷的独立做题路由。
   async function openQuizById(quizId: number) {
@@ -359,6 +369,7 @@ export function useStudentQuiz(deps: QuizDeps) {
         question_type_counts: quizTypeCounts(quizQuestionCount.value),
         prefer_weak_points: smartQuiz.value,
         difficulty: practiceDifficulty.value || "mixed",
+        custom_instructions: quizCustomInstructions.value.trim() || undefined,
       }));
       if (!result) return; // run() 已弹出错误提示
       // 生成全程不再锁按钮空等：占位卡进列表、任务后台轮询，完成/失败都有回执。
@@ -464,8 +475,9 @@ export function useStudentQuiz(deps: QuizDeps) {
     openQuizSelection, generateKnowledgeQuiz, loadQuizPage,
     quizDraftKey, readQuizDraft, clearQuizDraft, hasQuizDraft, quizCardStatus,
     refreshGenerationTasks, upsertGeneratingTask, removeGeneratingTask, ignoreGenerationTask,
-    trackGenerationTask, handleGenerateResult, pollGenerationTask, openQuizById,
+    trackGenerationTask, handleGenerateResult, openQuizById,
     practiceQuizTitle, generateQuiz, latestQuizAttempt, practiceRecordTime,
+    showCustomInstructions, quizCustomInstructions,
     openQuiz, startQuiz, reviewAttempt, retakeQuiz, deletePractice, togglePracticeChapter,
     loadWrongBook, loadWrongPractice, practiceWrong, clearWrongFilters,
     quizQuestionMeta, quizScoreLabel,

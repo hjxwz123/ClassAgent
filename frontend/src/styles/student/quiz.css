@@ -2469,6 +2469,36 @@
    min-width: 0
 }
 
+.practice-custom-instructions {
+   margin-top: 16px
+}
+
+.practice-custom-toggle {
+   display: inline-flex;
+   align-items: center;
+   gap: 6px;
+   border: none;
+   background: none;
+   padding: 0;
+   color: var(--quiz-ai-main);
+   font-size: 13px;
+   font-weight: 700;
+   cursor: pointer
+}
+
+.practice-custom-textarea {
+   width: 100%;
+   min-height: 64px;
+   margin-top: 10px;
+   resize: vertical;
+   border-radius: var(--quiz-radius-lg);
+   background: var(--quiz-muted);
+   padding: 12px 16px;
+   color: var(--quiz-text);
+   font-size: 13px;
+   font-family: inherit
+}
+
 .practice-generate-btn {
    width: 100%;
    min-height: 56px;

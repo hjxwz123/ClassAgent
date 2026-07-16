@@ -326,6 +326,7 @@
               <div class="weak-config-body">
                 <label>题目总数<input v-model.number="weakQuizForm.question_count" class="input" type="number" min="1" max="20" /></label>
                 <label>难度<AppSelect v-model="weakQuizForm.difficulty" :options="quizDifficultyOptions" /></label>
+                <label class="weak-custom-instructions">自定义要求（可选）<textarea v-model="weakQuizForm.custom_instructions" maxlength="300" class="input" placeholder="例如：优先生成计算题，覆盖第2章公式应用"></textarea></label>
                 <div class="weak-type-grid">
                   <label v-for="item in weakQuestionTypes" :key="item.value">{{ item.label }}<input v-model.number="weakQuizForm.question_type_counts[item.value]" class="input" type="number" min="0" max="20" /></label>
                 </div>
@@ -673,7 +674,9 @@ import {
   Users, Volume2, Wand2, X, XCircle, ZoomIn
 } from "../icons";
 import { api, setToken } from "../api/client";
+import { extractGenerationStep } from "../composables/useGenerationProgress";
 import { routeByPage } from "../router";
+import { useGenerationTasksStore } from "../stores/generationTasks";
 import type { Course, CourseDetail, MaterialDetail, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
 import { extractStructuredText, renderRichText } from "../utils/richText";
@@ -781,6 +784,7 @@ const courseCoverInput = ref<HTMLInputElement | null>(null);
 const quizEditorOpen = ref(false);
 const quizEditorSaving = ref(false);
 const quizEditorPublishing = ref(false);
+const generation = useGenerationTasksStore();
 const weakQuizGenerating = ref(false);
 const weakQuizGeneratingTopic = ref("");
 const weakQuizGenerationMode = ref<"all" | "single" | "">("");
@@ -814,6 +818,7 @@ const weakQuizForm = reactive({
     blank: 0,
     short_answer: 1,
   } as Record<string, number>,
+  custom_instructions: "",
 });
 const reminderForm = reactive({ title: "", message: "" });
 const profileForm = reactive({ nickname: props.user.nickname, avatar_url: props.user.avatar_url || "", organization: "", department: "", bio: props.user.bio || "" });
@@ -1522,6 +1527,7 @@ async function waitForGeneratedQuiz(initial: any) {
   emit("notice", "info", "薄弱题目已进入生成队列，完成后将自动打开审核弹窗");
   for (let attempt = 0; attempt < weakQuizTaskMaxPolls; attempt += 1) {
     const task = await api.get<any>(`/learning/generation-tasks/${taskId}`);
+    generation.updateTask(taskId, { status: generationTaskStatus(task) as any, step: extractGenerationStep(task) });
     if (task?.id) return task;
     const status = generationTaskStatus(task);
     if (status === "failed") {
@@ -1554,6 +1560,8 @@ async function generateTeacherWeakQuiz(point?: any) {
   weakQuizGenerationMode.value = mode;
   weakQuizStatus.value = point ? `正在生成“${point.knowledge_point}”专项题...` : "正在生成全部薄弱知识点综合测验...";
   emit("notice", "info", weakQuizStatus.value);
+  let taskId = 0;
+  let succeeded = false;
   try {
     const quiz = await run<any>(() => api.post("/learning/teacher/weak-quizzes/generate", {
       course_id: currentCourse.value!.id,
@@ -1563,8 +1571,11 @@ async function generateTeacherWeakQuiz(point?: any) {
       question_count: Number(weakQuizForm.question_count || 0),
       question_type_counts: weakQuizTypeCountsPayload(),
       difficulty: weakQuizForm.difficulty || "mixed",
+      custom_instructions: weakQuizForm.custom_instructions.trim() || undefined,
     }));
     if (!quiz) return;
+    taskId = generationTaskId(quiz);
+    if (taskId) generation.upsertTask({ id: taskId, title, status: "pending", step: null });
     const generatedQuiz = await waitForGeneratedQuiz(quiz);
     if (!generatedQuiz) {
       await loadDashboard();
@@ -1572,10 +1583,14 @@ async function generateTeacherWeakQuiz(point?: any) {
     }
     await openGeneratedWeakQuiz(generatedQuiz);
     await loadDashboard();
+    succeeded = true;
     emit("notice", "success", "薄弱题目已生成，请审核后发布");
   } catch (error) {
+    if (taskId) generation.updateTask(taskId, { status: "failed" });
     emit("notice", "error", (error as Error).message);
   } finally {
+    // 成功才移除面板卡片；失败态留给用户在面板上手动关闭，超时态留给面板保留"进行中"直到下次轮询/刷新兜底。
+    if (succeeded && taskId) generation.removeTask(taskId);
     weakQuizGenerating.value = false;
     weakQuizGeneratingTopic.value = "";
     weakQuizGenerationMode.value = "";
