@@ -581,3 +581,55 @@ def test_call_json_surfaces_raw_model_output_on_parse_failure(monkeypatch):
     except AppError as exc:
         assert "实际返回" in exc.detail["message"]
         assert getattr(exc, "raw_model_output", None) == raw
+
+
+def test_parse_quiz_payload_recovers_truncated_json():
+    """输出触顶被截断（最后一题 JSON 残缺）时，应抢救出前面已完整闭合的题目而非整次失败。"""
+    from app.services.ai import _parse_quiz_generation_payload
+
+    item = {
+        "question_type": "single_choice",
+        "stem": "给定文法 G[E]：E→E+T | T，请判断 id+id*id 的最右推导首步。",
+        "options": ["E→E+T", "E→T", "T→F", "F→id"],
+        "reference_answer": {"value": 0},
+        "explanation": "最右推导每步替换最右非终结符，首步应展开 E→E+T。",
+        "score": 10,
+        "difficulty": "standard",
+    }
+    import json as jsonlib
+
+    truncated = '{ "items": [ ' + jsonlib.dumps(item, ensure_ascii=False) + ', ' \
+        + jsonlib.dumps(item, ensure_ascii=False) + ', { "question_type": "short_answer", "stem": "请写出完整的最右推'
+    payload = _parse_quiz_generation_payload(truncated)
+    items = payload["items"]
+    assert len(items) == 2
+    assert items[0]["stem"].startswith("给定文法")
+
+
+def test_parse_quiz_payload_tolerates_raw_newlines_in_strings():
+    """长推导题干里模型直接输出裸换行（非法控制字符）时，应按宽松模式解析成功。"""
+    from app.services.ai import _parse_quiz_generation_payload
+
+    raw = '{"items": [{"question_type": "short_answer", "stem": "请写出最右推导：\nE⇒E+T\n⇒E+T*F", "reference_answer": {"keywords": ["最右推导"]}, "explanation": "逐步替换最右非终结符。", "score": 10, "difficulty": "hard"}]}'
+    payload = _parse_quiz_generation_payload(raw)
+    assert "E⇒E+T" in payload["items"][0]["stem"]
+
+
+def test_parse_quiz_payload_repairs_latex_backslash_escapes():
+    """题干含 LaTeX 单反斜杠（非法 JSON 转义）时应自动修复；已正确转义的内容不得被二次改写。"""
+    from app.services.ai import _parse_quiz_generation_payload
+
+    raw = '{"items": [{"stem": "计算 \\alpha + \\(x\\) 的值，其中路径为 C:\\\\tmp", "score": 10}]}'
+    payload = _parse_quiz_generation_payload(raw)
+    stem = payload["items"][0]["stem"]
+    assert "\\alpha" in stem and "\\(x\\)" in stem and "C:\\tmp" in stem
+
+
+def test_parse_quiz_payload_still_raises_on_garbage():
+    """三级兜底全部失效（纯文本闲聊）时必须抛出，让上层带原始片段报错，不能静默返回空题。"""
+    import pytest
+
+    from app.services.ai import _parse_quiz_generation_payload
+
+    with pytest.raises(ValueError):
+        _parse_quiz_generation_payload("模型今天不想返回 JSON，我们聊聊别的吧。")

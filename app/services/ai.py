@@ -98,6 +98,82 @@ def _parse_json_payload(value: str) -> Any:
         return json.loads(text[start : end + 1])
 
 
+# 非法 JSON 转义：反斜杠后跟的不是合法转义起始符（" \\ / b f n r t u）。
+# 数学/编译类课程的题干常含 LaTeX（\alpha、\(x\)、F\(E\)），弱模型会原样输出单反斜杠，
+# 一个非法转义就让整包 JSON 解析失败。(?<!\\)((?:\\\\)*) 先吞掉成对的合法双反斜杠，
+# 保证已正确转义的内容不被二次改写。
+_INVALID_JSON_ESCAPE_RE = re.compile(r'(?<!\\)((?:\\\\)*)\\(?!["\\/bfnrtu])')
+
+
+def _repair_json_invalid_escapes(text: str) -> str:
+    return _INVALID_JSON_ESCAPE_RE.sub(lambda match: match.group(1) + "\\\\", text)
+
+
+def _salvage_quiz_items_from_text(text: str) -> list[dict]:
+    """截断兜底：题干/解析过长导致输出触顶被截断时，整包 JSON 必然解析失败，
+    但 items 数组前面的题目对象是完整的。定位数组起点后用 raw_decode 逐个抢救
+    已闭合的题目 dict，丢弃残缺的最后一题——把"整次出题失败"降级为"少几道候选题"，
+    数量缺口由既有的定向重试补齐。"""
+    match = re.search(r'"(?:items|questions)"\s*:\s*\[', text)
+    if match:
+        index = match.end()
+    else:
+        bracket = text.find("[")
+        if bracket < 0:
+            return []
+        index = bracket + 1
+    # strict=False：容忍字符串值里的裸换行/制表符（长推导题干常见），不因控制字符中断抢救
+    decoder = json.JSONDecoder(strict=False)
+    items: list[dict] = []
+    length = len(text)
+    while True:
+        while index < length and text[index] in " \r\n\t,":
+            index += 1
+        if index >= length or text[index] != "{":
+            break
+        try:
+            obj, index = decoder.raw_decode(text, index)
+        except ValueError:
+            break
+        if isinstance(obj, dict):
+            items.append(obj)
+    return items
+
+
+def _parse_quiz_generation_payload(content: str) -> Any:
+    """出题响应的宽容解析，按序尝试：严格解析 → 容忍裸控制字符(strict=False，长推导题干
+    常夹裸换行) → 非法转义修复(LaTeX 反斜杠)后重试 → 截断抢救完整题目。
+    全部失败才抛 ValueError（调用方补充原始片段后转用户可读错误）。"""
+    text = str(content).strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?", "", text).strip()
+        text = re.sub(r"```$", "", text).strip()
+    try:
+        return _parse_json_payload(text)
+    except Exception:
+        pass
+    try:
+        payload = json.loads(text, strict=False)
+        logger.warning("出题 JSON 含裸控制字符（题干内未转义换行），已按宽松模式解析成功")
+        return payload
+    except Exception:
+        pass
+    repaired = _repair_json_invalid_escapes(text)
+    if repaired != text:
+        for parser in (_parse_json_payload, lambda value: json.loads(value, strict=False)):
+            try:
+                payload = parser(repaired)
+                logger.warning("出题 JSON 含非法转义（疑似 LaTeX 反斜杠），已自动修复后解析成功")
+                return payload
+            except Exception:
+                continue
+    items = _salvage_quiz_items_from_text(repaired)
+    if items:
+        logger.warning("出题 JSON 整包解析失败（疑似输出被截断），已抢救出 %s 道完整题目", len(items))
+        return {"items": items}
+    raise ValueError("quiz generation payload unparseable")
+
+
 _GENERIC_QUIZ_LABELS = {
     "章节练习",
     "薄弱点章节练习",
@@ -2482,10 +2558,10 @@ class AIService:
         if content is None:
             raise bad_request("AI 出题失败：模型未返回题目内容")
         try:
-            payload = _parse_json_payload(content)
+            payload = _parse_quiz_generation_payload(content)
         except Exception as exc:
             snippet = re.sub(r"\s+", " ", str(content)).strip()
-            logger.warning("出题 JSON 解析失败，模型原始返回(前1500字)：%s", snippet[:1500])
+            logger.warning("出题 JSON 解析失败（转义修复与截断抢救均无效），模型原始返回(前1500字)：%s", snippet[:1500])
             err = bad_request(f"AI 出题失败：模型返回无法解析为 JSON（实际返回前120字：{snippet[:120]}）")
             err.raw_model_output = snippet[:4000]
             raise err from exc
@@ -2567,10 +2643,10 @@ class AIService:
         )
         if retry_content:
             try:
-                retry_payload = _parse_json_payload(retry_content)
+                retry_payload = _parse_quiz_generation_payload(retry_content)
             except Exception as exc:
                 snippet = re.sub(r"\s+", " ", str(retry_content)).strip()
-                logger.warning("出题(重试) JSON 解析失败，模型原始返回(前1500字)：%s", snippet[:1500])
+                logger.warning("出题(重试) JSON 解析失败（转义修复与截断抢救均无效），模型原始返回(前1500字)：%s", snippet[:1500])
                 err = bad_request(f"AI 出题失败：模型返回无法解析为 JSON（实际返回前120字：{snippet[:120]}）")
                 err.raw_model_output = snippet[:4000]
                 raise err from exc
