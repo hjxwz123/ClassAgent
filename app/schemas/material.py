@@ -55,6 +55,7 @@ class MaterialResponse(ORMModel):
     extracted_text: str | None
     parse_status: str
     vector_status: str
+    metadata_json: dict | None
     created_at: datetime
     updated_at: datetime
 

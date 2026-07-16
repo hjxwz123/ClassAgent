@@ -37,6 +37,9 @@ class WeakQuizGenerateRequest(BaseModel):
     weak_point_id: int | None = None
     weak_point_ids: list[int] | None = None
     all_weak_points: bool = False
+    # 针对"未标注知识点"的错题（没有真实 KnowledgePoint 可用）单独生成练习；为 True 时忽略
+    # weak_point_id/weak_point_ids/all_weak_points，走错题原题变式生成而非知识点出题路径。
+    target_untagged: bool = False
     title: str | None = Field(default=None, min_length=2, max_length=255)
     question_count: int = Field(default=5, ge=1, le=20)
     question_type_counts: dict[str, int] | None = None

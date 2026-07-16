@@ -320,7 +320,7 @@
                   >
                     <Sparkles :size="20" />{{ quizGenerating ? '出卷中…' : '智能生成练习' }}
                   </button>
-                  <p class="practice-generate-hint"></p>
+                  <p class="practice-generate-hint">{{ quizGenerating ? 'AI 正在出题（约 1-3 分钟），不会卡住：可放心切换页面或先做其它练习，进度看右下角，完成后会通知你' : '' }}</p>
                 </article>
 
                 <article class="practice-modern-card">

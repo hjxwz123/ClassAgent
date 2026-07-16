@@ -222,6 +222,8 @@ export function useStudentQuiz(deps: QuizDeps) {
     if (quizGenerating.value) return;
     if (!selectedCourseId.value) return void emit("notice", "warning", "请先选择课程");
     quizGenerating.value = true;
+    emit("notice", "info", "AI 已开始出题，约需 1-3 分钟；可切换页面，进度看右下角，完成后会提醒你");
+    startGenerationRefresh();
     try {
       const title = `${opts.name || "知识点"}练习`;
       const result = await run<any>(() => api.post("/learning/quizzes/generate", { course_id: selectedCourseId.value, chapter_id: opts.chapterId || undefined, title, quiz_type: "practice", question_count: count }));
@@ -230,6 +232,8 @@ export function useStudentQuiz(deps: QuizDeps) {
       await handleGenerateResult(result, { title, kind: "quiz" });
     } finally {
       quizGenerating.value = false;
+      stopGenerationRefresh();
+      void refreshGenerationTasks();
     }
   }
 
@@ -266,6 +270,25 @@ export function useStudentQuiz(deps: QuizDeps) {
   }
 
   // ─── 生成任务占位卡（非阻塞出题） ───
+  // 出题期间轮询任务列表：部署为 Celery 同步档（CELERY_TASK_ALWAYS_EAGER=true，开发/单机常见）时
+  // POST 会阻塞到出题完成，按钮全程"出卷中"，用户误以为卡死不敢切页。靠这里把后台任务
+  // （含 detail.step 实时步骤）拉进右下角进度面板，用户能看到真实进展、可放心离开本页；
+  // 异步档下 POST 秒回，轮询随 finally 立即停止，无额外开销。引用计数支持多路生成并发共用一个定时器。
+  let generationRefreshTimer = 0;
+  let generationRefreshUsers = 0;
+  function startGenerationRefresh() {
+    generationRefreshUsers += 1;
+    if (!generationRefreshTimer) {
+      generationRefreshTimer = window.setInterval(() => { void refreshGenerationTasks(); }, 2500);
+    }
+  }
+  function stopGenerationRefresh() {
+    generationRefreshUsers = Math.max(0, generationRefreshUsers - 1);
+    if (!generationRefreshUsers && generationRefreshTimer) {
+      window.clearInterval(generationRefreshTimer);
+      generationRefreshTimer = 0;
+    }
+  }
   // 同步一份到全局 generationTasks store，供 App.vue 根级挂载的右侧步骤清单浮层读取；
   // 面板需要在做题路由(无 shellKey，会整卸载 StudentView)之上常驻，因此不能只放本地 ref。
   function syncGenerationPanelTask(task: any) {
@@ -339,8 +362,8 @@ export function useStudentQuiz(deps: QuizDeps) {
       await loadNotifications(true);
       return;
     }
+    // "已开始出题"的提示已提前到点击瞬间（见 generateQuiz 等调用方），此处不再重复弹
     upsertGeneratingTask({ task_id: taskId, title, status: String(result.status || "pending"), kind });
-    emit("notice", "info", "AI 已开始出题，可以先做别的，完成后会提醒你");
     void trackGenerationTask(taskId, kind);
   }
   // 出卷成功后点击“进入答题”：直接跳该卷的独立做题路由。
@@ -356,6 +379,8 @@ export function useStudentQuiz(deps: QuizDeps) {
     if (quizGenerating.value) return;
     if (!selectedCourseId.value) return void emit("notice", "warning", "请先选择课程");
     quizGenerating.value = true;
+    emit("notice", "info", "AI 已开始出题，约需 1-3 分钟；可切换页面，进度看右下角，完成后会提醒你");
+    startGenerationRefresh();
     try {
       const chapterIds = selectedPracticeChapters.value.length ? selectedPracticeChapters.value : (selectedChapterId.value ? [selectedChapterId.value] : []);
       const title = practiceQuizTitle(chapterIds);
@@ -376,6 +401,9 @@ export function useStudentQuiz(deps: QuizDeps) {
       await handleGenerateResult(result, { title, kind: "quiz" });
     } finally {
       quizGenerating.value = false;
+      stopGenerationRefresh();
+      // 收尾再刷一次：同步档下任务已 ready/failed，列表口径（仅进行中/失败）会自动把面板卡清掉或转失败态
+      void refreshGenerationTasks();
     }
   }
   function latestQuizAttempt(quiz: any) {
@@ -423,12 +451,14 @@ export function useStudentQuiz(deps: QuizDeps) {
   async function loadWrongPractice(wrongQuestionId?: number) {
     if (!selectedCourseId.value || wrongPracticeGenerating.value) return;
     wrongPracticeGenerating.value = true;
+    startGenerationRefresh();
     try {
       if (!wrongQuestions.value.length) await loadWrongBook();
       if (!wrongQuestions.value.length) {
         emit("notice", "info", "暂无错题可重练");
         return;
       }
+      emit("notice", "info", "错题重练生成中，约需 1-2 分钟；可切换页面，完成后会提醒你");
       const quiz = await run<any>(() => api.post("/learning/wrong-questions/practice", undefined, { course_id: selectedCourseId.value, ...(wrongQuestionId ? { wrong_question_id: wrongQuestionId } : {}) }));
       if (!quiz) return;
       if (Number(quiz.id || 0) > 0) {
@@ -443,6 +473,8 @@ export function useStudentQuiz(deps: QuizDeps) {
       await handleGenerateResult(quiz, { title: "错题重练", kind: "wrong_book_practice" });
     } finally {
       wrongPracticeGenerating.value = false;
+      stopGenerationRefresh();
+      void refreshGenerationTasks();
     }
   }
   function practiceWrong(item: any) { loadWrongPractice(item?.wrong_question_id); }

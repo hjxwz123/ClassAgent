@@ -927,6 +927,171 @@ def test_teacher_weak_quiz_management_flow(client, monkeypatch):
     assert attempts_payload["attempts"][0]["correct_count"] == 2
 
 
+def test_pre_generate_knowledge_points_lets_later_material_contribute_new_points(client, monkeypatch):
+    # 章节已有知识点(第一份课件贡献的)时，第二份课件此前会被整体跳过；现在应能补充新名字进去，
+    # 而不是永远只有第一份课件说了算。
+    course, chapter, _lesson_id, teacher_headers, _student_headers = bootstrap_course_with_material(client)
+
+    initial_names = {
+        point["name"]
+        for point in client.get(
+            "/api/v1/learning/knowledge-points", params={"course_id": course["id"]}, headers=teacher_headers
+        ).json()["data"]
+    }
+    assert initial_names == {"极限定义", "矩阵", "线性变换"}
+
+    monkeypatch.setattr(ai_service, "extract_knowledge_points", lambda text, db=None: ["行列式"])
+    upload_resp = client.post(
+        "/api/v1/materials",
+        data={"course_id": str(course["id"]), "title": "第二份课件", "category": "courseware", "chapter_id": str(chapter["id"])},
+        files={
+            "file": (
+                "matrix_lesson_2.pptx",
+                build_pptx_bytes(),
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            )
+        },
+        headers=teacher_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+
+    updated_names = {
+        point["name"]
+        for point in client.get(
+            "/api/v1/learning/knowledge-points", params={"course_id": course["id"]}, headers=teacher_headers
+        ).json()["data"]
+    }
+    assert updated_names == {"极限定义", "矩阵", "线性变换", "行列式"}
+
+
+def test_teacher_weak_quiz_generates_practice_for_untagged_wrong_questions(client, monkeypatch):
+    # 旧课件场景：错题对应的 QuizQuestion/WrongQuestion 都没有 knowledge_point_id，
+    # INNER JOIN 会把它们整体过滤掉，教师端应改为把它们汇总成"未标注错题"可选条目并能生成练习。
+    from app.db.models import Quiz, WrongQuestion
+
+    course, chapter, _lesson_id, teacher_headers, _student_headers = bootstrap_course_with_material(client)
+    with db_session.SessionLocal() as db:
+        student = db.scalar(select(User).where(User.email == "student3@example.com"))
+        legacy_quiz = Quiz(
+            course_id=course["id"],
+            chapter_id=chapter["id"],
+            creator_id=student.id,
+            title="旧课件生成的练习",
+            description="",
+            quiz_type="practice",
+            status="published",
+            metadata_json={},
+            total_score=10,
+        )
+        db.add(legacy_quiz)
+        db.flush()
+        legacy_question = QuizQuestion(
+            quiz_id=legacy_quiz.id,
+            course_id=course["id"],
+            chapter_id=chapter["id"],
+            knowledge_point_id=None,
+            question_type="single_choice",
+            stem="旧课件遗留的无标签题干",
+            options=["选项甲", "选项乙", "选项丙", "选项丁"],
+            reference_answer={"value": 0},
+            explanation="旧解析",
+            score=10,
+            difficulty="standard",
+        )
+        db.add(legacy_question)
+        db.flush()
+        db.add(WrongQuestion(user_id=student.id, question_id=legacy_question.id, course_id=course["id"], knowledge_point_id=None, wrong_count=2))
+        db.commit()
+
+    weak_list_resp = client.get("/api/v1/learning/teacher/weak-quizzes", params={"course_id": course["id"]}, headers=teacher_headers)
+    assert weak_list_resp.status_code == 200, weak_list_resp.text
+    weak_points = weak_list_resp.json()["data"]["weak_points"]
+    untagged_entry = next(item for item in weak_points if item["knowledge_point_id"] is None)
+    assert untagged_entry["knowledge_point"] == "未标注错题"
+    assert untagged_entry["wrong_count"] == 2
+
+    def fake_variants(*, originals, db=None):
+        return [
+            {"stem": f"变式：{item['stem']}", "options": item["options"], "reference_answer": item["reference_answer"], "explanation": item["explanation"]}
+            for item in originals
+        ]
+
+    monkeypatch.setattr(ai_service, "generate_variant_questions", fake_variants)
+    generate_resp = client.post(
+        "/api/v1/learning/teacher/weak-quizzes/generate",
+        json={"course_id": course["id"], "target_untagged": True, "question_count": 1},
+        headers=teacher_headers,
+    )
+    assert generate_resp.status_code == 200, generate_resp.text
+    generated = generate_resp.json()["data"]
+    assert generated["metadata_json"]["weak_quiz_scope"] == "untagged"
+    detail_resp = client.get(f"/api/v1/learning/quizzes/{generated['id']}", headers=teacher_headers)
+    assert detail_resp.status_code == 200, detail_resp.text
+    assert detail_resp.json()["data"]["questions"][0]["stem"] == "变式：旧课件遗留的无标签题干"
+
+
+def test_quiz_generation_blocked_while_material_still_processing(client, monkeypatch):
+    monkeypatch.setattr(ai_service, "generate_quiz_questions", fake_quiz_questions)
+    course, chapter, _lesson_id, teacher_headers, _student_headers = bootstrap_course_with_material(client)
+    with db_session.SessionLocal() as db:
+        material = db.scalar(select(CourseMaterial).where(CourseMaterial.course_id == course["id"]))
+        material.parse_status = ProcessStatus.PROCESSING.value
+        db.add(material)
+        db.commit()
+
+    # 出题走 Celery 异步队列（CELERY_TASK_ALWAYS_EAGER 下同步执行完才返回），generate_quiz 内部
+    # 抛出的校验错误跟其它结构性错误（如"该课程暂无可用于出题的课件内容"）一样，是通过任务
+    # status=failed 体现，而不是让 /quizzes/generate 本身返回 400。
+    resp = client.post(
+        "/api/v1/learning/quizzes/generate",
+        json={
+            "course_id": course["id"],
+            "chapter_id": chapter["id"],
+            "title": "解析中不该能出题",
+            "quiz_type": "course",
+            "question_count": 1,
+        },
+        headers=teacher_headers,
+    )
+    assert resp.status_code == 200, resp.text
+    task = resp.json()["data"]
+    assert task["status"] == "failed"
+    assert "解析中" in task["detail"]["error"]
+
+
+def test_teacher_cannot_view_student_private_quiz_attempts(client, monkeypatch):
+    monkeypatch.setattr(ai_service, "generate_quiz_questions", fake_quiz_questions)
+    course, chapter, _lesson_id, teacher_headers, student_headers = bootstrap_course_with_material(client)
+    practice_resp = client.post(
+        "/api/v1/learning/quizzes/generate",
+        json={
+            "course_id": course["id"],
+            "chapter_id": chapter["id"],
+            "chapter_ids": [chapter["id"]],
+            "title": "学生自练",
+            "quiz_type": "practice",
+            "question_count": 1,
+        },
+        headers=student_headers,
+    )
+    assert practice_resp.status_code == 200, practice_resp.text
+    practice_quiz_id = practice_resp.json()["data"]["id"]
+    assert practice_quiz_id
+
+    resp = client.get(f"/api/v1/learning/teacher/weak-quizzes/{practice_quiz_id}/attempts", headers=teacher_headers)
+    assert resp.status_code == 403, resp.text
+
+
+def test_enqueue_teacher_weak_quiz_rejects_invalid_difficulty_immediately(client):
+    course, _chapter, _lesson_id, teacher_headers, _student_headers = bootstrap_course_with_material(client)
+    resp = client.post(
+        "/api/v1/learning/teacher/weak-quizzes/generate",
+        json={"course_id": course["id"], "all_weak_points": True, "question_count": 1, "difficulty": "impossible"},
+        headers=teacher_headers,
+    )
+    assert resp.status_code == 400, resp.text
+
+
 def test_quiz_generation_requires_ai_questions(monkeypatch):
     monkeypatch.setattr(ai_service, "_call_chat", lambda *args, **kwargs: None)
     clean = sanitize_quiz_source_text(
