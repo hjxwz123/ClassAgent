@@ -2,6 +2,7 @@ const api = require('../../../utils/api');
 const fmt = require('../../../utils/format');
 const toast = require('../../../utils/toast');
 const tabbar = require('../../../utils/tabbar');
+const gen = require('../../../utils/generation');
 
 // 触底分批渲染的每批条数
 const PAGE_SIZE = 20;
@@ -18,13 +19,21 @@ Page({
     keyword: '',
     status: 'all', // all | pending | resolved
     stats: { total: 0, pending: 0, repeat: 0, week: 0 },
-    generating: false
+    generating: false,
+    // 出题进度浮层
+    genShow: false,
+    genTitle: 'AI 出题',
+    genStatus: 'processing',
+    genStep: 'preparing'
   },
 
   onShow() {
     tabbar.setTab(this, 3);
     if (!this.data.courses.length) this.loadCourses();
   },
+
+  onHide() { gen.stopProgress(this); },
+  onUnload() { gen.stopProgress(this); },
   onPullDownRefresh() {
     // 课程列表为空时先补拉课程（loadCourses 内会连带刷错题），否则直接刷新错题
     const task = this.data.courses.length ? this.load() : this.loadCourses();
@@ -126,24 +135,34 @@ Page({
     this.setData({ ['filtered[' + idx + '].expanded']: expanded });
   },
 
-  async startPractice() {
+  // 整册重练：对全部错题生成变式练习
+  startPractice() {
     if (this.data.generating) return;
     if (!(this._wrongs || []).length) return toast.info('本课程暂无错题');
+    this._runPractice({ course_id: this.data.courseId }, '错题重练');
+  },
+  // 单题重练：对某一道错题生成变式练习（对齐网页端 practiceWrong）
+  practiceOne(e) {
+    if (this.data.generating) return;
+    const id = e.currentTarget.dataset.id;
+    if (!id) return toast.info('本题暂不可重练');
+    this._runPractice({ course_id: this.data.courseId, wrong_question_id: id }, '单题重练');
+  },
+  async _runPractice(query, title) {
     this.setData({ generating: true });
-    try {
-      // 错题变式是同步 LLM 长调用：30s 默认超时会"客户端报错、服务端照常落卷"，重点一次就多一份重复卷。
-      const quiz = await api.postLong('/learning/wrong-questions/practice', undefined, { course_id: this.data.courseId });
-      if (quiz && quiz.id) {
-        toast.success('已生成重练');
-        getApp().globalData.transfer.quiz = quiz;
-        wx.navigateTo({ url: '/subpackages/student-learning/quiz-answer/index?quizId=' + quiz.id });
-      } else {
-        toast.info('错题重练已加入生成队列，完成后会通知你');
-      }
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      this.setData({ generating: false });
-    }
-  }
+    const res = await gen.submit(this, {
+      title,
+      // 错题变式是长耗时 LLM 调用；同步档 postLong 直接拿卷，异步档由 gen.submit 轮询任务收尾
+      request: () => api.postLong('/learning/wrong-questions/practice', undefined, query),
+      onReady: (quizId) => wx.navigateTo({ url: '/subpackages/student-learning/quiz-answer/index?quizId=' + quizId })
+    });
+    this.setData({ generating: false });
+    if (res.status === 'ready') toast.success('已生成重练');
+    else if (res.status === 'error') toast.error(res.error.message);
+    else if (res.status === 'failed') toast.error('生成失败，请稍后重试');
+    else if (res.status === 'timeout') toast.info('重练仍在后台进行，完成后可在列表查看');
+    else if (res.status === 'queued') toast.info('错题重练已加入生成队列，完成后会通知你');
+  },
+
+  dismissGen() { gen.dismissProgress(this); }
 });

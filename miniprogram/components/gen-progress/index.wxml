@@ -1,0 +1,18 @@
+<view wx:if="{{show}}" class="genp {{status === 'failed' ? 'genp--fail' : ''}}">
+  <view class="genp__head">
+    <icon name="spark" size="26rpx" color="#00B8D4" />
+    <text class="genp__title">{{title}}</text>
+    <view class="genp__close" hover-class="hover-dim" catchtap="onDismiss">✕</view>
+  </view>
+  <view class="genp__steps">
+    <view wx:for="{{rows}}" wx:key="key" class="genp-step genp-step--{{item.state}}">
+      <view class="genp-step__mark">
+        <view wx:if="{{item.state === 'active'}}" class="genp-spin"></view>
+        <text wx:elif="{{item.state === 'done'}}" class="genp-check">✓</text>
+        <view wx:else class="genp-dot"></view>
+      </view>
+      <text class="genp-step__label">{{item.label}}</text>
+    </view>
+  </view>
+  <view wx:if="{{status === 'failed'}}" class="genp__fail">生成失败，可稍后重试</view>
+</view>

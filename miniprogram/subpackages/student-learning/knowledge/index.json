@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "知识点精讲",
   "usingComponents": {
-    "icon": "/components/icon/index"
+    "icon": "/components/icon/index",
+    "gen-progress": "/components/gen-progress/index"
   }
 }

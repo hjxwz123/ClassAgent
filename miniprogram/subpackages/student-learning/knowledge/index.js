@@ -1,5 +1,6 @@
 const api = require('../../../utils/api');
 const toast = require('../../../utils/toast');
+const gen = require('../../../utils/generation');
 
 const LEVELS = [
   { value: 'beginner', label: '入门' },
@@ -22,13 +23,20 @@ Page({
     levels: LEVELS,
     level: 'standard',
     content: {},
-    generating: false
+    generating: false,
+    // 出题进度浮层
+    genShow: false,
+    genTitle: 'AI 出题',
+    genStatus: 'processing',
+    genStep: 'preparing'
   },
 
   onLoad(query) {
     this.setData({ courseId: Number(query.courseId || 0) });
     this.init();
   },
+
+  onUnload() { gen.stopProgress(this); },
 
   async init() {
     try {
@@ -102,26 +110,28 @@ Page({
     const count = Number(e.currentTarget.dataset.count);
     if (!this.data.selected) return;
     if (this.data.generating) return;
+    const selected = this.data.selected;
+    const title = selected.name + ' 练习';
     this.setData({ generating: true });
-    try {
-      const quiz = await api.postLong('/learning/quizzes/generate', {
+    const res = await gen.submit(this, {
+      title,
+      request: () => api.postLong('/learning/quizzes/generate', {
         course_id: this.data.courseId,
-        chapter_id: this.data.selected.chapter_id || undefined,
-        knowledge_point_ids: [this.data.selected.id],
-        title: this.data.selected.name + ' 练习',
+        chapter_id: selected.chapter_id || undefined,
+        knowledge_point_ids: [selected.id],
+        title,
         quiz_type: 'practice',
         question_count: count
-      });
-      if (quiz && quiz.id) {
-        toast.success('练习已生成');
-        wx.navigateTo({ url: '/subpackages/student-learning/quiz-answer/index?quizId=' + quiz.id });
-      } else {
-        toast.info('练习已加入生成队列');
-      }
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      this.setData({ generating: false });
-    }
-  }
+      }),
+      onReady: (quizId) => wx.navigateTo({ url: '/subpackages/student-learning/quiz-answer/index?quizId=' + quizId })
+    });
+    this.setData({ generating: false });
+    if (res.status === 'ready') toast.success('练习已生成');
+    else if (res.status === 'error') toast.error(res.error.message);
+    else if (res.status === 'failed') toast.error('AI 出题失败，请稍后重试');
+    else if (res.status === 'timeout') toast.info('出题仍在后台进行，稍后可在练习页查看');
+    else if (res.status === 'queued') toast.info('练习已加入生成队列，完成后可在练习页查看');
+  },
+
+  dismissGen() { gen.dismissProgress(this); }
 });

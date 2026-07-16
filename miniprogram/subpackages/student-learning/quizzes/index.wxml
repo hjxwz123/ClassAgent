@@ -44,9 +44,9 @@
   <!-- 章节练习 -->
   <block wx:else>
     <view class="card">
-      <view class="section-title" style="margin-top:0">选择章节（单选）</view>
+      <view class="section-title" style="margin-top:0">选择章节（可多选）</view>
       <view class="chips" wx:if="{{chapters.length}}">
-        <view wx:for="{{chapters}}" wx:key="id" class="chip {{selectedChapter === item.id ? 'chip--on' : ''}}" hover-class="hover-dim" data-id="{{item.id}}" bindtap="toggleChapter">{{item.title}}</view>
+        <view wx:for="{{chapters}}" wx:key="id" class="chip {{chapterSel[item.id] ? 'chip--on' : ''}}" hover-class="hover-dim" data-id="{{item.id}}" bindtap="toggleChapter">{{item.title}}</view>
       </view>
       <view wx:else class="text-muted">本课程暂无章节，可直接生成全课程练习</view>
 
@@ -55,12 +55,30 @@
         <view wx:for="{{counts}}" wx:key="*this" class="chip {{count === item ? 'chip--on' : ''}}" hover-class="hover-dim" data-count="{{item}}" bindtap="setCount">{{item}} 题</view>
       </view>
 
+      <view class="section-title">题型（可多选）</view>
+      <view class="chips">
+        <view wx:for="{{types}}" wx:key="value" class="chip {{typeSel[item.value] ? 'chip--on' : ''}}" hover-class="hover-dim" data-value="{{item.value}}" bindtap="toggleType">{{item.label}}</view>
+      </view>
+
+      <view class="section-title">难度</view>
+      <view class="chips">
+        <view wx:for="{{difficulties}}" wx:key="value" class="chip {{difficulty === item.value ? 'chip--on' : ''}}" hover-class="hover-dim" data-value="{{item.value}}" bindtap="setDifficulty">{{item.label}}</view>
+      </view>
+
       <view class="notice-row mt-16">
         <text class="flex-1">优先薄弱知识点</text>
         <switch checked="{{preferWeak}}" color="#00B8D4" bindchange="toggleWeak" />
       </view>
 
+      <view class="custom-row mt-16" hover-class="hover-dim" bindtap="toggleCustom">
+        <text class="flex-1">自定义出题要求（选填）</text>
+        <text class="custom-row__arrow">{{showCustom ? '收起' : '展开'}}</text>
+      </view>
+      <textarea wx:if="{{showCustom}}" class="custom-input" placeholder="例如：多考察应用题，避免纯概念题；侧重讲义第 3 节内容" maxlength="300" value="{{customText}}" bindinput="onCustomInput" />
+
       <button class="btn btn--primary btn--block mt-16" loading="{{generating}}" disabled="{{generating}}" bindtap="generate"><icon name="spark" size="28rpx" color="#ffffff" /> 智能生成练习</button>
     </view>
   </block>
 </view>
+
+<gen-progress show="{{genShow}}" title="{{genTitle}}" status="{{genStatus}}" step="{{genStep}}" bind:dismiss="dismissGen" />

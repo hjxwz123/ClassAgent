@@ -2,3 +2,18 @@
 .quiz-top__cell { flex: 1; text-align: center; color: #fff; }
 .quiz-top__cell .num { font-size: 48rpx; font-weight: 700; }
 .quiz-top__cell text { font-size: 22rpx; opacity: 0.85; }
+
+/* 自定义出题要求（选填，可折叠） */
+.custom-row { display: flex; align-items: center; margin-top: 8rpx; font-size: 28rpx; color: var(--ca-ink-soft); }
+.custom-row__arrow { flex: 0 0 auto; color: var(--ca-student-hover); font-size: 26rpx; }
+.custom-input {
+  width: 100%;
+  min-height: 140rpx;
+  margin-top: 12rpx;
+  padding: 20rpx 24rpx;
+  background: var(--ca-bg);
+  border: 1rpx solid var(--ca-border);
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}

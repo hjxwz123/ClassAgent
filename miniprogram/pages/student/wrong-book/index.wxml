@@ -50,6 +50,7 @@
       </view>
       <view class="row-between mt-16">
         <text class="text-muted" style="font-size:24rpx">{{item.expanded ? '收起' : '展开'}}</text>
+        <button class="btn btn--outline btn--sm" catchtap="practiceOne" data-id="{{item.wrong_question_id}}" disabled="{{generating}}">重练本题</button>
       </view>
     </view>
   </block>
@@ -74,3 +75,5 @@
     </view>
   </scroll-view>
 </view>
+
+<gen-progress show="{{genShow}}" title="{{genTitle}}" status="{{genStatus}}" step="{{genStep}}" bind:dismiss="dismissGen" />

@@ -70,3 +70,5 @@
 
   <view wx:else class="empty"><icon class="empty__icon" name="puzzle" size="64rpx" color="#00B8D4" /><view class="empty__text">暂无知识点</view></view>
 </view>
+
+<gen-progress show="{{genShow}}" title="{{genTitle}}" status="{{genStatus}}" step="{{genStep}}" bind:dismiss="dismissGen" />
