@@ -789,6 +789,9 @@ const weakQuizGenerating = ref(false);
 const weakQuizGeneratingTopic = ref("");
 const weakQuizGenerationMode = ref<"all" | "single" | "">("");
 const weakQuizStatus = ref("");
+// 课程切换后可能在新课程又发起一次生成；用递增 token 让"更早那次生成"结束时的 finally
+// 不会误清掉"更新那次生成"正在使用的 loading 状态。
+let weakQuizGenerationToken = 0;
 const weakQuizData = ref<any>({ stats: {}, weak_points: [], all_sets: [] });
 const weakQuizSelectedSetId = ref(0);
 const weakQuizPointIndex = ref(0);
@@ -1153,6 +1156,12 @@ async function selectCourse(id: number, target = active.value) {
   await withAction(`select-course-${id}`, async () => {
     currentCourseId.value = id;
     courseMenuOpen.value = false;
+    // 薄弱测验生成状态按课程隔离：否则 A 课程生成中途切到 B 课程，B 的生成按钮会被
+    // 无意义地禁用到超时(最长 10 分钟)。任务本身仍在服务端后台跑，不受这次重置影响。
+    weakQuizGenerating.value = false;
+    weakQuizGeneratingTopic.value = "";
+    weakQuizGenerationMode.value = "";
+    weakQuizStatus.value = "";
     await loadCourseHome();
     await go(target);
   });
@@ -1553,20 +1562,25 @@ async function generateTeacherWeakQuiz(point?: any) {
   if (!ensureCurrentCourseOperable()) return;
   if (!weakQuizFormValid.value) return emit("notice", "warning", "题型数量合计必须等于总题量");
   if (weakQuizGenerating.value) return emit("notice", "info", "正在生成测验，请稍候");
+  // "未标注错题"伪知识点条目(knowledge_point_id 为 null)没有真实知识点可用，走后端的错题变式生成路径。
+  const untagged = !!point && point.knowledge_point_id == null;
   const mode: "all" | "single" = point ? "single" : "all";
-  const title = point ? `${point.knowledge_point}薄弱点专项测验` : "薄弱知识点综合测验";
+  const title = untagged ? "未标注错题专项测验" : point ? `${point.knowledge_point}薄弱点专项测验` : "薄弱知识点综合测验";
   weakQuizGenerating.value = true;
   weakQuizGeneratingTopic.value = point?.knowledge_point || "";
   weakQuizGenerationMode.value = mode;
   weakQuizStatus.value = point ? `正在生成“${point.knowledge_point}”专项题...` : "正在生成全部薄弱知识点综合测验...";
   emit("notice", "info", weakQuizStatus.value);
+  const generationCourseId = currentCourse.value!.id;
+  const myGenerationToken = ++weakQuizGenerationToken;
   let taskId = 0;
   let succeeded = false;
   try {
     const quiz = await run<any>(() => api.post("/learning/teacher/weak-quizzes/generate", {
-      course_id: currentCourse.value!.id,
+      course_id: generationCourseId,
       weak_point_id: point?.knowledge_point_id || undefined,
       all_weak_points: !point,
+      target_untagged: untagged,
       title,
       question_count: Number(weakQuizForm.question_count || 0),
       question_type_counts: weakQuizTypeCountsPayload(),
@@ -1577,12 +1591,17 @@ async function generateTeacherWeakQuiz(point?: any) {
     taskId = generationTaskId(quiz);
     if (taskId) generation.upsertTask({ id: taskId, title, status: "pending", step: null });
     const generatedQuiz = await waitForGeneratedQuiz(quiz);
+    // 生成期间教师可能已经切到别的课程：任务本身照常完成，但审核弹窗/仪表盘刷新只对
+    // "生成发起时的那门课程"仍是当前页面时才有意义，否则会用 A 课程的内容打断 B 课程的视图。
+    const stillSameCourse = currentCourse.value?.id === generationCourseId;
     if (!generatedQuiz) {
-      await loadDashboard();
+      if (stillSameCourse) await loadDashboard();
       return;
     }
-    await openGeneratedWeakQuiz(generatedQuiz);
-    await loadDashboard();
+    if (stillSameCourse) {
+      await openGeneratedWeakQuiz(generatedQuiz);
+      await loadDashboard();
+    }
     succeeded = true;
     emit("notice", "success", "薄弱题目已生成，请审核后发布");
   } catch (error) {
@@ -1591,10 +1610,14 @@ async function generateTeacherWeakQuiz(point?: any) {
   } finally {
     // 成功才移除面板卡片；失败态留给用户在面板上手动关闭，超时态留给面板保留"进行中"直到下次轮询/刷新兜底。
     if (succeeded && taskId) generation.removeTask(taskId);
-    weakQuizGenerating.value = false;
-    weakQuizGeneratingTopic.value = "";
-    weakQuizGenerationMode.value = "";
-    weakQuizStatus.value = "";
+    // 只有仍是"最新一次生成"才清 loading 状态：若切课程后又发起了新一轮生成，token 已经前进，
+    // 这次(更早的)收尾就不该把新一轮的 loading 状态误清掉。
+    if (weakQuizGenerationToken === myGenerationToken) {
+      weakQuizGenerating.value = false;
+      weakQuizGeneratingTopic.value = "";
+      weakQuizGenerationMode.value = "";
+      weakQuizStatus.value = "";
+    }
   }
 }
 async function selectWeakQuizSet(quiz: any) {

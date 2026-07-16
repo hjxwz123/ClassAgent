@@ -47,7 +47,31 @@ export const ActivityList = defineComponent({ props: { items: { type: Array as P
 
 export const ProgressList = defineComponent({ props: { items: { type: Array as PropType<any[]>, required: true } }, setup(p) { return () => h(TransitionGroup, { name: "motion-list", tag: "div", class: "progress-list" }, { default: () => p.items.length ? p.items.map((item) => h("div", { key: item.student.id, class: "student-progress-row" }, [h("span", { class: "avatar mini" }, firstChar(item.student.nickname)), h("strong", item.student.nickname), h(ProgressBar, { value: item.progress_percent }), h("small", `${item.progress_percent}%`)])) : [h(EmptyState, { key: "empty", text: "暂无学生" })] }); } });
 
-export const MaterialStatus = defineComponent({ props: { item: { type: Object, required: true } }, setup(p) { return () => h("small", { class: ["material-status", p.item.parse_status === "processing" ? "processing" : ""] }, p.item.parse_status === "ready" ? "脚本已生成 · 语音已合成 · 教学结构已就绪" : p.item.parse_status === "processing" ? "正在解析课件、生成脚本和教学结构，请稍候" : p.item.parse_status === "failed" ? "解析失败，可重新解析" : "待处理"); } });
+export const MaterialStatus = defineComponent({
+  props: { item: { type: Object, required: true } },
+  setup(p) {
+    return () => {
+      const status = p.item.parse_status;
+      const text = status === "ready" ? "脚本已生成 · 语音已合成 · 教学结构已就绪"
+        : status === "processing" ? "正在解析课件、生成脚本和教学结构，请稍候"
+        : status === "failed" ? "解析失败，可重新解析"
+        : "待处理";
+      // 知识点抽取结果为空时(旧课件常见)持久化在 metadata_json 里，解析完成后在这里加一句提示，
+      // 避免教师完全看不到——之前这个状态既不报错也不提示，出题/薄弱点分析悄悄缺知识点标签。
+      const knowledgePointWarning = status === "ready" && p.item.metadata_json?.knowledge_point_warning;
+      return h("small", { class: ["material-status", status === "processing" ? "processing" : ""] }, [
+        text,
+        knowledgePointWarning
+          ? h(
+              "em",
+              { class: "material-status-warning", title: "该章节暂未能从课件内容中提取出知识点，可能影响出题知识点标签与薄弱点分析" },
+              " · ⚠ 未提取到知识点"
+            )
+          : null,
+      ]);
+    };
+  },
+});
 
 export const LayerCard = defineComponent({ props: { label: { type: String, required: true }, value: { type: Number, required: true }, tone: { type: String, default: "primary" }, max: { type: Number, default: 1 } }, setup(p) { return () => h("article", { class: ["layer-card", p.tone] }, [h("strong", p.label), h("span", `${p.value} 人`), h(AppProgress, { value: p.value, max: Math.max(1, p.max), tone: p.tone as any })]); } });
 

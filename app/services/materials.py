@@ -1402,12 +1402,24 @@ def process_material_pipeline(db: Session, material_id: int) -> None:
                 db,
                 course_id=material.course_id,
                 chapter_id=material.chapter_id,
+                chunks=created_chunks,
             )
             knowledge_point_count = len(knowledge_result.points)
             if knowledge_result.failed_chunk_count:
                 warnings.append(
                     f"知识点抽取有 {knowledge_result.failed_chunk_count}/{knowledge_result.chunk_count} 个片段使用本地关键词降级"
                 )
+            if knowledge_point_count == 0:
+                # 抽取"成功"但结果为空此前无警告、无持久化标记，教师完全看不出这门课/章节
+                # 缺知识点。写进 warnings（本次任务详情可见）并持久化到 metadata_json（长期可见，
+                # 供材料列表渲染角标）；后续这个章节一旦有知识点了，下方 else 分支会清掉这个标记。
+                warnings.append("该章节暂未能从课件内容中提取出知识点，可能影响出题知识点标签与薄弱点分析")
+                material.metadata_json = {**(material.metadata_json or {}), "knowledge_point_warning": True}
+            else:
+                metadata = material.metadata_json or {}
+                if metadata.get("knowledge_point_warning"):
+                    material.metadata_json = {**metadata, "knowledge_point_warning": False}
+            db.add(material)
             _update_task_stage(
                 db,
                 task,

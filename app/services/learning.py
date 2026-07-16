@@ -348,6 +348,20 @@ def _chapter_ids_for_quiz(payload: QuizGenerateRequest) -> list[int]:
     return values
 
 
+def _assert_course_materials_parsed(db: Session, *, course_id: int, chapter_ids: list[int] | None = None) -> None:
+    """出题前置校验：课件切片提交与知识点抽取分两阶段落库，中间有窗口期——若此时出题，
+    生成的题目会漏知识点标签。范围内(未指定章节时为整门课程)只要有课件仍在解析中就直接拒绝。"""
+    statement = select(func.count(CourseMaterial.id)).where(
+        CourseMaterial.course_id == course_id,
+        CourseMaterial.deleted_at.is_(None),
+        CourseMaterial.parse_status.in_([ProcessStatus.PENDING.value, ProcessStatus.PROCESSING.value]),
+    )
+    if chapter_ids:
+        statement = statement.where(CourseMaterial.chapter_id.in_(chapter_ids))
+    if db.scalar(statement) or 0:
+        raise bad_request("课件正在解析中，请解析完成后再出题")
+
+
 def _knowledge_points_for_quiz(db: Session, *, course_id: int, chapter_ids: list[int]) -> list[KnowledgePoint]:
     if not chapter_ids:
         return list_knowledge_points(db, course_id=course_id, chapter_id=None)
@@ -851,6 +865,7 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest, task
     _report_quiz_generation_step(db, task_id, "preparing")
     course, question_type_counts = _validate_quiz_generation_request(db, user=user, payload=payload)
     chapter_ids = _chapter_ids_for_quiz(payload)
+    _assert_course_materials_parsed(db, course_id=payload.course_id, chapter_ids=chapter_ids)
     points = (
         _knowledge_points_by_ids(db, course_id=payload.course_id, point_ids=payload.knowledge_point_ids)
         if payload.knowledge_point_ids
@@ -1395,6 +1410,130 @@ def _weak_point_rows(db: Session, *, course_id: int) -> list[dict]:
     ]
 
 
+# 无标签错题（WrongQuestion 与 QuizQuestion 都没有 knowledge_point_id）在旧课件缺知识点时会被
+# _weak_point_rows 的 INNER JOIN 整体过滤，教师端因此"看不见也生成不了"。学生端 get_weak_points
+# 已有把它们汇总成一条伪知识点条目的先例，这里给教师端也补一条同款汇总。
+def _untagged_wrong_summary(db: Session, *, course_id: int) -> dict:
+    row = db.execute(
+        select(
+            func.sum(WrongQuestion.wrong_count),
+            func.count(func.distinct(WrongQuestion.user_id)),
+            func.max(WrongQuestion.updated_at),
+        )
+        .select_from(WrongQuestion)
+        .join(QuizQuestion, QuizQuestion.id == WrongQuestion.question_id)
+        .where(
+            WrongQuestion.course_id == course_id,
+            QuizQuestion.course_id == course_id,
+            WrongQuestion.knowledge_point_id.is_(None),
+            QuizQuestion.knowledge_point_id.is_(None),
+        )
+    ).one()
+    wrong_count, student_count, last_wrong_at = row
+    return {
+        "knowledge_point_id": None,
+        "knowledge_point": "未标注错题",
+        "description": "未关联知识点的错题，生成练习时直接对错题原题做变式，不依赖知识点",
+        "wrong_count": int(wrong_count or 0),
+        "student_count": int(student_count or 0),
+        "last_wrong_at": last_wrong_at,
+    }
+
+
+def _untagged_wrong_question_rows(db: Session, *, course_id: int, limit: int) -> list[QuizQuestion]:
+    """按被错次数排序取出课程内"无标签"错题对应的原题(去重到题目粒度，不重复同一题)。"""
+    rows = db.execute(
+        select(QuizQuestion, func.sum(WrongQuestion.wrong_count).label("total_wrong"))
+        .join(WrongQuestion, WrongQuestion.question_id == QuizQuestion.id)
+        .where(
+            WrongQuestion.course_id == course_id,
+            QuizQuestion.course_id == course_id,
+            WrongQuestion.knowledge_point_id.is_(None),
+            QuizQuestion.knowledge_point_id.is_(None),
+        )
+        .group_by(QuizQuestion.id)
+        .order_by(func.sum(WrongQuestion.wrong_count).desc(), QuizQuestion.id.asc())
+        .limit(limit)
+    )
+    return [question for question, _total_wrong in rows]
+
+
+def _generate_untagged_weak_quiz(db: Session, *, user: User, course: Course, payload: WeakQuizGenerateRequest, task_id: int | None = None) -> Quiz:
+    """未标注知识点错题的薄弱点测验：没有真实 KnowledgePoint 可用，改为像错题重练
+    (generate_wrong_book_practice)一样，直接对错题原题调用变式生成，而不是走知识点出题路径。
+    question_type_counts/difficulty 对"复现指定原题的变式"没有意义，此路径不使用。"""
+    _report_quiz_generation_step(db, task_id, "preparing")
+    questions = _untagged_wrong_question_rows(db, course_id=course.id, limit=max(payload.question_count, 1))
+    if not questions:
+        raise bad_request("暂无未标注知识点的错题可生成练习")
+    originals = [
+        {
+            "question_type": question.question_type,
+            "stem": question.stem,
+            "options": question.options,
+            "reference_answer": question.reference_answer,
+            "explanation": question.explanation,
+        }
+        for question in questions
+    ]
+    _report_quiz_generation_step(db, task_id, "drafting")
+    try:
+        variants = ai_service.generate_variant_questions(originals=originals, db=db)
+    except Exception:
+        variants = [None] * len(questions)
+    _report_quiz_generation_step(db, task_id, "assembling")
+    title = payload.title or "未标注错题专项测验"
+    quiz = Quiz(
+        course_id=course.id,
+        chapter_id=None,
+        creator_id=user.id,
+        title=title,
+        description="基于未标注知识点的课程错题自动生成",
+        quiz_type=QuizType.COURSE.value,
+        status=QuizStatus.REVIEW.value,
+        metadata_json={"generated": True, "source": "untagged_weak_quiz"},
+    )
+    db.add(quiz)
+    db.flush()
+    db.refresh(quiz)
+    total_score = 0.0
+    variant_count = 0
+    for index, question in enumerate(questions):
+        variant = variants[index] if index < len(variants) else None
+        if variant is not None:
+            variant_count += 1
+        clone = QuizQuestion(
+            quiz_id=quiz.id,
+            course_id=course.id,
+            chapter_id=question.chapter_id,
+            knowledge_point_id=None,
+            question_type=question.question_type,
+            stem=variant["stem"] if variant else question.stem,
+            options=variant["options"] if variant else question.options,
+            reference_answer=variant["reference_answer"] if variant else question.reference_answer,
+            explanation=(variant.get("explanation") or question.explanation) if variant else question.explanation,
+            score=question.score,
+            difficulty=question.difficulty,
+        )
+        total_score += question.score
+        db.add(clone)
+    quiz.total_score = total_score
+    quiz.metadata_json = {
+        "generated": True,
+        "source": "untagged_weak_quiz",
+        "weak_quiz": True,
+        "weak_quiz_scope": "untagged",
+        "weak_point_ids": [],
+        "weak_point_names": ["未标注错题"],
+        "course_name": course.name,
+        "variant_count": variant_count,
+    }
+    db.add(quiz)
+    db.commit()
+    db.refresh(quiz)
+    return quiz
+
+
 def _quiz_question_type_counts(db: Session, quiz_id: int) -> dict[str, int]:
     rows = db.execute(
         select(QuizQuestion.question_type, func.count(QuizQuestion.id))
@@ -1437,6 +1576,10 @@ def _weak_quiz_summary(db: Session, quiz: Quiz) -> dict:
 def list_teacher_weak_quizzes(db: Session, *, course_id: int, user: User) -> dict:
     _assert_teacher_course_access(db, course_id=course_id, user=user)
     weak_points = _weak_point_rows(db, course_id=course_id)
+    untagged = _untagged_wrong_summary(db, course_id=course_id)
+    if untagged["wrong_count"]:
+        # None 作为 dict key 与真实 knowledge_point_id 不冲突，前端据此渲染成"未标注错题"卡片。
+        weak_points = [*weak_points, untagged]
     weak_by_id = {item["knowledge_point_id"]: {**item, "quiz_sets": []} for item in weak_points}
     all_sets: list[dict] = []
     quizzes = list(db.scalars(select(Quiz).where(Quiz.course_id == course_id).order_by(Quiz.created_at.desc())))
@@ -1446,10 +1589,14 @@ def list_teacher_weak_quizzes(db: Session, *, course_id: int, user: User) -> dic
             continue
         summary = _weak_quiz_summary(db, quiz)
         scope = metadata.get("weak_quiz_scope")
-        point_ids = [int(point_id) for point_id in metadata.get("weak_point_ids", []) if str(point_id).isdigit()]
         if scope == "all":
             all_sets.append(summary)
             continue
+        if scope == "untagged":
+            if None in weak_by_id:
+                weak_by_id[None]["quiz_sets"].append(summary)
+            continue
+        point_ids = [int(point_id) for point_id in metadata.get("weak_point_ids", []) if str(point_id).isdigit()]
         for point_id in point_ids:
             if point_id in weak_by_id:
                 weak_by_id[point_id]["quiz_sets"].append(summary)
@@ -1466,6 +1613,9 @@ def list_teacher_weak_quizzes(db: Session, *, course_id: int, user: User) -> dic
 
 def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGenerateRequest, task_id: int | None = None) -> Quiz:
     course = _assert_teacher_course_access(db, course_id=payload.course_id, user=user, require_active=True)
+    _assert_course_materials_parsed(db, course_id=payload.course_id)
+    if payload.target_untagged:
+        return _generate_untagged_weak_quiz(db, user=user, course=course, payload=payload, task_id=task_id)
     if payload.weak_point_id:
         point_ids = [payload.weak_point_id]
         scope = "single"
@@ -1517,10 +1667,17 @@ def generate_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGene
 
 def enqueue_teacher_weak_quiz(db: Session, *, user: User, payload: WeakQuizGenerateRequest) -> AsyncTaskLog:
     course = _assert_teacher_course_access(db, course_id=payload.course_id, user=user, require_active=True)
+    # 与 _validate_quiz_generation_request（/quizzes/generate）对齐：非法参数入队前就 400，
+    # 不要让它排进队列后才在 Celery worker 里异步失败。
+    if (payload.difficulty or "mixed") not in _QUIZ_DIFFICULTY_CHOICES:
+        raise bad_request("难度参数不合法，可选 mixed/easy/standard/hard")
     type_counts = _normalize_question_type_counts(payload.question_type_counts)
     if type_counts and sum(type_counts.values()) != payload.question_count:
         raise bad_request("题型数量合计必须等于总题量")
-    title = payload.title or ("薄弱知识点综合测验" if payload.all_weak_points else "薄弱点专项测验")
+    # 范围判定需与 generate_teacher_weak_quiz 的实际 scope 逻辑一致（多个 weak_point_ids 也算 all），
+    # 否则占位任务标题会和最终生成的测验标题对不上。
+    is_all_scope = payload.all_weak_points or (bool(payload.weak_point_ids) and len(set(payload.weak_point_ids)) > 1)
+    title = payload.title or ("薄弱知识点综合测验" if is_all_scope else "薄弱点专项测验")
     payload_dict = {**payload.model_dump(mode="json"), "question_type_counts": type_counts}
     reusable = _find_reusable_quiz_task(db, user=user, course_id=course.id, kind="teacher_weak_quiz", title=title, payload=payload_dict)
     if reusable is not None:
@@ -1559,6 +1716,10 @@ def get_teacher_quiz_attempts(db: Session, *, quiz_id: int, user: User) -> dict:
     if quiz is None:
         raise not_found("测验不存在")
     _assert_teacher_course_access(db, course_id=quiz.course_id, user=user)
+    if _is_student_private_quiz(quiz):
+        # #越权：错题重练/自助练习属学生私有内容，其它 6 处读写路径都已隔离，此处遗漏会让教师
+        # 拿任意 quiz_id 就能看到学生私有练习的完整作答与解析。
+        raise forbidden("学生私有练习不支持教师查看作答详情")
     questions = list(db.scalars(select(QuizQuestion).where(QuizQuestion.quiz_id == quiz_id).order_by(QuizQuestion.id.asc())))
     question_by_id = {question.id: question for question in questions}
     rows = list(

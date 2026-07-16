@@ -345,14 +345,28 @@ def _extract_chunk_knowledge_points(content: str) -> tuple[list[str], str | None
             return list(dict.fromkeys(names)), str(exc) or "模型调用失败"
 
 
+_KNOWLEDGE_POINT_CAP = 8
+
+
 def pre_generate_knowledge_points(
     db: Session,
     *,
     course_id: int,
     chapter_id: int | None = None,
     max_concurrency: int | None = None,
+    chunks: list[KnowledgeChunk] | None = None,
 ) -> KnowledgePointPreGenerationResult:
-    """Pre-generate a course/chapter's points during material processing, never from a user hot path."""
+    """Pre-generate a course/chapter's points during material processing, never from a user hot path.
+
+    chunks=None（默认，兼容全量回填等调用方）：existing 非空就整体复用跳过，为空才扫描该
+    章节/课程下的全部切片——与改动前行为完全一致。
+
+    显式传入 chunks（调用方明确这是"刚处理完的某份课件自己的新切片"）：不再因为 existing
+    非空就整体跳过——只对这批新切片跑抽取（成本只随新增内容增长，不会对老切片重复调用 AI），
+    把其中新出现、且不与 existing 已有名字重复的知识点名按频次补进去，直到补满原有总量上限，
+    而不是丢弃/替换 existing。这样章节里较晚上传、抽得更好的课件也有机会贡献知识点，
+    而不是永远只有第一份课件说了算。
+    """
     if chapter_id is None:
         scope_statement = select(Course.id).where(Course.id == course_id)
     else:
@@ -363,17 +377,25 @@ def pre_generate_knowledge_points(
         return KnowledgePointPreGenerationResult([], 0, 0, False)
 
     existing = list_knowledge_points(db, course_id=course_id, chapter_id=chapter_id)
-    if existing:
-        db.commit()
-        return KnowledgePointPreGenerationResult(existing, 0, 0, True)
 
-    chunk_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
-    if chapter_id is not None:
-        chunk_statement = chunk_statement.where(KnowledgeChunk.chapter_id == chapter_id)
-    chunks = list(db.scalars(chunk_statement.order_by(KnowledgeChunk.id)))
+    if chunks is None:
+        if existing:
+            db.commit()
+            return KnowledgePointPreGenerationResult(existing, 0, 0, True)
+        chunk_statement = select(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
+        if chapter_id is not None:
+            chunk_statement = chunk_statement.where(KnowledgeChunk.chapter_id == chapter_id)
+        chunks = list(db.scalars(chunk_statement.order_by(KnowledgeChunk.id)))
+
     if not chunks:
         db.commit()
-        return KnowledgePointPreGenerationResult([], 0, 0, False)
+        return KnowledgePointPreGenerationResult(existing, 0, 0, bool(existing))
+
+    remaining_slots = max(0, _KNOWLEDGE_POINT_CAP - len(existing))
+    if existing and remaining_slots == 0:
+        # 已达上限，新课件的切片不会再有名额，跳过这次抽取以省一次 AI 调用。
+        db.commit()
+        return KnowledgePointPreGenerationResult(existing, len(chunks), 0, True)
 
     worker_limit = max_concurrency or int(_settings.knowledge_point_extraction_max_concurrency)
     worker_count = min(len(chunks), max(1, int(worker_limit)))
@@ -390,6 +412,7 @@ def pre_generate_knowledge_points(
             for future in as_completed(future_map):
                 extracted[future_map[future]] = future.result()
 
+    existing_names = {point.name for point in existing}
     counter: Counter[str] = Counter()
     source_text: dict[str, str] = {}
     failed_chunk_count = 0
@@ -398,11 +421,13 @@ def pre_generate_knowledge_points(
         if error:
             failed_chunk_count += 1
         for keyword in names:
+            if keyword in existing_names:
+                continue
             counter[keyword] += 1
             source_text.setdefault(keyword, chunk.content)
 
     created: list[KnowledgePoint] = []
-    for keyword, _ in counter.most_common(8):
+    for keyword, _ in counter.most_common(remaining_slots):
         content = {
             "beginner": _local_knowledge_explanation(name=keyword, difficulty="beginner", source_text=source_text[keyword]),
             "standard": _local_knowledge_explanation(name=keyword, difficulty="standard", source_text=source_text[keyword]),
@@ -418,7 +443,7 @@ def pre_generate_knowledge_points(
         db.add(point)
         created.append(point)
     db.commit()
-    return KnowledgePointPreGenerationResult(created, len(chunks), failed_chunk_count, False)
+    return KnowledgePointPreGenerationResult(existing + created, len(chunks), failed_chunk_count, not created and bool(existing))
 
 
 def ensure_knowledge_points(db: Session, *, course_id: int, chapter_id: int | None = None) -> list[KnowledgePoint]:

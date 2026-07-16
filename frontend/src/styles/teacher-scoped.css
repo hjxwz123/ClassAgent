@@ -2204,6 +2204,11 @@ code {
   margin-top: 2px;
 }
 
+.material-status-warning {
+  color: var(--color-warning-600, var(--color-warning-500));
+  font-style: normal;
+}
+
 .material-row>.tag {
   flex: 0 0 auto;
   white-space: nowrap;
