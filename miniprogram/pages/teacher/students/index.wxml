@@ -79,7 +79,7 @@
 
 <!-- 课程选择 -->
 <view wx:if="{{coursePickerOpen}}" class="sheet-mask" bindtap="toggleCoursePicker"></view>
-<view wx:if="{{coursePickerOpen}}" class="sheet" catchtap="">
+<view wx:if="{{coursePickerOpen}}" class="sheet sheet--tab" catchtap="">
   <view class="sheet__handle"></view>
   <view class="sheet__title">选择课程</view>
   <scroll-view scroll-y style="max-height:50vh">
@@ -92,7 +92,7 @@
 
 <!-- 提醒 -->
 <view wx:if="{{remindOpen}}" class="sheet-mask" bindtap="closeRemind"></view>
-<view wx:if="{{remindOpen}}" class="sheet" catchtap="">
+<view wx:if="{{remindOpen}}" class="sheet sheet--tab" catchtap="">
   <view class="sheet__handle"></view>
   <view class="sheet__title">提醒 {{remindStudent.name}}</view>
   <view class="field">

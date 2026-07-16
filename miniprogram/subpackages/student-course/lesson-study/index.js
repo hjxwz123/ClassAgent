@@ -20,8 +20,8 @@ Page({
     navTop: 60,
     statusBar: 20,
     navRightPx: 12, // 顶栏右侧按钮距屏幕右缘（px），避开胶囊
-    // 字幕
-    subtitleMode: 'full', // full | hidden
+    // 字幕（默认关闭，需要时点顶栏"字幕"手动开启）
+    subtitleMode: 'hidden', // full | hidden
     // 抽屉
     drawerOpen: false,
     drawerTab: 'script', // script | activity | qa | note

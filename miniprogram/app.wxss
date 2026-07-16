@@ -243,6 +243,8 @@ view, text, scroll-view, button, input, textarea, navigator {
 }
 .sheet__handle { width: 72rpx; height: 8rpx; border-radius: 9999rpx; background: var(--ca-border); margin: 8rpx auto 20rpx; }
 .sheet__title { font-size: 34rpx; font-weight: 600; text-align: center; margin-bottom: 24rpx; }
+/* Tab 页上的抽屉：底部额外避让自定义 TabBar（112rpx + 安全区），避免按钮/内容被底部导航栏遮挡 */
+.sheet--tab { padding-bottom: calc(112rpx + env(safe-area-inset-bottom) + 32rpx); }
 @keyframes caSheetUp {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
