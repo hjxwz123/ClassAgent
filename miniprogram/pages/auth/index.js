@@ -12,6 +12,12 @@ Page({
     // 已登录直接跳转
     const auth = require('../../utils/auth');
     if (auth.isLoggedIn()) {
+      // 管理员仅限网页端管理后台：清除历史会话并留在登录页
+      if (auth.role() === 'admin') {
+        getApp().clearSession();
+        toast.error('管理员请前往网页端管理后台登录');
+        return;
+      }
       this.redirectByRole(auth.role());
     }
   },
@@ -43,6 +49,11 @@ Page({
     this.setData({ submitting: true, errors: {} });
     try {
       const data = await api.post('/auth/login', { email, password });
+      // 管理员仅限网页端管理后台，禁止登录小程序：不建立会话
+      if (data.user && data.user.role === 'admin') {
+        toast.error('管理员请前往网页端管理后台登录');
+        return;
+      }
       getApp().setSession(data.access_token, data.user);
       toast.success('欢迎回来');
       setTimeout(() => this.redirectByRole(data.user.role), 400);

@@ -11,7 +11,12 @@ App({
     // 启动时恢复登录态
     const user = auth.getUser();
     if (user) {
-      this.globalData.user = user;
+      // 管理员仅限网页端管理后台，禁止进入小程序：清除历史遗留的管理员会话
+      if (user.role === 'admin') {
+        this.clearSession();
+      } else {
+        this.globalData.user = user;
+      }
     }
     // 新版本就绪后提示重启，避免用户长期停留在旧缓存版本
     if (wx.getUpdateManager) {
