@@ -76,7 +76,9 @@ Page({
     else toast.info('课程暂无课时');
   },
   goQa() {
-    getApp().globalData.transfer.qaCourseId = this.data.courseId;
+    const transfer = getApp().globalData.transfer;
+    transfer.qaCourseId = this.data.courseId;
+    transfer.qaBackCourseId = this.data.courseId; // 标记来自课程详情页：QA 顶栏显示返回按钮
     wx.switchTab({ url: '/pages/student/qa/index' });
   },
   goMaterials() {

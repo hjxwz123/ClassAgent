@@ -1,9 +1,12 @@
 <view class="qa">
   <!-- 顶部栏 -->
   <view class="qa__top">
-    <view class="course-sel" hover-class="hover-dim" bindtap="toggleCoursePicker">
-      <text class="ellipsis">{{courseName}}</text>
-      <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#0097A7" />
+    <view class="qa__top-left">
+      <view wx:if="{{backCourseId}}" class="qa__back" hover-class="hover-dim" bindtap="backToCourse">‹</view>
+      <view class="course-sel" hover-class="hover-dim" bindtap="toggleCoursePicker">
+        <text class="ellipsis">{{courseName}}</text>
+        <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#0097A7" />
+      </view>
     </view>
     <view class="qa__actions">
       <text class="qa__action" hover-class="hover-dim" bindtap="goTutoring">题目辅导</text>
@@ -89,7 +92,7 @@
 
 <!-- 课程选择 -->
 <view wx:if="{{coursePickerOpen}}" class="sheet-mask" bindtap="toggleCoursePicker"></view>
-<view wx:if="{{coursePickerOpen}}" class="sheet" catchtap="">
+<view wx:if="{{coursePickerOpen}}" class="sheet sheet--tab" catchtap="">
   <view class="sheet__handle"></view>
   <view class="sheet__title">选择课程</view>
   <scroll-view scroll-y style="max-height:50vh">
@@ -106,7 +109,7 @@
 
 <!-- 历史 -->
 <view wx:if="{{historyOpen}}" class="sheet-mask" bindtap="closeHistory"></view>
-<view wx:if="{{historyOpen}}" class="sheet" catchtap="">
+<view wx:if="{{historyOpen}}" class="sheet sheet--tab" catchtap="">
   <view class="sheet__handle"></view>
   <view class="sheet__title">问答历史</view>
   <scroll-view scroll-y style="max-height:60vh">

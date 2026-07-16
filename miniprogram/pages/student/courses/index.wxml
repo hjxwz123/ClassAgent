@@ -68,7 +68,7 @@
 
 <!-- 加入课程抽屉 -->
 <view wx:if="{{joinOpen}}" class="sheet-mask" bindtap="closeJoin"></view>
-<view wx:if="{{joinOpen}}" class="sheet" catchtap="">
+<view wx:if="{{joinOpen}}" class="sheet sheet--tab" catchtap="">
   <view class="sheet__handle"></view>
   <view class="sheet__title">加入课程</view>
   <view class="field">

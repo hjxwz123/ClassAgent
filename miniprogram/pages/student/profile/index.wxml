@@ -96,7 +96,7 @@
 
 <!-- 改密抽屉 -->
 <view wx:if="{{pwdOpen}}" class="sheet-mask" bindtap="closePwd"></view>
-<view wx:if="{{pwdOpen}}" class="sheet" catchtap="">
+<view wx:if="{{pwdOpen}}" class="sheet sheet--tab" catchtap="">
   <view class="sheet__handle"></view>
   <view class="sheet__title">修改密码</view>
   <view class="field">

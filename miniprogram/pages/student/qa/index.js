@@ -24,6 +24,7 @@ Page({
     coursesError: false,
     courseId: 0,
     courseName: '选择课程',
+    backCourseId: 0, // >0 时从课程详情页进入，顶栏显示"返回课程"按钮
     coursePickerOpen: false,
     messages: [],
     conversationId: null,
@@ -45,6 +46,10 @@ Page({
   onShow() {
     tabbar.setTab(this, 2);
     const transfer = getApp().globalData.transfer;
+    // 仅当从课程详情页进入时显示"返回课程"按钮；其余入口（tab 切换等）清除，避免残留错误的返回目标
+    const backCourseId = transfer.qaBackCourseId || 0;
+    transfer.qaBackCourseId = null;
+    if (backCourseId !== this.data.backCourseId) this.setData({ backCourseId });
     if (transfer.qaCourseId) {
       this.pendingCourseId = transfer.qaCourseId;
       transfer.qaCourseId = null;
@@ -107,12 +112,20 @@ Page({
     const course = this.data.courses.find((c) => c.id === id);
     const hadConversation = this.data.messages.length > 0;
     this.cancelStream();
-    this.setData({ courseId: id, courseName: course ? course.name : '选择课程', coursePickerOpen: false, messages: [], conversationId: null });
+    // 手动切到其它课程后，"返回课程"入口已与当前所看课程不一致，一并清除避免回错课程
+    this.setData({ courseId: id, courseName: course ? course.name : '选择课程', coursePickerOpen: false, messages: [], conversationId: null, backCourseId: 0 });
     if (hadConversation) toast.info('已切换课程，原对话可在历史中找回');
   },
   goJoinCourse() {
     this.setData({ coursePickerOpen: false });
     wx.switchTab({ url: '/pages/student/courses/index' });
+  },
+
+  // 从课程详情页 switchTab 进入 QA 后返回栈已清空，提供显式入口回到该课程主页
+  backToCourse() {
+    const id = this.data.backCourseId;
+    if (!id) return;
+    wx.navigateTo({ url: '/subpackages/student-course/course-home/index?courseId=' + id });
   },
 
   newConversation() {

@@ -57,7 +57,7 @@
 
 <!-- 改密 -->
 <view wx:if="{{pwdOpen}}" class="sheet-mask" bindtap="closePwd"></view>
-<view wx:if="{{pwdOpen}}" class="sheet" catchtap="">
+<view wx:if="{{pwdOpen}}" class="sheet sheet--tab" catchtap="">
   <view class="sheet__handle"></view>
   <view class="sheet__title">修改密码</view>
   <view class="field"><view class="field__label">当前密码</view><input class="input" password value="{{pwd.old_password}}" data-field="old_password" bindinput="onPwd" /></view>
