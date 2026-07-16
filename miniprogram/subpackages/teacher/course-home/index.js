@@ -30,11 +30,15 @@ Page({
   },
 
   goStudents() {
-    getApp().globalData.transfer.teacherCourseId = this.data.courseId;
+    const transfer = getApp().globalData.transfer;
+    transfer.teacherCourseId = this.data.courseId;
+    transfer.teacherBackCourseId = this.data.courseId; // 标记来自课程主页：目标 tab 页显示返回按钮
     wx.switchTab({ url: '/pages/teacher/students/index' });
   },
   goAnalytics() {
-    getApp().globalData.transfer.teacherCourseId = this.data.courseId;
+    const transfer = getApp().globalData.transfer;
+    transfer.teacherCourseId = this.data.courseId;
+    transfer.teacherBackCourseId = this.data.courseId;
     wx.switchTab({ url: '/pages/teacher/analytics/index' });
   },
   // 资料/课时管理暂无移动端页面，给出提示避免"假按钮"

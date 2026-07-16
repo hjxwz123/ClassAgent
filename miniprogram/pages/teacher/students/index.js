@@ -8,6 +8,7 @@ Page({
     courses: [],
     courseId: 0,
     courseName: '选择课程',
+    backCourseId: 0, // >0 时从课程主页进入，顶栏显示"返回课程"
     coursePickerOpen: false,
     loading: true,
     error: '',
@@ -29,6 +30,10 @@ Page({
   onShow() {
     tabbar.setTab(this, 2);
     const transfer = getApp().globalData.transfer;
+    // 仅从课程主页进入时显示"返回课程"，其它入口（tab 切换）清除，避免回到不一致的课程
+    const backCourseId = transfer.teacherBackCourseId || 0;
+    transfer.teacherBackCourseId = null;
+    if (backCourseId !== this.data.backCourseId) this.setData({ backCourseId });
     if (transfer.teacherCourseId) {
       this._pendingCourseId = transfer.teacherCourseId;
       transfer.teacherCourseId = null;
@@ -73,8 +78,14 @@ Page({
   pickCourse(e) {
     const id = e.currentTarget.dataset.id;
     const course = this.data.courses.find((c) => c.id === id);
-    this.setData({ courseId: id, courseName: course ? course.name : '', coursePickerOpen: false });
+    // 手动切课程后返回目标已不一致，清除返回按钮
+    this.setData({ courseId: id, courseName: course ? course.name : '', coursePickerOpen: false, backCourseId: 0 });
     this.load();
+  },
+  // 从课程主页 switchTab 进入（返回栈已清空），提供显式入口回到该课程主页
+  backToCourse() {
+    if (!this.data.backCourseId) return;
+    wx.navigateTo({ url: '/subpackages/teacher/course-home/index?courseId=' + this.data.backCourseId });
   },
 
   async load() {

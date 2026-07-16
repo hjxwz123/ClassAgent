@@ -1,7 +1,10 @@
 <view class="page page--tab">
-  <view class="course-sel course-sel--teacher" hover-class="hover-dim" bindtap="toggleCoursePicker">
-    <text class="ellipsis">{{courseName}}</text>
-    <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#D94925" />
+  <view class="row gap-16">
+    <view wx:if="{{backCourseId}}" class="nav-back nav-back--teacher" hover-class="hover-dim" bindtap="backToCourse">‹</view>
+    <view class="course-sel course-sel--teacher" hover-class="hover-dim" bindtap="toggleCoursePicker">
+      <text class="ellipsis">{{courseName}}</text>
+      <icon class="course-sel__arrow" name="chevron-down" size="24rpx" color="#D94925" />
+    </view>
   </view>
 
   <!-- 统计 -->
