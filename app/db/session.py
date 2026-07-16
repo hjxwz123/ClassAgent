@@ -117,6 +117,11 @@ def _ensure_schema_updates(target_engine: Engine) -> None:
         quiz_answer_columns = {column["name"] for column in inspector.get_columns("quiz_answers")}
         if "pending_review" not in quiz_answer_columns:
             statements.append("ALTER TABLE quiz_answers ADD COLUMN pending_review BOOLEAN NOT NULL DEFAULT 0")
+    if "quiz_questions" in table_names:
+        # 题库溯源列：从题库克隆的题记录来源库题 id，作答结果据此回流题库统计。
+        quiz_question_columns = {column["name"] for column in inspector.get_columns("quiz_questions")}
+        if "bank_item_id" not in quiz_question_columns:
+            statements.append("ALTER TABLE quiz_questions ADD COLUMN bank_item_id INTEGER")
     if target_engine.dialect.name == "mysql":
         _append_mysql_longtext_updates(inspector, table_names, statements)
     if "quiz_attempts" in table_names:

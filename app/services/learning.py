@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 import unicodedata
 from datetime import UTC, date, datetime, timedelta
+from hashlib import blake2b
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,6 +22,7 @@ from app.db.models import (
     KnowledgePoint,
     QARecord,
     ProblemRecord,
+    QuestionBankItem,
     Quiz,
     QuizAnswer,
     QuizAttempt,
@@ -34,7 +37,13 @@ from app.db.models import (
     LearningProgress,
 )
 from app.schemas.learning import QuizEditRequest, QuizGenerateRequest, StudyPlanCreateRequest, WeakQuizGenerateRequest
-from app.services.ai import ai_service, sanitize_quiz_source_text
+from app.services.ai import (
+    _quiz_difficulty_targets,
+    _select_quiz_questions_by_difficulty,
+    _select_quiz_questions_by_type_counts,
+    ai_service,
+    sanitize_quiz_source_text,
+)
 from app.services.courses import _assert_course_owner, _get_course_or_404
 from app.services.knowledge import list_knowledge_points
 from app.services.learning_signals import learning_signal_point_stats
@@ -650,6 +659,194 @@ def _match_knowledge_point(points: list[KnowledgePoint], name) -> KnowledgePoint
     return None
 
 
+# ─── 课程题库（检索优先 + 缺口补生成）───
+# 质量惰性淘汰阈值：作答样本 >=20 且正确率 >97%（送分/泄露）或 <10%（题目有误/有争议）不再出。
+_BANK_QUALITY_MIN_ATTEMPTS = 20
+_BANK_QUALITY_MAX_CORRECT_RATE = 0.97
+_BANK_QUALITY_MIN_CORRECT_RATE = 0.10
+_BANK_FETCH_LIMIT = 400
+
+
+def _bank_stem_key(stem: str) -> str:
+    """归一化题干哈希：去空白/标点、小写、数字归一为 #。"只换数值的伪新题"会得到相同 key。"""
+    text_value = re.sub(r"\s+", "", str(stem or "")).lower()
+    text_value = re.sub(r"\d+(?:\.\d+)?", "#", text_value)
+    text_value = re.sub(r"[^\w#]", "", text_value)
+    return blake2b(text_value.encode("utf-8"), digest_size=20).hexdigest()
+
+
+def _student_seen_stems(db: Session, *, course_id: int, user: User) -> list[str]:
+    """该学生在本课程"已见"的题干原文：其名下创建的所有卷（含未作答的待做练习）
+    + 其作答过的所有题。新见优先排列，供检索排重（转 key）与补生成避开清单双用。"""
+    created_stems = db.scalars(
+        select(QuizQuestion.stem)
+        .join(Quiz, Quiz.id == QuizQuestion.quiz_id)
+        .where(Quiz.course_id == course_id, Quiz.creator_id == user.id)
+        .order_by(QuizQuestion.id.desc())
+    )
+    attempted_stems = db.scalars(
+        select(QuizQuestion.stem)
+        .join(QuizAnswer, QuizAnswer.question_id == QuizQuestion.id)
+        .join(QuizAttempt, QuizAttempt.id == QuizAnswer.attempt_id)
+        .where(QuizAttempt.user_id == user.id, QuizQuestion.course_id == course_id)
+        .order_by(QuizQuestion.id.desc())
+    )
+    return list(created_stems) + list(attempted_stems)
+
+
+def _bank_item_quality_ok(item: QuestionBankItem) -> bool:
+    attempts = int(item.attempt_count or 0)
+    if attempts < _BANK_QUALITY_MIN_ATTEMPTS:
+        return True
+    rate = int(item.correct_count or 0) / attempts
+    return _BANK_QUALITY_MIN_CORRECT_RATE <= rate <= _BANK_QUALITY_MAX_CORRECT_RATE
+
+
+def _bank_item_to_question_dict(item: QuestionBankItem) -> dict:
+    """转成与 AI 生成题一致的 dict 形状，供 _assign_quiz_scores/按题型难度选题等既有函数直接复用；
+    额外携带 bank_item_id 与知识点/章节绑定，组卷时优先用显式 id 而非名称匹配。"""
+    return {
+        "question_type": item.question_type,
+        "stem": item.stem,
+        "options": item.options,
+        "reference_answer": item.reference_answer,
+        "explanation": item.explanation,
+        "score": 10,
+        "difficulty": item.difficulty or "standard",
+        "bank_item_id": item.id,
+        "knowledge_point_id": item.knowledge_point_id,
+        "chapter_id": item.chapter_id,
+    }
+
+
+def _retrieve_bank_questions(
+    db: Session,
+    *,
+    course_id: int,
+    points: list[KnowledgePoint],
+    whole_course: bool,
+    count: int,
+    type_counts: dict[str, int] | None,
+    difficulty: str,
+    seen_stems: list[str],
+    prefer_weak: bool = False,
+) -> tuple[list[dict], int, dict[str, int] | None]:
+    """从课程题库检索可复用题，返回 (选中题 dicts, 仍需生成的数量, 缺口题型分布)。
+
+    范围口径与生成路径完全一致：按调用方用同一套圈定逻辑算出的知识点集合过滤；
+    未绑定知识点的"无标签题"只允许全课程请求（whole_course）检索到——宁缺勿滥，
+    章节/知识点圈定的请求绝不给可能跑偏的题（跨课程由 course_id 硬过滤保证）。
+    教师出卷来源（origin=teacher）一律不出给学生练习：教师测验多为待审核/未发布考卷，
+    先于考试把题喂给学生等于泄题。"""
+    conditions = [
+        QuestionBankItem.course_id == course_id,
+        QuestionBankItem.status == "active",
+        QuestionBankItem.origin != "teacher",
+    ]
+    point_ids = [point.id for point in points]
+    if not whole_course:
+        if not point_ids:
+            return [], count, type_counts
+        conditions.append(QuestionBankItem.knowledge_point_id.in_(point_ids))
+    if difficulty in {"easy", "standard", "hard"}:
+        conditions.append(QuestionBankItem.difficulty == difficulty)
+    candidates = list(
+        db.scalars(
+            select(QuestionBankItem)
+            .where(*conditions)
+            .order_by(QuestionBankItem.usage_count.asc(), QuestionBankItem.id.desc())
+            .limit(_BANK_FETCH_LIMIT)
+        )
+    )
+    exclude_keys = {_bank_stem_key(stem) for stem in seen_stems}
+    eligible = [item for item in candidates if item.stem_key not in exclude_keys and _bank_item_quality_ok(item)]
+    if not eligible:
+        return [], count, type_counts
+    # 低使用优先 + 同使用档内随机：让题库均匀轮换，也避免同班同学抽到完全一样的卷面（防对答案）。
+    # 勾选"优先薄弱点"时改为按知识点的薄弱排名（points 已由 _prioritize_weak_points 排好序）优先选题，
+    # 否则该开关在题库命中路径上会被静默忽略。
+    random.shuffle(eligible)
+    if prefer_weak and point_ids:
+        point_rank = {point_id: rank for rank, point_id in enumerate(point_ids)}
+        eligible.sort(key=lambda item: (point_rank.get(item.knowledge_point_id, len(point_rank)), int(item.usage_count or 0)))
+    else:
+        eligible.sort(key=lambda item: int(item.usage_count or 0))
+    dicts = [_bank_item_to_question_dict(item) for item in eligible]
+    if type_counts:
+        selected, missing_by_type = _select_quiz_questions_by_type_counts(dicts, type_counts)
+        missing_total = sum(missing_by_type.values())
+        return selected, missing_total, (missing_by_type or None)
+    targets = _quiz_difficulty_targets(count, difficulty)
+    # 易题配额封顶（全量与部分命中一致执行）：库存偏科成"全是送分题"时，混合难度卷若被易题
+    # 挤满会虚高成绩、测不出掌握。只封易题不封中/难——中难题多拿几道无伤教学目标，
+    # 而逐档硬配额会在库存偏科时大幅牺牲复用率（复用正是题库的核心价值）。超出的名额留给补生成。
+    if targets and "easy" in targets and difficulty == "mixed":
+        easy_quota = int(targets.get("easy", 0))
+        kept: list[dict] = []
+        easy_taken = 0
+        for item in dicts:
+            if str(item.get("difficulty") or "standard") == "easy":
+                if easy_taken >= easy_quota:
+                    continue
+                easy_taken += 1
+            kept.append(item)
+        dicts = kept
+    if len(dicts) >= count:
+        return _select_quiz_questions_by_difficulty(dicts, count=count, targets=targets), 0, None
+    return dicts, count - len(dicts), None
+
+
+def _ingest_questions_into_bank(db: Session, *, quiz: Quiz, rows: list[tuple[QuizQuestion, dict]], origin: str) -> int:
+    """把本次新生成的题拷贝入题库（同事务）。按 (course_id, stem_key) 去重，撞 key 即视为伪新题跳过。"""
+    pending: dict[str, tuple[QuizQuestion, dict]] = {}
+    for question, question_dict in rows:
+        if question_dict.get("bank_item_id"):
+            continue  # 本就来自题库的克隆题不回灌
+        key = _bank_stem_key(question.stem)
+        if key not in pending:
+            pending[key] = (question, question_dict)
+    if not pending:
+        return 0
+    existing_keys = set(
+        db.scalars(
+            select(QuestionBankItem.stem_key).where(
+                QuestionBankItem.course_id == quiz.course_id,
+                QuestionBankItem.stem_key.in_(list(pending.keys())),
+            )
+        )
+    )
+    ingested = 0
+    for key, (question, _question_dict) in pending.items():
+        if key in existing_keys:
+            continue
+        item = QuestionBankItem(
+            course_id=quiz.course_id,
+            chapter_id=question.chapter_id,
+            knowledge_point_id=question.knowledge_point_id,
+            question_type=question.question_type,
+            difficulty=question.difficulty or "standard",
+            stem=question.stem,
+            options=question.options,
+            reference_answer=question.reference_answer,
+            explanation=question.explanation,
+            stem_key=key,
+            source_quiz_id=quiz.id,
+            source_question_id=question.id,
+            origin=origin,
+            status="active",
+        )
+        # 逐行 SAVEPOINT：先查后插的去重在并发生成下有竞态（两个 worker 同时给同一课程出同题），
+        # 撞 uq_bank_course_stem 时只跳过该行入库，绝不让唯一约束异常炸掉外层整个组卷事务。
+        try:
+            with db.begin_nested():
+                db.add(item)
+                db.flush()
+        except IntegrityError:
+            continue
+        ingested += 1
+    return ingested
+
+
 def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest, task_id: int | None = None) -> Quiz:
     _report_quiz_generation_step(db, task_id, "preparing")
     course, question_type_counts = _validate_quiz_generation_request(db, user=user, payload=payload)
@@ -695,22 +892,49 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest, task
     # 学生自助练习走提速档：把最坏 3 次串行大模型调用降到常见 1 次（详见 generate_quiz_questions）。
     # 教师课程测验(COURSE)与其它调用方保持完整质量流程不变。
     practice_fast = payload.quiz_type == QuizType.PRACTICE.value and user.role == UserRole.STUDENT.value
-    question_kwargs = {
-        "topic": quiz_topic,
-        "source_text": source_text,
-        "count": payload.question_count,
-        "db": db,
-        "difficulty": payload.difficulty or "mixed",
-        "knowledge_point_names": [point.name for point in points if point.name],
-        "misconception_text": "\n\n".join(misconception_contexts) if misconception_contexts else None,
-        "avoid_stems": recent_stems,
-        "practice_fast": practice_fast,
-        "custom_instructions": payload.custom_instructions,
-        "on_step": lambda step: _report_quiz_generation_step(db, task_id, step),
-    }
-    if question_type_counts:
-        question_kwargs["type_counts"] = question_type_counts
-    question_dicts = ai_service.generate_quiz_questions(**question_kwargs)
+    # 题库检索优先（仅学生自助练习）：库存够则秒级组卷零 LLM 调用，缺口才补生成——
+    # 学生刷穿某个桶时补生成自动触发，题库随使用持续增长，无需全局阈值开关。
+    # 填写了自定义要求的请求个性化诉求明确，跳过库存直接生成；教师出卷保持全新生成（但结果贡献题库）。
+    whole_course = not chapter_ids and not payload.knowledge_point_ids
+    bank_eligible = practice_fast and not str(payload.custom_instructions or "").strip()
+    bank_dicts: list[dict] = []
+    remaining_count = payload.question_count
+    remaining_type_counts = question_type_counts
+    student_seen_stems: list[str] = []
+    if bank_eligible:
+        student_seen_stems = _student_seen_stems(db, course_id=payload.course_id, user=user)
+        bank_dicts, remaining_count, remaining_type_counts = _retrieve_bank_questions(
+            db,
+            course_id=payload.course_id,
+            points=points,
+            whole_course=whole_course,
+            count=payload.question_count,
+            type_counts=question_type_counts,
+            difficulty=payload.difficulty or "mixed",
+            seen_stems=student_seen_stems,
+            prefer_weak=payload.prefer_weak_points,
+        )
+    question_dicts = list(bank_dicts)
+    if remaining_count > 0:
+        # 避开清单排序即优先级：本卷已命中的库题 > 该生历史已见题 > 课程近期题——
+        # 提示词只放前 40 条，但完整清单会整体进入生成侧的题干排重集合（防同卷/跨卷重复）。
+        avoid_stems = list(dict.fromkeys([item["stem"] for item in bank_dicts] + student_seen_stems + recent_stems))
+        question_kwargs = {
+            "topic": quiz_topic,
+            "source_text": source_text,
+            "count": remaining_count,
+            "db": db,
+            "difficulty": payload.difficulty or "mixed",
+            "knowledge_point_names": [point.name for point in points if point.name],
+            "misconception_text": "\n\n".join(misconception_contexts) if misconception_contexts else None,
+            "avoid_stems": avoid_stems,
+            "practice_fast": practice_fast,
+            "custom_instructions": payload.custom_instructions,
+            "on_step": lambda step: _report_quiz_generation_step(db, task_id, step),
+        }
+        if remaining_type_counts:
+            question_kwargs["type_counts"] = remaining_type_counts
+        question_dicts.extend(ai_service.generate_quiz_questions(**question_kwargs))
     _assign_quiz_scores(question_dicts)
     _report_quiz_generation_step(db, task_id, "assembling")
     quiz = Quiz(
@@ -739,38 +963,82 @@ def generate_quiz(db: Session, *, user: User, payload: QuizGenerateRequest, task
     db.flush()
     db.refresh(quiz)
     total_score = 0.0
+    point_chapter_by_id = {point.id: point.chapter_id for point in points}
+    created_rows: list[tuple[QuizQuestion, dict]] = []
     for index, question_dict in enumerate(question_dicts):
-        # 知识点真实绑定：按模型返回的 knowledge_point 名称匹配，而非下标轮询——
-        # 轮询是随机标签，会污染错题本/薄弱点统计/自适应组卷整条下游链路。
-        # 仅当模型完全未返回该字段(旧模型/降级)时才退回轮询保底，给了名字但匹配不上则诚实置空。
-        point = _match_knowledge_point(points, question_dict.get("knowledge_point"))
-        if point is None and not question_dict.get("knowledge_point") and points:
-            point = points[index % len(points)]
-        question = QuizQuestion(
-            quiz_id=quiz.id,
-            course_id=payload.course_id,
-            chapter_id=point.chapter_id if point else (chapter_ids[0] if len(chapter_ids) == 1 else None),
-            knowledge_point_id=point.id if point else None,
-            question_type=question_dict["question_type"],
-            stem=question_dict["stem"],
-            options=question_dict["options"],
-            reference_answer=question_dict["reference_answer"],
-            explanation=question_dict["explanation"],
-            score=float(question_dict["score"]),
-            difficulty=question_dict["difficulty"],
-        )
+        bank_item_id = question_dict.get("bank_item_id")
+        if bank_item_id:
+            # 库题克隆：入库时已带真实知识点绑定，直接采用显式 id；知识点已被删除/移出本次
+            # 圈定范围时诚实置空，章节一律从当前知识点表推导，杜绝入库快照过期导致的悬挂外键。
+            kp_id = question_dict.get("knowledge_point_id")
+            if kp_id not in point_chapter_by_id:
+                kp_id = None
+            question = QuizQuestion(
+                quiz_id=quiz.id,
+                course_id=payload.course_id,
+                chapter_id=point_chapter_by_id.get(kp_id) if kp_id else (chapter_ids[0] if len(chapter_ids) == 1 else None),
+                knowledge_point_id=kp_id,
+                question_type=question_dict["question_type"],
+                stem=question_dict["stem"],
+                options=question_dict["options"],
+                reference_answer=question_dict["reference_answer"],
+                explanation=question_dict["explanation"],
+                score=float(question_dict["score"]),
+                difficulty=question_dict["difficulty"],
+                bank_item_id=bank_item_id,
+            )
+        else:
+            # 知识点真实绑定：按模型返回的 knowledge_point 名称匹配，而非下标轮询——
+            # 轮询是随机标签，会污染错题本/薄弱点统计/自适应组卷整条下游链路。
+            # 仅当模型完全未返回该字段(旧模型/降级)时才退回轮询保底，给了名字但匹配不上则诚实置空。
+            point = _match_knowledge_point(points, question_dict.get("knowledge_point"))
+            if point is None and not question_dict.get("knowledge_point") and points:
+                point = points[index % len(points)]
+            question = QuizQuestion(
+                quiz_id=quiz.id,
+                course_id=payload.course_id,
+                chapter_id=point.chapter_id if point else (chapter_ids[0] if len(chapter_ids) == 1 else None),
+                knowledge_point_id=point.id if point else None,
+                question_type=question_dict["question_type"],
+                stem=question_dict["stem"],
+                options=question_dict["options"],
+                reference_answer=question_dict["reference_answer"],
+                explanation=question_dict["explanation"],
+                score=float(question_dict["score"]),
+                difficulty=question_dict["difficulty"],
+            )
         total_score += float(question.score)
         db.add(question)
+        created_rows.append((question, question_dict))
     quiz.total_score = total_score
+    # 新生成的题沉淀进题库、被复用的库题使用计数 +1（同一事务，随组卷一起提交/回滚）。
+    # 先 flush 拿到题目 id 供题库溯源字段引用。
+    db.flush()
+    bank_origin = "generated" if user.role == UserRole.STUDENT.value else "teacher"
+    ingested_count = _ingest_questions_into_bank(db, quiz=quiz, rows=created_rows, origin=bank_origin)
+    used_bank_ids = [item["bank_item_id"] for item in question_dicts if item.get("bank_item_id")]
+    if used_bank_ids:
+        db.execute(
+            update(QuestionBankItem)
+            .where(QuestionBankItem.id.in_(used_bank_ids))
+            .values(usage_count=QuestionBankItem.usage_count + 1)
+        )
+    quiz.metadata_json = {
+        **(quiz.metadata_json if isinstance(quiz.metadata_json, dict) else {}),
+        "bank_hit_count": len(used_bank_ids),
+        "bank_ingested_count": ingested_count,
+    }
     db.add(quiz)
-    log_ai_usage(
-        db,
-        module="quiz_generation",
-        user_id=user.id,
-        course_id=payload.course_id,
-        prompt_chars=len(source_text),
-        completion_chars=sum(len(item["stem"]) for item in question_dicts),
-    )
+    if remaining_count > 0:
+        # 纯题库命中时没有任何 LLM 调用，不记 AI 用量；补生成路径只统计新生成部分的产出字符。
+        log_ai_usage(
+            db,
+            module="quiz_generation",
+            user_id=user.id,
+            course_id=payload.course_id,
+            prompt_chars=len(source_text),
+            completion_chars=sum(len(item["stem"]) for item in question_dicts if not item.get("bank_item_id")),
+        )
     db.commit()
     return quiz
 
@@ -1723,6 +1991,7 @@ def _grade_question(question: QuizQuestion, user_answer, *, db: Session) -> dict
         "feedback": feedback,
         "pending_review": pending_review,
         "count_as_wrong": count_as_wrong,
+        "has_answer": has_answer,
     }
 
 
@@ -1806,6 +2075,22 @@ def submit_quiz(db: Session, *, quiz_id: int, user: User, answers: list[dict], d
             if not result["is_correct"]:
                 wrong_count += 1
             _record_answer_to_wrong_book(db, user=user, quiz=quiz, question=question, attempt=attempt, is_correct=result["is_correct"])
+    # 作答结果回流题库统计：pending 待批改与未作答的题都不计入——漏答不是答错，
+    # 计入会拉低库题正确率、把好题误判进"正确率过低"的淘汰区。
+    bank_attempted_ids = [q.bank_item_id for q, _ua, r in graded if q.bank_item_id and r["has_answer"] and not r["pending_review"]]
+    bank_correct_ids = [q.bank_item_id for q, _ua, r in graded if q.bank_item_id and r["has_answer"] and not r["pending_review"] and r["is_correct"]]
+    if bank_attempted_ids:
+        db.execute(
+            update(QuestionBankItem)
+            .where(QuestionBankItem.id.in_(bank_attempted_ids))
+            .values(attempt_count=QuestionBankItem.attempt_count + 1)
+        )
+    if bank_correct_ids:
+        db.execute(
+            update(QuestionBankItem)
+            .where(QuestionBankItem.id.in_(bank_correct_ids))
+            .values(correct_count=QuestionBankItem.correct_count + 1)
+        )
     attempt.score = round(total_score, 2)
     # #M7：正确率/总分以"已判分题满分(graded_full_score)"为分母，pending 题不计入，
     # 避免主观题待批改期间正确率被永久低估；若全部题目都待批改则分母兜底为 1 防除零。

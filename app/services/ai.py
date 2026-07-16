@@ -2397,7 +2397,10 @@ class AIService:
             if misconception_text and misconception_text.strip()
             else ""
         )
-        avoid_list = [str(item).strip()[:60] for item in (avoid_stems or []) if str(item).strip()][:40]
+        # 完整避开清单用于生成侧题干排重（集合运算无成本）；提示词内只放截断后的前 40 条控 token。
+        # 若排重也用截断清单，>60 字的已有题干永远匹配不上自身前缀，重复守卫对情境化长题干形同虚设。
+        avoid_full = [str(item).strip() for item in (avoid_stems or []) if str(item).strip()]
+        avoid_list = [stem[:60] for stem in avoid_full][:40]
         avoid_instruction = (
             "禁止与以下已有题干重复或高度相似（同一考点必须换情境/换数值/换问法）：\n- "
             + "\n- ".join(avoid_list)
@@ -2486,7 +2489,7 @@ class AIService:
             err = bad_request(f"AI 出题失败：模型返回无法解析为 JSON（实际返回前120字：{snippet[:120]}）")
             err.raw_model_output = snippet[:4000]
             raise err from exc
-        seen_stems: set[str] = {_clean_text(stem) for stem in avoid_list}
+        seen_stems: set[str] = {_clean_text(stem) for stem in avoid_full}
         normalized = _normalize_quiz_questions_from_payload(
             payload,
             count=candidate_count,

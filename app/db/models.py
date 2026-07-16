@@ -333,6 +333,9 @@ class QuizQuestion(TimestampMixin, Base):
     explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
     score: Mapped[float] = mapped_column(Float, default=10)
     difficulty: Mapped[str] = mapped_column(String(32), default="standard")
+    # 题库来源：本题由 question_bank_items 中该 id 的库题克隆而来（作答结果据此回流题库统计）。
+    # 松耦合的普通整数列（同 AsyncTaskLog.target_id 风格）：题库拷贝式设计下双向 FK 会构成循环依赖。
+    bank_item_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class QuizAttempt(TimestampMixin, Base):
@@ -364,6 +367,38 @@ class QuizAnswer(TimestampMixin, Base):
     # 待人工批改的主观题：以 is_correct=False/score=0 落库但并非真正答错，需持久化标记，
     # 以便学情分析(薄弱点错误计数)与正确率统计将其排除，避免把"待批改"误计为"答错"。
     pending_review: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class QuestionBankItem(TimestampMixin, Base):
+    """课程题库：AI 生成题的沉淀池（拷贝式，不引用 quiz_questions——学生可删未作答练习，题随卷删）。
+
+    学生自助练习出题时优先从这里按 (课程, 知识点, 题型, 难度) 检索复用，缺口才触发 LLM 补生成；
+    作答结果经 QuizQuestion.bank_item_id 回流 attempt/correct 统计，用于惰性淘汰送分题/问题题。
+    """
+
+    __tablename__ = "question_bank_items"
+    __table_args__ = (UniqueConstraint("course_id", "stem_key", name="uq_bank_course_stem"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), index=True)
+    chapter_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    knowledge_point_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    question_type: Mapped[str] = mapped_column(String(32), default=QuestionType.SINGLE_CHOICE.value)
+    difficulty: Mapped[str] = mapped_column(String(32), default="standard")
+    stem: Mapped[str] = mapped_column(Text)
+    options: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    reference_answer: Mapped[dict | list | str | None] = mapped_column(JSON, nullable=True)
+    explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 归一化题干哈希（去空白/标点、数字归一）：入库去重口径，"只换数值的伪新题"视为重复
+    stem_key: Mapped[str] = mapped_column(String(64), index=True)
+    source_quiz_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_question_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # generated=学生练习生成 / teacher=教师出卷生成（走审核流，信任级更高） / backfill=存量回填
+    origin: Mapped[str] = mapped_column(String(32), default="generated")
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    usage_count: Mapped[int] = mapped_column(Integer, default=0)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    correct_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class WrongQuestion(TimestampMixin, Base):
