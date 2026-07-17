@@ -5,6 +5,7 @@ import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, ref
 import { AlertTriangle, ArrowLeft, ArrowRight, BookMarked, Check, CheckCircle, Clock, Flag, RefreshCw, Sparkles, X, XCircle } from "../../../icons";
 import { relativeTime, timeLabel } from "../../../utils/datetime";
 import { answerIndexSet, optionText, referenceDisplayText } from "../../../utils/quiz";
+import { renderInlineRichText, renderRichText } from "../../../utils/richText";
 import { EmptyState } from "./primitives";
 
 export const QuizAnswerView = defineComponent({
@@ -197,7 +198,7 @@ export const QuizAnswerView = defineComponent({
             }),
             h("div", { class: "exam-opt-card" }, [
               h("div", { class: "exam-opt-letter" }, optionLabel(index)),
-              h("div", { class: "exam-opt-text" }, typeof option === "object" ? option.text || option.label || JSON.stringify(option) : String(option))
+              h("div", { class: "exam-opt-text exam-rich-text", innerHTML: renderInlineRichText(typeof option === "object" ? option.text || option.label || JSON.stringify(option) : String(option)) })
             ])
           ]);
         }));
@@ -231,7 +232,7 @@ export const QuizAnswerView = defineComponent({
         if (isChosen) cls.push("is-chosen");
         return h("div", { key: index, class: cls }, [
           h("span", { class: "exam-review-letter" }, optionLabel(index)),
-          h("span", { class: "exam-review-text" }, typeof option === "object" ? option.text || option.label || JSON.stringify(option) : String(option)),
+          h("span", { class: "exam-review-text exam-rich-text", innerHTML: renderInlineRichText(typeof option === "object" ? option.text || option.label || JSON.stringify(option) : String(option)) }),
           isCorrect ? h("span", { class: "exam-review-badge correct" }, [h(Check, { size: 12 }), "正确答案"]) : null,
           isChosen && !isCorrect ? h("span", { class: "exam-review-badge wrong" }, [h(X, { size: 12 }), "你的选择"]) : null,
           isChosen && isCorrect ? h("span", { class: "exam-review-badge chosen" }, "你的选择") : null
@@ -243,11 +244,11 @@ export const QuizAnswerView = defineComponent({
       return h("div", { class: "exam-review-answers" }, [
         h("div", { class: ["exam-review-answer", row.is_correct ? "good" : "bad"] }, [
           h("small", "你的答案"),
-          h("p", answered ? String(optionText(row.user_answer, row.question)) : "未作答")
+          answered ? h("p", { class: "exam-rich-text", innerHTML: renderInlineRichText(String(optionText(row.user_answer, row.question))) }) : h("p", "未作答")
         ]),
         h("div", { class: "exam-review-answer reference" }, [
           h("small", "参考答案"),
-          h("p", referenceDisplayText(row))
+          h("p", { class: "exam-rich-text", innerHTML: renderInlineRichText(referenceDisplayText(row)) })
         ])
       ]);
     }
@@ -269,10 +270,10 @@ export const QuizAnswerView = defineComponent({
           h("span", { class: ["exam-review-state", state] },
             state === "pending" ? [h(Clock, { size: 14 }), "待批改"] : state === "correct" ? [h(CheckCircle, { size: 14 }), "答对"] : [h(XCircle, { size: 14 }), "答错"])
         ]),
-        h("div", { class: "exam-review-stem" }, questionData.stem || ""),
+        h("div", { class: "exam-review-stem exam-rich-text", innerHTML: renderRichText(questionData.stem || "") }),
         isChoice ? renderReviewOptions(row) : renderReviewAnswers(row),
-        questionData.explanation ? h("div", { class: "exam-review-explain" }, [h("small", "解析"), h("p", questionData.explanation)]) : null,
-        row.feedback && row.feedback !== questionData.explanation ? h("div", { class: "exam-review-feedback" }, [h(Sparkles, { size: 14 }), h("span", row.feedback)]) : null
+        questionData.explanation ? h("div", { class: "exam-review-explain" }, [h("small", "解析"), h("div", { class: "exam-review-explain-body exam-rich-text", innerHTML: renderRichText(questionData.explanation) })]) : null,
+        row.feedback && row.feedback !== questionData.explanation ? h("div", { class: "exam-review-feedback" }, [h(Sparkles, { size: 14 }), h("span", { class: "exam-rich-text", innerHTML: renderInlineRichText(row.feedback) })]) : null
       ]);
     }
     function renderResult() {
@@ -303,7 +304,7 @@ export const QuizAnswerView = defineComponent({
           h("article", { class: "exam-result-summary" }, [
             h("div", [
               h("h2", [h(Sparkles, { size: 18 }), "AI 建议"]),
-              h("p", attemptData.value?.ai_feedback || "复盘错题，并回看对应知识点。"),
+              h("p", { class: "exam-rich-text", innerHTML: renderInlineRichText(attemptData.value?.ai_feedback || "复盘错题，并回看对应知识点。") }),
               wrongCount ? h("button", { type: "button", class: "exam-wrongbook-link", onClick: () => update("goWrongBook") }, [
                 h(BookMarked, { size: 14 }), `${wrongCount} 道错题已收入错题本，去看看`, h(ArrowRight, { size: 14 })
               ]) : null,
@@ -393,7 +394,7 @@ export const QuizAnswerView = defineComponent({
                   marked.value.includes(item.id) ? "已标记" : "标记稍后看"
                 ])
             ]),
-              h("div", { class: "exam-q-stem" }, item.stem),
+              h("div", { class: "exam-q-stem exam-rich-text", innerHTML: renderRichText(item.stem) }),
               renderQuestionBody(item)
             ])
           ])

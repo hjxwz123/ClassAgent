@@ -5001,3 +5001,39 @@
       justify-content: center
    }
 }
+
+/* ============ 富文本/公式渲染容器（题干、选项、答案、解析走 KaTeX） ============ */
+/* markdown 渲染输出的块级标签之间带换行符，必须覆盖原有 pre-wrap，否则出现成片空行 */
+.exam-rich-text,
+p.exam-rich-text,
+.exam-rich-text p {
+   white-space: normal
+}
+
+.exam-rich-text p {
+   margin: 0 0 8px
+}
+
+.exam-rich-text p:last-child {
+   margin-bottom: 0
+}
+
+/* 块级公式：居中展示，窄屏横向滚动而不是撑破卡片 */
+.exam-rich-text .katex-display {
+   margin: 10px 0;
+   padding: 2px 0;
+   overflow-x: auto;
+   overflow-y: hidden
+}
+
+.exam-rich-text .katex {
+   font-size: 1.06em;
+   line-height: 1.5
+}
+
+/* 行内公式过长时允许折行，避免选项卡片横向溢出 */
+.exam-opt-text.exam-rich-text,
+.exam-review-text.exam-rich-text {
+   min-width: 0;
+   overflow-wrap: anywhere
+}

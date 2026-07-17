@@ -199,8 +199,7 @@ export function renderUserRichText(value?: string) {
   return sanitizeHtml(html);
 }
 
-export function renderRichText(value?: unknown) {
-  if (!value) return "";
+function createMathStash() {
   const mathParts: string[] = [];
   const stash = (html: string) => {
     const token = `@@MATH_${mathParts.length}@@`;
@@ -212,9 +211,29 @@ export function renderRichText(value?: unknown) {
     .replace(/\\\[([\s\S]+?)\\\]/g, (_match, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), true)))
     .replace(/\\\(([\s\S]+?)\\\)/g, (_match, expr: string) => stash(renderMath(normalizeLatexEscapes(expr.trim()), false)))
     .replace(/(^|[^\\])\$([^$\n]+?)\$/g, (_match, prefix: string, expr: string) => `${prefix}${stash(renderMath(normalizeLatexEscapes(expr.trim()), false))}`);
+  const restore = (html: string) => html.replace(/@@MATH_(\d+)@@/g, (_match, index: string) => mathParts[Number(index)] || "");
+  return { renderDelimitedMath, restore };
+}
+
+export function renderRichText(value?: unknown) {
+  if (!value) return "";
+  const { renderDelimitedMath, restore } = createMathStash();
   const extracted = normalizeLatexEscapes(extractStructuredText(value));
   const delimitedRendered = renderDelimitedMath(extracted);
   const inferredMath = wrapInlineBareLatex(wrapBareLatexBlocks(delimitedRendered));
   const textWithDelimitedMath = renderDelimitedMath(inferredMath);
-  return sanitizeHtml(markdownRenderer.render(textWithDelimitedMath).replace(/@@MATH_(\d+)@@/g, (_match, index: string) => mathParts[Number(index)] || ""));
+  return sanitizeHtml(restore(markdownRenderer.render(textWithDelimitedMath)));
+}
+
+/**
+ * 行内富文本：渲染 $...$ / $$...$$ / \(...\) / \[...\] 与裸 LaTeX 公式，其余文本原样转义（换行→<br>）。
+ * 不走 markdown 块级语法——用于选择题选项、参考答案等行内场景，避免选项文本被解释成标题/列表。
+ */
+export function renderInlineRichText(value?: unknown) {
+  if (value === null || value === undefined || value === "") return "";
+  const { renderDelimitedMath, restore } = createMathStash();
+  const extracted = normalizeLatexEscapes(typeof value === "string" ? value : extractStructuredText(value));
+  const withMath = renderDelimitedMath(wrapInlineBareLatex(renderDelimitedMath(extracted)));
+  const escaped = markdownRenderer.utils.escapeHtml(withMath).replace(/\n/g, "<br>");
+  return sanitizeHtml(restore(escaped));
 }
