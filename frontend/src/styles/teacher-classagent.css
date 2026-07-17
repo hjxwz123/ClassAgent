@@ -1259,23 +1259,24 @@
   cursor: wait;
 }
 
-.weak-quiz-page .weak-quiz-hero span,
-.weak-point-card header b {
+.weak-quiz-page .weak-head-icon,
+.weak-nav-rank {
   background: var(--ca-role-teacher-light);
   color: var(--ca-role-teacher-primary);
 }
 
-.weak-config-card,
-.weak-selection-card,
-.weak-detail-card,
-.weak-point-card {
+.weak-nav-card,
+.weak-detail-card {
   border-color: var(--ca-color-paper-border);
   background: var(--ca-color-paper-card);
   box-shadow: var(--ca-shadow-paper);
 }
 
-.weak-set-section {
-  border-bottom-color: var(--ca-color-paper-border);
+.weak-nav-group,
+.weak-head-stat,
+.weak-detail-stats>div {
+  border-color: var(--ca-color-paper-border);
+  background: var(--ca-color-paper-bg);
 }
 
 .weak-set-card {
@@ -2815,37 +2816,27 @@ html.theme-dark .teacher-shell .course-switch > button span {
 
 /* ---------- 13. 薄弱题目页 ---------- */
 
-.weak-config-card,
-.weak-selection-card,
+.weak-nav-card,
 .weak-detail-card {
   padding: 24px;
 }
 
 .weak-type-status strong,
+.weak-head-stat strong,
+.weak-detail-stats strong,
 .quiz-editor-stats span {
   font-family: var(--ca-font-mono);
   font-variant-numeric: tabular-nums;
 }
 
-.weak-point-switcher-head {
-  border-radius: var(--ca-radius-lg);
-  background: var(--ca-color-paper-bg);
-}
-
-.weak-point-switcher-title small {
-  font-family: var(--ca-font-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  font-variant-numeric: tabular-nums;
-}
-
-.weak-point-card {
-  border-radius: var(--ca-radius-lg);
-}
-
-.weak-point-card h2 {
+.weak-head-text h2,
+.weak-detail-title h2 {
   font-family: var(--ca-font-serif);
   font-weight: 800;
+}
+
+.weak-nav-group {
+  border-radius: var(--ca-radius-lg);
 }
 
 .weak-set-card {
@@ -3159,8 +3150,7 @@ html.theme-dark .teacher-shell .course-switch > button span {
 
   .panel-card,
   .form-panel,
-  .weak-config-card,
-  .weak-selection-card,
+  .weak-nav-card,
   .weak-detail-card {
     padding: 18px;
   }

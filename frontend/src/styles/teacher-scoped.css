@@ -3029,71 +3029,261 @@ code {
   text-align: right;
 }
 
+/* ---------- 薄弱题目页：页头（标题 + 内联统计 + 操作） ---------- */
+.weak-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+}
+
+.weak-page-head.thinking {
+  opacity: .85;
+}
+
+.weak-head-main {
+  display: flex;
+  flex: 1;
+  min-width: 260px;
+  align-items: center;
+  gap: 12px;
+}
+
+.weak-head-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-danger-50);
+  color: var(--color-danger-700);
+}
+
+.weak-head-text h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--text-h4);
+}
+
+.weak-head-text p {
+  margin: 3px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-body-sm);
+}
+
+.weak-head-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.weak-head-stat {
+  display: grid;
+  min-width: 88px;
+  justify-items: center;
+  gap: 2px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+  padding: 8px 14px;
+}
+
+.weak-head-stat strong {
+  color: var(--color-text-primary);
+  font-size: 22px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.weak-head-stat span {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.weak-head-stat.danger strong {
+  color: var(--color-danger-700);
+}
+
+.weak-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weak-config-chevron {
+  transition: transform .18s ease;
+}
+
+.weak-config-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* ---------- 生成设置：可折叠的横向工具条 ---------- */
+.weak-config-bar {
+  display: grid;
+  gap: 12px;
+}
+
+.weak-config-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.weak-config-row label,
+.weak-config-custom {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+
+.weak-config-custom textarea {
+  min-height: 46px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+/* ---------- 主体两栏：套题导航 + 详情 ---------- */
 .weak-quiz-layout {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   align-items: stretch;
   gap: 18px;
 }
 
-.weak-config-card,
-.weak-selection-card,
+.weak-nav-card,
 .weak-detail-card {
   min-width: 0;
-  min-height: 680px;
-  height: clamp(680px, calc(100vh - 220px), 900px);
+  height: clamp(560px, calc(100vh - 200px), 860px);
   overflow: hidden;
-}
-
-.weak-config-card,
-.weak-detail-card {
-  position: sticky;
-  top: 76px;
-}
-
-.weak-config-card,
-.weak-selection-card,
-.weak-detail-card {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  align-content: stretch;
 }
 
-.weak-config-body,
-.weak-selection-scroll,
+.weak-nav-scroll,
 .weak-detail-scroll {
+  flex: 1;
   min-height: 0;
   overflow: auto;
-  padding-right: 4px;
-}
-
-.weak-config-body,
-.weak-selection-scroll,
-.weak-detail-scroll {
   display: grid;
   align-content: start;
   gap: 14px;
+  padding-right: 4px;
 }
 
-.weak-config-card label {
+.weak-nav-group {
   display: grid;
-  gap: 6px;
-  color: var(--color-text-secondary);
-  font-size: var(--text-body-sm);
-  font-weight: 600;
+  gap: 10px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-muted);
+  padding: 12px;
 }
 
-.weak-type-grid {
+.weak-nav-group-head {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   gap: 10px;
 }
 
-.weak-custom-instructions textarea {
-  min-height: 60px;
-  resize: vertical;
-  font-family: inherit;
+.weak-nav-rank {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-danger-50);
+  color: var(--color-danger-700);
+  font-family: var(--font-family-mono);
+  font-weight: 700;
+}
+
+.weak-nav-rank.is-all {
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
+}
+
+.weak-nav-group-text {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.weak-nav-group-text strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--text-body-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weak-nav-group-text small {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.weak-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.weak-detail-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.weak-detail-title h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--text-h4);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weak-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.weak-detail-stats>div {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-muted);
+  padding: 10px;
+}
+
+.weak-detail-stats strong {
+  color: var(--color-text-primary);
+  font-size: 20px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.weak-detail-stats span {
+  color: var(--color-text-muted);
+  font-size: var(--text-caption);
+}
+
+.weak-detail-empty {
+  display: grid;
+  flex: 1;
+  place-items: center;
 }
 
 .weak-type-status {
@@ -3120,118 +3310,6 @@ code {
 
 .weak-type-status span {
   font-size: var(--text-caption);
-}
-
-.weak-point-card {
-  display: grid;
-  gap: 14px;
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-lg);
-  background: white;
-  padding: 16px;
-}
-
-.weak-point-card header {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px 12px;
-}
-
-.weak-point-card header .tag,
-.weak-point-card header .btn {
-  grid-column: 2;
-  justify-self: start;
-}
-
-.weak-point-card header b {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--color-danger-50);
-  color: var(--color-danger-700);
-  font-family: var(--font-family-mono);
-}
-
-.weak-point-card h2 {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: var(--text-h4);
-}
-
-.weak-point-card p {
-  margin: 3px 0 0;
-  color: var(--color-text-muted);
-  font-size: var(--text-caption);
-}
-
-.weak-point-switcher {
-  display: grid;
-  gap: 12px;
-}
-
-.weak-point-switcher-head {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--color-bg-muted);
-  padding: 10px;
-}
-
-.weak-point-switcher-title {
-  min-width: 0;
-  display: grid;
-  justify-items: center;
-  gap: 3px;
-  text-align: center;
-}
-
-.weak-point-switcher-title small {
-  color: var(--color-text-muted);
-  font-size: var(--text-caption);
-}
-
-.weak-point-switcher-title strong {
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--color-text-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.weak-set-section {
-  display: grid;
-  gap: 12px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  padding-bottom: 14px;
-}
-
-.weak-section-title {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.weak-section-title strong {
-  color: var(--color-text-primary);
-  font-size: var(--text-body-sm);
-}
-
-.weak-section-title small {
-  color: var(--color-text-muted);
-  font-size: var(--text-caption);
-}
-
-.weak-set-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 10px;
 }
 
 .weak-set-list {
@@ -3326,10 +3404,11 @@ code {
 }
 
 .weak-question-preview span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
   color: var(--color-text-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .weak-question-preview em {
@@ -4524,20 +4603,21 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .weak-config-card,
-  .weak-selection-card,
+  .weak-nav-card,
   .weak-detail-card {
-    position: static;
     height: auto;
     min-height: 0;
     max-height: none;
   }
 
-  .weak-config-body,
-  .weak-selection-scroll,
+  .weak-nav-scroll,
   .weak-detail-scroll {
     overflow: visible;
     padding-right: 0;
+  }
+
+  .weak-config-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .analysis-grid.two,
@@ -4625,17 +4705,16 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .weak-point-card header {
-    grid-template-columns: 34px minmax(0, 1fr);
+  .weak-config-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .weak-point-card header .tag,
-  .weak-point-card header .btn {
-    justify-self: start;
+  .weak-page-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .weak-type-grid,
-  .weak-set-grid {
+  .weak-detail-stats {
     grid-template-columns: 1fr;
   }
 

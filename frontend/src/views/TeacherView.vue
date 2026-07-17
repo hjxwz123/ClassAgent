@@ -314,73 +314,87 @@
       <section v-if="active === 'teacherWeakQuizzes'" key="teacherWeakQuizzes" class="teacher-content weak-quiz-page">
         <CourseRequired v-if="!currentCourse" />
         <template v-else>
-          <article class="ai-suggestion weak-quiz-hero" :class="{ thinking: weakQuizGenerating }">
-            <span><AlertTriangle :size="20" /></span>
-            <div><h2>薄弱题目管理</h2><p>按薄弱知识点生成多套专项测验，审核题目后发布，并追踪学生作答情况。</p></div>
-            <button class="btn btn-ai btn-sm" :data-loading="weakQuizGenerating && weakQuizGenerationMode === 'all'" :disabled="weakQuizGenerating || !weakQuizFormValid || !weakQuizPoints.length" @click="generateTeacherWeakQuiz()"><Sparkles :size="14" />生成综合测验</button>
+          <article class="panel-card weak-page-head" :class="{ thinking: weakQuizGenerating }">
+            <div class="weak-head-main">
+              <span class="weak-head-icon"><AlertTriangle :size="20" /></span>
+              <div class="weak-head-text">
+                <h2>薄弱题目管理</h2>
+                <p>{{ weakQuizGenerating && weakQuizStatus ? weakQuizStatus : '按薄弱知识点生成专项测验，审核发布后追踪学生作答情况。' }}</p>
+              </div>
+            </div>
+            <div class="weak-head-stats">
+              <div class="weak-head-stat" :class="{ danger: (weakQuizData.stats?.weak_point_count || 0) > 0 }"><strong>{{ weakQuizData.stats?.weak_point_count || 0 }}</strong><span>薄弱知识点</span></div>
+              <div class="weak-head-stat"><strong>{{ weakQuizData.stats?.wrong_count || 0 }}</strong><span>学生错题</span></div>
+              <div class="weak-head-stat"><strong>{{ weakQuizData.stats?.quiz_set_count || 0 }}</strong><span>已生成套数</span></div>
+            </div>
+            <div class="weak-head-actions">
+              <button class="btn btn-secondary btn-sm" :class="{ active: weakConfigOpen }" @click="weakConfigOpen = !weakConfigOpen"><Settings :size="14" />生成设置<ChevronDown :size="14" class="weak-config-chevron" :class="{ open: weakConfigOpen }" /></button>
+              <button class="btn btn-ai btn-sm" :data-loading="weakQuizGenerating && weakQuizGenerationMode === 'all'" :disabled="weakQuizGenerating || !weakQuizFormValid || !weakQuizPoints.length" @click="generateTeacherWeakQuiz()"><Sparkles :size="14" />生成综合测验</button>
+            </div>
           </article>
-          <div class="metric-grid four compact"><MetricCard :icon="AlertTriangle" label="薄弱知识点" :value="weakQuizData.stats?.weak_point_count || 0" sub="当前课程" :danger="(weakQuizData.stats?.weak_point_count || 0) > 0" /><MetricCard :icon="XCircle" label="错题累计" :value="weakQuizData.stats?.wrong_count || 0" sub="学生错题" tone="warning" /><MetricCard :icon="ClipboardList" label="题目套数" :value="weakQuizData.stats?.quiz_set_count || 0" sub="已生成" tone="success" /><MetricCard :icon="CheckCircle" label="题型合计" :value="weakQuizTypeTotal" :sub="weakQuizFormValid ? '配置有效' : '需等于总题量'" :danger="!weakQuizFormValid" /></div>
-          <div class="weak-quiz-layout">
-            <aside class="panel-card weak-config-card">
-              <div class="panel-head rich-head"><div><h2><Settings :size="18" />生成设置</h2><small>一次生成一套测验，可重复生成多套</small></div></div>
-              <div class="weak-config-body">
+          <Transition name="fade-slide">
+            <article v-if="weakConfigOpen" class="panel-card weak-config-bar">
+              <div class="weak-config-row">
                 <label>题目总数<input v-model.number="weakQuizForm.question_count" class="input" type="number" min="1" max="20" /></label>
                 <label>难度<AppSelect v-model="weakQuizForm.difficulty" :options="quizDifficultyOptions" /></label>
-                <label class="weak-custom-instructions">自定义要求（可选）<textarea v-model="weakQuizForm.custom_instructions" maxlength="300" class="input" placeholder="例如：优先生成计算题，覆盖第2章公式应用"></textarea></label>
-                <div class="weak-type-grid">
-                  <label v-for="item in weakQuestionTypes" :key="item.value">{{ item.label }}<input v-model.number="weakQuizForm.question_type_counts[item.value]" class="input" type="number" min="0" max="20" /></label>
-                </div>
+                <label v-for="item in weakQuestionTypes" :key="item.value">{{ item.label }}<input v-model.number="weakQuizForm.question_type_counts[item.value]" class="input" type="number" min="0" max="20" /></label>
                 <div class="weak-type-status" :class="{ invalid: !weakQuizFormValid }"><strong>{{ weakQuizTypeTotal }}</strong><span>题型合计 / 总题量 {{ weakQuizForm.question_count }}</span></div>
-                <button class="btn btn-primary full" :data-loading="weakQuizGenerating && weakQuizGenerationMode === 'all'" :disabled="weakQuizGenerating || !weakQuizFormValid || !weakQuizPoints.length" @click="generateTeacherWeakQuiz()"><Sparkles :size="15" />按全部薄弱点生成</button>
-                <button class="btn btn-ghost full" :data-loading="isPending('load-weak-quizzes')" :disabled="isPending('load-weak-quizzes')" @click="loadWeakQuizzes(true)"><RefreshCw :size="15" />刷新列表</button>
               </div>
-            </aside>
-            <section class="panel-card weak-selection-card">
-              <div class="panel-head rich-head"><div><h2><ClipboardList :size="18" />题目选择</h2><small>选择综合测验或按薄弱知识点选择专项套题</small></div></div>
-              <div class="weak-selection-scroll">
-                <section v-if="weakQuizAllSets.length" class="weak-set-section">
-                  <div class="weak-section-title"><strong>综合测验</strong><small>覆盖全部薄弱知识点的测验套卷</small></div>
-                  <div class="weak-set-grid">
+              <label class="weak-config-custom">自定义要求（可选）<textarea v-model="weakQuizForm.custom_instructions" maxlength="300" rows="2" class="input" placeholder="例如：优先生成计算题，覆盖第2章公式应用"></textarea></label>
+            </article>
+          </Transition>
+          <div class="weak-quiz-layout">
+            <section class="panel-card weak-nav-card">
+              <div class="panel-head rich-head">
+                <div><h2><ClipboardList :size="18" />测验套题</h2><small>综合测验与各薄弱知识点的专项套题</small></div>
+                <button class="icon-action" title="刷新列表" :data-loading="isPending('load-weak-quizzes')" :disabled="isPending('load-weak-quizzes')" @click="loadWeakQuizzes(true)"><RefreshCw :size="15" /></button>
+              </div>
+              <div class="weak-nav-scroll">
+                <section v-if="weakQuizAllSets.length" class="weak-nav-group">
+                  <header class="weak-nav-group-head">
+                    <b class="weak-nav-rank is-all"><Sparkles :size="14" /></b>
+                    <div class="weak-nav-group-text"><strong>综合测验</strong><small>覆盖全部薄弱知识点</small></div>
+                  </header>
+                  <div class="weak-set-list">
                     <button v-for="quiz in weakQuizAllSets" :key="quiz.id" type="button" class="weak-set-card" :class="{ active: weakQuizSelectedSetId === quiz.id }" @click="selectWeakQuizSet(quiz)">
                       <strong>{{ quiz.title }}</strong><span class="tag" :class="statusClass(quiz.status)">{{ statusText(quiz.status) }}</span><small>{{ quiz.question_count }}题 · {{ quiz.attempt_count }}次作答 · 平均 {{ quiz.average_accuracy }}%</small>
                     </button>
                   </div>
                 </section>
-                <section v-if="selectedWeakQuizPoint" class="weak-point-switcher">
-                  <div class="weak-point-switcher-head">
-                    <button type="button" class="icon-action" :disabled="weakQuizPointCount <= 1" @click="stepWeakQuizPoint(-1)"><ChevronLeft :size="15" />上一个</button>
-                    <div class="weak-point-switcher-title">
-                      <small>知识点 {{ weakQuizPointIndex + 1 }} / {{ weakQuizPointCount }}</small>
-                      <strong>{{ selectedWeakQuizPoint.knowledge_point }}</strong>
+                <section v-for="(point, index) in weakQuizPoints" :key="point.knowledge_point_id ?? 'untagged'" class="weak-nav-group">
+                  <header class="weak-nav-group-head">
+                    <b class="weak-nav-rank">{{ rankNumber(index) }}</b>
+                    <div class="weak-nav-group-text">
+                      <strong :title="point.description || point.knowledge_point">{{ point.knowledge_point }}</strong>
+                      <small>{{ point.wrong_count }} 错题<template v-if="point.student_count"> · {{ point.student_count }} 名学生</template></small>
                     </div>
-                    <button type="button" class="icon-action" :disabled="weakQuizPointCount <= 1" @click="stepWeakQuizPoint(1)">下一个<ChevronRight :size="15" /></button>
+                    <button class="btn btn-secondary btn-sm" :data-loading="weakQuizGeneratingTopic === point.knowledge_point" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(point)"><Sparkles :size="13" />生成</button>
+                  </header>
+                  <div v-if="point.quiz_sets?.length" class="weak-set-list">
+                    <button v-for="quiz in point.quiz_sets" :key="quiz.id" type="button" class="weak-set-card" :class="{ active: weakQuizSelectedSetId === quiz.id }" @click="selectWeakQuizSet(quiz)">
+                      <strong>{{ quiz.title }}</strong><span class="tag" :class="statusClass(quiz.status)">{{ statusText(quiz.status) }}</span><small>{{ quiz.question_count }}题 · {{ quiz.attempt_count }}次作答 · 平均 {{ quiz.average_accuracy }}%</small>
+                    </button>
                   </div>
-                  <article :key="selectedWeakQuizPoint.knowledge_point_id" class="weak-point-card weak-point-active">
-                    <header>
-                      <b>{{ rankNumber(weakQuizPointIndex) }}</b>
-                      <div><h2>{{ selectedWeakQuizPoint.knowledge_point }}</h2><p>{{ selectedWeakQuizPoint.description || '暂无知识点说明' }}</p></div>
-                      <span class="tag tag-danger">{{ selectedWeakQuizPoint.wrong_count }} 错题</span>
-                      <button class="btn btn-secondary btn-sm" :data-loading="weakQuizGeneratingTopic === selectedWeakQuizPoint.knowledge_point" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(selectedWeakQuizPoint)"><Sparkles :size="14" />生成新套题</button>
-                    </header>
-                    <div v-if="selectedWeakQuizPoint.quiz_sets?.length" class="weak-set-list">
-                      <button v-for="quiz in selectedWeakQuizPoint.quiz_sets" :key="quiz.id" type="button" class="weak-set-card" :class="{ active: weakQuizSelectedSetId === quiz.id }" @click="selectWeakQuizSet(quiz)">
-                        <strong>{{ quiz.title }}</strong><span class="tag" :class="statusClass(quiz.status)">{{ statusText(quiz.status) }}</span><small>{{ quiz.question_count }}题 · {{ quiz.attempt_count }}次作答 · 平均 {{ quiz.average_accuracy }}%</small>
-                      </button>
-                    </div>
-                    <div v-else class="weak-empty-line"><span>还没有为这个薄弱点生成题目</span><button class="link-btn" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(selectedWeakQuizPoint)">立即生成</button></div>
-                  </article>
+                  <div v-else class="weak-empty-line"><span>还没有为这个薄弱点生成题目</span><button class="link-btn" :disabled="weakQuizGenerating || !weakQuizFormValid" @click="generateTeacherWeakQuiz(point)">立即生成</button></div>
                 </section>
-                <EmptyState v-else text="暂无薄弱知识点" />
+                <EmptyState v-if="!weakQuizAllSets.length && !weakQuizPoints.length" text="暂无薄弱知识点，学生作答的错题会在这里汇总" />
               </div>
             </section>
             <aside class="panel-card weak-detail-card">
-              <div class="panel-head rich-head"><div><h2><Eye :size="18" />题目与作答</h2><small>{{ weakQuizAttemptDetail?.quiz?.title || '选择一套题查看详情' }}</small></div></div>
-              <div class="weak-detail-scroll">
-                <template v-if="weakQuizAttemptDetail">
+              <template v-if="weakQuizAttemptDetail">
+                <header class="weak-detail-head">
+                  <div class="weak-detail-title"><h2>{{ weakQuizAttemptDetail.quiz?.title || '薄弱题目' }}</h2><span class="tag" :class="statusClass(weakQuizAttemptDetail.quiz?.status)">{{ statusText(weakQuizAttemptDetail.quiz?.status) }}</span></div>
                   <div class="weak-detail-actions"><button class="btn btn-secondary btn-sm" @click="openWeakQuizEditor"><Eye :size="14" />查看题目</button><button v-if="weakQuizAttemptDetail.quiz?.status !== 'published'" class="btn btn-primary btn-sm" @click="openWeakQuizEditor"><Check :size="14" />审核发布</button></div>
+                </header>
+                <div class="weak-detail-stats">
+                  <div><strong>{{ (weakQuizAttemptDetail.questions || []).length }}</strong><span>题目数</span></div>
+                  <div><strong>{{ (weakQuizAttemptDetail.attempts || []).length }}</strong><span>作答人次</span></div>
+                  <div><strong>{{ weakDetailAccuracy }}%</strong><span>平均正确率</span></div>
+                </div>
+                <div class="weak-detail-scroll">
                   <section class="weak-detail-section">
                     <strong>题目预览</strong>
-                    <div class="weak-question-preview"><div v-for="(question, index) in weakQuizAttemptDetail.questions || []" :key="question.id"><b>{{ rankPlain(index) }}</b><span>{{ question.stem }}</span><em>{{ questionTypeText(question.question_type) }}</em></div></div>
+                    <div class="weak-question-preview"><div v-for="(question, index) in weakQuizAttemptDetail.questions || []" :key="question.id"><b>{{ rankPlain(index) }}</b><span class="weak-question-stem" v-html="renderInlineRichText(question.stem)"></span><em>{{ questionTypeText(question.question_type) }}</em></div></div>
                   </section>
                   <section class="weak-detail-section">
                     <strong>作答记录</strong>
@@ -401,9 +415,9 @@
                       <EmptyState v-if="!(weakQuizAttemptDetail.attempts || []).length" text="暂无学生作答" />
                     </div>
                   </section>
-                </template>
-                <EmptyState v-else text="请选择一套薄弱题目" />
-              </div>
+                </div>
+              </template>
+              <div v-else class="weak-detail-empty"><EmptyState text="从左侧选择一套题，查看题目与学生作答" /></div>
             </aside>
           </div>
         </template>
@@ -679,7 +693,7 @@ import { routeByPage } from "../router";
 import { useGenerationTasksStore } from "../stores/generationTasks";
 import type { Course, CourseDetail, MaterialDetail, User as UserType } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
-import { extractStructuredText, renderRichText } from "../utils/richText";
+import { extractStructuredText, renderInlineRichText, renderRichText } from "../utils/richText";
 import AppCheckbox from "../components/AppCheckbox.vue";
 import AppProgress from "../components/AppProgress.vue";
 import AppSelect from "../components/AppSelect.vue";
@@ -794,8 +808,8 @@ const weakQuizStatus = ref("");
 let weakQuizGenerationToken = 0;
 const weakQuizData = ref<any>({ stats: {}, weak_points: [], all_sets: [] });
 const weakQuizSelectedSetId = ref(0);
-const weakQuizPointIndex = ref(0);
 const weakQuizAttemptDetail = ref<any | null>(null);
+const weakConfigOpen = ref(false);
 const quizEditor = reactive({ id: 0, status: "", title: "", description: "", generated: false, questions: [] as any[] });
 let freshChapterTimer = 0;
 let freshMaterialChapterTimer = 0;
@@ -981,8 +995,11 @@ const weakSeries = computed(() => [{ name: "错题", data: (analysis.value.weak_
 const weakMax = computed(() => Math.max(1, ...(analysis.value.weak_points || []).map((item: any) => item.wrong_count || 0)));
 const weakQuizPoints = computed(() => weakQuizData.value.weak_points || []);
 const weakQuizAllSets = computed(() => weakQuizData.value.all_sets || []);
-const weakQuizPointCount = computed(() => weakQuizPoints.value.length);
-const selectedWeakQuizPoint = computed(() => weakQuizPoints.value[Math.min(weakQuizPointIndex.value, Math.max(weakQuizPoints.value.length - 1, 0))] || null);
+const weakDetailAccuracy = computed(() => {
+  const attempts = weakQuizAttemptDetail.value?.attempts || [];
+  if (!attempts.length) return 0;
+  return Math.round(attempts.reduce((sum: number, item: any) => sum + Number(item.accuracy || 0), 0) / attempts.length);
+});
 const weakQuizTypeTotal = computed(() => weakQuestionTypes.reduce((sum, item) => sum + Number(weakQuizForm.question_type_counts[item.value] || 0), 0));
 const weakQuizFormValid = computed(() => Number(weakQuizForm.question_count || 0) > 0 && weakQuizTypeTotal.value === Number(weakQuizForm.question_count || 0));
 const scoreLabels = computed(() => (analysis.value.score_distribution || []).map((item: any) => item.range));
@@ -997,13 +1014,6 @@ watch(activePage, (page) => {
   scriptUndoStack.value = [];
   scriptRedoStack.value = [];
 }, { immediate: true });
-watch(weakQuizPoints, (points) => {
-  if (!points.length) {
-    weakQuizPointIndex.value = 0;
-    return;
-  }
-  if (weakQuizPointIndex.value >= points.length) weakQuizPointIndex.value = points.length - 1;
-});
 watch(() => props.pageKey, (key) => { active.value = key || "teacherDashboard"; loadActive(); });
 watch(currentCourseId, (id) => { if (id) localStorage.setItem("teacher_current_course_id", String(id)); });
 watch(sidebarCollapsed, (value) => { localStorage.setItem("teacher_sidebar_collapsed", value ? "1" : "0"); });
@@ -1506,17 +1516,6 @@ function weakQuizTypeCountsPayload() {
   }
   return counts;
 }
-function setWeakQuizPointIndex(index: number) {
-  const total = weakQuizPoints.value.length;
-  weakQuizPointIndex.value = total ? (index + total) % total : 0;
-}
-function stepWeakQuizPoint(offset: number) {
-  setWeakQuizPointIndex(weakQuizPointIndex.value + offset);
-}
-function syncWeakQuizPointIndexForQuiz(quizId: number) {
-  const index = weakQuizPoints.value.findIndex((point: any) => (point.quiz_sets || []).some((quiz: any) => Number(quiz.id) === Number(quizId)));
-  if (index >= 0) weakQuizPointIndex.value = index;
-}
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -1623,7 +1622,6 @@ async function generateTeacherWeakQuiz(point?: any) {
 async function selectWeakQuizSet(quiz: any) {
   if (!quiz?.id) return;
   weakQuizSelectedSetId.value = quiz.id;
-  syncWeakQuizPointIndexForQuiz(quiz.id);
   weakQuizAttemptDetail.value = await run<any>(() => api.get(`/learning/teacher/weak-quizzes/${quiz.id}/attempts`));
 }
 async function openWeakQuizEditor() {
