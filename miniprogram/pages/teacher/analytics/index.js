@@ -6,7 +6,7 @@ const tabbar = require('../../../utils/tabbar');
 const RANGES = [
   { key: 'week', label: '本周', days: 7 },
   { key: 'month', label: '本月', days: 30 },
-  { key: 'all', label: '全部', days: 3650 }
+  { key: 'all', label: '全部', days: 365 } // 后端 days 上限为 365
 ];
 
 Page({
