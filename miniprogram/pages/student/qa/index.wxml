@@ -80,12 +80,8 @@
   <view class="qa__input-wrap">
     <view class="qa__input">
       <textarea class="qa__textarea" placeholder="向 AI 提问…" value="{{input}}" bindinput="onInput" auto-height maxlength="2000" cursor-spacing="20" show-confirm-bar="{{false}}" confirm-type="send" bindconfirm="send" />
-      <button wx:if="{{sending}}" class="qa__send qa__send--stop" bindtap="stopGeneration">
-        <view class="qa__stop-square"></view>
-      </button>
-      <button wx:else class="qa__send {{input ? 'qa__send--on' : ''}}" disabled="{{!input}}" bindtap="send">
-        <icon name="send" size="40rpx" color="{{input ? '#ffffff' : '#999990'}}" />
-      </button>
+      <button wx:if="{{sending}}" class="qa__send qa__send--stop" bindtap="stopGeneration">停止</button>
+      <button wx:else class="qa__send {{input ? 'qa__send--on' : ''}}" disabled="{{!input}}" bindtap="send">发送</button>
     </view>
   </view>
 </view>

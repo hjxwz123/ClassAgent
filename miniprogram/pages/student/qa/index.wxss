@@ -72,8 +72,6 @@
 }
 @keyframes caCursor { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0; } }
 .msg__tool--retry { color: var(--ca-student-hover); font-weight: 600; }
-.qa__send--stop { background: var(--ca-error-bg); }
-.qa__stop-square { width: 28rpx; height: 28rpx; border-radius: 6rpx; background: var(--ca-error); }
 
 .typing { display: flex; gap: 10rpx; padding: 8rpx 0; }
 .typing text { width: 12rpx; height: 12rpx; border-radius: 9999rpx; background: var(--ca-muted); animation: caBlink 1.2s infinite; }
@@ -101,28 +99,38 @@
 }
 
 .qa__input { display: flex; align-items: flex-end; gap: 16rpx; }
+/* 单行高度 = line-height 44rpx + 上下内边距 36rpx = 80rpx，与发送按钮等高 */
 .qa__textarea {
   flex: 1;
-  min-height: 72rpx;
+  min-height: 80rpx;
   max-height: 240rpx;
   padding: 18rpx 24rpx;
   background: var(--ca-bg);
   border-radius: 24rpx;
   font-size: 30rpx;
+  line-height: 44rpx;
 }
+/* 横向胶囊：136rpx 宽 ≈ 输入框(550rpx) : 按钮 = 4:1
+   （输入栏内容宽 702rpx - gap 16rpx - 按钮 136rpx = 输入框 550rpx）*/
 .qa__send {
   flex-shrink: 0;
-  width: 72rpx;
-  height: 72rpx;
+  width: 136rpx;
+  height: 80rpx;
   padding: 0;
   border-radius: 9999rpx;
   background: var(--ca-border);
+  color: var(--ca-muted);
+  font-size: 28rpx;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .qa__send::after { border: none; }
-.qa__send--on { background: var(--ca-student); }
+/* 修饰类必须声明在 .qa__send 之后：两者同为单类选择器、优先级相同，靠后者生效。
+   原先 --stop 写在 .qa__send 之前，红底一直被 .qa__send 的灰底覆盖（旧版靠内部红方块才看出停止态）。*/
+.qa__send--on { background: var(--ca-student); color: #fff; }
+.qa__send--stop { background: var(--ca-error-bg); color: var(--ca-error); }
 
 .pick-row, .hist-row { display: flex; align-items: center; padding: 24rpx 16rpx; border-bottom: 1rpx solid var(--ca-border); font-size: 30rpx; }
 .hist-row { flex-direction: column; align-items: flex-start; }
